@@ -1,0 +1,57 @@
+{
+  "name": "mochi",
+  "productName": "Mochi",
+  "version": "0.0.1",
+  "private": true,
+  "description": "A realtime-voice AI companion that lives on your desktop",
+  "author": "@xiaolai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiaolai/mochi.git"
+  },
+  "homepage": "https://lixiaolai.com",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "dist": "pnpm build && electron-builder",
+    "dist:mac": "pnpm build && electron-builder --mac",
+    "verify:signing": "bash scripts/verify-signing.sh",
+    "preview": "electron-vite preview",
+    "icons": "node scripts/make-icons.ts",
+    "site:art": "esbuild scripts/make-site-art.ts --bundle --platform=node --format=esm --packages=external --alias:@shared=./src/shared --alias:@rig=./src/renderer/companion/rig --outfile=node_modules/.cache/make-site-art.mjs && node node_modules/.cache/make-site-art.mjs",
+    "tuner": "vite --config vite.tuner.config.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.test.json",
+    "lint": "oxlint --type-aware",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^1.0.3",
+    "@types/node": "^26.1.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "happy-dom": "^20.11.2",
+    "oxlint": "1.77.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "playwright": "^1.62.1",
+    "prettier": "3.9.6",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.10"
+  },
+  "main": "./out/main/index.js",
+  "dependencies": {
+    "lucide": "^1.31.0"
+  }
+}

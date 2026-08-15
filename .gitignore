@@ -1,0 +1,38 @@
+node_modules/
+dist/
+out/
+coverage/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example
+.render/
+.measure/
+
+# Dropped in the working directory by the Codex CLI. Contains an account id.
+error.log
+
+# Agent instructions and design notes. Local to this checkout: they describe how
+# the work is done, not what the project ships. Anchored to the root so a fixture
+# named AGENTS.md somewhere under src/ is still tracked.
+/AGENTS.md
+/CLAUDE.md
+
+# Audit findings quote source; they are a local artifact, not a repo one.
+.cc-suite/
+
+# Every working note: the plan, the measurements, the spikes, design handoffs and
+# local audit artifacts. Untracked ON PURPOSE, for the same reason as AGENTS.md
+# above — they describe how the work is done, not what the project ships. Losing a
+# spike loses nothing, because every measurement carries its own method.
+dev-docs/
+
+# Assistant tooling, settings, and worktrees. The worktrees are checkouts of
+# this same repo, so git reports them as untracked nested repos unless ignored.
+.claude/
+
+# VMark editor session state
+.vmark/
+
+release/

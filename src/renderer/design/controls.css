@@ -1,0 +1,327 @@
+/*
+ * The primitives every window composes from. Tokens only — no raw values here.
+ *
+ * Deliberately element-and-class selectors rather than a component API: the
+ * markup is built with `document.createElement`, so a class is the whole of
+ * what a "component" can be. Keeping the vocabulary small is the point — one
+ * field, one section, one button, three variants. A settings window that needs
+ * a fourth button variant is usually a settings window that needs fewer
+ * buttons.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  /*
+   * `font-family`, not the `font: menu` shorthand this used to carry. `menu`
+   * resolves to the OS control face, which was right when this sheet WAS the
+   * macOS settings window and is wrong now that one system covers every
+   * surface: the shelf and the settings window would have rendered in
+   * different typefaces on the same machine. The stack falls back to
+   * `-apple-system` wherever Archivo is not installed, which is the same face
+   * `menu` was resolving to.
+   */
+  font-family: var(--sans);
+  font-size: var(--t-sm);
+  line-height: var(--line-body);
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  /* Chrome, not a document: dragging a selection across labels reads as a web
+     page. Fields opt back in below. */
+  user-select: none;
+}
+
+/* ---- structure -------------------------------------------------------- */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.section-title {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.field {
+  display: grid;
+  /*
+   * One fixed label column so controls line up down the window however long a
+   * translation runs. `ch` rather than `px` so it tracks the type size.
+   *
+   * `--label-col` is measured rather than picked, and lives in `tokens.css`
+   * because the credential status line needs the same number. The widest label in either locale is
+   * "Refer to them as" at 11.1ch by canvas metrics, and 11ch was the column --
+   * so the longest pronoun wrapped onto a second line, leaving "as" hanging
+   * under a select that stayed aligned to the first. The margin above the
+   * measurement is deliberate: metrics come from a generic sans, while the app
+   * renders in Archivo, which is wider. `controls.test.ts` re-measures every
+   * label in every locale and every pronoun, so a translation that outgrows
+   * this fails a test rather than wrapping in front of somebody.
+   */
+  grid-template-columns: var(--label-col) 1fr;
+  align-items: baseline;
+  column-gap: var(--s4);
+  row-gap: var(--s1);
+}
+
+/*
+ * Italic, right-aligned: the new system distinguishes a LABEL from the value
+ * beside it by cut rather than by weight or colour alone.
+ *
+ * `.field-label` is the same appearance for a label that is NOT in a `.field`.
+ * The shortcuts pane needs one: its labels are sentences that do not fit the
+ * shared 14ch column (see `panes/shortcuts.ts`), so it sizes its own column --
+ * but a pane looking like a different application because its column is wider
+ * is not an improvement. Written once here rather than restated there, because
+ * two copies of "this is what a label looks like" drift the first time one of
+ * the four declarations changes.
+ */
+.field > label,
+.field-label {
+  text-align: right;
+  font-style: italic;
+  font-size: var(--t-sm);
+  color: var(--ink-3);
+}
+
+.field-hint {
+  grid-column: 2;
+  margin: 0;
+  font-size: var(--t-label);
+  line-height: var(--line-tight);
+  color: var(--ink-3);
+}
+
+/*
+ * Why one box will not save, under that box.
+ *
+ * The pane's `.problems` list is where a refused ACTION reports, and it sits at
+ * the foot of a long sheet. A field that will not commit has to say so where
+ * the person is looking, which is the field they have just left.
+ *
+ * Same column and same size as the hint, so the row does not jump when one
+ * appears; red and above the hint, because the reason it will not save
+ * outranks the sentence explaining what the field is for.
+ */
+.field-error {
+  grid-column: 2;
+  margin: 0;
+  font-size: var(--t-label);
+  line-height: var(--line-tight);
+  color: var(--red);
+}
+
+/* The box itself says so too. Colour alone is not a signal everybody gets. */
+.field [aria-invalid='true'] {
+  border-color: var(--red);
+}
+
+/* ---- inputs ----------------------------------------------------------- */
+
+.input,
+.select {
+  font: inherit;
+  font-size: var(--t-sm);
+  width: 100%;
+  padding: var(--s1) var(--s3);
+  color: var(--ink);
+  background: var(--field);
+  border: var(--s-px) solid var(--rule);
+  border-radius: var(--r2);
+  transition: border-color var(--duration-fast) var(--ease);
+}
+
+.input {
+  user-select: text;
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+/*
+ * A search field is an INPUT, and is drawn like every other one.
+ *
+ * `type="search"` arrives with Chromium's own searchfield appearance, and that
+ * appearance wins over the radius and the padding above -- so the one field in
+ * this window with a magnifier's job was the one field that did not match the
+ * boxes around it: square corners beside rounded ones, and its text sitting
+ * against its own edge while the select above it had room to breathe.
+ *
+ * The same class of problem the slider below has a note about, and the same
+ * fix: take the native appearance away and let the stylesheet own the box.
+ * Everything else in here is `type="text"` (see `textInput`), which is why
+ * this is the only rule of its kind.
+ */
+.input[type='search'] {
+  appearance: none;
+}
+
+.input:hover,
+.select:hover {
+  border-color: var(--accent);
+}
+
+:is(.input, .select, .button):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+}
+
+/*
+ * The track is painted from TOKENS, not left to the browser.
+ *
+ * `accent-color` alone colours the thumb and the filled portion and leaves the
+ * remainder to the user agent, which drew a near-black bar across a sheet of
+ * warm paper -- the one element on screen that belonged to no palette. Styling
+ * the track explicitly means Chromium stops filling it, so the fill comes from
+ * a gradient driven by `--fill`, which `slider()` sets alongside the readout.
+ */
+.slider {
+  flex: 1;
+  accent-color: var(--accent);
+  appearance: none;
+  height: var(--s4);
+  background: transparent;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: var(--s2);
+  border-radius: var(--r-pill);
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 var(--fill, 0%),
+    var(--rule) var(--fill, 0%) 100%
+  );
+}
+
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  width: var(--s4);
+  height: var(--s4);
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  /* A ring in the page colour, so the thumb reads as separate from the fill it
+     sits on rather than melting into it. */
+  border: var(--s0) solid var(--paper);
+  box-shadow: var(--lift-1);
+  /* Centres the thumb on a track shorter than it is. */
+  margin-top: calc((var(--s2) - var(--s4)) / 2);
+}
+
+/* Tabular figures so the number does not jitter its own width while dragging. */
+.slider-value {
+  min-width: 5ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+/* ---- buttons ---------------------------------------------------------- */
+
+.button {
+  /*
+   * UNDERLINED, not boxed.
+   *
+   * The handoff outlined these, and an outline is what made the widths
+   * visible: a row of boxes invites the eye to compare their edges, and the
+   * labels behind them run 2.7ch to 13.0ch. The raggedness was the CONTAINER,
+   * not the words.
+   *
+   * A shadow with a radius was the other candidate and does not help -- a
+   * shadow implies a rectangle, so it keeps the box and only restyles it.
+   * Removing the box removes the thing being compared, and what is left is a
+   * row of labels over rules of one length, because the floor below still
+   * holds.
+   *
+   * It also gives the window a distinction it did not have: things you TYPE IN
+   * or CHOOSE FROM are boxed -- inputs, selects, the chord recorder -- and
+   * things you DO are underlined. Previously both were rectangles with a
+   * hairline, and the only difference was what happened when you clicked.
+   */
+  min-height: 32px;
+  /*
+   * A FLOOR, not a fixed width.
+   *
+   * Button labels in this app run from 2.7ch to 13.0ch -- 「保存」 against
+   * "Restore the original" -- so one width for all of them would size every
+   * button for the longest sentence in either language and leave most of them
+   * mostly empty. A floor evens up the ordinary ones, which are the ones that
+   * sit side by side, and lets a genuinely longer label be longer.
+   *
+   * Sized past the widest ordinary label rather than picked: `controls.test.ts`
+   * measures every button string in every locale against it, so a translation
+   * that outgrows this fails a test rather than being the one ragged button
+   * somebody notices later.
+   */
+  min-width: var(--button-min);
+  /* Room for the rule to sit clear of the baseline rather than on it. */
+  padding: 5px 10px 6px;
+  border: 0;
+  border-bottom: 2px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--t-sm);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.button:hover:not(:disabled) {
+  border-bottom-color: var(--accent);
+}
+
+.button-primary {
+  /* The primary differs by COLOUR alone now, which is what the handoff asked
+     for -- it just no longer needs a box to carry it. */
+  border-bottom-color: var(--gold);
+  color: var(--gold-strong);
+}
+
+.button-primary:hover:not(:disabled) {
+  border-bottom-color: var(--gold-strong);
+}
+
+.button:disabled {
+  opacity: 0.4;
+}
+
+/* ---- messages --------------------------------------------------------- */
+
+.problems {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  font-size: var(--t-data);
+  color: var(--red);
+}
+
+/* Nothing wrong, nothing shown — and no reserved gap where a message might
+   one day go, which reads as a rendering bug. */
+.problems:empty {
+  display: none;
+}

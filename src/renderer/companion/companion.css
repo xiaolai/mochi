@@ -1,0 +1,19 @@
+/* The page itself must be invisible: the window is transparent, and any
+   background here would paint a rectangle on the desktop. */
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  /* Nothing here is text, and a stray selection highlight on a desktop
+ companion looks like a bug. */
+  user-select: none;
+  cursor: default;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

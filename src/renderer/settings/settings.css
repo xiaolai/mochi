@@ -1,0 +1,828 @@
+/*
+ * Layout for the settings window, and nothing else.
+ *
+ * Every colour, size, radius and duration comes from `design/tokens.css`; every
+ * control comes from `design/controls.css`. What is left here is the arrangement
+ * of this one window, which is the only thing that is genuinely local to it. If
+ * a rule below contains a raw value that is not a layout dimension, it belongs
+ * in the token sheet instead.
+ *
+ * ## Six groups, one pane at a time
+ *
+ * A nav column and a single visible pane, per the design's 2b. The previous
+ * arrangement was one long scroll, which works while there are five fields and
+ * stops working at the point somebody has to scroll past the microphone to
+ * reach the wake key.
+ *
+ * Only the PANE scrolls, never the window. The nav has to stay reachable — a
+ * settings window you can scroll away from the list of settings is one that has
+ * hidden its own table of contents.
+ */
+
+@import url('../design/tokens.css');
+@import url('../design/controls.css');
+
+body {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.shell {
+  display: grid;
+  /* A fixed nav, so the pane does not change width as you move between groups:
+     content that reflows on navigation reads as a different window each time. */
+  grid-template-columns: 15rem 1fr;
+  height: 100vh;
+}
+
+/* ---- the nav ------------------------------------------------------------ */
+
+.nav {
+  /* No fill: held by a hairline, so nav and pane read as one surface and the
+     only thing marking the current group is the stroke on it. */
+  display: flex;
+  flex-direction: column;
+  padding: 22px 0 22px 22px;
+  border-right: 1px solid var(--rule);
+  overflow-y: auto;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  /* The mark is a STROKE, not a wash. Transparent rather than absent, so the
+     label does not shift two pixels when a group becomes current. */
+  border-left: 2px solid transparent;
+  background: transparent;
+  font: inherit;
+  font-size: var(--t-ui);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: var(--paper-2);
+}
+
+/*
+ * The open group is marked by FILL and by weight, not by colour alone — this
+ * list has no other affordance to fall back on, and `aria-current` carries the
+ * same fact to anything not looking at pixels.
+ */
+.nav-item[aria-current='page'] {
+  /* Gold, and only a stroke. Her colour used to fill this; the new system
+     gives the chrome gold and leaves her the two jobs that are hers. */
+  border-left-color: var(--gold);
+  background: transparent;
+  color: var(--ink);
+}
+
+/* ---- the pane ----------------------------------------------------------- */
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s7);
+  padding: var(--s7);
+  overflow-y: auto;
+}
+
+.pane-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.pane-title {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: var(--t-pane);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.pane-about {
+  margin: 0;
+  font-size: var(--t-cap);
+  line-height: var(--line-tight);
+  color: var(--ink-3);
+}
+
+/* ---- a group with nothing in it yet ------------------------------------- */
+
+/*
+ * An unbuilt pane, saying so.
+ *
+ * Deliberately neither an error nor blank. Blank is indistinguishable from a
+ * pane that failed to render, and "it is broken" is the reading a user reaches
+ * for first.
+ */
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  align-items: flex-start;
+  padding: var(--s6);
+  border: var(--s-px) dashed var(--rule);
+  border-radius: var(--r4);
+  background: var(--paper-2);
+}
+
+.empty-badge {
+  padding: var(--s0) var(--s3);
+  border-radius: var(--r-pill);
+  background: var(--paper-3);
+  color: var(--ink-2);
+  font-size: var(--t-label);
+  letter-spacing: var(--track);
+  text-transform: uppercase;
+}
+
+.empty p,
+.about p,
+.keys p {
+  margin: 0;
+  max-width: 46ch;
+  font-size: var(--t-sm);
+  line-height: var(--line-body);
+  color: var(--ink-2);
+}
+
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+/*
+ * The bindings are a FORM, so they are spaced like one.
+ *
+ * This pane used to be `.about` with a description list inside it, which is
+ * the layout for a list of facts. Its rows are controls -- see the comment in
+ * `panes/shortcuts.ts` -- so they are `.field` rows now, on the same label
+ * column as every other control in the window, and this matches `.auth`
+ * rather than the fact list it was borrowed from.
+ */
+.keys {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+/*
+ * Flush RIGHT, which is the one alignment in this window that is not the
+ * shared label column -- deliberately.
+ *
+ * These labels are sentences ("Wake him, or let him sleep" is 17.6ch against a
+ * 14ch column), so they cannot join the grid the rest of the pane sits on
+ * without wrapping. Given they must be wider, they are made to end where the
+ * pane ends rather than starting where nothing else starts: a block that is
+ * wider on BOTH sides reads as misaligned, and one that is wider on the left
+ * and square on the right reads as a block.
+ *
+ * `max-content max-content` plus `justify-content: end`, not `1fr` on the
+ * second track: a fractional track would stretch to the pane and leave the
+ * buttons where they were, which is the layout this replaced.
+ */
+.key-list {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  justify-content: end;
+  gap: var(--s1) var(--s4);
+  margin: 0;
+  font-size: var(--t-sm);
+}
+
+/* Appearance comes from `.field-label`; only the column belongs here. */
+.key-list dt {
+  align-self: center;
+}
+
+.key-list dd {
+  margin: 0;
+}
+
+.about dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--s1) var(--s4);
+  margin: 0;
+  font-size: var(--t-sm);
+}
+
+.about dt {
+  color: var(--ink-3);
+}
+
+.about dd {
+  margin: 0;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  /* Copyable. The rest of the window sets `user-select: none` so dragging
+     across labels does not read as a web page, but an address you cannot
+     select is one you have to retype by hand. */
+  user-select: text;
+}
+
+/*
+ * The chord itself, which is also the control that changes it.
+ *
+ * A key-shaped button rather than a text field: spelling an Electron
+ * accelerator by hand is not an input method, and the only way to find out you
+ * spelled it wrong would be to press it.
+ */
+.chord {
+  min-width: 9ch;
+  padding: var(--s1) var(--s3);
+  border: var(--s-px) solid var(--rule);
+  border-radius: var(--r1);
+  background: var(--paper-2);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: var(--t-data);
+}
+
+.chord:hover {
+  border-color: var(--gold);
+}
+
+.chord:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Listening. Her colour, because this is the one moment the window is waiting
+   on the user rather than the other way round. */
+.chord.is-recording {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+  font-family: var(--sans);
+}
+
+/* A chord somebody else owns. Not styled as an error -- it is an ordinary fact
+   about the machine -- but plainly not a key that works. */
+.chord.is-taken {
+  border-style: dashed;
+  color: var(--ink-3);
+}
+
+.chord-note {
+  margin-left: var(--s3);
+  font-size: var(--t-label);
+  color: var(--ink-3);
+}
+
+.about-name {
+  font-size: var(--t-h2);
+  font-weight: var(--weight-medium);
+  line-height: var(--line-tight);
+  color: var(--ink);
+}
+
+/*
+ * An address, styled as one and behaving as one, while being a button.
+ *
+ * Underlined rather than coloured alone: `--ink-brand` on paper is her green,
+ * and a reader who cannot separate it from the surrounding ink would have no
+ * way to tell this line is clickable.
+ */
+.link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--ink-brand);
+  text-decoration: underline;
+  text-underline-offset: var(--s0);
+  user-select: text;
+}
+
+.link:hover {
+  color: var(--ink);
+}
+
+/*
+ * Icons take the colour of the text beside them and the size of it too — they
+ * are `1em` and `currentColor`, so there is nothing here to set per context and
+ * no icon can introduce a colour the contrast sweep has not measured.
+ *
+ * `flex-shrink: 0` because a nav label in a long translation must lose width
+ * before the glyph does: a squashed icon reads as a rendering fault, while a
+ * wrapped label merely reads as a long word.
+ */
+.icon {
+  flex-shrink: 0;
+}
+
+/* Inside a line of text rather than beside it, so it needs the optical nudge
+   that a flex row does not. */
+.link .icon {
+  margin-left: var(--s1);
+  vertical-align: -0.1em;
+}
+
+.link:focus-visible {
+  outline: none;
+  border-radius: var(--r1);
+  box-shadow: var(--focus-ring);
+}
+
+/* ---- the credential status --------------------------------------------- */
+
+/*
+ * The pane is a stack of rows, and the status is one of them -- indented to
+ * the control column so it lines up with the select above it and the key field
+ * below. Previously it spanned the full width while everything else started at
+ * 14ch, which is most of why the group looked unfinished.
+ */
+.auth,
+.sound,
+.presence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+/* Lines about the whole section rather than about a field. */
+.sound-when,
+.sound-heard,
+.sound-advice,
+.presence-cost {
+  grid-column: unset;
+  max-width: var(--reading);
+}
+
+/*
+ * What was HEARD sits with the control it explains, not with the prose.
+ *
+ * It is a readout, not advice: it changes while you are looking at it, and
+ * indenting it to the control column is what says which control it belongs to.
+ */
+.sound-heard {
+  margin-left: calc(var(--label-col) + var(--s4));
+}
+
+/*
+ * A line, not a box.
+ *
+ * It was a bordered panel, which gave the pane's one CONCLUSION more visual
+ * weight than the controls it is a conclusion about -- the eye landed on the
+ * frame rather than on the dot inside it. The dot and the sentence carry the
+ * state; the border was carrying nothing.
+ */
+.auth-status {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  /* The label column, so this aligns with every control on the pane. */
+  margin-left: calc(var(--label-col) + var(--s4));
+}
+
+.auth-state {
+  flex: 1;
+  font-size: var(--t-sm);
+  color: var(--ink);
+}
+
+/*
+ * State by SHAPE as well as colour.
+ *
+ * A green dot and a red dot are the same dot to a reader who cannot separate
+ * the hues, and this is the one line on the pane that says whether anything
+ * works. The ring, the fill and the sentence beside it each carry the answer
+ * independently.
+ */
+.auth-dot {
+  width: var(--s4);
+  height: var(--s4);
+  border-radius: var(--r-pill);
+  border: var(--s0) solid var(--ink-3);
+  background: transparent;
+}
+
+.auth-dot.is-ok {
+  border-color: var(--good);
+  background: var(--good);
+}
+
+.auth-dot.is-bad {
+  border-color: var(--red);
+  /* Hollow, so it differs from `ok` with the colour removed. */
+  background: transparent;
+}
+
+/*
+ * "Ask again later" -- a rate limit, an outage, a dead network.
+ *
+ * Its own state because it is neither of the other two: the key is good, and
+ * nothing is being done about it right now. Half-filled, so it is distinct from
+ * `ok` and `bad` with all colour removed.
+ */
+.auth-dot.is-wait {
+  border-color: var(--warn-line);
+  background: linear-gradient(to bottom, var(--warn-line) 50%, transparent 50%);
+}
+
+.auth-dot.is-busy {
+  border-style: dashed;
+}
+
+.key-row {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+}
+
+/* The two buttons take what they need; the field takes the rest. Without this
+   the input collapsed to its default size and the row drifted left of every
+   other control. */
+.key-row .button {
+  flex: none;
+}
+
+/* The field takes the room; the two buttons take what they need. */
+.key-row .input {
+  flex: 1;
+  font-family: var(--mono);
+}
+
+/* ---- her colour --------------------------------------------------------- */
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+/*
+ * The radio is present and focusable, just not painted: the arrow keys, the
+ * group semantics and the screen-reader announcement all come from it, and
+ * `display: none` would take every one of those away. Clipped rather than
+ * hidden, which is the difference between "not shown" and "not there".
+ */
+.swatch-input {
+  position: absolute;
+  width: var(--s-px);
+  height: var(--s-px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s2) var(--s3);
+  border: var(--s-px) solid transparent;
+  border-radius: var(--r2);
+  font-size: var(--t-label);
+  color: var(--ink-3);
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.swatch:hover {
+  background: var(--paper-2);
+}
+
+/*
+ * The chosen one is marked by a RING and a filled label, never by colour alone
+ * -- this is a row of colours, so "the highlighted one" has to be legible as a
+ * shape rather than a hue.
+ */
+.swatch-input:checked + .swatch {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+  color: var(--ink);
+  font-weight: var(--weight-medium);
+}
+
+.swatch-input:focus-visible + .swatch {
+  box-shadow: var(--focus-ring);
+}
+
+/*
+ * Sized by WIDTH only. The viewBox carries her real proportions -- 100 by 78,
+ * from the face -- so fixing both dimensions here would stretch her, and the
+ * one thing a shape swatch must not do is misreport the shape.
+ */
+.silhouette {
+  display: block;
+  width: var(--s7);
+  height: auto;
+}
+
+/* ---- a row of buttons --------------------------------------------------- */
+
+/*
+ * A row of things you can DO, in the flow of the sheet.
+ *
+ * It used to be a footer as well: `position: sticky` with a gradient whose top
+ * 30% was transparent, so text scrolling under it was visible, then blurred,
+ * then gone — read as overlap because that is what it was. `margin-top: auto`
+ * on top of that gave one rule two behaviours: parked at the bottom of a short
+ * pane, stuck to the edge of a long one.
+ *
+ * None of it is needed. There is nothing left that applies to the whole sheet,
+ * so every row of buttons belongs to the block it sits in.
+ */
+.actions {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: var(--s3);
+  padding-top: var(--s4);
+}
+
+/*
+ * Where a refused save says so.
+ *
+ * On the pane rather than in the footer, because only two panes have a footer
+ * and every pane can refuse something. Hidden while empty -- `:empty` rather
+ * than a class, so there is no state to forget to clear.
+ */
+.problems {
+  list-style: none;
+  margin: var(--s4) 0 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--red);
+  border-radius: var(--r2);
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: var(--t-sm);
+  display: grid;
+  gap: var(--s2);
+}
+
+.problems:empty {
+  display: none;
+}
+
+/* While the first snapshot is still in flight. */
+main[aria-busy='true'] {
+  color: var(--ink-3);
+}
+
+/* The shelf. A list of characters, not a table: each row is one name and the
+   two things you can do to it, and a table would promise columns that do not
+   exist. */
+.personas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.persona {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+/* Her colour, barely there — the same wash every other selected thing in this
+   window uses, so "worn" reads as selection rather than as a warning. */
+.persona-worn {
+  background: var(--her-wash);
+}
+
+.persona-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swatch-chosen {
+  /* Her colour, on the bottom edge. The second of the two jobs her colour
+     keeps — the other is the worn row above. */
+  border-bottom: 2px solid var(--her);
+}
+
+.persona-badge {
+  font-size: 0.85em;
+  color: var(--gold-strong);
+  white-space: nowrap;
+}
+
+.persona-badge-quiet {
+  color: var(--ink-3);
+}
+
+.persona-controls {
+  display: flex;
+  gap: 6px;
+}
+
+/* Armed, not dangerous-looking by default: the first click changes the label
+   to the question, and only then does it read as destructive. */
+/*
+ * The destructive confirmation, in RED.
+ *
+ * It was `--ink-brand`, which is a green -- so the one button in the app that
+ * ends something irreversible was drawn in the same family as everything that
+ * does not. The same mistake as the credential dot on the control
+ * where it costs the most: a delete that looks like every other action is one
+ * you agree to without reading.
+ */
+.button-danger {
+  border-bottom-color: var(--red);
+  color: var(--red);
+  font-weight: 600;
+}
+
+/* The navigation is a LIST now, with a heading per half. Reset the list
+   chrome here rather than on `.nav`, so the headings and the items share one
+   set of rules and cannot drift apart. */
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A label, not a target. It is deliberately not a button: a tab stop that
+   navigates nowhere is a promise to the keyboard this window cannot keep. */
+.nav-group {
+  padding: 22px 0 6px 10px;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.nav-group:first-child {
+  padding-top: 2px;
+}
+
+.nav-group:first-child {
+  padding-top: 2px;
+}
+
+/* ---- what is kept ------------------------------------------------------ */
+
+.kept-actions {
+  display: flex;
+  gap: var(--s3);
+}
+
+/*
+ * The facts, on the same right-aligned grid the shortcuts use.
+ *
+ * A file path is long and has no useful shortening -- eliding the middle of a
+ * path is how somebody copies out something that is not where anything lives
+ * -- so it sits in a column that sizes to it, like the bindings do.
+ */
+.kept-facts dd {
+  font-family: var(--mono);
+  font-size: var(--t-data);
+  /* Copyable, like the addresses in About: a path you cannot select is one
+     you have to retype. */
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+
+.kept-count {
+  grid-column: unset;
+  margin-left: calc(var(--label-col) + var(--s4));
+}
+
+/*
+ * One conversation per row, modelled on the shelf rather than on a table.
+ *
+ * A table would promise columns that do not exist: the row is a moment and a
+ * count, and the count is a footnote to the moment rather than a second field.
+ */
+.kept-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/*
+ * A target, so a button -- but NOT `.button`.
+ *
+ * `controls.css` draws that as an underlined label, because in this window
+ * things you DO are underlined and things you type in or choose from are
+ * boxed. Opening a conversation is neither: it moves you around inside the
+ * pane, the way the navigation does, so it borrows the navigation's shape and
+ * resets the chrome a bare `<button>` arrives with.
+ */
+.kept-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s4);
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.kept-row:hover {
+  background: var(--her-wash);
+}
+
+/* Its own rule, because the shared one names `.input`, `.select` and
+   `.button`, and this is none of the three. A target with no focus ring is a
+   target the keyboard cannot find. */
+.kept-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Takes the room, and gives it up first. */
+.kept-row-when {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The count, quiet and on the right.
+ *
+ * The gap above is what separates these two. They were adjacent spans with no
+ * stylesheet at all, which rendered as `10:39 AM34 things said` -- the
+ * separator existed in neither the markup nor the CSS, because the CSS did
+ * not exist.
+ */
+.kept-row-what {
+  color: var(--ink-3);
+  font-size: var(--t-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- one conversation, opened ------------------------------------------ */
+
+.kept-turns {
+  list-style: none;
+  margin: 0 0 var(--s5);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.kept-turn {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s4);
+  padding-left: var(--s3);
+  /* Who spoke, carried by the edge rather than by a label on every line. A
+     name repeated down the margin is read once and then skipped, and it costs
+     the width the words need. */
+  border-left: 2px solid var(--rule);
+}
+
+/* Hers in her own colour -- the third job that colour does in this window,
+   after the worn row and the chosen swatch. */
+.kept-turn-her {
+  border-left-color: var(--her);
+}
+
+/* Named rather than left to the base rule. The two speakers are a PAIR, and a
+   pair where one half is a rule and the other half is the absence of one gets
+   tuned in one place and forgotten in the other. */
+.kept-turn-you {
+  border-left-color: var(--rule);
+}
+
+.kept-turn-when {
+  min-width: 6ch;
+  font-family: var(--mono);
+  font-size: var(--t-data);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.kept-turn-text {
+  flex: 1;
+  min-width: 0;
+  /* Selectable. A transcript you cannot copy out of is one you have to
+     retype, the same reason the file path above is selectable. */
+  user-select: text;
+  overflow-wrap: anywhere;
+}

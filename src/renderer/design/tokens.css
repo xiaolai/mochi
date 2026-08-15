@@ -1,0 +1,387 @@
+/*
+ * Design tokens. The only file in the project allowed to contain a raw value.
+ *
+ * ## Why a token layer and not a component library
+ *
+ * This app has no UI framework — the companion is a canvas, and adding React
+ * plus a component library to render six settings screens would make the
+ * dependency larger than the application, and every dependency is a liability.
+ * What was actually wrong with the first settings
+ * sheet was not that it was hand-written but that it hand-picked VALUES:
+ * `14px`, `7px`, `116px`, `opacity: 0.55`, each chosen once and agreeing with
+ * nothing. Those are the thing a design system removes, and a token layer
+ * removes them without shipping a framework.
+ *
+ * ## ONE system, not one per window
+ *
+ * This sheet was previously a macOS-native scale written for the settings
+ * window, and the design handoff arrived with a second scale written for the
+ * shelf — its own paper ramp, its own type, its own rhythm. Two vocabularies
+ * would mean two answers to "what is a large gap", and the first screen built
+ * from the wrong one would be indistinguishable from a mistake. The handoff's
+ * system is now THE system, and the settings window is expressed in it.
+ *
+ * What that cost, stated rather than hidden: the settings window's 24px and
+ * 32px gaps became 26px, because this rhythm goes 20 → 26 → 72 and has no 24.
+ * Its 7px radius became 8px. Its font moves from the system menu face to the
+ * `--sans` stack, which falls back to `-apple-system` where Archivo is absent.
+ *
+ * ## Roles this app needs and the handoff did not define
+ *
+ * The handoff describes a reading surface; a settings sheet also has inputs,
+ * focus rings and transitions. Those are added below, marked, and expressed in
+ * the handoff's own palette rather than invented alongside it.
+ *
+ * ## Colour
+ *
+ * Roles, never raw colours, and `light-dark()` rather than a media query — the
+ * pair lives in one declaration so a role cannot be defined in one scheme and
+ * forgotten in the other. The dark half is DESIGNED, not the light ramp
+ * inverted: `--green-deep` is her colour as text, so it flips from a dark green
+ * to a light one to keep that role working.
+ *
+ * The ACCENT is not here: it is injected at runtime by `accent.ts` from her own
+ * body colour, so the interface is her colour and cannot drift from the avatar.
+ *
+ * Every ratio below is measured, and `tokens.test.ts` re-measures them from
+ * this file on every run — so a value edited by eye fails a test rather than
+ * shipping. Nothing here is trusted because a comment claims it.
+ */
+
+/*
+ * The faces, vendored. Subset to latin + latin-ext: the design bundle also
+ * carried cyrillic, vietnamese, math and symbol cuts, which this app has no
+ * copy for -- and CJK is not in these families at all, so Chinese falls
+ * through to the system stack named in each role below, which is correct.
+ *
+ * One file per family: these are VARIABLE fonts, so 400 and 600 are the same
+ * bytes. Declaring both weights against one file is what lets the weight axis
+ * work without shipping it twice.
+ */
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('./fonts/CormorantGaramond-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC,
+    U+2122, U+2212, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('./fonts/CormorantGaramond-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+1E00-1E9F, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('./fonts/Lora-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC,
+    U+2122, U+2212, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('./fonts/Lora-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+1E00-1E9F, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/IBMPlexMono-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC,
+    U+2122, U+2212, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/IBMPlexMono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+1E00-1E9F, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  color-scheme: light dark;
+
+  /* ---- surfaces: warm paper, and a warm near-black rather than a cold grey */
+  --paper: light-dark(#f3f2f2, #2d2b2b);
+  --paper-2: light-dark(#eae9e9, #383635);
+  --paper-3: light-dark(#d9d6d6, #3a3837);
+  --rule: light-dark(#d0cccc, #4a4746);
+
+  /*
+   * A field is inset, which is the one place the two schemes disagree about
+   * direction: in light an input reads as paler than the page, in dark as
+   * DARKER. Added here because the handoff describes a reading surface and this
+   * app also has forms.
+   */
+  --field: light-dark(#f8f4f4, #232120);
+
+  /* ---- ink. light: 16.00 / 7.76 / 5.77 — dark: 14.26 / 8.09 / 7.65, on paper */
+  --ink: light-dark(#201f1d, #ece9e4);
+  --ink-2: light-dark(#444141, #a9a5a1);
+  /*
+   * The pale end: the tone that decides how pale is still a word.
+   *
+   * `#605d5d` is the value the handoff measured at 5.83:1 on this ground —
+   * clear of the 4.5:1 floor `accent.ts` enforces, and `tokens.test.ts`
+   * re-measures it here so the number is checked rather than quoted.
+   *
+   * The DARK half needed correcting, and saying so is the point of writing it
+   * down. The handoff's muted dark tone is `#8d8985`, which measures 4.05:1 on
+   * the handoff's own dark ground — under the floor. The light half was
+   * measured and stated; the dark half was drawn. So this is that hue lifted
+   * 20% toward white, the smallest move that clears 4.5:1 on every dark
+   * surface here (5.47 / 4.67 / 4.53). The colour is the design's; only the
+   * value moved, and only as far as the floor required.
+   */
+  --ink-3: light-dark(#605d5d, #a4a19d);
+
+  /* ---- gold: the CHROME's accent, fixed, and not hers ---------------------
+   *
+   * The new system splits a job that used to be one. Her colour drove the
+   * whole interface ("one graphical source"), which was right with a
+   * single persona and stops being right with many: installing a lilac teacher
+   * would turn the entire app lilac, and an arbitrary hue makes that
+   * unpredictable rather than expressive.
+   *
+   * So the chrome is gold and fixed, and HER colour keeps exactly two jobs —
+   * the worn persona and the chosen swatch. Fixed also means this pair is swept
+   * for contrast once, here, instead of per hue at runtime.
+   */
+  --gold: light-dark(#b68235, #e1ad66);
+  --gold-strong: light-dark(#7d5411, #facb8d);
+  --gold-wash: light-dark(#fff3e4, #3a270d);
+  /* The label ON a gold fill. Measured, like every other pairing here. */
+  --gold-ink: light-dark(#2d1f06, #201f1d);
+
+  /* ---- hers: the two jobs her colour keeps -------------------------------
+   *
+   * Static fallbacks only. `accent.ts` overwrites all four at runtime from the
+   * face actually being worn — these are what the window renders with for the
+   * frame before that happens, so they are her BUILT-IN green and nothing
+   * else. `accent.test.ts` pins them to what `accentVariables(MOCHI)` emits,
+   * so the fallback cannot drift from the derivation.
+   */
+  --her: #8ec8a8;
+  --her-hover: #7db094;
+  --her-ink: #141a17;
+  --her-wash: light-dark(#ebf5ef, #2d4036);
+
+  /* ---- status: a fill, an edge, and an ink that reads ON the fill --------- */
+  /*
+   * `--good` is a VERDICT, not a brand.
+   *
+   * The one green here used to be `--accent` -- her colour -- which read
+   * correctly and was wrong: it tied "the credential works" to whichever
+   * persona was worn, so wearing a persona with a warm hue would have said
+   * "working" in orange, and re-pointing the chrome at gold said it in gold.
+   * A state the user reads to decide whether anything works at all cannot be
+   * a property of the character wearing the app.
+   *
+   * Deliberately more saturated than `--her` (#8ec8a8, a muted sage) so that
+   * the two greens are not the same green in the one place where a persona
+   * swatch and a status dot can share a pane.
+   */
+  --good: light-dark(#14663f, #6fcb98);
+  --red: light-dark(#b3261e, #f2a6a1);
+  --red-bg: light-dark(#fdefee, #33201f);
+  --warn-ink: light-dark(#6f5010, #e2c078);
+  --warn-line: light-dark(#9a6f14, #a9821f);
+  --warn-bg: light-dark(#fdf6e6, #2c2517);
+
+  /* ---- type: three roles. Display+body, labels, data --------------------- */
+  /*
+   * Two faces with two jobs, which is the change the new system makes: a
+   * serif for reading and a serif for HEADINGS, rather than one sans doing
+   * both at different sizes.
+   *
+   * The CJK fallbacks are named rather than left to the OS, and that matters
+   * more here than it did before: neither Cormorant nor Lora contains a single
+   * CJK glyph, so every Chinese string in this app renders from the fallback.
+   * Leaving it implicit would make the interface's Chinese depend on whichever
+   * face the platform happened to pick.
+   */
+  --sans:
+    'Lora', -apple-system, system-ui, 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK SC', serif;
+  --display:
+    'Cormorant Garamond', 'Lora', -apple-system, system-ui, 'PingFang SC', 'Hiragino Sans', serif;
+  /* Retained as an alias: the shelf's dense rows still ask for a narrow face. */
+  --narrow: var(--sans);
+  /*
+   * Sarasa is Iosevka fitted to Source Han at exactly two Latin cells per CJK
+   * glyph, so a mono column of mixed script still aligns. IBM Plex Mono has no
+   * CJK at all, which is why the fallback is NAMED rather than left to the OS —
+   * and this app puts 中文 and English on the same line by design.
+   */
+  --mono: 'IBM Plex Mono', 'Sarasa Mono SC', 'Sarasa Mono J', ui-monospace, Menlo, monospace;
+
+  /* The pane title: the handoff sets it at 34px Cormorant, not a clamp. */
+  --t-pane: 34px;
+
+  /*
+   * The label column every `.field` shares.
+   *
+   * Here rather than in `controls.css` because TWO stylesheets need it: the
+   * grid that creates the column, and the credential status line, which is not
+   * in a `.field` at all and is indented by hand to line up with the controls
+   * above and below it. It was written as a bare `14ch` in both -- so widening
+   * the column for a longer translation would have left that one row silently
+   * out of line, with `controls.test.ts` re-measuring the grid and reporting
+   * everything fine.
+   *
+   * `ch` rather than `px` so it tracks the type size. The number is measured,
+   * not picked: see `.field` in `controls.css` and the sweep in
+   * `controls.test.ts`, which re-measures every label in every locale and
+   * every pronoun against whatever this says.
+   */
+  --label-col: 14ch;
+
+  /*
+   * The narrowest a button may be.
+   *
+   * Buttons sit in rows -- Save beside Revert, Wear beside Delete -- and a row
+   * of buttons whose widths track their word lengths reads as ragged rather
+   * than as a set. This is a floor rather than a fixed width because the range
+   * is too wide for one number: 2.7ch to 13.0ch across both locales.
+   *
+   * `ch` plus the horizontal padding, so it tracks the type size like the label
+   * column does. `controls.test.ts` measures every button label against it in
+   * both directions, so this number follows the labels rather than the labels
+   * being trimmed to fit it -- it moved from 9ch the day "Open folder" was
+   * added, which is the guard doing its job rather than a label doing so.
+   */
+  --button-min: calc(10ch + 28px);
+  --t-title: clamp(30px, 4.4vw, 46px);
+  --t-h2: 26px;
+  --t-h3: 21px;
+  --t-lead: 17px;
+  --t-body: 15px; /* the floor for anything she says aloud */
+  --t-ui: 14px;
+  --t-sm: 13px;
+  --t-cap: 12.5px;
+  --t-data: 12px;
+  --t-label: 11px;
+  --t-micro: 10.5px;
+  --track: 0.14em; /* labels only, and labels are always uppercase */
+
+  /* Line heights and weights: needed by any body of text, not in the handoff. */
+  --line-tight: 1.3;
+  --line-body: 1.45;
+  --weight-normal: 400;
+  --weight-medium: 600;
+
+  /* ---- rhythm ------------------------------------------------------------ */
+  --s0: 2px;
+  --s1: 4px;
+  --s2: 6px;
+  --s3: 8px;
+  --s4: 12px;
+  --s5: 16px;
+  --s6: 20px;
+  --s7: 26px;
+  --s8: 72px;
+  --s-px: 1px;
+  --s-desk: 32px;
+
+  /* ---- shape: seven radii, each with a job ------------------------------- */
+  --r0: 2px; /* a bar */
+  /*
+   * Tighter than they were. The previous scale went 4 / 8 / 10; the new system
+   * goes 2 / 4 / 7, and the difference is visible on every control at once —
+   * a softer corner reads as a heavier component, which is the opposite of
+   * what an outlined button wants.
+   */
+  --r1: 2px; /* a swatch, a chip */
+  --r2: 4px; /* anything you touch */
+  --r3: 7px; /* a stage inside a card, and the window itself */
+  --r4: 12px; /* a card */
+  --r5: 14px; /* a window */
+  --r-pill: 999px; /* a badge */
+
+  /*
+   * HERS. Fallbacks only — `accent.ts` overwrites all five at runtime from her
+   * `colBody`, so these are what the sheet shows in the moments before that
+   * runs, and the shape the injected values must match.
+   *
+   * The handoff declared these a second time as `--green`, `--green-deep` and
+   * `--green-wash`. They were the same three roles under other names — measured
+   * identical to the injected values, to the digit — and two names for one role
+   * is how a screen ends up half in one and half in the other. One name each.
+   *
+   * The first three are NOT `light-dark()` on purpose: she is one colour
+   * whatever scheme the OS is in, and `--accent-ink` is chosen by measuring
+   * against HER rather than against the page. The last two ARE, because they
+   * are read against the page — a pale wash on a dark page is a near-white band
+   * with unreadable text on it. `tokens.test.ts` asserts every one of these
+   * equals what `accentVariables` computes, so the sheet and the function
+   * cannot drift.
+   */
+  --accent: var(--gold);
+  /* #7db094, not the #7db095 that sat here: the fallback was written by hand
+     and had drifted one step in blue from what `shade(base, -0.12)` returns. */
+  --accent-hover: var(--gold-strong);
+  --accent-ink: light-dark(#3a270d, #201f1d);
+  --accent-wash: var(--gold-wash);
+  --ink-brand: light-dark(#24463a, #aad6be);
+
+  /* ---- motion. Not in the handoff; the shelf has none of its own yet. ----- */
+  --duration-fast: 90ms;
+  --duration: 160ms;
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* ---- elevation. On dark a shadow is nearly invisible, so the hairline
+     carries more of the separation — hence the per-scheme alphas. ----------- */
+  /*
+   * The handoff expresses its divider as `#201f1d` at 16% and its dark edge as
+   * the ground at 20%, which is what these two carry now — they were mixing
+   * the previous ink and would have stayed subtly green against the new
+   * paper.
+   */
+  --hair: light-dark(rgb(32 31 29 / 16%), rgb(243 242 242 / 20%));
+  --hair-soft: light-dark(rgb(32 31 29 / 8%), rgb(243 242 242 / 10%));
+  /*
+   * Elevation derived FROM THE GROUND rather than from black: a soft
+   * ink-tinted shadow on the light theme, a hairline edge plus ambient
+   * darkness on the dark one. Shadows mixed from pure black go grey against
+   * warm paper, which is what made the previous set read as a different
+   * material from the surface under it.
+   *
+   * `--lift-window` is the handoff's `--shadow-lg`, plus the half-pixel edge
+   * this app needs and a reading surface does not — a frameless window with
+   * no edge has no boundary against a light desktop.
+   */
+  --lift-1: 0 1px 2px light-dark(rgb(45 43 43 / 14%), rgb(0 0 0 / 44%));
+  --lift-2: 0 3px 10px light-dark(rgb(45 43 43 / 16%), rgb(0 0 0 / 52%));
+  --lift-window:
+    0 12px 32px light-dark(rgb(45 43 43 / 22%), rgb(0 0 0 / 62%)),
+    0 0 0 0.5px light-dark(rgb(32 31 29 / 20%), rgb(243 242 242 / 16%));
+  --focus-ring: 0 0 0 2px var(--paper), 0 0 0 4px var(--gold);
+
+  --reading: 82ch;
+}
+
+/*
+ * Honoured, not ignored. Every transition in this app is short, but a
+ * vestibular disorder does not care that the author thought the motion was
+ * tasteful.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration: 0ms;
+  }
+}

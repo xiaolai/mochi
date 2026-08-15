@@ -1,0 +1,154 @@
+import { describe, expect, it } from 'vitest'
+import { MOCHI, type FaceSpec } from './avatar-spec'
+import {
+  BASE_UNIT_SCALE,
+  BREATHING_UNITS,
+  LEAN_LIMIT,
+  SIZE_PERCENT,
+  SQUASH_LIMIT,
+  clampSizePercent,
+  fitToCanvas,
+  layoutFor,
+  worstCaseUnits,
+} from './avatar-layout'
+import { LOOKS } from '../renderer/companion/rig/looks'
+
+describe('layoutFor', () => {
+  it('makes her body the fixed thing and the window the derived one', () => {
+    // The whole point of the inversion. Her size must be exactly the design
+    // units times the scale, with nothing else able to influence it.
+    const layout = layoutFor(MOCHI, 100)
+    expect(layout.scale).toBeCloseTo(BASE_UNIT_SCALE, 10)
+    expect(layout.bodyWidth).toBeCloseTo(MOCHI.bodyW * BASE_UNIT_SCALE, 10)
+    expect(layout.bodyHeight).toBeCloseTo(MOCHI.bodyH * BASE_UNIT_SCALE, 10)
+  })
+
+  it('scales linearly with the percentage', () => {
+    const half = layoutFor(MOCHI, 50)
+    const full = layoutFor(MOCHI, 100)
+    const double = layoutFor(MOCHI, 200)
+    expect(half.bodyWidth * 2).toBeCloseTo(full.bodyWidth, 6)
+    expect(double.bodyWidth).toBeCloseTo(full.bodyWidth * 2, 6)
+  })
+
+  it('leaves room for the most deformed frame that can be drawn', () => {
+    // The window exists to contain her worst case, not her resting pose. This
+    // is the arithmetic behind the crop that shipped: sleepy posture at the top
+    // of a breath ran past a window sized for the resting body.
+    for (const percent of [SIZE_PERCENT.min, 100, SIZE_PERCENT.max]) {
+      const layout = layoutFor(MOCHI, percent)
+      const worst = worstCaseUnits(MOCHI)
+      expect(worst.width * layout.scale, `${percent}% width`).toBeLessThanOrEqual(layout.width)
+      // Everything above the ground line has to hold her tallest frame.
+      const aboveGround = layout.height * layout.ground
+      expect(worst.height * layout.scale, `${percent}% height`).toBeLessThanOrEqual(aboveGround)
+    }
+  })
+
+  it('keeps the clearance proportional, not fixed in pixels', () => {
+    // In her own units so the gap around her looks the same at every size. A
+    // pixel margin would swallow her at 50% and look lost at 200%.
+    const small = layoutFor(MOCHI, 50)
+    const large = layoutFor(MOCHI, 200)
+    const gap = (l: ReturnType<typeof layoutFor>): number => (l.width - l.bodyWidth) / l.bodyWidth
+    expect(gap(small)).toBeCloseTo(gap(large), 2)
+  })
+
+  it('rests her base one clearance above the bottom edge', () => {
+    const layout = layoutFor(MOCHI, 100)
+    const fromBottom = layout.height * (1 - layout.ground)
+    expect(fromBottom).toBeCloseTo(BREATHING_UNITS * layout.scale, 6)
+  })
+
+  it('gives whole pixels, because a window cannot be 293.7 wide', () => {
+    for (const percent of [50, 73, 100, 137, 200]) {
+      const layout = layoutFor(MOCHI, percent)
+      expect(Number.isInteger(layout.width), `${percent}% width`).toBe(true)
+      expect(Number.isInteger(layout.height), `${percent}% height`).toBe(true)
+    }
+  })
+
+  it('follows a face with different proportions', () => {
+    // Every avatar declares its own body, so the window must come from THAT
+    // face rather than from the built-in's numbers.
+    const tall: FaceSpec = { ...MOCHI, bodyW: 60, bodyH: 140 }
+    const layout = layoutFor(tall, 100)
+    expect(layout.height).toBeGreaterThan(layout.width)
+    expect(layout.bodyWidth / layout.bodyHeight).toBeCloseTo(60 / 140, 6)
+  })
+})
+
+describe('clampSizePercent', () => {
+  it('clamps rather than rejects', () => {
+    expect(clampSizePercent(10)).toBe(SIZE_PERCENT.min)
+    expect(clampSizePercent(9000)).toBe(SIZE_PERCENT.max)
+    expect(clampSizePercent(100)).toBe(100)
+  })
+
+  it('falls back on anything that is not a usable number', () => {
+    // This value arrives from a hand-editable JSON file and from an IPC
+    // payload, so it is a boundary, not an internal.
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, null, undefined, '120', {}]) {
+      expect(clampSizePercent(bad), JSON.stringify(bad)).toBe(SIZE_PERCENT.fallback)
+    }
+  })
+})
+
+describe('the deformation limits the window is sized against', () => {
+  it('no look leans further than the window allows for', () => {
+    // `LEAN_LIMIT` is a promise the window sizing relies on. Nothing stops a
+    // future look exceeding it except this test, and the symptom would be her
+    // apex clipped on one side in one expression.
+    for (const [emotion, look] of Object.entries(LOOKS)) {
+      expect(Math.abs(look.lean), emotion).toBeLessThanOrEqual(LEAN_LIMIT)
+    }
+  })
+
+  it('no look squashes further than the window allows for', () => {
+    // The rig clamps the SPRING to this, so a look beyond it would simply be
+    // truncated rather than clipped — but a table that asks for something the
+    // renderer refuses to draw is a table lying about what it does.
+    for (const [emotion, look] of Object.entries(LOOKS)) {
+      expect(Math.abs(look.squash), emotion).toBeLessThanOrEqual(SQUASH_LIMIT)
+    }
+  })
+})
+
+describe('fitToCanvas', () => {
+  it('finds a scale whose WORST case fits, not whose resting pose fits', () => {
+    const scale = fitToCanvas(MOCHI, 400, 300)
+    const worst = worstCaseUnits(MOCHI)
+    expect((worst.width + BREATHING_UNITS * 2) * scale).toBeLessThanOrEqual(400 + 1e-9)
+    expect((worst.height + BREATHING_UNITS * 2) * scale).toBeLessThanOrEqual(300 + 1e-9)
+  })
+
+  it('is bound by whichever axis is tighter', () => {
+    expect(fitToCanvas(MOCHI, 100, 10_000)).toBeLessThan(fitToCanvas(MOCHI, 10_000, 10_000))
+    expect(fitToCanvas(MOCHI, 10_000, 100)).toBeLessThan(fitToCanvas(MOCHI, 10_000, 10_000))
+  })
+})
+
+describe('fitToCanvas on a canvas that is not a canvas yet', () => {
+  it('refuses a zero, negative or non-finite size instead of scaling by it', () => {
+    // Every one of these produced an answer that flowed downstream in a shape
+    // nothing tested for: zero gave scale 0 and a `0 / 0` ground, so she was
+    // positioned at NaN and vanished silently; a negative width gave a negative
+    // scale, which mirrors her. A zero-sized canvas is ordinary -- an element
+    // that is display:none, or measured a frame before layout, reports exactly
+    // that.
+    for (const [w, h] of [
+      [0, 200],
+      [200, 0],
+      [-200, 200],
+      [200, -200],
+      [Number.NaN, 200],
+      [200, Number.POSITIVE_INFINITY],
+    ] as const) {
+      expect(fitToCanvas(MOCHI, w, h), `${w}x${h}`).toBe(0)
+    }
+  })
+
+  it('still fits a real canvas', () => {
+    expect(fitToCanvas(MOCHI, 240, 220)).toBeGreaterThan(0)
+  })
+})

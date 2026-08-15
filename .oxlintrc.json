@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "promise", "import"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-base-to-string": "error",
+    "typescript/unbound-method": "error",
+    "import/no-cycle": "error",
+    "no-unsafe-optional-chaining": "error",
+    "no-console": "off",
+
+    "typescript/no-unnecessary-condition": "off",
+    "typescript/switch-exhaustiveness-check": "off",
+    "typescript/restrict-template-expressions": "off",
+    "typescript/require-await": "off",
+    "typescript/no-confusing-void-expression": "off",
+    "typescript/no-non-null-assertion": "off",
+    "promise/always-return": "off",
+    "oxc/no-async-await": "off"
+  },
+  "ignorePatterns": ["node_modules/**", "coverage/**", "dist/**", "dev-docs/**", ".claude/**"]
+}

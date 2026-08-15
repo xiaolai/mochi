@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>mochi</title>
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body>
+    <!--
+      Every label is filled from the i18n table at runtime rather than written
+      here. A string in this file is a string no locale can reach, and it would
+      be invisible until somebody switched language.
+    -->
+    <main id="root" aria-busy="true">
+      <p id="loading">…</p>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

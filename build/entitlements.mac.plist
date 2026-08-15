@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  What the hardened runtime is asked to allow, and nothing more.
+
+  Every entry here is a hole in a wall macOS puts up by default, so the list is
+  short on purpose: an entitlement granted "just in case" is one nobody can
+  later prove is unnecessary.
+
+  NOT present, deliberately:
+
+  - `com.apple.security.app-sandbox`. This app SPAWNS `codex exec`, and a
+    sandboxed process cannot execute an arbitrary binary outside its container.
+    Sandboxing would not weaken delegation, it would delete it. Developer ID
+    distribution does not require the sandbox; the App Store does, which is one
+    of several reasons this app is not headed there.
+  - `com.apple.security.cs.disable-library-validation`. Only needed to load
+    native code signed by somebody else, and there are no runtime native
+    dependencies — `@napi-rs/canvas` is a devDependency used by the icon script,
+    which never ships. If a native module is added later and refuses to load,
+    that is the moment to reconsider, with a reason.
+  - `com.apple.security.network.client`. Meaningful only under the sandbox.
+-->
+<plist version="1.0">
+  <dict>
+    <!--
+      V8 compiles JavaScript at run time. Without these two, Electron does not
+      start under the hardened runtime at all — the failure is a crash on
+      launch, which looks nothing like a signing problem and is one.
+    -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!--
+      She listens. This is the entitlement, and `NSMicrophoneUsageDescription`
+      in Info.plist is the sentence the user reads when macOS asks: both are
+      required, and missing either produces a permission dialog that never
+      appears and a microphone that never opens.
+    -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+  </dict>
+</plist>

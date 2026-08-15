@@ -1,0 +1,88 @@
+/**
+ * Reading and writing the small JSON files that make up her state.
+ *
+ * ONE implementation, because there were two. `persona.ts` and
+ * `preferences.ts` had grown the same eight lines of temp-file-and-rename
+ * independently, down to the `0o600` mode and the trailing newline — and the
+ * careful reasoning about why the rename matters was written out in only one of
+ * them. Two copies of a careful thing are one careful thing and one liability:
+ * whichever gets the next fix, the other keeps the bug.
+ *
+ * Both files are heading for SQLite. Keeping the surface this narrow is what
+ * makes that a change to two functions rather than to every caller.
+ */
+
+import { randomUUID } from 'node:crypto'
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+
+/**
+ * Write it through a temporary file and a rename.
+ *
+ * `writeFileSync` onto the live path truncates first: a crash or a full disk
+ * between truncate and write leaves a zero-byte file, and the next launch reads
+ * it as corrupt and silently reverts the user to the defaults. `rename` within
+ * one directory is atomic on every platform this ships to.
+ *
+ * `0o600` because a persona is personal, and it will shortly sit next to
+ * transcripts.
+ */
+export function writeJsonAtomically(path: string, value: unknown): void {
+  mkdirSync(dirname(path), { recursive: true })
+  // UNPREDICTABLE, and refused if it already exists.
+  //
+  // `${path}.tmp` is a name anybody can work out, and several of these live in
+  // directories the user (and anything running as them) can write: a symlink
+  // planted at that name is followed by `writeFileSync`, so the write lands
+  // wherever the link points, with this process's privileges and `0o600` on
+  // the wrong file. A random name makes it unguessable; `wx` makes it a
+  // failure rather than a follow if the guess lands anyway.
+  const temporary = `${path}.${randomUUID()}.tmp`
+  try {
+    writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
+    renameSync(temporary, path)
+  } catch (error: unknown) {
+    // Never leave the scratch file behind. Unlike the fixed name it replaced,
+    // a random one is not reused, so a stray would accumulate rather than be
+    // overwritten on the next save.
+    rmSync(temporary, { force: true })
+    throw error
+  }
+}
+
+/** Why a file could not be turned into a value, in the caller's words. */
+export type ReadProblem =
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'unreadable'; readonly detail: string }
+  | { readonly kind: 'malformed'; readonly detail: string }
+
+export type JsonRead =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly problem: ReadProblem }
+
+/**
+ * Read and parse, distinguishing THREE outcomes rather than two.
+ *
+ * "No file yet" is the ordinary state of a machine nobody has customised and
+ * deserves no report. A permission error, a directory where a file should be,
+ * or a truncated write are all situations where her state is unreachable for a
+ * reason worth saying out loud — and collapsing them into "use the defaults"
+ * leaves somebody with a broken setup no clue at all, watching their settings
+ * silently reset on every launch.
+ */
+export function readJsonFile(path: string): JsonRead {
+  let raw: string
+  try {
+    raw = readFileSync(path, 'utf8')
+  } catch (error: unknown) {
+    const code = (error as NodeJS.ErrnoException).code
+    return code === 'ENOENT'
+      ? { ok: false, problem: { kind: 'absent' } }
+      : { ok: false, problem: { kind: 'unreadable', detail: String(error) } }
+  }
+  try {
+    return { ok: true, value: JSON.parse(raw) }
+  } catch (error: unknown) {
+    return { ok: false, problem: { kind: 'malformed', detail: String(error) } }
+  }
+}

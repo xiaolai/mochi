@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    // `scripts/` imports source by its real path, extension and all: it is run
+    // by `node`, which strips types rather than resolving a build graph.
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@shared/*": ["./src/shared/*"],
+      "@rig/*": ["./src/renderer/companion/rig/*"]
+    }
+  },
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.ts",
+    "scripts/**/*.ts",
+    "vitest.config.ts",
+    "vite.tuner.config.ts"
+  ]
+}
