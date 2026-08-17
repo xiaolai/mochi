@@ -1,0 +1,15 @@
+{
+  // Solution-style: the two real projects are `tsconfig.web.json` (source, no
+  // tests) and `tsconfig.test.json` (everything, including tests and scripts).
+  // `pnpm typecheck` runs each one directly.
+  //
+  // NEITHER is `composite`, and that is deliberate. Composite implies
+  // incremental, which writes a `.tsbuildinfo` and lets tsc decide it has
+  // already checked a file — and this gate reported SUCCESS over three real
+  // errors until the file was touched again. Composite exists for `tsc -b`
+  // project builds, which nothing here does, so it was buying nothing and
+  // risking a gate that lies. A typecheck that is slightly slower and always
+  // tells the truth is the better trade.
+  "files": [],
+  "references": [{ "path": "./tsconfig.web.json" }, { "path": "./tsconfig.test.json" }]
+}

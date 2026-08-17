@@ -1,0 +1,142 @@
+# Publish site/ to GitHub Pages.
+#
+# There is no build step. `site/` is already exactly what gets served — one
+# HTML file, six self-hosted fonts, and committed PNGs. So this workflow only
+# has to upload the right directory and prove it was not empty.
+#
+# The PNGs were generated from the v1 rig by a `pnpm site:art` that no longer
+# exists: the rig and its generator went to the archive when the app was rewritten.
+# Until a v2 rig can regenerate them, `site/art/` is hand-maintained, and the
+# check below treats the page's own markup as the source of truth for what
+# must be present.
+#
+# ## Why the checks below are not ceremony
+#
+# `upload-pages-artifact` will happily upload a directory with nothing useful
+# in it, and `deploy-pages` will happily publish that: the run goes green and
+# the site goes blank. A workflow that cannot fail is not a check, and "green
+# is not evidence that anything happened" is the specific failure mode here.
+# So every file the page needs is asserted before the upload, and the job fails
+# closed if one is missing.
+#
+# ## The custom domain needs BOTH halves, and neither one alone
+#
+# `site/CNAME` carries `moch.im`, and it has to sit in the uploaded artifact:
+# each deploy replaces the served tree, so a CNAME that exists only in
+# repository settings is not in what gets served.
+#
+# The artifact alone is equally not enough, which is the half that is easy to
+# get wrong because it only shows up on a repository that has never had the
+# domain set. Measured 2026-08-16 on a freshly created repo: this workflow ran
+# green with `site/CNAME` in the artifact, and the domain was still unset
+# (`pages.cname` null) with the site answering 404 until
+# `PUT /repos/:owner/:repo/pages` set `cname` explicitly. Send that field with
+# nothing else — pairing it with `https_enforced` fails "certificate does not
+# exist yet", because the certificate is issued only after the domain is set.
+#
+# ## Pages must already exist before this runs
+#
+# `configure-pages` is used with its default `enablement: false`, so it reads
+# the Pages site rather than creating one and fails "Get Pages site failed" if
+# there is none. A repository that has never had Pages turned on needs
+# `POST /repos/:owner/:repo/pages` with `build_type=workflow` first.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+    # Only when the site actually changes. Every other commit rebuilding and
+    # redeploying an identical tree is noise in the deployment history, which
+    # is the one place you look when a deploy went wrong.
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  # So a broken deploy can be re-run without an empty commit.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one in flight: cancelling a running
+# `deploy-pages` can leave the site serving a half-replaced tree.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check the site is actually there
+        run: |
+          set -euo pipefail
+          fail=0
+          need() {
+            if [ ! -s "$1" ]; then
+              echo "::error file=$1::missing or empty — the deploy would have published a hole"
+              fail=1
+            fi
+          }
+
+          need site/index.html
+          need site/CNAME
+          need site/art/icon.png
+          need site/art/mochi-awake.png
+
+          # The fonts are what stop the page falling back to a system serif on
+          # every machine that is not this one. Six files, counted rather than
+          # listed, so adding a weight does not need an edit here.
+          fonts=$(find site/fonts -name '*.woff2' | wc -l | tr -d ' ')
+          if [ "$fonts" -lt 6 ]; then
+            echo "::error::expected at least 6 web fonts under site/fonts, found $fonts"
+            fail=1
+          fi
+
+          # Every image the published page references must be in the artifact.
+          # Derived from `site/index.html` rather than listed here, so art added
+          # to the page cannot be forgotten — and asserted non-empty, because a
+          # derivation that silently yields nothing is a check that passes
+          # without checking.
+          #
+          # That is not hypothetical. This loop used to read `THEME_IDS` out of
+          # `src/shared/theme.ts`. When the rewrite removed that file, `grep`
+          # failed inside the process substitution — where `pipefail` does not
+          # reach — the loop body never ran, and the step went green having
+          # verified nothing. Hence the count check: the extractor now has to
+          # prove it found something before its results mean anything.
+          mapfile -t refs < <(grep -oE 'art/[a-z0-9-]+\.(png|jpg|svg|webp)' site/index.html | sort -u)
+          if [ "${#refs[@]}" -eq 0 ]; then
+            echo "::error file=site/index.html::no image references found — the extractor is broken, not the page"
+            fail=1
+          fi
+          for ref in "${refs[@]}"; do
+            need "site/$ref"
+          done
+
+          # The domain, matched against what the workflow claims to publish. A
+          # CNAME edited to something else is a silent redirect of the whole
+          # site.
+          domain=$(tr -d '[:space:]' < site/CNAME)
+          if [ "$domain" != "moch.im" ]; then
+            echo "::error file=site/CNAME::CNAME says '$domain', this workflow publishes moch.im"
+            fail=1
+          fi
+
+          exit "$fail"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

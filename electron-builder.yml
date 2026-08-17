@@ -1,0 +1,127 @@
+# How this becomes something somebody else can open.
+#
+# `electron-vite build` produces JavaScript in `out/`; it does not produce a
+# bundle. This is the step that makes a `.app` and a `.dmg`, and it is also the
+# step that decides whether Gatekeeper will let either of them run -- signing is
+# not a thing you add afterwards, it is a property of how the bundle is built.
+#
+# ## The order the pipeline runs in, and why it cannot be rearranged
+#
+#   build → sign nested binaries inside-out → sign the .app → notarize + staple
+#   the .app → build the .dmg from the stapled .app → sign the .dmg → notarize +
+#   staple the .dmg
+#
+# electron-builder does all of that in one pass, which is most of the reason to
+# use it rather than hand-rolled scripts: signing the app after building the dmg
+# means the dmg contains the unsigned app, and nothing about the build output
+# says so.
+#
+# ## Notarization is DECLARED here and not yet run
+#
+# `notarize: false` below. Everything else is wired, so turning it on is one
+# line plus a keychain profile -- but submitting uploads the binary to Apple,
+# which is outward-facing and is the user's call to make, not a side effect of
+# running a build script.
+
+appId: com.mochi.companion
+# The SAME string as `APP_USER_MODEL_ID` in `main/index.ts`. Two spellings of an
+# application's identity is how a notification arrives attributed to nothing and
+# a Windows taskbar groups it under its own second entry.
+productName: Mochi
+copyright: © HANDO K.K.
+
+directories:
+  output: release
+  buildResources: build
+
+# What goes INSIDE the bundle.
+#
+# `out/**` is the compiled application. `package.json` is required by Electron
+# itself to find the entry point. Nothing else: source, tests, docs and spikes
+# have no business in a shipped binary, and every file included is a file that
+# has to be signed and scanned.
+files:
+  - out/**
+  - package.json
+
+# What sits BESIDE it, in `Contents/Resources`.
+#
+# Not `files`, because the code that reads them resolves through
+# `process.resourcesPath` when packaged, and the asar is not a directory that
+# path can reach. The tray failure this prevents is not cosmetic: an invisible
+# tray icon is an app nobody can quit.
+#
+# Nothing consumes these yet. The v1 tray and settings window went to the archive
+# with the rest of the rewrite, so this is staged for the code that replaces
+# them. The assets themselves survived and are still the ones `pnpm dist` ships;
+# what did not survive is the generator that produced them, so treat
+# `resources/` as hand-maintained until a v2 rig can regenerate it.
+extraResources:
+  - from: resources/tray
+    to: tray
+  - from: resources/icons
+    to: icons
+
+mac:
+  category: public.app-category.productivity
+  # Generated from the 1024px PNG the icon pipeline already emits, so there is
+  # still ONE graphical source -- the `.icns` is derived,
+  # never hand-maintained beside it.
+  icon: resources/icons/1024x1024.png
+  target:
+    # Both, and the zip is not redundant: an updater consumes the zip, and a dmg
+    # is what a person downloads. Shipping only the dmg means adding auto-update
+    # later requires re-cutting every past release.
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+
+  # Non-negotiable for notarization: Apple refuses a submission without it.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # `false` because the check is run explicitly afterwards, against the real
+  # artifact, by `scripts/verify-signing.sh`. electron-builder's own assessment
+  # runs before the dmg exists and so cannot say anything about it.
+  gatekeeperAssess: false
+
+  extendInfo:
+    # The sentence macOS shows when it asks. Without it the permission dialog
+    # never appears and the microphone simply never opens -- which presents as
+    # "she cannot hear me", not as a missing plist key.
+    NSMicrophoneUsageDescription: Mochi listens so you can talk to her.
+    # She is an accessory: `main/index.ts` sets that activation policy at
+    # startup, and declaring it here is what keeps a Dock icon from appearing
+    # for the moment before it runs.
+    LSUIElement: true
+
+  # Signing identity comes from the keychain rather than from this file. There is
+  # exactly one Developer ID Application certificate on a normal machine and
+  # electron-builder finds it; naming it here would pin a build to one developer's
+  # keychain and break on everybody else's.
+  #
+  # Notarization: OFF until somebody decides to submit. Turning it on means
+  # setting `notarize: {teamId: ...}` here and storing a keychain profile with
+  # `xcrun notarytool store-credentials`. Nothing in a build script should upload
+  # a binary to Apple as a side effect of `pnpm dist`.
+  notarize: false
+
+dmg:
+  # Named so a download folder stays legible: `Mochi-0.0.1-arm64.dmg`.
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  # electron-builder defaults this to FALSE, and the default is wrong for
+  # distribution: verification of the first build reported the dmg as
+  # `no usable signature`. A stapled app inside an unsigned disk image is not
+  # enough — the image is what the user downloads and double-clicks, and
+  # Gatekeeper judges it on its own terms.
+  sign: true
+
+win:
+  target: nsis
+  icon: resources/icons/1024x1024.png
+
+linux:
+  target: AppImage
+  category: Utility
+  icon: resources/icons

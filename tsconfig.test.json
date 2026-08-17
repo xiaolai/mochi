@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@shared/*": ["./src/shared/*"]
+    }
+  },
+  // Wider than `tsconfig.web.json` on purpose: this is the project that covers
+  // `src/main` and `src/preload`, which run under Node rather than in the page
+  // and so need the `node` types the web project deliberately does not load.
+  "include": ["src/**/*.ts", "vitest.config.ts"]
+}

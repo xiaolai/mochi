@@ -1,0 +1,72 @@
+# Run the gate. `pnpm verify` = prettier --check → oxlint --type-aware → tsc → vitest.
+#
+# ## Why this file exists at all
+#
+# Until it did, `pnpm verify` was run by whoever remembered to run it. This
+# project is organised around "red means not done", and nothing enforced it:
+# `pages.yml` was the only workflow, and `core.hooksPath` points at a personal
+# commit-message guard that knows nothing about tests. A gate nobody runs is a
+# gate that is already open.
+#
+# ## macOS, and the original reason for it is gone
+#
+# This ran on macOS because a rig test regenerated the site PNGs and compared
+# them to the committed ones by byte digest, through a rasteriser that ships a
+# different native binary per platform. The v1 rewrite archived that rig, its
+# generator and that test, so **that argument no longer applies** and is not
+# quietly retained here as if it did.
+#
+# What still holds is weaker and worth stating plainly: macOS is the development
+# machine and what `electron-builder` packages for, so a green here is green on
+# the platform that ships. Nothing in the current gate is platform-sensitive —
+# prettier, oxlint, tsc and vitest are all pure — so moving to `ubuntu-latest`
+# for speed and cost is a defensible change whenever somebody wants it. It just
+# should be made on that reasoning, not on the deleted one.
+#
+# ## Fail closed
+#
+# No `continue-on-error`, no `|| true`, no step that swallows a non-zero exit.
+# `pages.yml` argues this at length for its own asserts and the argument is the
+# same one: a workflow that cannot fail is not a check.
+
+name: verify
+
+on:
+  push:
+  pull_request:
+
+# One run per ref. A superseded push has nothing to tell us, and cancelling it
+# frees a macOS runner, which is the scarce one.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    # The suite is ~6s locally; the ceiling is here so a hung `vitest` or a
+    # wedged `pnpm install` fails in minutes instead of running up against
+    # GitHub's six-hour default.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      # BEFORE `setup-node`, because `cache: pnpm` needs pnpm to already exist
+      # to locate its store. The version is not written here: `action-setup`
+      # reads `packageManager` from `package.json`, so the pin lives in one
+      # place and this file cannot drift from it.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # `--frozen-lockfile` so a lockfile that does not match `package.json`
+      # fails here, loudly, instead of resolving to something nobody tested.
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm verify
