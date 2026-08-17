@@ -19,8 +19,17 @@ export const COMPANION_CHANNELS = [
   'voice:open',
   /** Renderer hands main an SDP offer; main exchanges it and returns the answer. */
   'voice:sdp',
-  /** Renderer asks for the `tools` array to put in `session.update`. */
-  'voice:tools',
+  /**
+   * Renderer asks for everything that goes in `session.update` — who she is,
+   * what she sounds like, what she may call.
+   *
+   * ONE call rather than three, because all of it is main's to know: the
+   * persona lives in main's store, the note lives beside it, and the capability
+   * registry is main's by design. A renderer that assembled this would need the
+   * persona, which is the same mistake as letting it decide which capability
+   * runs.
+   */
+  'voice:config',
   /** She called a capability. Name, call id, raw arguments — main dispatches. */
   'voice:call',
   /** Renderer reports what the session is doing — see `VoiceReport`. */
@@ -50,6 +59,15 @@ export type VoiceReport =
   /** Anything else worth saying once. */
   | { readonly kind: 'note'; readonly text: string }
 
+/** What `session.update` is built from. Assembled in main; sent by the renderer. */
+export interface SessionConfig {
+  /** Who she is: persona, her note about the user, the rules. Never empty. */
+  readonly instructions: string
+  /** Locked after her first audio output — switching personas needs a reconnect (§21). */
+  readonly voice: string
+  readonly tools: readonly unknown[]
+}
+
 /**
  * The shape the preload bridge puts on `window.mochi`.
  *
@@ -62,8 +80,8 @@ export interface MochiApi {
   open(): Promise<{ ok: true; key: string; model: string } | { ok: false; why: string }>
   /** Exchange the offer. Main holds the key; the renderer never sees it again. */
   sdp(offer: string): Promise<{ ok: true; answer: string } | { ok: false; why: string }>
-  /** Everything she may call, ready for `session.update`. */
-  tools(): Promise<readonly unknown[]>
+  /** Everything `session.update` needs. See `voice:config`. */
+  config(): Promise<SessionConfig>
   /** Forward a tool call to main. Fire and forget: the answer comes back as a frame. */
   call(name: string, callId: string, args: string): void
   /** Tell main what the session is doing. */

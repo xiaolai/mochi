@@ -165,12 +165,22 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   window.mochi.onSend((frame) => put(frame))
 
   // SETTLED, not raced — see point 2.
-  const [minted, captured] = await Promise.allSettled([
+  //
+  // The config is fetched HERE rather than when the channel opens, and the
+  // difference is a race the first run showed in its own log: `session.created`
+  // arrived before the IPC round trip came back, so for that window she was
+  // configured with the model's defaults — no name, no manner. It depends on
+  // nothing the channel provides, so there is no reason to wait for it.
+  const [minted, captured, configured] = await Promise.allSettled([
     window.mochi.open(),
     navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     }),
+    window.mochi.config(),
   ])
+  if (configured.status === 'rejected')
+    fail(`could not read the persona: ${String(configured.reason)}`)
+  const config = configured.value
 
   // A late stream is stopped wherever this ends, including on the failure paths.
   if (captured.status === 'fulfilled') media = captured.value
@@ -201,28 +211,33 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   if (closed) fail('the session was abandoned while opening')
   await peer.setRemoteDescription({ type: 'answer', sdp: answered.answer })
 
+  // Sent the instant the channel opens, with everything already in hand.
   channel.addEventListener('open', () => {
-    void (async () => {
-      put({
-        type: 'session.update',
-        session: {
-          type: 'realtime',
-          output_modalities: ['audio'],
-          audio: {
-            input: {
-              // §17: her own voice through a speaker reads as somebody taking a
-              // turn without this, and `semantic_vad` lets the model decide what
-              // a turn is rather than an energy threshold deciding for it.
-              noise_reduction: { type: 'far_field' },
-              turn_detection: { type: 'semantic_vad' },
-              transcription: { model: 'whisper-1' },
-            },
+    put({
+      type: 'session.update',
+      session: {
+        type: 'realtime',
+        // Without this she is whatever the model is by default: no name, no
+        // manner, no memory of anybody. Every session before this one ran so.
+        instructions: config.instructions,
+        output_modalities: ['audio'],
+        audio: {
+          // Locked after her first audio output, so a persona switch is a
+          // reconnect rather than an update (§21).
+          output: { voice: config.voice },
+          input: {
+            // §17: her own voice through a speaker reads as somebody taking a
+            // turn without this, and `semantic_vad` lets the model decide what
+            // a turn is rather than an energy threshold deciding for it.
+            noise_reduction: { type: 'far_field' },
+            turn_detection: { type: 'semantic_vad' },
+            transcription: { model: 'whisper-1' },
           },
-          tools: await window.mochi.tools(),
-          tool_choice: 'auto',
         },
-      })
-    })()
+        tools: config.tools,
+        tool_choice: 'auto',
+      },
+    })
   })
 
   return {

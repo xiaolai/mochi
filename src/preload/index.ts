@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { isCompanionChannel, type MochiApi, type VoiceReport } from '@shared/ipc'
+import {
+  isCompanionChannel,
+  type MochiApi,
+  type SessionConfig,
+  type VoiceReport,
+} from '@shared/ipc'
 
 /**
  * The only path between the page and the main process.
@@ -26,8 +31,8 @@ const api: MochiApi = {
       ReturnType<MochiApi['sdp']>
     >
   },
-  async tools() {
-    return (await ipcRenderer.invoke(guard('voice:tools'))) as readonly unknown[]
+  async config() {
+    return (await ipcRenderer.invoke(guard('voice:config'))) as SessionConfig
   },
   call(name: string, callId: string, args: string) {
     ipcRenderer.send(guard('voice:call'), name, callId, args)

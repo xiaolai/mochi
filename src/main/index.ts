@@ -1,5 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
+import { existsSync } from 'node:fs'
+import { instructionsFor } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
 import { whenToReconnect } from '@shared/realtime/reconnect'
 import type { VoiceReport } from '@shared/ipc'
@@ -12,6 +14,8 @@ import {
   readBearer,
   type Minted,
 } from './voice/credential'
+import { activePersona, loadPersonas, personasRoot } from './store/personas'
+import { recall } from './store/memory'
 import { createCompanionWindow } from './window'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
@@ -97,7 +101,43 @@ ipcMain.handle('voice:sdp', async (_event, offer: unknown) => {
   return { ok: true, answer: answered.value }
 })
 
-ipcMain.handle('voice:tools', () => registry.tools)
+/**
+ * Who she is, what she sounds like, what she may call.
+ *
+ * Read fresh on every session rather than cached at startup. A session is
+ * opened on every wake and again on every reconnect (§53), so this is the
+ * natural moment to pick up a persona edit or a changed note — and a cache here
+ * would mean her character updated only on restart.
+ *
+ * `instructionsFor` takes the note as a REQUIRED argument. An omitted one is
+ * amnesia about the person, which is the failure this project is least able to
+ * notice, so it is not defaulted and not skipped.
+ */
+ipcMain.handle('voice:config', () => {
+  const userData = app.getPath('userData')
+  // Whether this installation has run before decides whether a one-time
+  // retention migration may run at all — a permissive default there would let a
+  // hand-placed package choose somebody's retention on a first launch.
+  const ranBefore = existsSync(personasRoot(userData))
+  const catalog = loadPersonas(userData, {}, ranBefore)
+  for (const problem of catalog.problems) {
+    console.error(`[persona] ${problem.kind}`)
+  }
+  // `null` is "wear the built-in". Choosing another is a setting that does not
+  // exist yet; the store has carried the machinery since v1.
+  const resolved = activePersona(catalog, null)
+  if (resolved.problem !== null) console.error(`[persona] ${resolved.problem.kind}`)
+
+  const note = recall(userData, resolved.persona.id)
+  console.log(
+    `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars`,
+  )
+  return {
+    instructions: instructionsFor(resolved.persona, note),
+    voice: resolved.persona.voice,
+    tools: registry.tools,
+  }
+})
 
 /**
  * She called something. This is the only place that decides what runs.
