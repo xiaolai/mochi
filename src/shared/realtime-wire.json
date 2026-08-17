@@ -1,0 +1,8 @@
+{
+  "callsUrl": "https://api.openai.com/v1/realtime/calls",
+  "clientSecretsUrl": "https://api.openai.com/v1/realtime/client_secrets",
+  "socketUrl": "wss://api.openai.com/v1/realtime",
+  "eventChannel": "oai-events",
+  "readOn": "2026-08-07",
+  "source": "https://developers.openai.com/api/docs/guides/realtime-webrtc"
+}
