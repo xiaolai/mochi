@@ -32,6 +32,7 @@
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.6",
     "@types/node": "^26.1.2",
     "@vitest/coverage-v8": "^4.1.10",
     "electron": "^43.3.0",
