@@ -1152,9 +1152,39 @@ describe('moving loose files into packages', () => {
 
     const problems = migrateLooseFiles(dir)
 
+    // Counted before it is described. `[].every(...)` is `true`, so the shape
+    // assertion below passes on an empty array — which is exactly the state a
+    // removed guard could produce.
+    expect(problems).toHaveLength(2)
     expect(problems.every((one) => one.kind === 'legacy-blocked')).toBe(true)
     // Nothing was created outside the folder, and nothing above it moved.
     expect(existsSync(join(personasRoot(dir), '..', MANIFEST))).toBe(false)
+  })
+
+  it('refuses a dotted stem even when nothing is standing in its way', () => {
+    // THIS is the case the stem check uniquely decides, and the test above does
+    // not reach it.
+    //
+    // Mutation testing removed `stem.includes('.')` and the test above stayed
+    // green — not because it asserts nothing, but because a SECOND mechanism
+    // produces the same observable. `...json` and `.json` leave the stems `..`
+    // and `''`, which name directories that already exist, so `reservePackage`
+    // throws and pushes the very same `legacy-blocked`. The traversal cases are
+    // caught by "that folder is taken", with the guard removed or not.
+    //
+    // `my.persona.json` leaves `my.persona`: a dot, no traversal, and nothing
+    // at that path. `reservePackage` would happily create it and the file would
+    // move in. So this is the one input whose outcome the guard alone decides.
+    const dir = workspace()
+    mkdirSync(personasRoot(dir), { recursive: true })
+    writeFileSync(join(personasRoot(dir), 'my.persona.json'), JSON.stringify(tutor))
+
+    const problems = migrateLooseFiles(dir)
+
+    expect(problems).toEqual([{ kind: 'legacy-blocked', source: 'my.persona.json' }])
+    // The guard's actual job: no folder was reserved and the file did not move.
+    expect(existsSync(join(personasRoot(dir), 'my.persona'))).toBe(false)
+    expect(existsSync(join(personasRoot(dir), 'my.persona.json'))).toBe(true)
   })
 })
 
