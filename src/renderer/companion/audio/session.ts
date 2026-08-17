@@ -118,10 +118,10 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
         // The log records the CONVERSATION now, not only the connection. The
         // first run of this session logged five lines, every one of them about
         // the wire, and could not have said whether she heard anything at all.
-        window.mochi.report({ kind: 'note', text: `heard: ${frame.transcript}` })
+        window.mochi.report({ kind: 'heard', transcript: frame.transcript })
         break
       case 'said':
-        window.mochi.report({ kind: 'note', text: `said: ${frame.transcript}` })
+        window.mochi.report({ kind: 'said', transcript: frame.transcript })
         break
       case 'session-expired':
         // Not a failure. An hour passed (§53), and main already has a timer.

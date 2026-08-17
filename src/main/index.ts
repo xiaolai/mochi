@@ -15,6 +15,10 @@ import {
   type Minted,
 } from './voice/credential'
 import { activePersona, loadPersonas, personasRoot } from './store/personas'
+import { readPolicy } from './store/policy'
+import { readWornPersonaId } from './store/worn'
+import { createTranscripts, type Transcripts } from './store/transcripts'
+import { createConversation, type Conversation } from './store/conversation'
 import { recall } from './store/memory'
 import { createCompanionWindow } from './window'
 
@@ -64,6 +68,31 @@ const ledger = createLedger({
   registry,
   send: (frame: AnswerFrame) => companion?.webContents.send('voice:send', frame),
 })
+
+/**
+ * The archive, opened once and lazily.
+ *
+ * Lazily because `app.getPath('userData')` is not answerable before the app is
+ * ready, and once because `node:sqlite` is a file handle — a second connection
+ * to the same database is a second writer, and this one is the only writer.
+ */
+let archive: Transcripts | null = null
+let talk: Conversation | null = null
+
+function conversation(): Conversation {
+  if (talk === null) {
+    const userData = app.getPath('userData')
+    archive ??= createTranscripts(userData)
+    talk = createConversation({
+      transcripts: archive,
+      // Read per turn, inside the module. Turning saving off has to take effect
+      // on the next thing said, not on the next wake.
+      keeps: (personaId) => readPolicy(userData, personaId).keeps,
+      log: (text) => console.log(`[archive] ${text}`),
+    })
+  }
+  return talk
+}
 
 /** Held so a second open replaces the first rather than racing it. */
 let minted: Minted | null = null
@@ -123,10 +152,20 @@ ipcMain.handle('voice:config', () => {
   for (const problem of catalog.problems) {
     console.error(`[persona] ${problem.kind}`)
   }
-  // `null` is "wear the built-in". Choosing another is a setting that does not
-  // exist yet; the store has carried the machinery since v1.
-  const resolved = activePersona(catalog, null)
+  // Which persona was last worn, remembered across restarts. Getting this wrong
+  // is not cosmetic: the archive is scoped per persona, so defaulting to the
+  // built-in on an installation whose history is under another name shows her
+  // an empty memory and presents as "recall does not work".
+  const resolved = activePersona(catalog, readWornPersonaId(userData))
   if (resolved.problem !== null) console.error(`[persona] ${resolved.problem.kind}`)
+
+  // A new session is a new conversation. Ending the previous one here rather
+  // than on teardown covers the reconnect path too, which is the common case:
+  // §53 measured a session lasting exactly an hour, so this happens hourly.
+  // A new session is a new conversation. Doing it here rather than on teardown
+  // covers the reconnect path too, which is the common case: §53 measured a
+  // session lasting exactly an hour, so this happens hourly.
+  conversation().wear(resolved.persona.id)
 
   const note = recall(userData, resolved.persona.id)
   console.log(
@@ -180,6 +219,16 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
     }, ms)
     return
   }
+  if (event?.kind === 'heard') {
+    console.log(`[voice] heard: ${event.transcript}`)
+    conversation().file('you', event.transcript)
+    return
+  }
+  if (event?.kind === 'said') {
+    console.log(`[voice] said: ${event.transcript}`)
+    conversation().file('her', event.transcript)
+    return
+  }
   if (event?.kind === 'state') console.log(`[voice] ${event.state}`)
   if (event?.kind === 'note') console.log(`[voice] ${event.text}`)
 })
@@ -203,3 +252,7 @@ void app.whenReady().then(
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+
+// The last chance to close the conversation cleanly. `before-quit` rather than
+// `will-quit`, because the database has to still be usable when it runs.
+app.on('before-quit', () => conversation().end())

@@ -54,6 +54,16 @@ export function isCompanionChannel(value: unknown): value is CompanionChannel {
 export type VoiceReport =
   /** `session.created` announced the deadline. Absolute Unix **seconds**. */
   | { readonly kind: 'expiry'; readonly expiresAt: number }
+  /**
+   * What the user said, as ASR settled it.
+   *
+   * Structured rather than folded into a log line, because main files it. The
+   * text is a person's words: whether it reaches disk is the retention setting's
+   * decision, made in main, and the renderer neither knows it nor should.
+   */
+  | { readonly kind: 'heard'; readonly transcript: string }
+  /** What she said. Same treatment, same reason. */
+  | { readonly kind: 'said'; readonly transcript: string }
   /** A lifecycle change worth a line in the log. */
   | { readonly kind: 'state'; readonly state: string }
   /** Anything else worth saying once. */
