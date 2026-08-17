@@ -1,0 +1,90 @@
+{
+  "output_audio_buffer.started": {
+    "type": "output_audio_buffer.started",
+    "event_id": "event_observed_started",
+    "response_id": "resp_EDoWCLZlVMJ33iz5PgLWt"
+  },
+  "output_audio_buffer.stopped": {
+    "type": "output_audio_buffer.stopped",
+    "event_id": "event_observed_stopped",
+    "response_id": "resp_EDoWCLZlVMJ33iz5PgLWt"
+  },
+  "output_audio_buffer.cleared": {
+    "type": "output_audio_buffer.cleared",
+    "event_id": "event_observed_cleared",
+    "response_id": "resp_EDoWDmv69pvSGJRCH7yF1"
+  },
+  "response.function_call_arguments.delta": {
+    "type": "response.function_call_arguments.delta",
+    "event_id": "event_EDoWGPXjQMMwgyDFY4nap",
+    "response_id": "resp_EDoWGgOe6uabVreCjRIKw",
+    "item_id": "item_EDoWG8Q40zXhHQQRY82F9",
+    "output_index": 0,
+    "call_id": "call_LzM9HoHHCl3J1RJl",
+    "delta": "{",
+    "obfuscation": "QwtmGAZ3g2ote80"
+  },
+  "response.function_call_arguments.done": {
+    "type": "response.function_call_arguments.done",
+    "event_id": "event_EDoWG0XEIDEgx2fzvbJjA",
+    "response_id": "resp_EDoWGgOe6uabVreCjRIKw",
+    "item_id": "item_EDoWG8Q40zXhHQQRY82F9",
+    "output_index": 0,
+    "call_id": "call_LzM9HoHHCl3J1RJl",
+    "name": "look_up_the_passphrase",
+    "arguments": "{  \n  \"what\": \"the passphrase\" \n} \n"
+  },
+  "response.done": {
+    "type": "response.done",
+    "event_id": "event_EDoWGzBFwWiGzONf40jSQ",
+    "response": {
+      "object": "realtime.response",
+      "id": "resp_EDoWGgOe6uabVreCjRIKw",
+      "status": "completed",
+      "status_details": null,
+      "output": [
+        {
+          "id": "item_EDoWG8Q40zXhHQQRY82F9",
+          "type": "function_call",
+          "status": "completed",
+          "name": "look_up_the_passphrase",
+          "call_id": "call_LzM9HoHHCl3J1RJl",
+          "arguments": "{  \n  \"what\": \"the passphrase\" \n} \n"
+        }
+      ],
+      "conversation_id": null,
+      "output_modalities": ["audio"],
+      "max_output_tokens": "inf",
+      "audio": {
+        "output": {
+          "format": {
+            "type": "audio/pcm",
+            "rate": 24000
+          },
+          "voice": "alloy"
+        }
+      },
+      "usage": {
+        "total_tokens": 154,
+        "input_tokens": 127,
+        "output_tokens": 27,
+        "input_token_details": {
+          "text_tokens": 73,
+          "audio_tokens": 54,
+          "image_tokens": 0,
+          "cached_tokens": 0,
+          "cached_tokens_details": {
+            "text_tokens": 0,
+            "audio_tokens": 0,
+            "image_tokens": 0
+          }
+        },
+        "output_token_details": {
+          "text_tokens": 27,
+          "audio_tokens": 0
+        }
+      },
+      "metadata": null
+    }
+  }
+}
