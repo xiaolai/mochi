@@ -1,0 +1,47 @@
+[
+  {
+    "type": "function",
+    "name": "ask_workspace",
+    "description": "Look something up: read the files in the workspace, and search the web when the question needs current information. Returns immediately and the answer arrives later, usually within a minute — say you are going to look, then carry on talking. The answer names where it came from; pass that on rather than presenting it as your own knowledge. Report what comes back in your own words, including when it found nothing, and never invent an answer you did not receive or quietly replace one with something you remember.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "What to find out."
+        }
+      },
+      "required": ["question"]
+    }
+  },
+  {
+    "type": "function",
+    "name": "recall_conversations",
+    "description": "Search what was actually said in your earlier conversations with this person. Answers immediately, so there is no need to say you are checking. Use it when they refer to something from an earlier conversation, or when you would otherwise be guessing at what was said. Each result says when it was said; attribute it to that conversation rather than presenting it as your own knowledge, and say plainly when nothing was found.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The words to search for. Use the words they are likely to have actually said."
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "type": "function",
+    "name": "remember_this",
+    "description": "Write one short fact into your long-term notes about this person. Call this ONLY when they have asked you to remember something, in those words or plainly meaning it. Do not call it because something seemed interesting or worth keeping — everything said is already reviewed later. Record what is true about them, not what was said in this conversation.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "note": {
+          "type": "string",
+          "description": "The single fact to keep, as one plain sentence about the person."
+        }
+      },
+      "required": ["note"]
+    }
+  }
+]

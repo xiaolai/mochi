@@ -1,0 +1,14 @@
+{
+  "name": "remember_this",
+  "description": "Write one short fact into your long-term notes about this person. Call this ONLY when they have asked you to remember something, in those words or plainly meaning it. Do not call it because something seemed interesting or worth keeping — everything said is already reviewed later. Record what is true about them, not what was said in this conversation.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "note": {
+        "type": "string",
+        "description": "The single fact to keep, as one plain sentence about the person."
+      }
+    },
+    "required": ["note"]
+  }
+}
