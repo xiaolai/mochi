@@ -7,6 +7,7 @@ import { whenToReconnect } from '@shared/realtime/reconnect'
 import type { VoiceReport } from '@shared/ipc'
 import { loadCapabilities } from './capability/load'
 import { createLedger, type AnswerFrame } from './capability/ledger'
+import { builtinHandlers, handlerFor } from './capability/handlers'
 import {
   describeProblem,
   exchangeSdp,
@@ -94,6 +95,17 @@ function conversation(): Conversation {
   return talk
 }
 
+/** Who is worn right now. Read by the handlers, which search only her archive. */
+let wearing: string | null = null
+
+const handlers = builtinHandlers({
+  // Functions, not values: the store opens lazily and the persona changes on
+  // every session, so a handler asking at call time gets the current answer
+  // rather than whatever was true when this file was evaluated.
+  transcripts: () => archive,
+  wearing: () => wearing,
+})
+
 /** Held so a second open replaces the first rather than racing it. */
 let minted: Minted | null = null
 let reconnectTimer: NodeJS.Timeout | null = null
@@ -166,6 +178,7 @@ ipcMain.handle('voice:config', () => {
   // covers the reconnect path too, which is the common case: §53 measured a
   // session lasting exactly an hour, so this happens hourly.
   conversation().wear(resolved.persona.id)
+  wearing = resolved.persona.id
 
   const note = recall(userData, resolved.persona.id)
   console.log(
@@ -194,9 +207,23 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
     return
   }
   console.log(`[capability] ${name}(${JSON.stringify(arrival.args)})`)
-  ledger.answer(callId, {
-    error: `${name} is declared but not built yet in this version`,
-  })
+
+  // Every path answers. A handler that throws is still a call that must be
+  // settled — an unanswered one sits in the conversation for the rest of the
+  // session and she has no way to mention it.
+  void (async () => {
+    try {
+      const output = await handlerFor(handlers, name)(arrival.args)
+      ledger.answer(callId, output)
+      console.log(`[capability] ${name} -> ${JSON.stringify(output).slice(0, 120)}`)
+    } catch (error: unknown) {
+      console.error(`[capability] ${name} threw:`, error)
+      ledger.answer(callId, {
+        status: 'unavailable',
+        guidance: 'That did not work just now. Say so plainly rather than guessing at a result.',
+      })
+    }
+  })()
 })
 
 ipcMain.on('voice:report', (_event, report: unknown) => {
