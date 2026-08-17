@@ -35,6 +35,9 @@ const tutor: Persona = {
   name: 'Ada',
   addressUser: 'Lai',
   voice: 'sage',
+  // ON here, and off in the built-in. A fixture that matched the default would
+  // pass every test that never reads the field.
+  bubble: true,
   // A second persona with a DIFFERENT pronoun, deliberately: the whole reason
   // the pronoun lives here rather than in app settings is that switching
   // persona has to switch it too.
@@ -465,6 +468,39 @@ describe('greetingFor', () => {
     const greeting = greetingFor(DEFAULT_PERSONA)
     expect(greeting).not.toContain('Greet you ')
     expect(greeting).toContain('the person you are talking to')
+  })
+})
+
+describe('the bubble switch', () => {
+  it('defaults to off on a persona written before it existed', () => {
+    // The ordinary upgrade case: every file on disk right now. Quietly taking
+    // the default is what stops the app "eating" characters over a field the
+    // app itself added.
+    const { bubble, ...withoutIt } = tutor
+    void bubble
+    const parsed = parsePersona({ ...withoutIt })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.persona.bubble).toBe(false)
+  })
+
+  it('is carried through when the file says so', () => {
+    for (const wanted of [true, false]) {
+      const parsed = parsePersona({ ...tutor, bubble: wanted })
+      expect(parsed.ok, String(wanted)).toBe(true)
+      if (!parsed.ok) continue
+      expect(parsed.persona.bubble).toBe(wanted)
+    }
+  })
+
+  it('reports a value that is not a boolean rather than guessing', () => {
+    // Somebody wrote something there meaning to switch it. `"true"` silently
+    // becoming `true` teaches a format that does not exist; `"no"` silently
+    // becoming `true` is worse.
+    for (const raw of ['true', 'yes', 1, 0, null]) {
+      const parsed = parsePersona({ ...tutor, bubble: raw })
+      expect(parsed.ok, JSON.stringify(raw)).toBe(false)
+    }
   })
 })
 

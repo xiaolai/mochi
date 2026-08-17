@@ -185,6 +185,14 @@ export interface Persona {
    */
   readonly voice: VoiceName
   /**
+   * Whether her words are shown beside her while she speaks.
+   *
+   * Per character and OFF by default, which is the v1 design's call and worth
+   * keeping: a bubble is words over somebody's desktop, and a companion that
+   * subtitles itself by default has decided for them.
+   */
+  readonly bubble: boolean
+  /**
    * Character and manner, sent as `session.instructions`.
    *
    * Two constraints belong here that text chat never needs: no emoji and no
@@ -237,6 +245,9 @@ export const DEFAULT_PERSONA: Persona = {
   // The spike's choice, which is as good a starting point as any and is a
   // persona property rather than a global setting.
   voice: 'ballad',
+  // Off, per the design. `PERSONA_FIELDS` is derived from this object, so
+  // adding it here is also what stops `bubble` reading as an unknown field.
+  bubble: false,
   pronoun: 'she',
   theme: DEFAULT_THEME,
   // Character only -- and the speech rules are part of that character rather
@@ -998,6 +1009,7 @@ export function parsePersona(value: unknown): PersonaParse {
   const pronoun = readPronoun(problems, source)
   const theme = readTheme(problems, source)
   const voice = readVoice(problems, source)
+  const bubble = readBubble(problems, source)
 
   const greeting = readMoment(problems, source, 'greeting')
   const farewell = readMoment(problems, source, 'farewell')
@@ -1061,6 +1073,7 @@ export function parsePersona(value: unknown): PersonaParse {
       theme,
       version,
       voice,
+      bubble,
       style,
       avatarId,
       greeting,
@@ -1147,6 +1160,21 @@ function readTheme(problems: SaveProblem[], source: Record<string, unknown>): Th
     allowed: `${THEME_IDS.join(', ')}, or { hue: 0-359 }`,
   })
   return DEFAULT_THEME
+}
+
+/**
+ * Whether she shows her words.
+ *
+ * Absent is the ordinary upgrade case — every persona written before the bubble
+ * existed — and takes the default quietly. A value that is not a boolean is a
+ * problem, because somebody wrote something there meaning to switch it.
+ */
+function readBubble(problems: SaveProblem[], source: Record<string, unknown>): boolean {
+  const raw = source['bubble']
+  if (raw === undefined) return DEFAULT_PERSONA.bubble
+  if (typeof raw === 'boolean') return raw
+  problems.push({ kind: 'unknown-value', field: 'bubble', allowed: 'true, false' })
+  return DEFAULT_PERSONA.bubble
 }
 
 /** Which voice the service is asked for. A closed set the service owns. */

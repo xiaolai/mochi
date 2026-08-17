@@ -85,6 +85,21 @@ export interface SessionConfig {
   /** Locked after her first audio output — switching personas needs a reconnect (§21). */
   readonly voice: string
   readonly tools: readonly unknown[]
+  /**
+   * Whether she shows her words beside her.
+   *
+   * Per persona and off by default — a bubble is words over somebody's desktop,
+   * and a companion that subtitles itself by default has decided for them.
+   */
+  readonly bubble: boolean
+  /**
+   * What to say on waking, as an instruction rather than as words.
+   *
+   * A separate `response.create` rather than part of the system prompt, because
+   * she must speak **without having been spoken to** — there is no user turn to
+   * respond to, and a system prompt only shapes an answer to something.
+   */
+  readonly greeting: string
 }
 
 /**

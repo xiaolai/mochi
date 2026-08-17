@@ -61,6 +61,20 @@ export type ServerFrame =
    */
   | { readonly kind: 'heard'; readonly transcript: string; readonly itemId: string }
   /**
+   * One fragment of what she is saying, as it is generated.
+   *
+   * Observed keys include `delta`, which is the fragment. Used for the bubble
+   * and nothing else: it tracks GENERATION, which runs ahead of her audio at
+   * both ends — §56 measured it starting 0–320ms earlier, §19 measured it
+   * finishing 2.1–7.9s earlier. So it is not a signal about what she has
+   * actually said aloud.
+   *
+   * `responseId` is what separates one utterance from the next. Taking that
+   * boundary from the audio stream instead is §56's whole subject: it discards
+   * the opening deltas, and for a one-word reply it discards all of them.
+   */
+  | { readonly kind: 'saying'; readonly delta: string; readonly responseId: string }
+  /**
    * What she said, as text. Arrives BEFORE her audio finishes draining — §19
    * measured the gap at 2.1–7.9s and growing with length, so this is not a
    * signal that she has stopped talking.
@@ -156,6 +170,16 @@ export function parseServerFrame(text: string): ServerFrame {
       kind: 'heard',
       transcript: value['transcript'] as string,
       itemId: value['item_id'] as string,
+    }
+  }
+
+  if (type === 'response.output_audio_transcript.delta') {
+    const missing = missingFrom(value, ['delta', 'response_id'])
+    if (missing.length > 0) return { kind: 'malformed', type, missing }
+    return {
+      kind: 'saying',
+      delta: value['delta'] as string,
+      responseId: value['response_id'] as string,
     }
   }
 

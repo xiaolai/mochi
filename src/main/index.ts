@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { existsSync } from 'node:fs'
-import { instructionsFor } from '@shared/persona'
+import { greetingFor, instructionsFor } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
 import { whenToReconnect } from '@shared/realtime/reconnect'
 import type { VoiceReport } from '@shared/ipc'
@@ -182,11 +182,13 @@ ipcMain.handle('voice:config', () => {
 
   const note = recall(userData, resolved.persona.id)
   console.log(
-    `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars`,
+    `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars, bubble ${resolved.persona.bubble ? 'on' : 'off'}`,
   )
   return {
     instructions: instructionsFor(resolved.persona, note),
     voice: resolved.persona.voice,
+    bubble: resolved.persona.bubble,
+    greeting: greetingFor(resolved.persona),
     tools: registry.tools,
   }
 })

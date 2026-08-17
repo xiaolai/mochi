@@ -34,6 +34,7 @@ describe('frames captured from the live service', () => {
       'response.done',
       'response.function_call_arguments.delta',
       'response.function_call_arguments.done',
+      'response.output_audio_transcript.delta',
       'response.output_audio_transcript.done',
     ])
   })
@@ -91,6 +92,15 @@ describe('frames captured from the live service', () => {
 })
 
 describe('the two frames that make a conversation visible', () => {
+  it('reads a fragment of what she is saying, for the bubble', () => {
+    const parsed = parseServerFrame(frame('response.output_audio_transcript.delta'))
+    expect(parsed).toEqual({
+      kind: 'saying',
+      delta: 'one fragment ',
+      responseId: 'resp_observed',
+    })
+  })
+
   it('reads what the user said', () => {
     const parsed = parseServerFrame(frame('conversation.item.input_audio_transcription.completed'))
     expect(parsed).toEqual({

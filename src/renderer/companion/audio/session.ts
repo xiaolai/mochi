@@ -35,6 +35,8 @@ export type SessionState =
   'opening' | 'listening' | 'closed' | { readonly failed: string } | { readonly expired: true }
 
 export interface Session {
+  /** Whether this persona asked for her words to be shown. Off by default. */
+  readonly bubble: boolean
   /** Open the microphone. Off until this is called — see point 4 above. */
   listen(on: boolean): void
   /** Idempotent, and the only path that releases anything. */
@@ -47,6 +49,21 @@ export interface SessionCallbacks {
   readonly onRemote: (stream: MediaStream) => void
   /** The session announced its own deadline. Main schedules the reconnect. */
   readonly onExpiry: (expiresAt: number) => void
+  /**
+   * One fragment of what she is generating, for the bubble.
+   *
+   * Handed straight out rather than reported to main: it is neither a decision
+   * nor something to file, it is what to paint. Generation runs ahead of her
+   * audio at both ends — §19 measured it FINISHING 2.1–7.9s earlier, §56
+   * measured it STARTING 0–320ms earlier — so this is not a signal about what
+   * she has actually said aloud, and the bubble's fade rule comes from the
+   * analyser instead.
+   *
+   * `responseId` travels with it because the bubble needs a boundary between
+   * one utterance and the next, and §56 is why that boundary cannot come from
+   * `output_audio_buffer.started`.
+   */
+  readonly onSaying: (delta: string, responseId: string) => void
 }
 
 const CHANNEL = 'oai-events'
@@ -80,6 +97,8 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
 
   /** Frame types already announced this session — see the `other` case below. */
   const announced = new Set<string>()
+  /** She greets once per session, not once per `session.updated`. */
+  let greeted = false
 
   callbacks.onState('opening')
 
@@ -120,8 +139,28 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
         // the wire, and could not have said whether she heard anything at all.
         window.mochi.report({ kind: 'heard', transcript: frame.transcript })
         break
+      case 'saying':
+        callbacks.onSaying(frame.delta, frame.responseId)
+        break
       case 'said':
         window.mochi.report({ kind: 'said', transcript: frame.transcript })
+        break
+      case 'audio-buffer':
+        /**
+         * Parsed, and deliberately consumed by nothing.
+         *
+         * This is the WebRTC-only signal for when her audio actually starts and
+         * stops, and it reads like the obvious boundary between one utterance
+         * and the next. It is not, and the bubble used it once: §56 measured the
+         * first transcript delta landing 0–320ms ahead of `.started`, which for
+         * a one-word reply is the entire utterance, so the bubble cleared what
+         * had already arrived and showed a suffix — or nothing.
+         *
+         * Whatever needs "she is making sound" should ask the analyser, which
+         * measures the sound rather than an event about it. The kind stays
+         * because the frames are real and observed; the empty case stays so the
+         * next reader finds this note instead of the same idea.
+         */
         break
       case 'session-expired':
         // Not a failure. An hour passed (§53), and main already has a timer.
@@ -142,6 +181,30 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
         })
         break
       case 'other':
+        /**
+         * The greeting, and it waits for `session.updated` on purpose.
+         *
+         * v1 put the rule in a comment and the reason is exact: *an item queued
+         * against a session that has not been told what it is would be read
+         * under the service's defaults*.
+         *
+         * Firing on `session.created` — which is what this did first —
+         * **produced two utterances in one wake**, observed. Why there were two
+         * rather than one mis-read one is not established, so nothing here
+         * claims it; `session.updated` is the first moment the configuration is
+         * known to have landed, and on it the same wake produces one.
+         *
+         * No turn is requested beyond this one: `conversation: 'none'` keeps
+         * the greeting out of the transcript she will later be asked to
+         * remember. It is the app opening its mouth, not a turn.
+         */
+        if (frame.type === 'session.updated' && !greeted) {
+          greeted = true
+          put({
+            type: 'response.create',
+            response: { conversation: 'none', instructions: config.greeting },
+          })
+        }
         // Once per type per session. The service sends well over a dozen kinds
         // and most are noise, but a type nobody here has seen is either
         // something worth acting on or a change worth knowing about — and
@@ -241,6 +304,7 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   })
 
   return {
+    bubble: config.bubble,
     listen(on: boolean) {
       if (micTrack !== null) micTrack.enabled = on
       window.mochi.report({ kind: 'state', state: on ? 'listening' : 'muted' })

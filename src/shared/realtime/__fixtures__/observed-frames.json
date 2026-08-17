@@ -116,5 +116,16 @@
     "output_index": 0,
     "content_index": 0,
     "transcript": "what she said"
+  },
+  "response.output_audio_transcript.delta": {
+    "_note": "KEYS observed live 2026-08-17; values synthesised, as with the other transcript frames.",
+    "type": "response.output_audio_transcript.delta",
+    "event_id": "event_observed",
+    "response_id": "resp_observed",
+    "item_id": "item_observed",
+    "output_index": 0,
+    "content_index": 0,
+    "delta": "one fragment ",
+    "obfuscation": "xxxxxxxxxxxxxxx"
   }
 }

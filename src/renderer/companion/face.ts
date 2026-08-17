@@ -1,6 +1,6 @@
-import { EnvelopeMouth } from './rig/mouth'
 import { MochiAvatar } from './rig/mochi'
-import { rms } from './rig/envelope'
+import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
+import { createBubble, type BubbleColours } from './bubble'
 
 /**
  * Her, on screen.
@@ -30,16 +30,33 @@ import { rms } from './rig/envelope'
 export interface Face {
   /** Her voice, once the peer hands it over. Drives the mouth. */
   hear(stream: MediaStream): void
+  /** One fragment of what she is saying. Ignored unless the bubble is on. */
+  saying(delta: string, responseId: string): void
+  /** Turn the bubble on for this persona, with the surface it draws on. */
+  showWords(colours: BubbleColours | null): void
   /** Stop the loop, release the analyser, drop the canvas. */
   dispose(): void
 }
 
 export function showFace(canvas: HTMLCanvasElement): Face {
-  const ctx = canvas.getContext('2d')
-  if (ctx === null) throw new Error('companion: the canvas has no 2d context')
+  const found = canvas.getContext('2d')
+  if (found === null) throw new Error('companion: the canvas has no 2d context')
+  // Re-bound so the narrowing survives into the render loop below.
+  const ctx: CanvasRenderingContext2D = found
 
   const avatar = new MochiAvatar(ctx, { size: 'fit-canvas' })
-  const mouth = new EnvelopeMouth(avatar)
+  const bubble = createBubble()
+
+  /**
+   * ONE envelope, driving both the mouth and the bubble.
+   *
+   * `EnvelopeMouth` wraps this and keeps the state private, which is right when
+   * the mouth is the only consumer. It is not any more: the bubble's fade rule
+   * is `quietFor`, from the same measurement. Running a second envelope beside
+   * it would be two mechanisms deciding "is she talking" — and they would
+   * disagree, silently, exactly at the boundary where it matters.
+   */
+  let envelope = SILENT
 
   let audio: AudioContext | null = null
   let analyser: AnalyserNode | null = null
@@ -51,6 +68,8 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   let lastAt: number | null = null
   /** What main was last told, so the IPC is not a per-frame message. */
   let solid: boolean | null = null
+  /** Null until a persona with `bubble: true` is worn. Off is the default. */
+  let colours: BubbleColours | null = null
 
   function fit(): void {
     const ratio = window.devicePixelRatio
@@ -81,14 +100,27 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   function tick(now: number): void {
     frame = requestAnimationFrame(tick)
 
+    const seconds = lastAt === null ? 1 / 60 : Math.min(0.1, (now - lastAt) / 1000)
     if (analyser !== null && samples !== null) {
       analyser.getFloatTimeDomainData(samples)
-      const seconds = lastAt === null ? 1 / 60 : Math.min(0.1, (now - lastAt) / 1000)
-      mouth.observe(rms(samples), seconds)
+      envelope = advanceEnvelope(rms(samples), envelope, seconds, DEFAULT_ENVELOPE)
+      avatar.setMouthOpen(envelope.mouthOpen)
     }
+    // Unconditionally, including before the analyser exists — `SILENT.quietFor`
+    // is `Infinity` and `step` handles it. This used to be guarded here with
+    // `analyser !== null`, which fixed one call site of a rule that has two:
+    // "quietFor means nothing until there has been sound" is also violated in
+    // the window between an utterance's first delta and its first audio, where
+    // the analyser very much exists. The rule belongs to the fade, so it lives
+    // in `step`.
+    bubble.step(envelope.quietFor, seconds)
     lastAt = now
 
     avatar.render(now)
+    // AFTER her, so it sits above rather than behind. It is asked nothing about
+    // the mouse: `hitTest` below is the avatar's alone, which is what keeps the
+    // design's promise that a bubble cannot enlarge her hit region.
+    if (colours !== null) bubble.draw(ctx, canvas.clientWidth, colours)
 
     // Only when it CHANGES. Asking main to toggle the window flag sixty times a
     // second would be sixty IPC messages a second for an answer that changes
@@ -102,6 +134,15 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   frame = requestAnimationFrame(tick)
 
   return {
+    saying: (delta: string, responseId: string) => {
+      if (colours !== null) bubble.add(delta, responseId)
+    },
+    showWords: (next: BubbleColours | null) => {
+      colours = next
+      // Turning it off forgets what was on it, so switching to a character
+      // without a bubble and back does not resurrect the previous one's words.
+      if (next === null) bubble.clear()
+    },
     hear(stream: MediaStream) {
       // One context, reused. A second `AudioContext` per reconnect is a real
       // leak: they are not garbage collected while running, and this happens
