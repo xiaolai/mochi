@@ -39,8 +39,19 @@ export type ServerFrame =
       readonly phase: 'started' | 'stopped' | 'cleared'
       readonly responseId: string
     }
-  /** Kept whole: the inner shape has NOT been observed here. See below. */
-  | { readonly kind: 'error'; readonly raw: unknown }
+  /**
+   * The hour is up. Its own kind because the remedy is completely different
+   * from every other error: nothing is wrong, reconnect (§53).
+   */
+  | { readonly kind: 'session-expired'; readonly message: string | null }
+  /** Anything else the service refused. `raw` is kept so nothing is lost. */
+  | {
+      readonly kind: 'error'
+      readonly code: string | null
+      readonly message: string | null
+      readonly param: string | null
+      readonly raw: unknown
+    }
   /** A frame this application does not act on. */
   | { readonly kind: 'other'; readonly type: string }
   /** A frame we DO act on, whose fields are not what was observed. */
@@ -116,15 +127,31 @@ export function parseServerFrame(text: string): ServerFrame {
   }
 
   /**
-   * Passed through whole, and that is the honest thing to do with it.
+   * Now read from a captured frame rather than from a page.
    *
-   * No `error` frame has been captured on this machine. §20 read its shape off
-   * a documentation page — a top-level `event_id` for the server event and a
-   * nested `error.event_id` for the client event that caused it — and this
-   * project has been burned twice by exactly that. So the type is recognised,
-   * because that much is certain, and nothing inside is.
+   * The observed envelope is `{ type, event_id, error }`, with the inner object
+   * carrying `{ type, code, message, param, event_id }`.
+   *
+   * **`error.event_id` is deliberately not exposed.** The documentation calls it
+   * "the event_id of the client event that caused the error", and it has now
+   * arrived as `null` three times, on three different codes — including one
+   * where the causing client event was sent by the probe one line earlier and
+   * was therefore known for certain. A correlation handle that is always null is
+   * not a correlation handle, and a shipped mechanism already died on it. Giving
+   * it a field here would invite the same code to be written a third time.
    */
-  if (type === 'error') return { kind: 'error', raw: value }
+  if (type === 'error') {
+    const inner = value['error']
+    const read = (field: string): string | null => {
+      const found = isRecord(inner) ? inner[field] : undefined
+      return typeof found === 'string' ? found : null
+    }
+    const code = read('code')
+    // Its own kind: every other error means something was sent wrongly, and this
+    // one means an hour passed. Reconnecting on the wrong one loops.
+    if (code === 'session_expired') return { kind: 'session-expired', message: read('message') }
+    return { kind: 'error', code, message: read('message'), param: read('param'), raw: value }
+  }
 
   return { kind: 'other', type }
 }

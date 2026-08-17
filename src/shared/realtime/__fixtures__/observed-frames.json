@@ -86,5 +86,16 @@
       },
       "metadata": null
     }
+  },
+  "error": {
+    "type": "error",
+    "event_id": "event_EDqmcmPmiWLWjFvym0sTE",
+    "error": {
+      "type": "invalid_request_error",
+      "code": "invalid_value",
+      "message": "Invalid value: 'thi...ist'. Supported values are: 'session.update', 'session.close', 'input_audio_buffer.append', 'session.input_audio_buffer.append', 'input_audio_buffer.commit', 'input_audio_buffer.clear', 'conversation.item.create', 'conversation.item.truncate', 'conversation.item.delete', 'conversation.item.retrieve', 'response.create', and 'response.cancel'.",
+      "param": "type",
+      "event_id": null
+    }
   }
 }

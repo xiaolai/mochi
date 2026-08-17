@@ -26,6 +26,7 @@ describe('frames captured from the live service', () => {
     // If the fixture is ever emptied, every assertion below would pass
     // vacuously against `undefined`. Counted first.
     expect(Object.keys(OBSERVED).sort()).toEqual([
+      'error',
       'output_audio_buffer.cleared',
       'output_audio_buffer.started',
       'output_audio_buffer.stopped',
@@ -122,11 +123,56 @@ describe('a known frame whose fields are not what was observed', () => {
   })
 })
 
-describe('the error frame', () => {
-  it('is recognised by type and passed through whole', () => {
-    // Nothing here has ever captured one, so nothing here reads inside it.
-    const raw = { type: 'error', error: { code: 'whatever', message: 'unverified shape' } }
-    expect(parseServerFrame(JSON.stringify(raw))).toEqual({ kind: 'error', raw })
+describe('the error frame, now read from a captured one', () => {
+  it('reads code, message and param off a real refusal', () => {
+    const parsed = parseServerFrame(frame('error'))
+    expect(parsed.kind).toBe('error')
+    if (parsed.kind !== 'error') return
+    expect(parsed.code).toBe('invalid_value')
+    expect(parsed.param).toBe('type')
+    expect(parsed.message).toContain('Supported values are')
+  })
+
+  it('does not offer error.event_id as a way to correlate anything', () => {
+    // It is documented as "the event_id of the client event that caused the
+    // error" and has arrived as `null` three times on three different codes —
+    // including this fixture, where the causing client event was sent by the
+    // probe one line earlier and was known for certain. A shipped mechanism
+    // already died on it; there is no field here to write it a third time.
+    const inner = OBSERVED['error']?.['error'] as Record<string, unknown>
+    expect(inner['event_id']).toBeNull()
+    expect(parseServerFrame(frame('error'))).not.toHaveProperty('causedBy')
+  })
+
+  it('gives the hour being up its own kind, because the remedy is different', () => {
+    // Observed by `probe-session-lifetime` at exactly 60 minutes, twice (§53).
+    // Every other error means something was sent wrongly; this one means time
+    // passed, and reconnecting on the wrong one loops.
+    const expired = {
+      type: 'error',
+      event_id: 'event_x',
+      error: {
+        type: 'invalid_request_error',
+        code: 'session_expired',
+        message: 'Your session hit the maximum duration of 60 minutes.',
+        param: null,
+        event_id: null,
+      },
+    }
+    expect(parseServerFrame(JSON.stringify(expired))).toEqual({
+      kind: 'session-expired',
+      message: 'Your session hit the maximum duration of 60 minutes.',
+    })
+  })
+
+  it('survives an error whose inner object is missing or wrong', () => {
+    expect(parseServerFrame(JSON.stringify({ type: 'error' }))).toEqual({
+      kind: 'error',
+      code: null,
+      message: null,
+      param: null,
+      raw: { type: 'error' },
+    })
   })
 })
 
