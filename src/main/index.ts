@@ -256,6 +256,17 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
     conversation().file('her', event.transcript)
     return
   }
+  if (event?.kind === 'pointer') {
+    // The window is a square of empty pixels with a mochi somewhere in it.
+    // Without this the invisible corners swallow clicks, and the failure is
+    // silent — nothing looks wrong, the click just goes nowhere.
+    //
+    // `forward: true` on the ignore case so `mousemove` keeps arriving; without
+    // it she becomes blind the moment she becomes click-through, and can never
+    // report that the cursor came back.
+    companion?.setIgnoreMouseEvents(!event.onHer, { forward: true })
+    return
+  }
   if (event?.kind === 'state') console.log(`[voice] ${event.state}`)
   if (event?.kind === 'note') console.log(`[voice] ${event.text}`)
 })

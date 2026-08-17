@@ -64,6 +64,15 @@ export type VoiceReport =
   | { readonly kind: 'heard'; readonly transcript: string }
   /** What she said. Same treatment, same reason. */
   | { readonly kind: 'said'; readonly transcript: string }
+  /**
+   * Whether the cursor is inside her silhouette right now.
+   *
+   * Sent only when it CHANGES, not every frame. Main owns the window, so main
+   * is the only thing that can turn click-through on and off — and the renderer
+   * is the only thing that knows the shape, because the shape is one `Path2D`
+   * the rig both fills and hit-tests.
+   */
+  | { readonly kind: 'pointer'; readonly onHer: boolean }
   /** A lifecycle change worth a line in the log. */
   | { readonly kind: 'state'; readonly state: string }
   /** Anything else worth saying once. */

@@ -3,6 +3,42 @@
   <head>
     <meta charset="UTF-8" />
     <title>Mochi</title>
+    <style>
+      /*
+        Transparent all the way down. `background: transparent` on the window is
+        not enough — html and body carry a white background by default, and the
+        result is a white square with a mochi in it, which looks exactly like a
+        broken transparent window rather than like a missing stylesheet.
+      */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        /* Nothing here is text to select, and a drag-select on a companion is
+           a stray highlight that never goes away. */
+        user-select: none;
+        cursor: default;
+      }
+      #face {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      /* The one line of text, for the states before she can be drawn. */
+      #app {
+        position: absolute;
+        inset: auto 0 6px 0;
+        font:
+          11px/1.4 -apple-system,
+          system-ui,
+          sans-serif;
+        color: rgb(0 0 0 / 0.45);
+        text-align: center;
+        text-shadow: 0 1px 0 rgb(255 255 255 / 0.6);
+      }
+    </style>
     <!--
       There is no Content-Security-Policy here yet, and that is a named gap
       rather than an oversight.
@@ -16,7 +52,8 @@
     -->
   </head>
   <body>
-    <main id="app">Starting…</main>
+    <canvas id="face"></canvas>
+    <main id="app">starting…</main>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
