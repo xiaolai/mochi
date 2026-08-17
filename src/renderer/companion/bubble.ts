@@ -35,6 +35,8 @@
  * cannot quietly turn a strip of the window solid.
  */
 
+import { wrapByWord } from './wrap'
+
 /** Seconds of silence before it goes. The design's number. */
 export const FADE_AFTER_QUIET_S = 1.2
 
@@ -158,22 +160,12 @@ export function createBubble(): Bubble {
       ctx.font = font
       ctx.textBaseline = 'top'
 
-      // Wrapped by MEASUREMENT, not by character count. The text is whatever she
-      // is saying, which is routinely CJK — where a character is roughly twice
-      // the width of a Latin one and any count-based wrap is wrong in one
-      // direction or the other.
-      const lines: string[] = []
-      let line = ''
-      for (const glyph of text) {
-        const next = line + glyph
-        if (glyph !== '\n' && ctx.measureText(next).width <= maxWidth) {
-          line = next
-          continue
-        }
-        lines.push(line)
-        line = glyph === '\n' ? '' : glyph
-      }
-      if (line !== '') lines.push(line)
+      // Wrapped by MEASUREMENT, not by character count: she is routinely
+      // speaking Chinese, where a glyph is about twice the width of a Latin one
+      // and any count-based wrap is wrong in one direction or the other. Where
+      // it is allowed to break is `wrap.ts`, which is a separate question with
+      // a separate answer per script.
+      const lines = wrapByWord(text, maxWidth, (one) => ctx.measureText(one).width)
       // Only the tail fits on screen; a bubble is a glance.
       const shown = lines.slice(-4)
 
