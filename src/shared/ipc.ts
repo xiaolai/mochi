@@ -36,12 +36,41 @@ export const COMPANION_CHANNELS = [
   'voice:report',
   /** Main → renderer: put this frame on the data channel. */
   'voice:send',
+  /** She was asked for her conversations. Main owns the window; this opens it. */
+  'history:open',
 ] as const
 
 export type CompanionChannel = (typeof COMPANION_CHANNELS)[number]
 
+/**
+ * What the conversations window may ask for — a SEPARATE list, not an addition.
+ *
+ * Two documents, two allowlists, and neither can reach the other's channels.
+ * A single list would mean the window showing a transcript could also mint a
+ * key and exchange an SDP offer, and the companion could read any conversation
+ * — for no better reason than that both are renderers.
+ *
+ * **Nothing here names a persona.** Every one of these reads whoever is worn,
+ * decided in main, which is what keeps "show me the history" from becoming
+ * "show me anyone's history" the moment a page is compromised.
+ */
+export const HISTORY_CHANNELS = [
+  /** Her conversations, newest first. */
+  'history:list',
+  /** What was said in one of them, by its opaque token. */
+  'history:turns',
+  /** Full-text search across hers. */
+  'history:search',
+] as const
+
+export type HistoryChannel = (typeof HISTORY_CHANNELS)[number]
+
 export function isCompanionChannel(value: unknown): value is CompanionChannel {
   return typeof value === 'string' && (COMPANION_CHANNELS as readonly string[]).includes(value)
+}
+
+export function isHistoryChannel(value: unknown): value is HistoryChannel {
+  return typeof value === 'string' && (HISTORY_CHANNELS as readonly string[]).includes(value)
 }
 
 /**
@@ -118,8 +147,53 @@ export interface MochiApi {
   config(): Promise<SessionConfig>
   /** Forward a tool call to main. Fire and forget: the answer comes back as a frame. */
   call(name: string, callId: string, args: string): void
+  /** Open the conversations window. Main owns every window, so main opens it. */
+  history(): void
   /** Tell main what the session is doing. */
   report(event: VoiceReport): void
   /** Frames main wants put on the data channel — the ledger's answers. */
   onSend(handle: (frame: unknown) => void): void
+}
+
+/** One conversation, as the window lists it. */
+export interface HistoryConversation {
+  /** Opaque; holding it authorises nothing. Every read still checks the persona. */
+  readonly token: string
+  readonly startedAt: number
+  readonly endedAt: number | null
+  readonly turns: number
+}
+
+/** One thing said in one. */
+export interface HistoryTurn {
+  readonly at: number
+  readonly who: 'her' | 'you'
+  readonly text: string
+}
+
+/** One search result, with the conversation it came from so it can be opened. */
+export interface HistoryHit {
+  readonly token: string
+  readonly at: number
+  readonly who: 'her' | 'you'
+  readonly text: string
+}
+
+/**
+ * What the conversations window gets on `window.mochiHistory`.
+ *
+ * A different global from `window.mochi` rather than more methods on it: the
+ * two documents load the same preload file, and a single object would mean the
+ * companion page could call `turns()` because the bridge had already built it.
+ * The role decides which one is installed, so the other is not merely
+ * unreachable — it was never constructed.
+ */
+export interface MochiHistoryApi {
+  /** Whoever is worn. The window never gets to name a persona. */
+  list(): Promise<{
+    readonly persona: string
+    readonly conversations: readonly HistoryConversation[]
+  }>
+  turns(token: string): Promise<readonly HistoryTurn[]>
+  search(query: string): Promise<readonly HistoryHit[]>
 }

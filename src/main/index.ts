@@ -21,7 +21,7 @@ import { readWornPersonaId } from './store/worn'
 import { createTranscripts, type Transcripts } from './store/transcripts'
 import { createConversation, type Conversation } from './store/conversation'
 import { recall } from './store/memory'
-import { createCompanionWindow } from './window'
+import { createCompanionWindow, showHistoryWindow } from './window'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
 // application's identity is how a notification arrives attributed to nothing and
@@ -97,6 +97,20 @@ function conversation(): Conversation {
 
 /** Who is worn right now. Read by the handlers, which search only her archive. */
 let wearing: string | null = null
+
+/**
+ * The archive, opened if it is not already.
+ *
+ * `conversation()` opens it as a side effect of starting a conversation, which
+ * is fine while the only reader is a live session. The conversations window can
+ * be opened before she has ever spoken, so it needs a way in that does not
+ * begin one.
+ */
+function transcripts(): Transcripts {
+  const userData = app.getPath('userData')
+  archive ??= createTranscripts(userData)
+  return archive
+}
 
 const handlers = builtinHandlers({
   // Functions, not values: the store opens lazily and the persona changes on
@@ -271,6 +285,63 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
   }
   if (event?.kind === 'state') console.log(`[voice] ${event.state}`)
   if (event?.kind === 'note') console.log(`[voice] ${event.text}`)
+})
+
+/**
+ * The conversations window: open it, and answer what it asks.
+ *
+ * **Every handler here reads `wearing`, and none of them takes a persona.**
+ * That is the whole security property: the window holds opaque tokens that
+ * authorise nothing, so a compromised page can ask for hers and only hers. It
+ * is the same rule `voice:config` follows — who she is, is main's to know.
+ *
+ * `wearing` is null until the first session configures itself. Answering empty
+ * then is right and is not an error state: nothing is being worn, so there is
+ * no "her" whose conversations these would be.
+ */
+ipcMain.on('history:open', () => {
+  // Logged because the only way to ask for this window is a control that is
+  // invisible until hovered. "Nothing happened" then has two readings — the
+  // click never arrived, or the window opened somewhere unexpected — and they
+  // need completely different fixes.
+  const window = showHistoryWindow()
+  const at = window.getBounds()
+  console.log(`[history] window ${at.width}x${at.height} at ${at.x},${at.y}`)
+})
+
+ipcMain.handle('history:list', () => {
+  const persona = wearing
+  if (persona === null) return { persona: '', conversations: [] }
+  return {
+    persona,
+    conversations: transcripts()
+      .sessions(persona)
+      .map((one) => ({
+        token: one.token,
+        startedAt: one.startedAt,
+        endedAt: one.endedAt,
+        turns: one.turns,
+      })),
+  }
+})
+
+ipcMain.handle('history:turns', (_event, token: unknown) => {
+  const persona = wearing
+  // Checked here, not trusted from the page. A token is a string; anything else
+  // is a caller that built the wrong object, and passing it through would reach
+  // the query layer with a shape it never agreed to take.
+  if (persona === null || typeof token !== 'string') return []
+  return transcripts()
+    .turns(persona, token)
+    .map((one) => ({ at: one.at, who: one.who, text: one.text }))
+})
+
+ipcMain.handle('history:search', (_event, query: unknown) => {
+  const persona = wearing
+  if (persona === null || typeof query !== 'string') return []
+  return transcripts()
+    .search(persona, query)
+    .map((one) => ({ token: one.token, at: one.at, who: one.who, text: one.text }))
 })
 
 void app.whenReady().then(

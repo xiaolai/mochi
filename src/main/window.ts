@@ -88,3 +88,61 @@ export function createCompanionWindow(): BrowserWindow {
 
   return window
 }
+
+/**
+ * The conversations she remembers, in a window you can actually read.
+ *
+ * An ordinary window, and every way it differs from hers is deliberate. It has
+ * a frame, because it is a document and a document needs somewhere to grab. It
+ * is opaque, resizable and NOT always on top, because it is something you open,
+ * read and close — the opposite of furniture.
+ *
+ * `--mochi-role=history` is what makes the one preload file expose the
+ * conversations API and not the voice one. Passed as an argument rather than
+ * inferred from the URL, because a page can navigate itself and cannot rewrite
+ * the arguments it was constructed with.
+ *
+ * Only ever one: a second copy of the same read-only list is clutter, and both
+ * would go stale in different ways.
+ */
+let history: BrowserWindow | null = null
+
+export function showHistoryWindow(): BrowserWindow {
+  if (history !== null && !history.isDestroyed()) {
+    // Raise the one that exists rather than opening another.
+    if (history.isMinimized()) history.restore()
+    history.focus()
+    return history
+  }
+
+  const window = new BrowserWindow({
+    width: 760,
+    height: 620,
+    minWidth: 480,
+    minHeight: 360,
+    show: false,
+    title: 'Conversations',
+    // Her window hides from this; this one belongs in it.
+    skipTaskbar: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      additionalArguments: ['--mochi-role=history'],
+    },
+  })
+  history = window
+  window.on('closed', () => {
+    history = null
+  })
+  window.once('ready-to-show', () => window.show())
+
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL
+  if (devServerUrl === undefined) {
+    void window.loadFile(join(__dirname, '../renderer/history/index.html'))
+  } else {
+    void window.loadURL(`${devServerUrl}/history/index.html`)
+  }
+  return window
+}

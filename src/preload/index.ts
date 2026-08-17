@@ -1,7 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   isCompanionChannel,
+  isHistoryChannel,
+  type HistoryConversation,
+  type HistoryHit,
+  type HistoryTurn,
   type MochiApi,
+  type MochiHistoryApi,
   type SessionConfig,
   type VoiceReport,
 } from '@shared/ipc'
@@ -21,6 +26,21 @@ function guard(channel: string): string {
   if (!isCompanionChannel(channel)) throw new Error(`refusing unknown channel: ${channel}`)
   return channel
 }
+
+function guardHistory(channel: string): string {
+  if (!isHistoryChannel(channel)) throw new Error(`refusing unknown channel: ${channel}`)
+  return channel
+}
+
+/**
+ * Which document this is, from `additionalArguments`.
+ *
+ * ONE preload file for every window is the repository's rule, and the role is
+ * how a single file serves two. It is read from the process arguments rather
+ * than from the URL because a page can change its own URL and cannot change
+ * these — the window that main constructed is the window that gets the API.
+ */
+const role = process.argv.find((one) => one.startsWith('--mochi-role='))?.slice(13) ?? 'companion'
 
 const api: MochiApi = {
   async open() {
@@ -43,6 +63,34 @@ const api: MochiApi = {
   onSend(handle: (frame: unknown) => void) {
     ipcRenderer.on(guard('voice:send'), (_event, frame: unknown) => handle(frame))
   },
+  history() {
+    ipcRenderer.send(guard('history:open'))
+  },
 }
 
-contextBridge.exposeInMainWorld('mochi', api)
+const history: MochiHistoryApi = {
+  async list() {
+    return (await ipcRenderer.invoke(guardHistory('history:list'))) as {
+      persona: string
+      conversations: readonly HistoryConversation[]
+    }
+  },
+  async turns(token: string) {
+    return (await ipcRenderer.invoke(
+      guardHistory('history:turns'),
+      token,
+    )) as readonly HistoryTurn[]
+  },
+  async search(query: string) {
+    return (await ipcRenderer.invoke(
+      guardHistory('history:search'),
+      query,
+    )) as readonly HistoryHit[]
+  },
+}
+
+// One or the other, never both. The conversations window has no business
+// minting a key, and the companion has no business reading a transcript --
+// exposing both to both would make the two allowlists decorative.
+if (role === 'history') contextBridge.exposeInMainWorld('mochiHistory', history)
+else contextBridge.exposeInMainWorld('mochi', api)

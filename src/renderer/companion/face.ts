@@ -1,6 +1,7 @@
 import { MochiAvatar } from './rig/mochi'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createBubble, type BubbleColours } from './bubble'
+import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
 
 /**
  * Her, on screen.
@@ -32,13 +33,27 @@ export interface Face {
   hear(stream: MediaStream): void
   /** One fragment of what she is saying. Ignored unless the bubble is on. */
   saying(delta: string, responseId: string): void
-  /** Her voice for this response has started. Paces the bubble's reveal. */
+  /** Her voice for this response has started. Paces the bubble's cursor. */
   speaks(responseId: string): void
+  /** And has finished, naturally or by interruption. The two differ; see `pace.ts`. */
+  finished(responseId: string, interrupted: boolean): void
   /** Turn the bubble on for this persona, with the surface it draws on. */
   showWords(colours: BubbleColours | null): void
   /** Stop the loop, release the analyser, drop the canvas. */
   dispose(): void
 }
+
+/** Long enough to read as a fade, short enough not to feel like a delay. */
+const CHIP_FADE_S = 0.12
+
+/**
+ * Its own surface, like the bubble's and for the same reason: she may be sitting
+ * on anything, so a control tinted by the desktop behind it has no contrast
+ * guarantee at all. Fixed rather than themed for now — it is one control, and a
+ * per-persona palette for it is a decision the appearance loader should make
+ * once, not something to guess at here.
+ */
+const CHIP_COLOURS = { paper: '#f4f2ea', ink: '#2b2c25' }
 
 export function showFace(canvas: HTMLCanvasElement): Face {
   const found = canvas.getContext('2d')
@@ -72,6 +87,11 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   let solid: boolean | null = null
   /** Null until a persona with `bubble: true` is worn. Off is the default. */
   let colours: BubbleColours | null = null
+  /**
+   * How far the hover control has faded in. Not a boolean, so it does not
+   * snap into existence under a cursor that was only passing over her.
+   */
+  let chip = 0
 
   function fit(): void {
     const ratio = window.devicePixelRatio
@@ -99,6 +119,16 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     avatar.lookAt(0, 0)
   })
 
+  // `click` rather than `mousedown`, so a drag that happens to start on the chip
+  // and end elsewhere does not open a window nobody asked for. Guarded on the
+  // chip being visible: its rectangle is only solid while it is, and acting on
+  // a click there when it is not would be a button hidden in empty desktop.
+  window.addEventListener('click', (event) => {
+    if (chip <= 0) return
+    if (!chipHits(event.clientX, event.clientY, canvas.clientWidth)) return
+    window.mochi.history()
+  })
+
   function tick(now: number): void {
     frame = requestAnimationFrame(tick)
 
@@ -124,10 +154,28 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // design's promise that a bubble cannot enlarge her hit region.
     if (colours !== null) bubble.draw(ctx, canvas.clientWidth, colours)
 
+    const onHer = pointer !== null && avatar.hitTest(pointer.x, pointer.y)
+
+    // The hover control, over everything, including the bubble: it is the only
+    // thing here that can be clicked, so nothing may sit on top of it.
+    const wanted = chipVisible(pointer, onHer, canvas.clientWidth) ? 1 : 0
+    chip =
+      wanted > chip
+        ? Math.min(1, chip + seconds / CHIP_FADE_S)
+        : Math.max(0, chip - seconds / CHIP_FADE_S)
+    drawChip(ctx, canvas.clientWidth, CHIP_COLOURS, chip)
+
     // Only when it CHANGES. Asking main to toggle the window flag sixty times a
     // second would be sixty IPC messages a second for an answer that changes
     // when the cursor crosses an edge.
-    const on = pointer !== null && avatar.hitTest(pointer.x, pointer.y)
+    //
+    // The chip's rectangle counts as solid WHILE IT IS SHOWING, which is the
+    // one deliberate exception to "only painted pixels take the mouse" — a
+    // control nobody can click is not a control. It is exactly the size of the
+    // control and disappears with it.
+    const onChip =
+      chip > 0 && pointer !== null && chipHits(pointer.x, pointer.y, canvas.clientWidth)
+    const on = onHer || onChip
     if (on !== solid) {
       solid = on
       window.mochi.report({ kind: 'pointer', onHer: on })
@@ -141,6 +189,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     },
     speaks: (responseId: string) => {
       if (colours !== null) bubble.speaks(responseId)
+    },
+    finished: (responseId: string, interrupted: boolean) => {
+      if (colours !== null) bubble.finished(responseId, interrupted)
     },
     showWords: (next: BubbleColours | null) => {
       colours = next

@@ -73,6 +73,15 @@ export interface SessionCallbacks {
    * difference to pace a subtitle against the right utterance.
    */
   readonly onSpeaks: (responseId: string) => void
+  /**
+   * Her audio for this response finished — naturally, or because she was cut off.
+   *
+   * The two arrive as different frames and the difference is load-bearing: only
+   * a natural end means she said everything that was generated, which is the one
+   * fact the pacing can calibrate itself against. Barge-in is routine here
+   * (§17), so conflating them would poison the estimate constantly.
+   */
+  readonly onFinished: (responseId: string, interrupted: boolean) => void
 }
 
 const CHANNEL = 'oai-events'
@@ -168,6 +177,7 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
          * such signal — the analyser hears sound but cannot attribute it.
          */
         if (frame.phase === 'started') callbacks.onSpeaks(frame.responseId)
+        else callbacks.onFinished(frame.responseId, frame.phase === 'cleared')
         break
       case 'session-expired':
         // Not a failure. An hour passed (§53), and main already has a timer.

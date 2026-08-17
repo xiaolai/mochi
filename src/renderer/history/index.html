@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Conversations</title>
+    <style>
+      /*
+        Two panes: what she remembers, and one of them opened. Written as tokens
+        rather than literals because the same two schemes have to work — she can
+        sit on a light desktop or a dark one, and so can this.
+      */
+      :root {
+        --paper: #f7f6f1;
+        --raised: #ffffff;
+        --ink: #23241f;
+        --quiet: #6d6f66;
+        --line: #e2e0d7;
+        --hers: #8fc9a9;
+        --accent: #2f6f4f;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #1c1d1a;
+          --raised: #242622;
+          --ink: #eceade;
+          --quiet: #9a9c92;
+          --line: #34362f;
+          --hers: #5f9c7c;
+          --accent: #9fd8b8;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          13px/1.55 -apple-system,
+          system-ui,
+          sans-serif;
+      }
+      #app {
+        display: grid;
+        grid-template-columns: 232px 1fr;
+        height: 100%;
+      }
+
+      aside {
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .search {
+        padding: 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      .search input {
+        width: 100%;
+        padding: 6px 9px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--raised);
+        color: inherit;
+        font: inherit;
+      }
+      .search input:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -1px;
+      }
+      .list {
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+      }
+      .entry {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 9px 12px;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: default;
+      }
+      .entry:hover {
+        background: var(--raised);
+      }
+      .entry[aria-current='true'] {
+        background: var(--raised);
+        box-shadow: inset 2px 0 0 var(--accent);
+      }
+      .entry .when {
+        font-weight: 600;
+      }
+      .entry .count,
+      .entry .snippet {
+        color: var(--quiet);
+        font-size: 12px;
+      }
+      .entry .snippet {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      main {
+        overflow-y: auto;
+        padding: 20px 24px 40px;
+        min-height: 0;
+      }
+      /* Reading width, not window width. A transcript at 760px is unreadable. */
+      .transcript {
+        max-width: 62ch;
+        margin: 0 auto;
+      }
+      .turn {
+        margin: 0 0 14px;
+      }
+      .turn .who {
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--quiet);
+      }
+      .turn.her .who {
+        color: var(--accent);
+      }
+      .turn p {
+        margin: 2px 0 0;
+        white-space: pre-wrap;
+      }
+      /* Every empty surface says WHICH kind of empty it is. */
+      .empty {
+        color: var(--quiet);
+        max-width: 46ch;
+        margin: 48px auto;
+        text-align: center;
+      }
+      mark {
+        background: var(--hers);
+        color: var(--ink);
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <aside>
+        <div class="search">
+          <input id="q" type="search" placeholder="Search what was said" autocomplete="off" />
+        </div>
+        <div class="list" id="list"></div>
+      </aside>
+      <main id="pane"></main>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
