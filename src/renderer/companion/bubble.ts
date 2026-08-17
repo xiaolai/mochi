@@ -46,6 +46,38 @@ const FADE_S = 0.35
 /** Never more than this on screen. A bubble is a glance, not a transcript. */
 const MAX_CHARS = 220
 
+/**
+ * How fast she actually speaks, measured (§57), in cost units per second.
+ *
+ * A subtitle cannot be paced by when the text ARRIVES. §56 established that
+ * generation runs ahead of the audio; §57 measured how far, and the answer is
+ * not "a little": a 1101-character story was in hand within seconds and took
+ * **72.7 seconds** to read aloud. Paced by arrival, the bubble shows the last
+ * paragraph of a story for the whole two minutes she spends reading its first.
+ *
+ * 15.1 chars/s held across 37, 289 and 1101 characters — three orders of length
+ * with the same number, which is why it is usable as a constant at all.
+ */
+const SPEECH_RATE = 15.1
+
+/**
+ * What one Chinese glyph costs against one Latin one, at the same speaking rate.
+ *
+ * §57 measured 4.1 chars/s for Chinese against 15.1 for English — the same
+ * mouth, a third of the characters, because a Chinese glyph carries far more.
+ * The same shape as the width metric in `wrap.ts`, and for the same reason: a
+ * per-character constant that ignores the script is wrong in one direction or
+ * the other, and here it would be wrong by a factor of nearly four.
+ */
+const CJK_COST = SPEECH_RATE / 4.1
+
+/** Held so a long story is not truncated before she has read it. */
+const MAX_HELD = 20_000
+
+const CJK = /[⺀-〿぀-ヿ㐀-䶿一-鿿豈-﫿가-힯＀-￯]/u
+
+const costOf = (glyph: string): number => (CJK.test(glyph) ? CJK_COST : 1)
+
 export interface BubbleColours {
   /** The opaque surface. See rule 2. */
   readonly paper: string
@@ -77,23 +109,39 @@ export interface Bubble {
    */
   add(delta: string, responseId: string): void
   /**
-   * Advance the fade. `quietFor` comes from the same envelope as the mouth.
+   * Her audio for this response has begun — from `output_audio_buffer.started`,
+   * which carries the id.
+   *
+   * This is the anchor the whole thing hangs on, and it is the ONLY correct use
+   * of that event here. An earlier version used it as the boundary between one
+   * utterance's text and the next, which is wrong for the reason `add` gives.
+   * As "her voice for THIS response starts now" it is exact, and it is the only
+   * signal that is: the analyser hears sound but cannot say whose.
+   */
+  speaks(responseId: string): void
+  /**
+   * Advance the fade and the reveal. `quietFor` is the mouth's own measurement.
    *
    * **`quietFor` answers "how long since sound", which means nothing until
-   * there has been sound.** Two different call sites got this wrong before it
-   * was treated as a class:
+   * there has been sound — and it cannot say whose sound.** Three call sites
+   * got some form of this wrong before it was treated as one rule:
    *
-   * - Before the analyser exists at all, `quietFor` is `Infinity` — correct for
-   *   "nothing has ever been heard", and it retired the bubble on the frame
-   *   after it appeared.
-   * - Between this utterance's first delta and its first audio, the number is
-   *   real but describes the SILENCE BEFORE HER, not a pause in her. §56
-   *   measured that window at 0–320ms, and the bubble reached the desktop at
-   *   alpha 0.24 — measured off a screenshot, `#f4f2ea` over `(30,30,45)`
-   *   reading `(81,81,90)`, which is `1 − 0.27/0.35` of a 0.35s fade.
+   * - Before the analyser exists, `quietFor` is `Infinity` — correct for
+   *   "nothing has ever been heard" — and it retired the bubble one frame after
+   *   it appeared.
+   * - Between an utterance's first delta and its first audio, the number is real
+   *   but describes the silence BEFORE her. The bubble reached the desktop at
+   *   alpha 0.24: `#f4f2ea` over `(30,30,45)` read `(81,81,90)`, which is
+   *   `1 − 0.27/0.35` of a 0.35s fade.
+   * - Sound from the PREVIOUS utterance counted as this one's. When she answered
+   *   in two responses, the second's text arrived while the first was still
+   *   playing; the gap between the two then satisfied "she has gone quiet", and
+   *   the bubble faded and **emptied itself** — so it flashed while she was
+   *   silent and was gone for the whole minute she then spent speaking.
    *
-   * So the fade waits for sound rather than for a clock, here, once, instead of
-   * at each caller.
+   * Hence `speaks()`: the fade and the reveal both wait for THIS response's
+   * audio. And the fade no longer destroys the text, so a pause is a pause
+   * rather than the end of the utterance.
    */
   step(quietFor: number, dtSeconds: number): void
   /**
@@ -109,46 +157,85 @@ export interface Bubble {
 }
 
 export function createBubble(): Bubble {
+  /** Everything generated for the current response — the future included. */
   let text = ''
+  /** The prefix of it she is estimated to have actually said. What is drawn. */
+  let said = ''
+  /** Where `said` ends in `text`, and its cost, so the reveal is O(1) a frame. */
+  let at = 0
+  let spent = 0
+  /** Seconds of her audio, times the rate. Advances only while she sounds. */
+  let budget = 0
   let opacity = 0
   let saying: string | null = null
-  /** Whether her audio has been heard at all, for the utterance now on screen. */
-  let sounded = false
+  /** Whether THIS response's audio has begun. Not "whether there was sound". */
+  let speaking = false
+
+  /** A new response replaces everything; none of the old state survives it. */
+  function beginUtterance(responseId: string): void {
+    saying = responseId
+    text = ''
+    said = ''
+    at = 0
+    spent = 0
+    budget = 0
+    speaking = false
+  }
 
   return {
     add(delta: string, responseId: string) {
-      if (responseId !== saying) {
-        saying = responseId
-        text = ''
-        // A new utterance has its own audio, which has not started yet.
-        sounded = false
-      }
-      text = (text + delta).slice(-MAX_CHARS)
-      // She is talking again, so whatever fade was running is over.
-      opacity = 1
+      if (responseId !== saying) beginUtterance(responseId)
+      // Held whole, not trimmed to what fits: `MAX_CHARS` bounds what is SHOWN,
+      // and trimming here would throw away the end of a story before she has
+      // read it. Bounded well above any real utterance so it cannot grow without
+      // limit on a session that never ends.
+      if (text.length < MAX_HELD) text += delta
+      // Deliberately NOT `opacity = 1`. Text arriving is not her speaking — that
+      // is the whole of §56 — and a bubble that appears on arrival appears
+      // during the silence before her.
+    },
+    speaks(responseId: string) {
+      if (responseId !== saying) beginUtterance(responseId)
+      speaking = true
     },
     step(quietFor: number, dtSeconds: number) {
-      if (text === '') return
-      if (quietFor < FADE_AFTER_QUIET_S) {
-        // Sound, now or within the interval. From here on "how long since
-        // sound" describes a pause in HER rather than the silence before her.
-        sounded = true
+      if (text === '' || !speaking) return
+
+      if (quietFor >= FADE_AFTER_QUIET_S) {
+        // She has stopped. Fade — but keep the text, because a pause between two
+        // sentences is not the end of the utterance, and emptying here is what
+        // made the bubble unable to come back.
+        opacity = Math.max(0, opacity - dtSeconds / FADE_S)
         return
       }
-      // Long silence, but she has not started — so there is nothing to be
-      // finished with. See the note on `step` above.
-      if (!sounded) return
-      opacity = Math.max(0, opacity - dtSeconds / FADE_S)
-      if (opacity === 0) text = ''
+
+      opacity = Math.min(1, opacity + dtSeconds / FADE_S)
+      // Reveal at the rate she actually speaks (§57), not the rate the text
+      // arrives at. The remainder carries between frames: at 60fps one frame
+      // buys 0.25 of a character, so a loop that discarded it would never
+      // advance at all.
+      budget += dtSeconds * SPEECH_RATE
+      while (at < text.length) {
+        const glyph = text[at] ?? ''
+        const cost = spent + costOf(glyph)
+        if (cost > budget) break
+        spent = cost
+        said += glyph
+        at += 1
+      }
     },
     clear() {
       text = ''
+      said = ''
+      at = 0
+      spent = 0
+      budget = 0
       opacity = 0
       saying = null
-      sounded = false
+      speaking = false
     },
     draw(ctx, width, colours) {
-      if (text === '' || opacity <= 0) return false
+      if (said === '' || opacity <= 0) return false
 
       const pad = 10
       const radius = 12
@@ -165,7 +252,15 @@ export function createBubble(): Bubble {
       // and any count-based wrap is wrong in one direction or the other. Where
       // it is allowed to break is `wrap.ts`, which is a separate question with
       // a separate answer per script.
-      const lines = wrapByWord(text, maxWidth, (one) => ctx.measureText(one).width)
+      //
+      // Only the tail of what she has SAID, which is what bounds the work: a
+      // 1101-character story wrapped whole on every frame would be re-measured
+      // sixty times a second for four lines of output.
+      const lines = wrapByWord(
+        said.slice(-MAX_CHARS),
+        maxWidth,
+        (one) => ctx.measureText(one).width,
+      )
       // Only the tail fits on screen; a bubble is a glance.
       const shown = lines.slice(-4)
 

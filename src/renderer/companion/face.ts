@@ -32,6 +32,8 @@ export interface Face {
   hear(stream: MediaStream): void
   /** One fragment of what she is saying. Ignored unless the bubble is on. */
   saying(delta: string, responseId: string): void
+  /** Her voice for this response has started. Paces the bubble's reveal. */
+  speaks(responseId: string): void
   /** Turn the bubble on for this persona, with the surface it draws on. */
   showWords(colours: BubbleColours | null): void
   /** Stop the loop, release the analyser, drop the canvas. */
@@ -136,6 +138,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   return {
     saying: (delta: string, responseId: string) => {
       if (colours !== null) bubble.add(delta, responseId)
+    },
+    speaks: (responseId: string) => {
+      if (colours !== null) bubble.speaks(responseId)
     },
     showWords: (next: BubbleColours | null) => {
       colours = next

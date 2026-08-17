@@ -64,6 +64,15 @@ export interface SessionCallbacks {
    * `output_audio_buffer.started`.
    */
   readonly onSaying: (delta: string, responseId: string) => void
+  /**
+   * Her voice for this response has begun.
+   *
+   * `output_audio_buffer.started` is WebRTC-only and carries `response_id`,
+   * which makes it the one signal that says whose sound is starting. The
+   * analyser knows there is sound; it cannot know whose, and §57 needs the
+   * difference to pace a subtitle against the right utterance.
+   */
+  readonly onSpeaks: (responseId: string) => void
 }
 
 const CHANNEL = 'oai-events'
@@ -147,20 +156,18 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
         break
       case 'audio-buffer':
         /**
-         * Parsed, and deliberately consumed by nothing.
+         * `started` marks when HER VOICE for this response begins — and that,
+         * precisely, is all it is used for.
          *
-         * This is the WebRTC-only signal for when her audio actually starts and
-         * stops, and it reads like the obvious boundary between one utterance
-         * and the next. It is not, and the bubble used it once: §56 measured the
-         * first transcript delta landing 0–320ms ahead of `.started`, which for
-         * a one-word reply is the entire utterance, so the bubble cleared what
-         * had already arrived and showed a suffix — or nothing.
+         * It is not the boundary between one utterance's text and the next.
+         * That was tried: §56 measured the first transcript delta landing
+         * 0–320ms ahead of `.started`, which for a one-word reply is the whole
+         * utterance, so clearing here showed a suffix or nothing at all.
          *
-         * Whatever needs "she is making sound" should ask the analyser, which
-         * measures the sound rather than an event about it. The kind stays
-         * because the frames are real and observed; the empty case stays so the
-         * next reader finds this note instead of the same idea.
+         * As an anchor for "whose sound is this", it is exact and it is the only
+         * such signal — the analyser hears sound but cannot attribute it.
          */
+        if (frame.phase === 'started') callbacks.onSpeaks(frame.responseId)
         break
       case 'session-expired':
         // Not a failure. An hour passed (§53), and main already has a timer.

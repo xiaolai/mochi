@@ -65,6 +65,7 @@ async function open(): Promise<void> {
         /* main schedules the reconnect; nothing to do here */
       },
       onSaying: (delta, responseId) => face.saying(delta, responseId),
+      onSpeaks: (responseId) => face.speaks(responseId),
     })
     // Off unless this persona asked for it. The surface is opaque paper rather
     // than her colour: the design settles it as a rule — anything carrying
