@@ -78,6 +78,9 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     throw new Error(why)
   }
 
+  /** Frame types already announced this session — see the `other` case below. */
+  const announced = new Set<string>()
+
   callbacks.onState('opening')
 
   // BEFORE the offer, or it is not in it.
@@ -111,6 +114,15 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
         // a capability: it does not decide which one runs, or whether it may.
         window.mochi.call(frame.name, frame.callId, frame.args)
         break
+      case 'heard':
+        // The log records the CONVERSATION now, not only the connection. The
+        // first run of this session logged five lines, every one of them about
+        // the wire, and could not have said whether she heard anything at all.
+        window.mochi.report({ kind: 'note', text: `heard: ${frame.transcript}` })
+        break
+      case 'said':
+        window.mochi.report({ kind: 'note', text: `said: ${frame.transcript}` })
+        break
       case 'session-expired':
         // Not a failure. An hour passed (§53), and main already has a timer.
         callbacks.onState({ expired: true })
@@ -128,6 +140,21 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
           kind: 'note',
           text: `MALFORMED ${frame.type}: missing ${frame.missing.join(', ')}`,
         })
+        break
+      case 'other':
+        // Once per type per session. The service sends well over a dozen kinds
+        // and most are noise, but a type nobody here has seen is either
+        // something worth acting on or a change worth knowing about — and
+        // neither is visible if it is silently ignored. §33's lesson in its
+        // current form: the log recorded the CONNECTION and not the
+        // CONVERSATION, so nothing in it could say whether she heard anything.
+        if (!announced.has(frame.type)) {
+          announced.add(frame.type)
+          window.mochi.report({
+            kind: 'note',
+            text: `first ${frame.type}  keys=[${frame.keys.join(', ')}]`,
+          })
+        }
         break
       default:
         break

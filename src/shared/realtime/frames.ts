@@ -52,8 +52,36 @@ export type ServerFrame =
       readonly param: string | null
       readonly raw: unknown
     }
-  /** A frame this application does not act on. */
-  | { readonly kind: 'other'; readonly type: string }
+  /**
+   * What the user said, once ASR has settled it.
+   *
+   * A SEPARATE pass from the audio she hears — she is speech-to-speech, so bad
+   * ASR does not make her mishear anyone. It makes the log and the archive
+   * wrong, which is a different problem with a different fix.
+   */
+  | { readonly kind: 'heard'; readonly transcript: string; readonly itemId: string }
+  /**
+   * What she said, as text. Arrives BEFORE her audio finishes draining — §19
+   * measured the gap at 2.1–7.9s and growing with length, so this is not a
+   * signal that she has stopped talking.
+   */
+  | {
+      readonly kind: 'said'
+      readonly transcript: string
+      readonly responseId: string
+      readonly itemId: string
+    }
+  /**
+   * A frame this application does not act on — **yet**, and `keys` is why it
+   * carries them.
+   *
+   * The rule here is not to build on a field nobody has seen in a real log. The
+   * corollary is that there has to be a way to see one, and the cheapest is for
+   * an unrecognised frame to announce its own shape the first time it arrives.
+   * That is how the transcript events get read next: talk to her once, read the
+   * log, then write the parser against what it printed.
+   */
+  | { readonly kind: 'other'; readonly type: string; readonly keys: readonly string[] }
   /** A frame we DO act on, whose fields are not what was observed. */
   | { readonly kind: 'malformed'; readonly type: string; readonly missing: readonly string[] }
   /** Not JSON, or not an object. */
@@ -119,6 +147,29 @@ export function parseServerFrame(text: string): ServerFrame {
     }
   }
 
+  // Both shapes below were captured on 2026-08-17 by running the app and
+  // reading what announced itself — the `other` branch's whole purpose.
+  if (type === 'conversation.item.input_audio_transcription.completed') {
+    const missing = missingFrom(value, ['transcript', 'item_id'])
+    if (missing.length > 0) return { kind: 'malformed', type, missing }
+    return {
+      kind: 'heard',
+      transcript: value['transcript'] as string,
+      itemId: value['item_id'] as string,
+    }
+  }
+
+  if (type === 'response.output_audio_transcript.done') {
+    const missing = missingFrom(value, ['transcript', 'response_id', 'item_id'])
+    if (missing.length > 0) return { kind: 'malformed', type, missing }
+    return {
+      kind: 'said',
+      transcript: value['transcript'] as string,
+      responseId: value['response_id'] as string,
+      itemId: value['item_id'] as string,
+    }
+  }
+
   const phase = BUFFER_PHASE[type]
   if (phase !== undefined) {
     const missing = missingFrom(value, ['response_id'])
@@ -153,5 +204,5 @@ export function parseServerFrame(text: string): ServerFrame {
     return { kind: 'error', code, message: read('message'), param: read('param'), raw: value }
   }
 
-  return { kind: 'other', type }
+  return { kind: 'other', type, keys: Object.keys(value) }
 }

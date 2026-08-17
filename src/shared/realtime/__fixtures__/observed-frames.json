@@ -97,5 +97,24 @@
       "param": "type",
       "event_id": null
     }
+  },
+  "conversation.item.input_audio_transcription.completed": {
+    "_note": "KEYS observed live 2026-08-17; values synthesised \u2014 a real transcript is what somebody said out loud and does not belong in a committed file.",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "event_id": "event_observed",
+    "item_id": "item_observed",
+    "content_index": 0,
+    "transcript": "what the user said",
+    "usage": {}
+  },
+  "response.output_audio_transcript.done": {
+    "_note": "KEYS observed live 2026-08-17; values synthesised, same reason.",
+    "type": "response.output_audio_transcript.done",
+    "event_id": "event_observed",
+    "response_id": "resp_observed",
+    "item_id": "item_observed",
+    "output_index": 0,
+    "content_index": 0,
+    "transcript": "what she said"
   }
 }

@@ -26,6 +26,7 @@ describe('frames captured from the live service', () => {
     // If the fixture is ever emptied, every assertion below would pass
     // vacuously against `undefined`. Counted first.
     expect(Object.keys(OBSERVED).sort()).toEqual([
+      'conversation.item.input_audio_transcription.completed',
       'error',
       'output_audio_buffer.cleared',
       'output_audio_buffer.started',
@@ -33,6 +34,7 @@ describe('frames captured from the live service', () => {
       'response.done',
       'response.function_call_arguments.delta',
       'response.function_call_arguments.done',
+      'response.output_audio_transcript.done',
     ])
   })
 
@@ -69,16 +71,54 @@ describe('frames captured from the live service', () => {
       Record<string, unknown>[] | undefined
     expect(output?.[0]?.['call_id']).toBe('call_LzM9HoHHCl3J1RJl')
 
-    expect(parseServerFrame(frame('response.done'))).toEqual({
+    const parsed = parseServerFrame(frame('response.done'))
+    expect(parsed).toEqual({
       kind: 'other',
       type: 'response.done',
+      // Carried so an unrecognised frame can announce its own shape once, which
+      // is how the next set of fields gets captured rather than guessed.
+      keys: ['type', 'event_id', 'response'],
     })
   })
 
   it('ignores the streaming deltas', () => {
-    expect(parseServerFrame(frame('response.function_call_arguments.delta'))).toEqual({
-      kind: 'other',
-      type: 'response.function_call_arguments.delta',
+    const parsed = parseServerFrame(frame('response.function_call_arguments.delta'))
+    expect(parsed.kind).toBe('other')
+    if (parsed.kind !== 'other') return
+    expect(parsed.type).toBe('response.function_call_arguments.delta')
+    expect(parsed.keys).toContain('delta')
+  })
+})
+
+describe('the two frames that make a conversation visible', () => {
+  it('reads what the user said', () => {
+    const parsed = parseServerFrame(frame('conversation.item.input_audio_transcription.completed'))
+    expect(parsed).toEqual({
+      kind: 'heard',
+      transcript: 'what the user said',
+      itemId: 'item_observed',
+    })
+  })
+
+  it('reads what she said, and carries the response id that distinguishes utterances', () => {
+    const parsed = parseServerFrame(frame('response.output_audio_transcript.done'))
+    expect(parsed).toEqual({
+      kind: 'said',
+      transcript: 'what she said',
+      responseId: 'resp_observed',
+      itemId: 'item_observed',
+    })
+  })
+
+  it('is malformed rather than silent when a transcript is missing', () => {
+    // Silently dropping one would put the log back where it started: able to say
+    // the wire is up and unable to say whether anybody spoke.
+    expect(
+      parseServerFrame(JSON.stringify({ type: 'response.output_audio_transcript.done' })),
+    ).toEqual({
+      kind: 'malformed',
+      type: 'response.output_audio_transcript.done',
+      missing: ['transcript', 'response_id', 'item_id'],
     })
   })
 })
