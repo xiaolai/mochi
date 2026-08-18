@@ -1,33 +1,42 @@
 import { describe, expect, it } from 'vitest'
 import { chipRect, drawChip, hits, visible } from './chip'
 
-const WIDTH = 320
+/** Where she stands on a 320 canvas at size 100 — her right edge and her top. */
+const HER = { right: 207, top: 239 }
 
 describe('where it is', () => {
-  it('sits in the top right, inside the window', () => {
-    const rect = chipRect(WIDTH)
-    expect(rect.x + rect.w).toBeLessThan(WIDTH)
-    expect(rect.x).toBeGreaterThan(WIDTH / 2)
-    expect(rect.y).toBeGreaterThan(0)
+  it('sits on her shoulder, not in the window’s corner', () => {
+    // The window is far larger than she is, so anchoring to the window put the
+    // control a long way from the thing it belongs to.
+    const rect = chipRect(HER)
+    expect(Math.abs(rect.x + rect.w / 2 - HER.right)).toBeLessThan(2)
+    expect(Math.abs(rect.y + rect.h / 2 - HER.top)).toBeLessThan(2)
+  })
+
+  it('follows her when she moves', () => {
+    const a = chipRect({ right: 207, top: 239 })
+    const b = chipRect({ right: 260, top: 100 })
+    expect(b.x - a.x).toBe(53)
+    expect(b.y - a.y).toBe(-139)
   })
 
   it('answers for points on it and not for points beside it', () => {
-    const { x, y, w, h } = chipRect(WIDTH)
-    expect(hits(x + w / 2, y + h / 2, WIDTH)).toBe(true)
-    expect(hits(x - 4, y + h / 2, WIDTH)).toBe(false)
-    expect(hits(x + w / 2, y + h + 4, WIDTH)).toBe(false)
-    // The middle of the window is her, not it.
-    expect(hits(WIDTH / 2, WIDTH / 2, WIDTH)).toBe(false)
+    const { x, y, w, h } = chipRect(HER)
+    expect(hits(x + w / 2, y + h / 2, HER)).toBe(true)
+    expect(hits(x - 4, y + h / 2, HER)).toBe(false)
+    expect(hits(x + w / 2, y + h + 4, HER)).toBe(false)
+    // The middle of her body is her, not it.
+    expect(hits(160, 290, HER)).toBe(false)
   })
 })
 
 describe('when it shows', () => {
   it('is hidden when the pointer is nowhere near the window', () => {
-    expect(visible(null, false, WIDTH)).toBe(false)
+    expect(visible(null, false, HER)).toBe(false)
   })
 
   it('shows while the pointer is on her', () => {
-    expect(visible({ x: 160, y: 200 }, true, WIDTH)).toBe(true)
+    expect(visible({ x: 160, y: 280 }, true, HER)).toBe(true)
   })
 
   it('stays up while the pointer is on IT, though that is not on her', () => {
@@ -35,12 +44,12 @@ describe('when it shows', () => {
     // silhouette — that is what a corner is — so any path from her to it leaves
     // her. "Show while on her" alone hides it exactly as the cursor arrives,
     // which also un-solids the rectangle under the cursor.
-    const { x, y, w, h } = chipRect(WIDTH)
-    expect(visible({ x: x + w / 2, y: y + h / 2 }, false, WIDTH)).toBe(true)
+    const { x, y, w, h } = chipRect(HER)
+    expect(visible({ x: x + w / 2, y: y + h / 2 }, false, HER)).toBe(true)
   })
 
   it('hides when the pointer is on neither', () => {
-    expect(visible({ x: 4, y: 300 }, false, WIDTH)).toBe(false)
+    expect(visible({ x: 4, y: 20 }, false, HER)).toBe(false)
   })
 })
 
@@ -69,7 +78,7 @@ describe('what it draws', () => {
 
   it('paints its own opaque surface, like anything else she sits in front of', () => {
     const { ctx, calls, raw } = recorder()
-    drawChip(ctx, WIDTH, COLOURS, 1)
+    drawChip(ctx, HER, COLOURS, 1)
     expect(calls).toContain(`fill:${COLOURS.paper}`)
     expect(calls).toContain(`fill:${COLOURS.ink}`)
     expect(raw.globalAlpha).toBe(1)
@@ -80,7 +89,7 @@ describe('what it draws', () => {
     // sixty times a second, for every frame she is not hovered — which is
     // almost all of them.
     const { ctx, calls } = recorder()
-    drawChip(ctx, WIDTH, COLOURS, 0)
+    drawChip(ctx, HER, COLOURS, 0)
     expect(calls).toEqual([])
   })
 
@@ -88,7 +97,7 @@ describe('what it draws', () => {
     // It shares a canvas with her. A leaked `globalAlpha` or fillStyle would
     // tint whatever is painted next, which is her face.
     const { ctx, calls } = recorder()
-    drawChip(ctx, WIDTH, COLOURS, 0.5)
+    drawChip(ctx, HER, COLOURS, 0.5)
     expect(calls[0]).toBe('save')
     expect(calls[calls.length - 1]).toBe('restore')
   })

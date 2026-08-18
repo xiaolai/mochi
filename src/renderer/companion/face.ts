@@ -3,6 +3,8 @@ import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createBubble, type BubbleColours } from './bubble'
 import { createUtterance } from './utterance'
 import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
+import { layoutFor, BREATHING_UNITS } from '@shared/avatar-layout'
+import { MOCHI } from '@shared/avatar-spec'
 
 /**
  * Her, on screen.
@@ -72,7 +74,38 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   // Re-bound so the narrowing survives into the render loop below.
   const ctx: CanvasRenderingContext2D = found
 
-  const avatar = new MochiAvatar(ctx, { size: 'fit-canvas' })
+  /**
+   * A SIZE, not `fit-canvas`.
+   *
+   * `mochi.ts` warns about exactly this: the companion window "forgot to pass a
+   * percentage and fell through to the canvas fit", which looked right because
+   * main had sized the canvas — so the renderer was re-deriving main's answer
+   * from main's own number and she grew to whatever the window happened to be.
+   *
+   * 100% is the spec's own default and puts her `bodyW` of 100 units at
+   * `BASE_UNIT_SCALE` 0.94 — about **94 CSS pixels** wide. The window stays
+   * larger than her on purpose: the bubble draws above her head and needs the
+   * width to be readable, and the chip needs the corner.
+   */
+  const SIZE_PERCENT = 100
+  const avatar = new MochiAvatar(ctx, { size: SIZE_PERCENT })
+
+  /**
+   * Where she actually is on the canvas, from the module that decides it.
+   *
+   * She is horizontally centred and rests one clearance above the bottom, so
+   * her corner follows from the layout rather than from a guess. Recomputed on
+   * resize rather than cached at construction, because `fit()` changes the
+   * canvas and a stale corner would leave the chip behind.
+   */
+  function herCorner(): { right: number; top: number } {
+    const layout = layoutFor(MOCHI, SIZE_PERCENT)
+    const clearance = BREATHING_UNITS * layout.scale
+    return {
+      right: canvas.clientWidth / 2 + layout.bodyWidth / 2,
+      top: canvas.clientHeight - clearance - layout.bodyHeight,
+    }
+  }
   const bubble = createBubble()
   /**
    * What she is saying, owned HERE rather than inside the bubble.
@@ -144,7 +177,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   // a click there when it is not would be a button hidden in empty desktop.
   window.addEventListener('click', (event) => {
     if (chip <= 0) return
-    if (!chipHits(event.clientX, event.clientY, canvas.clientWidth)) return
+    if (!chipHits(event.clientX, event.clientY, herCorner())) return
     window.mochi.history()
   })
 
@@ -180,12 +213,12 @@ export function showFace(canvas: HTMLCanvasElement): Face {
 
     // The hover control, over everything, including the bubble: it is the only
     // thing here that can be clicked, so nothing may sit on top of it.
-    const wanted = chipVisible(pointer, onHer, canvas.clientWidth) ? 1 : 0
+    const wanted = chipVisible(pointer, onHer, herCorner()) ? 1 : 0
     chip =
       wanted > chip
         ? Math.min(1, chip + seconds / CHIP_FADE_S)
         : Math.max(0, chip - seconds / CHIP_FADE_S)
-    drawChip(ctx, canvas.clientWidth, CHIP_COLOURS, chip)
+    drawChip(ctx, herCorner(), CHIP_COLOURS, chip)
 
     // Only when it CHANGES. Asking main to toggle the window flag sixty times a
     // second would be sixty IPC messages a second for an answer that changes
@@ -195,8 +228,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // one deliberate exception to "only painted pixels take the mouse" — a
     // control nobody can click is not a control. It is exactly the size of the
     // control and disappears with it.
-    const onChip =
-      chip > 0 && pointer !== null && chipHits(pointer.x, pointer.y, canvas.clientWidth)
+    const onChip = chip > 0 && pointer !== null && chipHits(pointer.x, pointer.y, herCorner())
     const on = onHer || onChip
     if (on !== solid) {
       solid = on

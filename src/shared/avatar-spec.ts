@@ -345,7 +345,7 @@ export const MOCHI: FaceSpec = {
   mouthUpper: 0,
   mouthLower: 3.2,
   mouthRound: 2,
-  mouthOpenGain: 15,
+  mouthOpenGain: 9,
 
   cheekAlpha: 0.34,
   cheekX: 0.62,

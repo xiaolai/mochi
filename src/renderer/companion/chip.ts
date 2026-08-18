@@ -26,9 +26,8 @@
  * the pointer is always on one or the other along any path between them.
  */
 
-/** Its size and inset, in CSS pixels. Small: it is a handle, not a button bar. */
+/** Its size, in CSS pixels. Small: it is a handle, not a button bar. */
 const SIZE = 26
-const INSET = 8
 
 export interface ChipColours {
   /** Its own opaque surface. She may be sitting on a photograph. */
@@ -44,13 +43,24 @@ export interface Rect {
 }
 
 /** Top right of her window, inset. Returned rather than drawn so it is testable. */
-export function chipRect(width: number): Rect {
-  return { x: width - SIZE - INSET, y: INSET, w: SIZE, h: SIZE }
+
+/**
+ * At HER shoulder, not the window's corner.
+ *
+ * The window is deliberately much larger than she is — the bubble draws above
+ * her head and needs the width — so "top right of the window" put the control a
+ * long way from the thing it belongs to. It followed the window because that is
+ * what it was given; now it is given her.
+ *
+ * Centred ON her corner rather than beside it, so it reads as attached.
+ */
+export function chipRect(her: { right: number; top: number }): Rect {
+  return { x: her.right - SIZE / 2, y: her.top - SIZE / 2, w: SIZE, h: SIZE }
 }
 
 /** Whether a point in CSS pixels is on it. */
-export function hits(x: number, y: number, width: number): boolean {
-  const rect = chipRect(width)
+export function hits(x: number, y: number, her: { right: number; top: number }): boolean {
+  const rect = chipRect(her)
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h
 }
 
@@ -63,10 +73,10 @@ export function hits(x: number, y: number, width: number): boolean {
 export function visible(
   pointer: { x: number; y: number } | null,
   onHer: boolean,
-  width: number,
+  her: { right: number; top: number },
 ): boolean {
   if (pointer === null) return false
-  return onHer || hits(pointer.x, pointer.y, width)
+  return onHer || hits(pointer.x, pointer.y, her)
 }
 
 /**
@@ -79,12 +89,12 @@ export function visible(
  */
 export function drawChip(
   ctx: CanvasRenderingContext2D,
-  width: number,
+  her: { right: number; top: number },
   colours: ChipColours,
   opacity: number,
 ): void {
   if (opacity <= 0) return
-  const { x, y, w, h } = chipRect(width)
+  const { x, y, w, h } = chipRect(her)
 
   ctx.save()
   ctx.globalAlpha = opacity
