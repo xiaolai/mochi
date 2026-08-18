@@ -29,6 +29,30 @@
 /** Its size, in CSS pixels. Small: it is a handle, not a button bar. */
 const SIZE = 26
 
+/**
+ * Where it sits relative to her corner, and it is worth stating in one place
+ * because both extremes were tried and rejected by eye.
+ *
+ * Centred on the corner put a quarter of the button inside her outline — the
+ * two ran into each other. Nine pixels clear of it read as unrelated to her,
+ * floating in the desktop. Zero is the corner itself: the button's inner corner
+ * touches the corner of her bounding box, which — because she is a rounded dome
+ * and her box is not — leaves a small diagonal gap where her edge falls away,
+ * and no overlap anywhere.
+ */
+const CLEAR = 0
+
+/**
+ * A margin around it for the purpose of STAYING VISIBLE, and for nothing else.
+ *
+ * Moving it clear of her opened a strip of empty desktop between the two, and
+ * the rule "show it while the pointer is on her or on it" hides it exactly
+ * halfway across — which un-solids the rectangle the cursor is travelling
+ * towards. The click region is still the button and only the button; this is
+ * about not vanishing on the way.
+ */
+const GRACE = 12
+
 /** The badge, in CSS pixels. A dot, not a number: at this size a digit is mush. */
 const DOT = 5
 
@@ -65,10 +89,11 @@ export interface Rect {
  * long way from the thing it belongs to. It followed the window because that is
  * what it was given; now it is given her.
  *
- * Centred ON her corner rather than beside it, so it reads as attached.
+ * Clear of her corner rather than centred on it. Centred put a quarter of the
+ * button inside her outline, so the two ran into each other.
  */
 export function chipRect(her: { right: number; top: number }): Rect {
-  return { x: her.right - SIZE / 2, y: her.top - SIZE / 2, w: SIZE, h: SIZE }
+  return { x: her.right + CLEAR, y: her.top - SIZE - CLEAR, w: SIZE, h: SIZE }
 }
 
 /** Whether a point in CSS pixels is on it. */
@@ -87,24 +112,30 @@ export function visible(
   pointer: { x: number; y: number } | null,
   onHer: boolean,
   her: { right: number; top: number },
-  problems = 0,
 ): boolean {
   /**
-   * Something went wrong: show it without waiting to be found.
+   * Hover, and nothing else — including when something has gone wrong.
    *
-   * A badge that only appears on hover is not a way of telling anybody
-   * anything. The case this exists for is somebody editing `mine.json`,
-   * reloading, and seeing her look exactly the same — which is what a rejected
-   * avatar file looks like from outside. They have no reason to hover, because
-   * from where they are standing nothing happened.
+   * It showed itself unbidden while a problem was outstanding, on the argument
+   * that somebody whose edited file was rejected has no reason to hover. That
+   * argument was overruled: a control that appears on the desktop by itself is
+   * a control that appears on the desktop by itself, however good its reason.
    *
-   * It costs a 26-pixel rectangle of solid window while a problem is
-   * outstanding, which is the same exception the paragraph above makes and no
-   * larger. Normal is zero, and then this line does nothing.
+   * What is kept is the mark ON it — see `drawChip` — so the hover that finds
+   * it still says something is waiting. And the bubble's own copy of this
+   * control keeps its unprompted badge, which is the common case: the bubble is
+   * on by default, and the chip is only what remains when it is not.
    */
-  if (problems > 0) return true
   if (pointer === null) return false
-  return onHer || hits(pointer.x, pointer.y, her)
+  if (onHer) return true
+  // The button, plus the gap it now sits across. See `GRACE`.
+  const rect = chipRect(her)
+  return (
+    pointer.x >= rect.x - GRACE &&
+    pointer.x <= rect.x + rect.w + GRACE &&
+    pointer.y >= rect.y - GRACE &&
+    pointer.y <= rect.y + rect.h + GRACE
+  )
 }
 
 /**

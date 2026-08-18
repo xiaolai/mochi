@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { readWornPersonaId } from './worn'
+import { readWornPersonaId, writeWornPersonaId } from './worn'
 
 let userData = ''
 beforeEach(() => {
@@ -55,6 +55,47 @@ describe('remembering who she is', () => {
 
   it('answers null when the key is simply absent', () => {
     writePreferences({ sizePercent: 100 })
+    expect(readWornPersonaId(userData)).toBeNull()
+  })
+})
+
+describe('remembering who is worn', () => {
+  it('writes the id, and reads it back', () => {
+    writeWornPersonaId(userData, 'loki')
+    expect(readWornPersonaId(userData)).toBe('loki')
+  })
+
+  it('keeps every other key in the file', () => {
+    // This file is older than this application. v1 put window geometry,
+    // shortcuts and a model choice in it, and writing `{ activePersonaId }`
+    // alone would silently discard somebody's settings for an app that may
+    // still be installed.
+    writeFileSync(
+      join(userData, 'preferences.json'),
+      JSON.stringify({ activePersonaId: 'mochi', windowBounds: { x: 10, y: 20 }, theme: 'dark' }),
+    )
+    writeWornPersonaId(userData, 'loki')
+    const after: unknown = JSON.parse(readFileSync(join(userData, 'preferences.json'), 'utf8'))
+    expect(after).toEqual({
+      activePersonaId: 'loki',
+      windowBounds: { x: 10, y: 20 },
+      theme: 'dark',
+    })
+  })
+
+  it('replaces a file nothing can parse rather than refusing to write', () => {
+    // There is nothing to preserve in unreadable JSON, and refusing would leave
+    // the switch silently ineffective — the worst of the three outcomes.
+    writeFileSync(join(userData, 'preferences.json'), '{ not json at all')
+    writeWornPersonaId(userData, 'loki')
+    expect(readWornPersonaId(userData)).toBe('loki')
+  })
+
+  it('refuses an id that is not usable as one', () => {
+    // It becomes a lookup key and, downstream, a path segment. The reader
+    // already validates on the way in; a writer that did not would let the file
+    // hold something the reader must then reject on every launch.
+    expect(() => writeWornPersonaId(userData, '../elsewhere')).toThrow()
     expect(readWornPersonaId(userData)).toBeNull()
   })
 })

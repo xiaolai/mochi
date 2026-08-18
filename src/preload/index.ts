@@ -2,12 +2,18 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   isCompanionChannel,
   isHistoryChannel,
+  isSettingsChannel,
   type HistoryConversation,
   type HistoryHit,
   type HistoryProblem,
   type HistoryTurn,
   type MochiApi,
   type MochiHistoryApi,
+  type MochiSettingsApi,
+  type PersonaChange,
+  type Revealable,
+  type SettingsView,
+  type SettingsWrite,
   type SessionConfig,
   type VoiceReport,
 } from '@shared/ipc'
@@ -33,6 +39,11 @@ function guardHistory(channel: string): string {
   return channel
 }
 
+function guardSettings(channel: string): string {
+  if (!isSettingsChannel(channel)) throw new Error(`refusing unknown channel: ${channel}`)
+  return channel
+}
+
 /**
  * Which document this is, from `additionalArguments`.
  *
@@ -53,7 +64,7 @@ const role = process.argv.find((one) => one.startsWith('--mochi-role='))?.slice(
  * a capability runner whose role string is misspelt would receive the voice
  * bridge rather than nothing at all.
  */
-const ROLES = new Set(['companion', 'history'])
+const ROLES = new Set(['companion', 'history', 'settings'])
 
 const api: MochiApi = {
   async open() {
@@ -100,6 +111,9 @@ const history: MochiHistoryApi = {
   async problems() {
     return (await ipcRenderer.invoke(guardHistory('history:problems'))) as readonly HistoryProblem[]
   },
+  settings() {
+    ipcRenderer.send(guardHistory('history:settings'))
+  },
   async search(query: string) {
     return (await ipcRenderer.invoke(
       guardHistory('history:search'),
@@ -108,15 +122,33 @@ const history: MochiHistoryApi = {
   },
 }
 
-// One or the other, never both. The conversations window has no business
-// minting a key, and the companion has no business reading a transcript --
-// exposing both to both would make the two allowlists decorative.
+const settings: MochiSettingsApi = {
+  async read() {
+    return (await ipcRenderer.invoke(guardSettings('settings:read'))) as SettingsView
+  },
+  async wear(id: string) {
+    return (await ipcRenderer.invoke(guardSettings('settings:wear'), id)) as SettingsWrite
+  },
+  async save(change: PersonaChange) {
+    return (await ipcRenderer.invoke(guardSettings('settings:save'), change)) as SettingsWrite
+  },
+  reveal(what: Revealable) {
+    ipcRenderer.send(guardSettings('settings:reveal'), what)
+  },
+}
+
+// One of the three, never more than one. The conversations window has no
+// business minting a key, the companion has no business reading a transcript,
+// and neither has any business rewriting who she is -- exposing every API to
+// every document would make all three allowlists decorative.
 if (!ROLES.has(role)) {
   // Loud, and empty. Silence here would present as a page whose API is simply
   // undefined, which reads as a bug in the page rather than a refusal.
   console.error(`[preload] refusing to expose any API: unknown role "${role}"`)
 } else if (role === 'history') {
   contextBridge.exposeInMainWorld('mochiHistory', history)
+} else if (role === 'settings') {
+  contextBridge.exposeInMainWorld('mochiSettings', settings)
 } else {
   contextBridge.exposeInMainWorld('mochi', api)
 }

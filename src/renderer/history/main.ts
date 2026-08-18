@@ -22,6 +22,7 @@ declare global {
 
 const list = document.querySelector('#list')
 const troubles = document.querySelector('#troubles')
+const settings = document.querySelector('#settings')
 const troublesLabel = document.querySelector('#troubles-label')
 const pane = document.querySelector('#pane')
 const query = document.querySelector('#q')
@@ -34,6 +35,12 @@ if (!(query instanceof HTMLInputElement)) {
 if (!(troubles instanceof HTMLButtonElement) || !(troublesLabel instanceof HTMLElement)) {
   throw new Error('history: the problems strip is missing')
 }
+if (!(settings instanceof HTMLButtonElement)) {
+  throw new Error('history: the settings button is missing')
+}
+settings.addEventListener('click', () => {
+  window.mochiHistory.settings()
+})
 // Re-bound so the narrowing survives into the closures below.
 const listEl: HTMLElement = list
 const paneEl: HTMLElement = pane

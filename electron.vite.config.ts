@@ -36,6 +36,7 @@ export default defineConfig({
         input: {
           companion: fileURLToPath(new URL('./src/renderer/companion/index.html', import.meta.url)),
           history: fileURLToPath(new URL('./src/renderer/history/index.html', import.meta.url)),
+          settings: fileURLToPath(new URL('./src/renderer/settings/index.html', import.meta.url)),
         },
       },
     },

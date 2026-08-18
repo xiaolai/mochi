@@ -145,9 +145,42 @@ let history: BrowserWindow | null = null
  * activated by clicking it, and the only way back is the control on her bubble.
  */
 function bringForward(window: BrowserWindow): void {
+  becomeOrdinary(window)
   window.show()
   if (process.platform === 'darwin') app.focus({ steal: true })
   window.focus()
+}
+
+/**
+ * An app with real windows open is a real app, and stops being one when they
+ * close.
+ *
+ * The accessory policy is what keeps her out of the Dock and out of the app
+ * switcher — she is furniture, not something you alt-tab to. The cost, once
+ * there was a second window, is that **an accessory app cannot be raised by
+ * clicking it**: no Dock icon, no switcher entry, and clicking its window does
+ * not activate an app that is not allowed to activate. Both real windows went
+ * behind the first thing that took focus and could not be got back except by
+ * clicking the control on her bubble again.
+ *
+ * So the policy follows the windows. While an ordinary one is open the app is
+ * `regular` and behaves like anything else on the desktop; when the last closes
+ * it goes back to `accessory` and the Dock icon disappears with it. Her own
+ * window never counts — it is `alwaysOnTop` on every workspace and was never
+ * the thing that needed raising.
+ */
+const ordinary = new Set<BrowserWindow>()
+
+function becomeOrdinary(window: BrowserWindow): void {
+  if (process.platform !== 'darwin') return
+  if (ordinary.has(window)) return
+  ordinary.add(window)
+  app.setActivationPolicy('regular')
+  window.on('closed', () => {
+    ordinary.delete(window)
+    // Furniture again, the moment the last real window is gone.
+    if (ordinary.size === 0) app.setActivationPolicy('accessory')
+  })
 }
 
 export function showHistoryWindow(): BrowserWindow {
@@ -188,6 +221,57 @@ export function showHistoryWindow(): BrowserWindow {
     void window.loadFile(join(__dirname, '../renderer/history/index.html'))
   } else {
     void window.loadURL(`${devServerUrl}/history/index.html`)
+  }
+  return window
+}
+
+/**
+ * The one place a person can change who she is without opening a text editor.
+ *
+ * A third window rather than a third pane in the conversations one. They are
+ * genuinely different jobs — that window is a reader of a person's own words,
+ * this one writes to the persona those words are filed under — and they have
+ * different allowlists for exactly that reason. Sharing a document would make
+ * the split decorative.
+ */
+let settings: BrowserWindow | null = null
+
+export function showSettingsWindow(): BrowserWindow {
+  if (settings !== null && !settings.isDestroyed()) {
+    if (settings.isMinimized()) settings.restore()
+    bringForward(settings)
+    return settings
+  }
+
+  const window = new BrowserWindow({
+    width: 720,
+    height: 640,
+    minWidth: 520,
+    minHeight: 420,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1d1a' : '#f7f6f1',
+    title: 'Settings',
+    skipTaskbar: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      additionalArguments: ['--mochi-role=settings'],
+    },
+  })
+  settings = window
+  window.on('closed', () => {
+    settings = null
+  })
+  // Shown at once, for the reason `bringForward` gives at length: waiting for a
+  // first paint in an accessory app is waiting for something that never comes.
+  bringForward(window)
+
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL
+  if (devServerUrl === undefined) {
+    void window.loadFile(join(__dirname, '../renderer/settings/index.html'))
+  } else {
+    void window.loadURL(`${devServerUrl}/settings/index.html`)
   }
   return window
 }

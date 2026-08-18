@@ -5,12 +5,25 @@ import { chipRect, drawChip, hits, visible } from './chip'
 const HER = { right: 207, top: 239 }
 
 describe('where it is', () => {
-  it('sits on her shoulder, not in the window’s corner', () => {
+  it('sits beside her shoulder, not in the window’s corner', () => {
     // The window is far larger than she is, so anchoring to the window put the
     // control a long way from the thing it belongs to.
     const rect = chipRect(HER)
-    expect(Math.abs(rect.x + rect.w / 2 - HER.right)).toBeLessThan(2)
-    expect(Math.abs(rect.y + rect.h / 2 - HER.top)).toBeLessThan(2)
+    // Outside her box, and touching it. Both extremes were tried by eye and
+    // rejected: centred on the corner overlapped her, and nine pixels clear
+    // read as unrelated to her.
+    expect(rect.x).toBeGreaterThanOrEqual(HER.right)
+    expect(rect.y + rect.h).toBeLessThanOrEqual(HER.top)
+    expect(rect.x - HER.right).toBeLessThan(rect.w / 2)
+    expect(HER.top - (rect.y + rect.h)).toBeLessThan(rect.h / 2)
+  })
+
+  it('does not overlap her, which is the whole complaint about where it was', () => {
+    // It used to be centred ON her corner, so a quarter of the button sat
+    // inside her outline and the two ran into each other.
+    const rect = chipRect(HER)
+    expect(rect.x).toBeGreaterThanOrEqual(HER.right)
+    expect(rect.y + rect.h).toBeLessThanOrEqual(HER.top)
   })
 
   it('follows her when she moves', () => {
@@ -21,6 +34,8 @@ describe('where it is', () => {
   })
 
   it('answers for points on it and not for points beside it', () => {
+    // `hits` is the CLICK region and stays exactly the button. The margin that
+    // keeps it from vanishing mid-approach lives in `visible`, not here.
     const { x, y, w, h } = chipRect(HER)
     expect(hits(x + w / 2, y + h / 2, HER)).toBe(true)
     expect(hits(x - 4, y + h / 2, HER)).toBe(false)
@@ -46,6 +61,14 @@ describe('when it shows', () => {
     // which also un-solids the rectangle under the cursor.
     const { x, y, w, h } = chipRect(HER)
     expect(visible({ x: x + w / 2, y: y + h / 2 }, false, HER)).toBe(true)
+  })
+
+  it('survives the gap between her and it', () => {
+    // Moving it clear of her opened a strip of empty desktop in between, and
+    // "on her or on it" hides it exactly halfway across — which un-solids the
+    // rectangle the cursor is travelling towards.
+    const { x, y, h } = chipRect(HER)
+    expect(visible({ x: x - 6, y: y + h + 6 }, false, HER)).toBe(true)
   })
 
   it('hides when the pointer is on neither', () => {
@@ -105,16 +128,15 @@ describe('what it draws', () => {
 })
 
 describe('when something needs reading', () => {
-  it('shows itself with no pointer anywhere near the window', () => {
-    // The case this exists for: somebody edits an avatar file, reloads, and she
-    // looks exactly the same — because the file was rejected. They have no
-    // reason to hover, so a badge that waits to be hovered tells nobody
-    // anything.
-    expect(visible(null, false, HER, 1)).toBe(true)
-  })
-
-  it('goes back to hover-only when there is nothing wrong', () => {
-    expect(visible(null, false, HER, 0)).toBe(false)
+  it('still waits to be hovered, however many problems there are', () => {
+    // It used to show itself unbidden while a problem was outstanding. That was
+    // overruled: a control that appears on the desktop by itself is a control
+    // that appears on the desktop by itself, whatever its reason. The mark on
+    // it is kept, so the hover that finds it still says something is waiting —
+    // and the bubble's own copy of this control keeps its unprompted badge,
+    // which is the common case.
+    expect(visible(null, false, HER)).toBe(false)
+    expect(visible({ x: 4, y: 20 }, false, HER)).toBe(false)
   })
 
   it('paints the dot, and does not when the count is zero', () => {

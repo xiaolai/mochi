@@ -71,9 +71,121 @@ export const HISTORY_CHANNELS = [
   'history:search',
   /** Everything that went wrong, for the window that can show it. */
   'history:problems',
+  /**
+   * Open the settings window.
+   *
+   * The way in lives HERE rather than on her bubble, which has exactly three
+   * controls and a person asked for exactly those three. Opening a window is
+   * also the only thing this channel does — the conversations window gets no
+   * ability to read or write a setting by having it.
+   */
+  'history:settings',
 ] as const
 
 export type HistoryChannel = (typeof HISTORY_CHANNELS)[number]
+
+/**
+ * What the settings window may ask for — a THIRD list, for the same reason
+ * there is a second.
+ *
+ * This is the only window that WRITES, which is exactly why it does not share
+ * an allowlist with the two that read. The companion can mint a credential and
+ * must never be able to rewrite who she is; the conversations window shows a
+ * person's words and must never be able to change the persona those words are
+ * filed under.
+ *
+ * **Nothing here takes a path.** `settings:reveal` names a folder by kind, not
+ * by location — a renderer that could hand main an arbitrary path to open would
+ * be a file browser with the user's authority, reachable from a page.
+ */
+export const SETTINGS_CHANNELS = [
+  /** Everything the window draws: personas, avatars, capabilities, folders. */
+  'settings:read',
+  /** Wear this persona. The id is checked against the catalog in main. */
+  'settings:wear',
+  /** Change fields on a persona. Main decides what may be written and where. */
+  'settings:save',
+  /** Show me where these files are. A KIND, never a path. */
+  'settings:reveal',
+] as const
+
+export type SettingsChannel = (typeof SETTINGS_CHANNELS)[number]
+
+export function isSettingsChannel(value: unknown): value is SettingsChannel {
+  return typeof value === 'string' && (SETTINGS_CHANNELS as readonly string[]).includes(value)
+}
+
+/** The folders a person may be shown. Named, so no path crosses the bridge. */
+export const REVEALABLE = ['avatars', 'personas', 'capabilities'] as const
+export type Revealable = (typeof REVEALABLE)[number]
+
+/** One persona, as the settings window lists it. */
+export interface SettingsPersona {
+  readonly id: string
+  readonly name: string
+  readonly voice: string
+  readonly bubble: boolean
+  readonly avatarId: string | null
+  /** Where she came from, or null for the built-in. Shown, never sent back. */
+  readonly source: string | null
+}
+
+/**
+ * One avatar somebody could wear.
+ *
+ * `id` is **null for the built-in**, because that is what a persona actually
+ * stores: `avatarId: null` means the shipped face. Inventing a name for it here
+ * would create a second way to say the same thing, and the resolver would have
+ * to learn the fake one.
+ */
+export interface SettingsAvatar {
+  readonly id: string | null
+  readonly builtIn: boolean
+}
+
+/** One capability, and whether she is actually offered it. */
+export interface SettingsCapability {
+  readonly name: string
+  readonly description: string
+  /**
+   * `available` is a built-in she can call. `refused` is something found in the
+   * user's folder that this build will not run — and does not describe to her
+   * either, because a capability she offers and cannot perform is worse than
+   * one she has never heard of.
+   */
+  readonly state: 'available' | 'refused'
+  readonly why: string | null
+}
+
+/** Everything the settings window draws, answered in one call. */
+export interface SettingsView {
+  readonly wornId: string
+  readonly personas: readonly SettingsPersona[]
+  readonly avatars: readonly SettingsAvatar[]
+  readonly voices: readonly string[]
+  readonly capabilities: readonly SettingsCapability[]
+  /** Named for display. Opening one goes through `settings:reveal` by kind. */
+  readonly folders: Readonly<Record<Revealable, string>>
+}
+
+/** What may be changed about a persona from this window, and nothing else. */
+export interface PersonaChange {
+  readonly id: string
+  readonly name?: string
+  readonly voice?: string
+  readonly bubble?: boolean
+  readonly avatarId?: string | null
+}
+
+/** Whether a write landed, and what to say when it did not. */
+export type SettingsWrite = { readonly ok: true } | { readonly ok: false; readonly why: string }
+
+export interface MochiSettingsApi {
+  read(): Promise<SettingsView>
+  wear(id: string): Promise<SettingsWrite>
+  save(change: PersonaChange): Promise<SettingsWrite>
+  reveal(what: Revealable): void
+}
 
 export function isCompanionChannel(value: unknown): value is CompanionChannel {
   return typeof value === 'string' && (COMPANION_CHANNELS as readonly string[]).includes(value)
@@ -257,6 +369,8 @@ export interface HistoryProblem {
 export interface MochiHistoryApi {
   /** Everything that went wrong this launch, newest first. */
   problems(): Promise<readonly HistoryProblem[]>
+  /** Open the settings window. Opening it is all this can do. */
+  settings(): void
   /** Whoever is worn. The window never gets to name a persona. */
   list(): Promise<{
     readonly persona: string

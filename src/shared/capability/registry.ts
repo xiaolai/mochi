@@ -20,6 +20,21 @@ export interface WireTool {
 export type RegistryProblem =
   | { readonly kind: 'shadows-builtin'; readonly name: string }
   | { readonly kind: 'duplicate-name'; readonly name: string }
+  /**
+   * This build will not run third-party capability code, so it will not offer
+   * it either.
+   *
+   * The refusal is here, in the thing that builds `tools`, rather than at the
+   * call site declining to pass the manifests along. Both keep the code out of
+   * the process; only this one keeps the DESCRIPTION out of the model's
+   * context. A capability that is described to her but cannot be called is
+   * strictly worse than one she has never heard of — she will offer to do it,
+   * try, and fail, and the description is attacker-controlled text either way.
+   *
+   * Lifted only when execution exists and has passed its controls. See W2 in
+   * `plan-v2.md` for what those are.
+   */
+  | { readonly kind: 'execution-unavailable'; readonly name: string }
 
 export interface Refusal {
   readonly manifest: CapabilityManifest
@@ -59,6 +74,14 @@ function wire(manifest: CapabilityManifest): WireTool {
 export function createRegistry(
   builtin: readonly CapabilityManifest[],
   installed: readonly CapabilityManifest[],
+  /**
+   * Whether anything installed may run. **Default false**, deliberately.
+   *
+   * A default that widens authority is the wrong direction for a default to
+   * fail in — the preload already made that mistake once with its role check.
+   * Turning this on is a decision somebody has to write down at the call site.
+   */
+  mayRunInstalled = false,
 ): Registry {
   const byName = new Map<string, CapabilityManifest>()
   for (const manifest of builtin) byName.set(manifest.name, manifest)
@@ -68,6 +91,12 @@ export function createRegistry(
   const accepted: CapabilityManifest[] = []
 
   for (const manifest of [...installed].sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    // First, before any other question about it: nothing installed is offered
+    // while nothing installed can be run.
+    if (!mayRunInstalled) {
+      refused.push({ manifest, problem: { kind: 'execution-unavailable', name: manifest.name } })
+      continue
+    }
     if (reserved.has(manifest.name)) {
       refused.push({ manifest, problem: { kind: 'shadows-builtin', name: manifest.name } })
       continue

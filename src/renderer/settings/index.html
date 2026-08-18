@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Settings</title>
+    <style>
+      /*
+        One column, read top to bottom. The same two schemes as the
+        conversations window, because she can sit on a light desktop or a dark
+        one and so can this.
+      */
+      :root {
+        --paper: #f7f6f1;
+        --raised: #ffffff;
+        --ink: #23241f;
+        --quiet: #6d6f66;
+        --line: #e2e0d7;
+        --accent: #2f6f4f;
+        --alarm: #c23a4c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #1c1d1a;
+          --raised: #242622;
+          --ink: #eceade;
+          --quiet: #9a9c92;
+          --line: #34362f;
+          --accent: #9fd8b8;
+          --alarm: #e2748a;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        /*
+          No `height: 100%` here, unlike the conversations window. That page is
+          two panes that scroll independently and must fill the frame; this one
+          is a document that runs past the bottom, and pinning it to the
+          viewport height left the folders and half the capabilities unreachable
+          — the page did not scroll at all.
+        */
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          13px/1.55 -apple-system,
+          system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 54ch;
+        margin: 0 auto;
+        padding: 26px 24px 60px;
+      }
+      h2 {
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--quiet);
+        margin: 30px 0 10px;
+        font-weight: 600;
+      }
+      h2:first-of-type {
+        margin-top: 0;
+      }
+      .field {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .field label {
+        color: var(--quiet);
+      }
+      select,
+      input[type='text'] {
+        width: 100%;
+        padding: 5px 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--raised);
+        color: inherit;
+        font: inherit;
+      }
+      select:focus,
+      input:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -1px;
+      }
+      .switch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      button {
+        padding: 5px 11px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--raised);
+        color: inherit;
+        font: inherit;
+        cursor: default;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      .note {
+        color: var(--quiet);
+        margin: 6px 0 0;
+      }
+      .cap {
+        padding: 9px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .cap .name {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .cap .desc {
+        color: var(--quiet);
+        margin: 3px 0 0;
+      }
+      .cap.refused .name {
+        color: var(--alarm);
+      }
+      .cap .why {
+        color: var(--alarm);
+        margin: 3px 0 0;
+      }
+      .folder {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .folder code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        color: var(--quiet);
+        overflow-wrap: anywhere;
+      }
+      /* Says what happened, where the thing that happened is. */
+      #said {
+        position: sticky;
+        bottom: 0;
+        margin-top: 20px;
+        padding: 9px 12px;
+        border-radius: 8px;
+        background: var(--raised);
+        border: 1px solid var(--line);
+      }
+      #said.bad {
+        border-color: var(--alarm);
+        color: var(--alarm);
+      }
+      #said:empty {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h2>Who she is</h2>
+      <div id="who"></div>
+      <h2>What she can do</h2>
+      <div id="capabilities"></div>
+      <h2>Where things live</h2>
+      <div id="folders"></div>
+      <p id="said" role="status" aria-live="polite"></p>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

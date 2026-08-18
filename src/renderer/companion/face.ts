@@ -370,7 +370,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
      * turned off, or one the reader has dismissed.
      */
     const inBubble = bubble.controls() !== null
-    const wanted = !inBubble && chipVisible(at, onHer, herCorner(), troubles) ? 1 : 0
+    const wanted = !inBubble && chipVisible(at, onHer, herCorner()) ? 1 : 0
     chip =
       wanted > chip
         ? Math.min(1, chip + seconds / CHIP_FADE_S)

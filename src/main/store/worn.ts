@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { isPersonaId } from '@shared/persona'
 import { logBoundedRead, readBounded } from './read-bounded'
+import { writeJsonAtomically } from './json-file'
 
 /**
  * Which persona is being worn, remembered across restarts.
@@ -13,10 +14,17 @@ import { logBoundedRead, readBounded } from './read-bounded'
  * window that does not exist here yet — and none of that is needed to answer
  * "who is she today".
  *
- * So this reads **one key** out of that file. It is deliberately a read and not
- * a store: nothing in v2 can switch personas yet, so nothing has anything to
- * write. When a switcher exists it should own this file properly rather than
- * grow a second one beside it.
+ * So this reads **one key** out of that file, and now writes that one key back.
+ * It was a read for as long as nothing in v2 could switch personas; the
+ * settings window can, and the note left here said plainly that when a switcher
+ * existed it should own this file rather than grow a second one beside it.
+ *
+ * Owning it means **read, change one key, write the whole object back**. v1's
+ * file has window geometry, shortcuts and a model choice in it, and this
+ * version understands none of those. Writing `{ activePersonaId }` alone would
+ * silently discard somebody's settings for an application that may still be
+ * installed — so unknown keys are carried through untouched, and a file that
+ * cannot be read at all is replaced rather than merged into blindly.
  *
  * ## Why it matters more than it looks
  *
@@ -57,4 +65,37 @@ export function readWornPersonaId(userData: string): string | null {
     return null
   }
   return found
+}
+
+/**
+ * Remember who is being worn, without discarding what else is in the file.
+ *
+ * Atomic, because this is read on every launch and a half-written
+ * `preferences.json` presents as her forgetting who she is — and, since the
+ * archive is scoped per persona, as her forgetting the person too.
+ */
+export function writeWornPersonaId(userData: string, id: string): void {
+  if (!isPersonaId(id)) throw new Error(`refusing to remember an unusable persona id: ${id}`)
+
+  // Everything already there, kept. See the note above: this file is older than
+  // this application and holds keys it does not understand.
+  let existing: Record<string, unknown> = {}
+  const read = readBounded(join(userData, PREFERENCES))
+  if (read.ok) {
+    try {
+      const value: unknown = JSON.parse(read.text)
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        existing = value as Record<string, unknown>
+      }
+    } catch {
+      // Unreadable JSON is REPLACED, not merged into. There is nothing to
+      // preserve in a file nothing can parse, and refusing to write would
+      // leave the switch silently ineffective.
+      console.warn('[worn] preferences.json is not valid JSON; replacing it')
+    }
+  } else if (read.reason.kind !== 'absent') {
+    console.warn(`[worn] ${logBoundedRead(read.reason)}; replacing it`)
+  }
+
+  writeJsonAtomically(join(userData, PREFERENCES), { ...existing, activePersonaId: id })
 }

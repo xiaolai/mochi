@@ -1,11 +1,18 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, clipboard, ipcMain } from 'electron'
-import { existsSync } from 'node:fs'
-import { greetingFor, instructionsFor } from '@shared/persona'
+import { app, BrowserWindow, clipboard, ipcMain, shell } from 'electron'
+import { existsSync, mkdirSync } from 'node:fs'
+import { greetingFor, instructionsFor, VOICE_NAMES } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
 import { heardPortion } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'
-import type { VoiceReport } from '@shared/ipc'
+import {
+  REVEALABLE,
+  type PersonaChange,
+  type Revealable,
+  type SettingsView,
+  type SettingsWrite,
+  type VoiceReport,
+} from '@shared/ipc'
 import { loadCapabilities } from './capability/load'
 import { createLedger, type AnswerFrame } from './capability/ledger'
 import { builtinHandlers, handlerFor } from './capability/handlers'
@@ -16,17 +23,26 @@ import {
   readBearer,
   type Minted,
 } from './voice/credential'
-import { activePersona, loadPersonas, personasRoot } from './store/personas'
+import { activePersona, loadPersonas, personasRoot, savePersonaTo } from './store/personas'
 import { readPolicy } from './store/policy'
-import { readWornPersonaId } from './store/worn'
+import { readWornPersonaId, writeWornPersonaId } from './store/worn'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { createProblems } from './problems'
+import { discoverInstalled, type Installed } from './capability/installed'
+import {
+  applyChange,
+  folderFor,
+  listAvatars,
+  listCapabilities,
+  listPersonas,
+  refuse,
+} from './settings'
 import { packageFolder } from './store/personas'
 import { createTranscripts, type Transcripts } from './store/transcripts'
 import { createConversation, type Conversation } from './store/conversation'
 import { recall } from './store/memory'
-import { createCompanionWindow, showHistoryWindow } from './window'
+import { createCompanionWindow, showHistoryWindow, showSettingsWindow } from './window'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
 // application's identity is how a notification arrives attributed to nothing and
@@ -80,6 +96,16 @@ console.log(
 
 /** The one window, and the only thing frames can be sent through. */
 let companion: BrowserWindow | null = null
+
+/**
+ * What is in the user's capabilities folder, read once at startup.
+ *
+ * Once rather than per session: unlike the persona and the note, nothing here
+ * can take effect until a sandbox exists, so re-reading it mid-run would only
+ * change what is REPORTED — and a report that changes without the app
+ * restarting is a report nobody can act on.
+ */
+let installed: Installed = { root: '', manifests: [], problems: [] }
 
 const ledger = createLedger({
   registry,
@@ -424,6 +450,117 @@ ipcMain.handle('history:turns', (_event, token: unknown) => {
 
 ipcMain.handle('history:problems', () => problems.all())
 
+ipcMain.on('history:settings', () => {
+  const window = showSettingsWindow()
+  const at = window.getBounds()
+  console.log(`[settings] window ${at.width}x${at.height} at ${at.x},${at.y}`)
+})
+
+/**
+ * Everything the settings window draws, answered in one call.
+ *
+ * Read fresh, like `voice:config`, and for the same reason: the files under
+ * `Application Support` are the truth and somebody may have edited one by hand
+ * between opening this window and looking at it. A cached answer would make
+ * this window the second place a persona lives.
+ */
+ipcMain.handle('settings:read', (): SettingsView => {
+  const userData = app.getPath('userData')
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const worn = activePersona(catalog, readWornPersonaId(userData))
+  return {
+    wornId: worn.persona.id,
+    personas: listPersonas(catalog),
+    avatars: listAvatars(avatarsRoot(userData)),
+    voices: [...VOICE_NAMES],
+    capabilities: listCapabilities(registry, installed),
+    folders: {
+      avatars: folderFor(userData, 'avatars'),
+      personas: folderFor(userData, 'personas'),
+      capabilities: folderFor(userData, 'capabilities'),
+    },
+  }
+})
+
+/**
+ * Wear somebody. Checked against the catalog, not against the character set.
+ *
+ * This is not cosmetic: the archive is scoped per persona, so wearing the wrong
+ * one presents as her memory being empty. An id that no persona holds is
+ * refused rather than remembered — the alternative is a preferences file that
+ * every future launch has to reject.
+ */
+ipcMain.handle('settings:wear', (_event, id: unknown): SettingsWrite => {
+  if (typeof id !== 'string') return refuse('That is not a persona.')
+  const userData = app.getPath('userData')
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  if (!catalog.personas.has(id)) return refuse(`There is no persona called ${id}.`)
+  try {
+    writeWornPersonaId(userData, id)
+  } catch (error: unknown) {
+    problems.note('persona', id, `could not be worn: ${String(error)}`)
+    return refuse(String(error))
+  }
+  console.log(`[persona] now wearing ${id}`)
+  return { ok: true }
+})
+
+/**
+ * Change a persona, field by field, and write her back where she came from.
+ *
+ * `applyChange` decides what may be touched — a spread would have let a page
+ * set `id`, which keys her memory — and `savePersonaTo` decides WHERE it lands:
+ * an overlay for the built-in, the package itself for everyone else. Neither
+ * decision is the renderer's, and neither is made twice.
+ */
+ipcMain.handle('settings:save', (_event, change: unknown): SettingsWrite => {
+  if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
+  const asked = change as PersonaChange
+  if (typeof asked.id !== 'string') return refuse('That change does not name a persona.')
+
+  const userData = app.getPath('userData')
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const persona = catalog.personas.get(asked.id)
+  if (persona === undefined) return refuse(`There is no persona called ${asked.id}.`)
+
+  const avatars = listAvatars(avatarsRoot(userData))
+    .map((one) => one.id)
+    .filter((one): one is string => one !== null)
+  const changed = applyChange(persona, asked, avatars)
+  if (!changed.ok) return refuse(changed.why)
+
+  try {
+    const written = savePersonaTo(userData, catalog, changed.persona)
+    console.log(`[persona] ${asked.id} saved to ${written.source}`)
+  } catch (error: unknown) {
+    // Loud, and reported where somebody will see it. A save that silently did
+    // not land is the failure this whole window exists to remove.
+    console.error(`[persona] could not save ${asked.id}:`, error)
+    problems.note('persona', asked.id, `could not be saved: ${String(error)}`)
+    return refuse(String(error))
+  }
+  return { ok: true }
+})
+
+/**
+ * Open a folder in the system file manager. A KIND, never a path.
+ *
+ * `folderFor` is the only place a name becomes a location. A channel that took
+ * the path instead would be a file browser running with this application's
+ * authority, reachable from a page.
+ */
+ipcMain.on('settings:reveal', (_event, what: unknown) => {
+  if (!(REVEALABLE as readonly unknown[]).includes(what)) {
+    console.error(`[settings] refusing to reveal an unknown folder: ${String(what)}`)
+    return
+  }
+  const folder = folderFor(app.getPath('userData'), what as Revealable)
+  // Created if missing, because the answer to "where do I put one" must be a
+  // folder that exists rather than a path that does not.
+  mkdirSync(folder, { recursive: true })
+  void shell.openPath(folder)
+})
+
 ipcMain.handle('history:search', (_event, query: unknown) => {
   const persona = wearing
   if (persona === null || typeof query !== 'string') return []
@@ -447,6 +584,33 @@ void app.whenReady().then(
       console.error(`[inherited] could not set aside ${file}: ${reason}`),
     )) {
       console.log(`[inherited] ${name} -> ${to}/ (v1's, nothing here reads it)`)
+    }
+
+    /**
+     * What somebody installed: found, named, and not run.
+     *
+     * W2's first step. The registry is the thing that refuses — see
+     * `execution-unavailable` — so this cannot become "we forgot to pass them
+     * along and it worked by accident". What happens here is only the telling.
+     *
+     * Reported through `problems` because that is the surface for "something
+     * you put in a folder did not take effect", which is exactly this. A folder
+     * nobody has created produces nothing, because a person with no
+     * capabilities installed has not made a mistake.
+     */
+    installed = discoverInstalled(app.getPath('userData'))
+    for (const problem of installed.problems) {
+      console.error(`[capability] installed/${problem.folder}: ${problem.kind}`)
+      problems.note('capability', problem.folder, problem.kind)
+    }
+    for (const manifest of installed.manifests) {
+      console.log(`[capability] installed/${manifest.name}: found, NOT run`)
+      problems.note(
+        'capability',
+        manifest.name,
+        'found in your capabilities folder, and not run — this build has no sandbox for ' +
+          'third-party capability code, so she is not told it exists either',
+      )
     }
 
     companion = createCompanionWindow()

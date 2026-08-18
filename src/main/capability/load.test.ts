@@ -70,15 +70,20 @@ describe('the built-ins on disk', () => {
 
 describe('loadCapabilities', () => {
   it('accepts a capability nobody wrote code for', () => {
-    // The claim, end to end and off a real filesystem: a folder appears, and a
-    // new tool is on the wire and dispatchable. No source file in this
-    // repository mentions `read_clipboard`.
+    // W1's fourth acceptance criterion, end to end and off a real filesystem: a
+    // folder appears, and a new tool is on the wire and dispatchable. No source
+    // file in this repository mentions `read_clipboard`.
+    //
+    // `mayRunInstalled` is passed EXPLICITLY, because that is the whole state
+    // of W2: the mechanism is finished and switched off. This test is what
+    // keeps it from rotting while it waits for a sandbox — the day one exists,
+    // the flag flips at one call site and this already passes.
     install(scratch, 'read_clipboard', clipboard())
     const { manifests, problems } = loadCapabilities(scratch)
     expect(problems).toEqual([])
 
     const builtin = loadCapabilities(BUILTIN_DIR).manifests
-    const registry = createRegistry(builtin, manifests)
+    const registry = createRegistry(builtin, manifests, true)
     expect(registry.tools.map((tool) => tool.name)).toEqual([
       'ask_workspace',
       'recall_conversations',
@@ -86,6 +91,20 @@ describe('loadCapabilities', () => {
       'read_clipboard',
     ])
     expect(registry.get('read_clipboard')?.parameters.required).toEqual(['format'])
+  })
+
+  it('and this build refuses it, off the same filesystem', () => {
+    // The other half, and the one that is true today. The folder is read, the
+    // manifest is valid, the capability is named — and she is never told it
+    // exists, because a capability she offers and cannot perform is worse than
+    // one she has never heard of.
+    install(scratch, 'read_clipboard', clipboard())
+    const { manifests } = loadCapabilities(scratch)
+    const registry = createRegistry(loadCapabilities(BUILTIN_DIR).manifests, manifests)
+
+    expect(registry.tools.map((tool) => tool.name)).not.toContain('read_clipboard')
+    expect(registry.get('read_clipboard')).toBeNull()
+    expect(registry.refused.map((r) => r.problem.kind)).toEqual(['execution-unavailable'])
   })
 
   it('treats a missing directory as "nothing installed", not as a fault', () => {

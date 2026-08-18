@@ -179,6 +179,11 @@
         background: var(--raised);
         box-shadow: inset 2px 0 0 var(--alarm);
       }
+      /* Always there, unlike the problems strip above it, because it is not a
+         report — it is the only way to reach the settings window. */
+      .troubles.settings {
+        color: var(--ink);
+      }
       .troubles .dot {
         width: 8px;
         height: 8px;
@@ -225,6 +230,7 @@
         <button class="troubles" id="troubles" type="button" hidden>
           <span class="dot"></span><span id="troubles-label"></span>
         </button>
+        <button class="troubles settings" id="settings" type="button">Settings…</button>
       </aside>
       <main id="pane"></main>
     </div>
