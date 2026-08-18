@@ -30,6 +30,7 @@ import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { createProblems } from './problems'
 import { createTray, trayMenuTemplate, type TrayHandle, type TrayModel } from './tray'
+import { parseGrip, startDrag, stopDrag } from './drag'
 import { discoverInstalled, type Installed } from './capability/installed'
 import {
   applyChange,
@@ -159,6 +160,26 @@ const menuHandlers = {
  * click on the empty part of her window still reaches the desktop behind, and
  * this needs no hit region of its own.
  */
+/**
+ * She was grabbed. Main moves her from here — see `drag.ts` for why the cursor
+ * is polled rather than followed through the renderer.
+ *
+ * The grip is normalised against the window's real bounds rather than trusted:
+ * it arrives from a page, and it is SUBTRACTED from the cursor, so an offset of
+ * four thousand would put her origin four thousand pixels left of the pointer
+ * on the very first tick.
+ */
+ipcMain.on('companion:grab', (_event, value: unknown) => {
+  if (companion === null) return
+  const grip = parseGrip(value, companion.getBounds())
+  if (grip === null) return
+  startDrag(grip, () => companion)
+})
+
+ipcMain.on('companion:drop', () => {
+  stopDrag()
+})
+
 ipcMain.on('companion:menu', () => {
   if (companion === null) return
   Menu.buildFromTemplate(trayMenuTemplate(menuModel(), menuHandlers, app.getName())).popup({

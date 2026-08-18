@@ -281,6 +281,37 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * reload, inspect, and the vocabulary of a web page, on a character.
    */
   /**
+   * Press on her and she comes with you.
+   *
+   * `mousedown` rather than a drag threshold, and main stops on `mouseup` — a
+   * press that does not move simply moves her by nothing, which costs nothing.
+   * The `click` handler below still fires afterwards, so the controls keep
+   * working: the bubble's buttons and the chip are checked there and are not
+   * part of her silhouette, so they are never a grab.
+   *
+   * Her SILHOUETTE only, per pixel, exactly as everything else here. Her window
+   * is 320 square and mostly empty; a press on the empty part belongs to the
+   * desktop.
+   */
+  window.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return
+    if (!avatar.hitTest(event.clientX, event.clientY)) return
+    window.mochi.grab(event.clientX, event.clientY)
+  })
+
+  /**
+   * Let go — on `mouseup` ANYWHERE, not only on her.
+   *
+   * The cursor is routinely off her by the time the button comes up: that is
+   * what dragging is. Listening on her silhouette would leave the drag running
+   * whenever somebody released the button anywhere else, which is most of the
+   * time.
+   */
+  window.addEventListener('mouseup', () => {
+    window.mochi.drop()
+  })
+
+  /**
    * Wheeling over the bubble moves the reader's place in what she said.
    *
    * `passive: false` because this is prevented: without it a scroll over her

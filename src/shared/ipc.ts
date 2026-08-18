@@ -39,6 +39,17 @@ export const COMPANION_CHANNELS = [
   /** She was asked for her conversations. Main owns the window; this opens it. */
   'history:open',
   /**
+   * She was grabbed — the pointer went down on her painted pixels.
+   *
+   * Carries WHERE on her she was grabbed, so she does not jump on the first
+   * tick. Main does the moving from there, polling the cursor: while dragging a
+   * frameless window the pointer routinely leaves the window's bounds and the
+   * renderer stops hearing about it, at which point she sticks to the edge.
+   */
+  'companion:grab',
+  /** Let go. Main also has a deadline, for the mouseup that never arrives. */
+  'companion:drop',
+  /**
    * Right-clicked on her painted pixels. Main pops the menu.
    *
    * Main, not the renderer, because the menu is a real `NSMenu` — the system
@@ -321,6 +332,9 @@ export interface MochiApi {
   copy(text: string): void
   /** Ask for the context menu, at the cursor. */
   menu(): void
+  /** Start moving her. `offsetX/Y` is where on her the pointer went down. */
+  grab(offsetX: number, offsetY: number): void
+  drop(): void
   /** Tell main what the session is doing. */
   report(event: VoiceReport): void
   /** Frames main wants put on the data channel — the ledger's answers. */

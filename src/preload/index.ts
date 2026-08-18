@@ -96,6 +96,12 @@ const api: MochiApi = {
   menu() {
     ipcRenderer.send(guard('companion:menu'))
   },
+  grab(offsetX: number, offsetY: number) {
+    ipcRenderer.send(guard('companion:grab'), { offsetX, offsetY })
+  },
+  drop() {
+    ipcRenderer.send(guard('companion:drop'))
+  },
 }
 
 const history: MochiHistoryApi = {
