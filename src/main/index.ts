@@ -29,6 +29,7 @@ import { readWornPersonaId, writeWornPersonaId } from './store/worn'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { createProblems } from './problems'
+import { createTray, type TrayHandle } from './tray'
 import { discoverInstalled, type Installed } from './capability/installed'
 import {
   applyChange,
@@ -96,6 +97,13 @@ console.log(
 
 /** The one window, and the only thing frames can be sent through. */
 let companion: BrowserWindow | null = null
+
+/**
+ * The menu bar item — the only way to quit, and the only surface that is
+ * always there. Null until the app is ready, since a `Tray` cannot exist
+ * before then.
+ */
+let tray: TrayHandle | null = null
 
 /**
  * What is in the user's capabilities folder, read once at startup.
@@ -490,7 +498,16 @@ ipcMain.handle('settings:read', (): SettingsView => {
  * refused rather than remembered — the alternative is a preferences file that
  * every future launch has to reject.
  */
-ipcMain.handle('settings:wear', (_event, id: unknown): SettingsWrite => {
+/**
+ * Wear somebody. ONE implementation, because there are two ways to ask.
+ *
+ * The tray offers it as an action and the settings window as a control — v1's
+ * standing rule, carried over: the tray is actions, the window is
+ * configuration. Two entry points onto one setting is exactly how v1's own note
+ * says a project ends up with two refresh paths that drift, so they share this
+ * function and both refresh the tray afterwards.
+ */
+function wearPersona(id: unknown): SettingsWrite {
   if (typeof id !== 'string') return refuse('That is not a persona.')
   const userData = app.getPath('userData')
   const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
@@ -502,8 +519,11 @@ ipcMain.handle('settings:wear', (_event, id: unknown): SettingsWrite => {
     return refuse(String(error))
   }
   console.log(`[persona] now wearing ${id}`)
+  tray?.refresh()
   return { ok: true }
-})
+}
+
+ipcMain.handle('settings:wear', (_event, id: unknown): SettingsWrite => wearPersona(id))
 
 /**
  * Change a persona, field by field, and write her back where she came from.
@@ -614,6 +634,42 @@ void app.whenReady().then(
     }
 
     companion = createCompanionWindow()
+
+    /**
+     * The menu bar item, created AFTER her window, because it is the way out of
+     * a running application rather than a prerequisite for starting one.
+     *
+     * Its model is read fresh on every rebuild rather than held: the persona
+     * shelf is files on disk, and somebody may add one while this is running.
+     */
+    tray = createTray(
+      () => {
+        const userData = app.getPath('userData')
+        const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+        return {
+          personas: [...catalog.personas.values()].map((one) => ({ id: one.id, name: one.name })),
+          wornId: activePersona(catalog, readWornPersonaId(userData)).persona.id,
+        }
+      },
+      {
+        onConversations: () => {
+          showHistoryWindow()
+        },
+        onSettings: () => {
+          showSettingsWindow()
+        },
+        onWear: (id) => {
+          const written = wearPersona(id)
+          // The menu has already drawn the radio as moved. Saying nothing when
+          // the write failed would leave it lying about what is on disk.
+          if (!written.ok) console.error(`[tray] could not wear ${id}: ${written.why}`)
+          tray?.refresh()
+        },
+        onQuit: () => {
+          app.quit()
+        },
+      },
+    )
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) companion = createCompanionWindow()

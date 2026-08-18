@@ -225,6 +225,19 @@ async function load(): Promise<void> {
   renderFolders(view)
 }
 
+/**
+ * Read again whenever this window comes back.
+ *
+ * There are two ways to change who is worn — this window and the menu bar item
+ * — and v1's note is explicit that one setting behind two entry points is how a
+ * project ends up with two refresh paths that drift. They share one handler in
+ * main; this is the other half, so a switch made on the tray is on screen here
+ * the moment somebody looks.
+ */
+window.addEventListener('focus', () => {
+  void load()
+})
+
 void load().catch((error: unknown) => {
   say(`Could not read your settings: ${String(error)}`, true)
 })
