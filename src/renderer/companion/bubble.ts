@@ -46,6 +46,7 @@
  */
 
 import { wrapByWord } from './wrap'
+import { CHECK, CLOSE, COPY, strokeIcon } from './icons'
 
 /** Seconds of silence before it goes. The design's number. */
 export const FADE_AFTER_QUIET_S = 1.2
@@ -167,8 +168,19 @@ export function runsFor(line: string, start: number, at: number): readonly Run[]
  */
 const TAIL = 8
 const GAP = 18
-/** The control buttons, shown on hover. */
-const BUTTON = 18
+/**
+ * The control buttons, and the room kept clear for them.
+ *
+ * RESERVED ALWAYS, not only while they are showing. The alternatives are both
+ * worse: laying text under them and masking it leaves a line that reads as
+ * truncated mid-word, and widening the box on hover reflows the paragraph
+ * under the pointer at the exact moment somebody is trying to read it.
+ *
+ * The cost is a permanently narrower first line, which is the cheapest of the
+ * three and the only one that never surprises anybody.
+ */
+const BUTTON = 16
+const CONTROLS_W = BUTTON * 2 + 12
 
 export function createBubble(): Bubble {
   let opacity = 0
@@ -257,7 +269,7 @@ export function createBubble(): Bubble {
       const pad = 10
       const radius = 12
       const lineHeight = 18
-      const maxWidth = width - pad * 4
+      const maxWidth = width - pad * 4 - CONTROLS_W
 
       ctx.save()
       ctx.font = '13px -apple-system, system-ui, sans-serif'
@@ -300,9 +312,14 @@ export function createBubble(): Bubble {
       let offset = 0
       for (const line of lines.slice(0, start)) offset += line.length
 
+      // Wide enough for the text OR for the controls, whichever needs more —
+      // a one-word utterance must not produce a box the buttons hang out of.
       const boxWidth = Math.min(
-        maxWidth + pad * 2,
-        Math.max(...shown.map((one) => ctx.measureText(one).width)) + pad * 2,
+        maxWidth + pad * 2 + CONTROLS_W,
+        Math.max(
+          CONTROLS_W + pad * 2,
+          Math.max(...shown.map((one) => ctx.measureText(one).width)) + pad * 2 + CONTROLS_W,
+        ),
       )
       const boxHeight = shown.length * lineHeight + pad * 2
 
@@ -346,10 +363,16 @@ export function createBubble(): Bubble {
       ctx.closePath()
       ctx.fill()
 
-      // Where the controls are, whether or not they are being drawn: `covers`
-      // needs the box every frame so hover can be detected before they appear.
-      const copy = { x: x + boxWidth - BUTTON * 2 - 6, y: y - BUTTON / 2, w: BUTTON, h: BUTTON }
-      const close = { x: x + boxWidth - BUTTON - 2, y: y - BUTTON / 2, w: BUTTON, h: BUTTON }
+      /**
+       * The controls, INSIDE the bubble's top right corner.
+       *
+       * They straddled the edge before, which put half of each button over
+       * whatever happened to be behind her — so they were unreadable against a
+       * dark desktop and looked detached from the thing they belong to. Inside
+       * means they are always on her paper.
+       */
+      const close = { x: x + boxWidth - pad - BUTTON, y: y + 4, w: BUTTON, h: BUTTON }
+      const copy = { x: close.x - BUTTON - 4, y: close.y, w: BUTTON, h: BUTTON }
       laidOut = { copy, close, box: { x, y, w: boxWidth, h: boxHeight } }
 
       let lineStart = offset
@@ -375,18 +398,13 @@ export function createBubble(): Bubble {
        */
       if (hovered) {
         const fresh = frames - confirmedAt < 90
-        for (const [rect, glyph] of [
-          [copy, fresh ? '✓' : '⧉'],
-          [close, '×'],
+        ctx.globalAlpha = opacity
+        for (const [rect, icon] of [
+          [copy, fresh ? CHECK : COPY],
+          [close, CLOSE],
         ] as const) {
-          ctx.globalAlpha = opacity
-          ctx.fillStyle = colours.ink
-          ctx.beginPath()
-          ctx.roundRect(rect.x, rect.y, rect.w, rect.h, rect.w / 2)
-          ctx.fill()
-          ctx.fillStyle = colours.paper
-          ctx.font = '11px -apple-system, system-ui, sans-serif'
-          ctx.fillText(glyph, rect.x + 5, rect.y + 4)
+          // Inset, so Lucide's 24-grid artwork has the margin it is drawn for.
+          strokeIcon(ctx, icon, { x: rect.x + 2, y: rect.y + 2, size: rect.w - 4 }, colours.ink)
         }
       }
 

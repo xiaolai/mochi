@@ -25,6 +25,9 @@ importers:
       electron-vite:
         specifier: ^5.0.0
         version: 5.0.0(vite@7.3.6(@types/node@26.2.0)(jiti@2.7.0))
+      lucide-static:
+        specifier: ^1.31.0
+        version: 1.31.0
       oxlint:
         specifier: 1.77.0
         version: 1.77.0(oxlint-tsgolint@7.0.2001)
@@ -2832,6 +2835,12 @@ packages:
       }
     engines: { node: '>=10' }
 
+  lucide-static@1.31.0:
+    resolution:
+      {
+        integrity: sha512-XFX9NO+gcLsOkXISmeQZYGJa2siGWZc/lgT/BK1b83h9RdOiz3cj1eQP5nWhELiB1KhW5ryk0nmMopOgm/CuSA==,
+      }
+
   magic-string@0.30.21:
     resolution:
       {
@@ -5394,6 +5403,8 @@ snapshots:
   lru-cache@6.0.0:
     dependencies:
       yallist: 4.0.0
+
+  lucide-static@1.31.0: {}
 
   magic-string@0.30.21:
     dependencies:
