@@ -22,7 +22,7 @@ import {
   type VisemeWeights,
 } from '@shared/avatar'
 import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
-import { BREATHING_UNITS, SQUASH_LIMIT, fitToCanvas, layoutFor } from '@shared/avatar-layout'
+import { BREATHING_UNITS, SQUASH_LIMIT, feetY, fitToCanvas, layoutFor } from '@shared/avatar-layout'
 import { IdleLayer } from './idle'
 import { blendLook, type Look } from './looks'
 import { BUILT_IN_MOTIONS, poseAt, progress, type MotionClip, type MotionPose } from './motion'
@@ -432,8 +432,22 @@ export class MochiAvatar implements AvatarBackend {
     // Measured from the BOTTOM of the canvas she was actually given, so a canvas
     // that is not the size the layout asked for still rests her on a surface
     // rather than floating her.
-    const ground = layout?.ground ?? 1 - (BREATHING_UNITS * scale) / this.cssHeight
-    const originY = this.cssHeight * ground
+    /**
+     * Where she stands — from `feetY`, which the bubble's anchor also calls.
+     *
+     * This used to be a FRACTION of her layout height applied to the canvas,
+     * while `face.ts` computed the same thing as an offset from the canvas
+     * bottom. The two agree only when the canvas happens to be exactly her
+     * layout's height, which it never is, so the tail pointed at a head that
+     * was not quite there.
+     *
+     * `fit-canvas` keeps the old fraction: the tuner sizes its own cells and
+     * wants her filling each one, not standing at a fixed height in it.
+     */
+    const originY =
+      layout === null
+        ? this.cssHeight * (1 - (BREATHING_UNITS * scale) / this.cssHeight)
+        : feetY(this.cssHeight, BREATHING_UNITS * scale)
 
     const base: BodyShape = {
       halfWidth: (face.bodyW / 2) * scale,

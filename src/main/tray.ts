@@ -32,12 +32,27 @@ export interface TrayModel {
   /** Everyone she could be, and who she is. */
   readonly personas: readonly { readonly id: string; readonly name: string }[]
   readonly wornId: string
+  /**
+   * Where the bubble could go right now, what was asked for, and where it is.
+   *
+   * `available` comes up from the renderer, the only thing that knows how big
+   * the bubble is and where the screen ends — so the menu can never offer a
+   * side that would not be honoured. It shrinks as she is dragged into a
+   * corner: in the bottom right there is no room below her or to her right, and
+   * the menu says so by having two entries instead of four.
+   */
+  readonly bubble: {
+    readonly available: readonly string[]
+    readonly asked: string
+    readonly using: string
+  }
 }
 
 export interface TrayHandlers {
   readonly onConversations: () => void
   readonly onSettings: () => void
   readonly onWear: (id: string) => void
+  readonly onBubbleSide: (side: string) => void
   readonly onQuit: () => void
 }
 
@@ -75,10 +90,53 @@ export function trayMenuTemplate(
           { type: 'separator' },
         ] as MenuItemConstructorOptions[])
       : []),
+    {
+      label: 'Speech bubble',
+      submenu: [
+        {
+          label: 'Wherever it fits',
+          type: 'radio',
+          checked: model.bubble.asked === 'auto',
+          click: () => {
+            handlers.onBubbleSide('auto')
+          },
+        },
+        { type: 'separator' },
+        /**
+         * Only the sides that fit, so a choice is always honoured.
+         *
+         * Disabled-and-present was the alternative and it is worse: a greyed
+         * "Below her" while she is in the bottom corner invites the reading
+         * that the feature is broken rather than that the screen ends there.
+         */
+        ...model.bubble.available.map((side): MenuItemConstructorOptions => ({
+          label: SIDE_NAMES[side] ?? side,
+          type: 'radio',
+          checked: model.bubble.asked === side,
+          click: () => {
+            handlers.onBubbleSide(side)
+          },
+        })),
+      ],
+    },
+    { type: 'separator' },
     // The item this whole file exists for. `Command+Q` is spelled out because
     // an accessory app has no application menu to carry it.
     { label: `Quit ${appName}`, accelerator: 'Command+Q', click: handlers.onQuit },
   ]
+}
+
+/**
+ * What the sides are called to a person.
+ *
+ * "Above her" rather than "Top", because the menu is about where she speaks
+ * from, not about a corner of a box.
+ */
+const SIDE_NAMES: Readonly<Record<string, string>> = {
+  above: 'Above her',
+  below: 'Below her',
+  left: 'To her left',
+  right: 'To her right',
 }
 
 /**

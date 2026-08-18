@@ -47,6 +47,14 @@
 
 import { wrapByWord } from './wrap'
 import { CHECK, CLOSE, COPY, HISTORY, strokeIcon } from './icons'
+import {
+  placeBubble,
+  sidesThatFit,
+  type Body,
+  type Room,
+  type Side,
+  type SidePreference,
+} from './place'
 
 /** Seconds of silence before it goes. The design's number. */
 export const FADE_AFTER_QUIET_S = 1.2
@@ -109,6 +117,10 @@ export interface Bubble {
     text: string,
     at: number,
     her: Anchor,
+    /** Where the bubble may go, in canvas pixels. See `place.ts`. */
+    room: Room,
+    /** Which side somebody asked for, or `auto`. */
+    prefer: SidePreference,
     hovered: boolean,
     /** How many things main could not do, for the badge on the history control. */
     problems?: number,
@@ -120,6 +132,13 @@ export interface Bubble {
    * reader left it until the next utterance.
    */
   scrollBy(lines: number): void
+  /**
+   * Which sides the bubble could go on, from the last frame it drew.
+   *
+   * Read rather than pushed, so nothing is computed for a menu that is not
+   * open. Null until it has drawn once.
+   */
+  offered(): { readonly available: readonly Side[]; readonly using: Side } | null
   /** Where its controls are, so the caller can route the mouse to them. */
   controls(): { readonly copy: Rect; readonly close: Rect; readonly history: Rect } | null
   /** Whether a point is anywhere on it — for hover, not for clicks. */
@@ -130,11 +149,14 @@ export interface Bubble {
   copied(): void
 }
 
-/** Her top edge and centre, in CSS pixels: what the bubble points at. */
-export interface Anchor {
-  readonly centreX: number
-  readonly top: number
-}
+/**
+ * Her whole body in CSS pixels, which is what the bubble is placed AROUND.
+ *
+ * It used to be her centre and the top of her head, which is everything a
+ * bubble above her needs and not enough for one anywhere else: below her needs
+ * her feet, and beside her needs both her sides.
+ */
+export type Anchor = Body
 
 export interface Rect {
   readonly x: number
@@ -177,6 +199,15 @@ export function runsFor(line: string, start: number, at: number): readonly Run[]
  */
 const TAIL = 8
 const GAP = 18
+/**
+ * The text column, in CSS pixels — a reading measure rather than the canvas.
+ *
+ * About 60 Latin characters or 26 Chinese ones at 13px, which is inside the
+ * range prose is comfortable at. Her window is 700 wide so the bubble has room
+ * to slide clear of a screen edge; wrapping text to that width would make every
+ * line a paragraph.
+ */
+const TEXT_W = 340
 /**
  * The control buttons, and the room kept clear for them.
  *
@@ -244,6 +275,8 @@ export function createBubble(): Bubble {
    * next sentence still parked in the middle of the last one.
    */
   let scrolledTo: number | null = null
+  /** What the last frame worked out about where the bubble may go. */
+  let offered: { available: readonly Side[]; using: Side } | null = null
   /** Where the page would be if nobody had scrolled. `scrollBy` starts here. */
   let followingLine = 0
   /**
@@ -317,6 +350,7 @@ export function createBubble(): Bubble {
     copied() {
       confirmedAt = frames
     },
+    offered: () => offered,
     scrollBy(lines: number) {
       // Recorded, not clamped: how far it CAN go depends on the wrap, which is
       // known only inside `draw` where the width is. Draw clamps and writes the
@@ -333,7 +367,7 @@ export function createBubble(): Bubble {
       const { box } = laidOut
       return x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h
     },
-    draw(ctx, width, colours, text, at, her, hovered, problems = 0) {
+    draw(ctx, width, colours, text, at, her, room, prefer, hovered, problems = 0) {
       // A different utterance is a different thing to read, so the reader's
       // position goes back to following her. Without this, her next sentence
       // opens parked in the middle of the last one.
@@ -347,7 +381,17 @@ export function createBubble(): Bubble {
       const pad = 10
       const radius = 12
       const lineHeight = 18
-      const maxWidth = width - pad * 4 - CONTROLS_W
+      /**
+       * How wide the text column may be — a fixed measure, not a fraction of
+       * the canvas.
+       *
+       * The canvas is 700 wide now, so wrapping to it would give a line of
+       * about ninety Latin characters: technically legible, and nothing anybody
+       * reads comfortably. `TEXT_W` is a reading measure, and it also fixes the
+       * bubble's widest possible box, which is what `place.ts` needs in order
+       * to know whether it fits beside her.
+       */
+      const maxWidth = Math.min(TEXT_W, width - pad * 4 - CONTROLS_W)
 
       ctx.save()
       ctx.font = '13px -apple-system, system-ui, sans-serif'
@@ -429,8 +473,25 @@ export function createBubble(): Bubble {
        * what sits in the screen corner, so anything above its edge is simply
        * clipped away, and a clipped first line is worse than a lower bubble.
        */
-      const x = Math.max(pad, Math.min(width - boxWidth - pad, her.centreX - boxWidth / 2))
-      const y = Math.max(pad, her.top - GAP - TAIL - boxHeight)
+      /**
+       * Which side of her, decided against the SCREEN rather than the window.
+       *
+       * Her window is far larger than she is and deliberately hangs off the
+       * edge of the display when she is parked in a corner, so "inside the
+       * window" and "on screen" are different questions. `room` answers the
+       * second; see `place.ts`.
+       */
+      const placed = placeBubble(her, { w: boxWidth, h: boxHeight }, room, GAP + TAIL, prefer)
+      // What the menu may offer. Reported by the caller, from the same call
+      // that did the placing, so the menu cannot list a side that would not be
+      // honoured if it were picked.
+      offered = {
+        available: sidesThatFit(her, { w: boxWidth, h: boxHeight }, room, GAP + TAIL),
+        using: placed.side,
+      }
+      const { x, y } = placed
+      const centreX = her.left + her.width / 2
+      const centreY = her.top + her.height / 2
 
       ctx.globalAlpha = opacity
       // Opaque, per rule 2 — the alpha above fades the WHOLE bubble in and out,
@@ -449,11 +510,23 @@ export function createBubble(): Bubble {
        * because those come apart the moment the box is clamped to the window
        * edge — and a tail pointing at nothing is worse than no tail.
        */
-      const tip = Math.max(x + radius + TAIL, Math.min(x + boxWidth - radius - TAIL, her.centreX))
       ctx.beginPath()
-      ctx.moveTo(tip - TAIL, y + boxHeight - 1)
-      ctx.lineTo(tip, y + boxHeight + TAIL)
-      ctx.lineTo(tip + TAIL, y + boxHeight - 1)
+      if (placed.side === 'above' || placed.side === 'below') {
+        const tip = Math.max(x + radius + TAIL, Math.min(x + boxWidth - radius - TAIL, centreX))
+        // The edge that FACES her, and the direction that reaches for her.
+        const edge = placed.side === 'above' ? y + boxHeight - 1 : y + 1
+        const reach = placed.side === 'above' ? TAIL : -TAIL
+        ctx.moveTo(tip - TAIL, edge)
+        ctx.lineTo(tip, edge + reach)
+        ctx.lineTo(tip + TAIL, edge)
+      } else {
+        const tip = Math.max(y + radius + TAIL, Math.min(y + boxHeight - radius - TAIL, centreY))
+        const edge = placed.side === 'left' ? x + boxWidth - 1 : x + 1
+        const reach = placed.side === 'left' ? TAIL : -TAIL
+        ctx.moveTo(edge, tip - TAIL)
+        ctx.lineTo(edge + reach, tip)
+        ctx.lineTo(edge, tip + TAIL)
+      }
       ctx.closePath()
       ctx.fill()
 

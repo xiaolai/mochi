@@ -42,32 +42,56 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Keep an origin on a display that exists.
+ * Keep HER on a display that exists — not her window.
  *
- * Clamped against the display nearest the window's own CENTRE, not the
- * cursor's. During a drag those agree; anywhere else the cursor could be on
- * another screen entirely, and she would teleport to it.
+ * The distinction is the whole of this function now. Her window is far larger
+ * than she is, because the bubble is drawn inside it and has to be able to go
+ * above, below or beside her, so with her in a corner most of the window hangs
+ * off the display ON PURPOSE. Clamping the window would refuse to let her near
+ * any edge and would park her hundreds of pixels inland.
  *
- * A window LARGER than the work area is pinned to its top-left rather than
- * clamped. Without that case the two bounds cross — the maximum origin is left
- * of the minimum — and `clamp` returns the maximum, placing her FURTHER off
- * screen than the value it was asked to correct. That is the one input for
- * which this function used to do the opposite of its name.
+ * `body` is where she is INSIDE the window, sent up by the renderer — the only
+ * thing that knows her size and where she stands.
+ *
+ * Clamped against the display nearest HER centre, not the cursor's and not the
+ * window's. During a drag hers and the cursor's agree; the window's centre can
+ * be on another display entirely once the overhang is this big.
+ *
+ * A body LARGER than the work area is pinned to the near edge rather than
+ * clamped. Without that case the two bounds cross — the maximum is left of the
+ * minimum — and `clamp` returns the maximum, placing her FURTHER off screen
+ * than the value it was asked to correct. That is the one input for which this
+ * used to do the opposite of its name.
  */
 export function containToWorkArea(
   x: number,
   y: number,
-  size: { width: number; height: number },
+  body: { left: number; top: number; width: number; height: number },
+  keep: number,
 ): { x: number; y: number } {
   const { workArea } = screen.getDisplayNearestPoint({
-    x: x + size.width / 2,
-    y: y + size.height / 2,
+    x: x + body.left + body.width / 2,
+    y: y + body.top + body.height / 2,
   })
+  // Expressed as the WINDOW origin, because that is what `setPosition` takes.
+  // Every line is the work area translated by her inset within the window.
+  const minX = workArea.x + keep - body.left
+  const maxX = workArea.x + workArea.width - keep - body.left - body.width
+  const minY = workArea.y + keep - body.top
+  const maxY = workArea.y + workArea.height - keep - body.top - body.height
   return {
-    x: clamp(x, workArea.x, workArea.x + Math.max(0, workArea.width - size.width)),
-    y: clamp(y, workArea.y, workArea.y + Math.max(0, workArea.height - size.height)),
+    x: clamp(x, minX, Math.max(minX, maxX)),
+    y: clamp(y, minY, Math.max(minY, maxY)),
   }
 }
+
+/**
+ * How much daylight is kept between her and the edge of the display.
+ *
+ * Zero would let her sit exactly flush with it, which reads as half of her
+ * having fallen off. A few pixels is what "in the corner" looks like.
+ */
+export const KEEP_ON_SCREEN = 4
 
 /**
  * Normalise rather than merely type-check.
@@ -99,7 +123,11 @@ export function stopDrag(): void {
   timer = null
 }
 
-export function startDrag(grip: Grip, liveWindow: () => BrowserWindow | null): void {
+export function startDrag(
+  grip: Grip,
+  liveWindow: () => BrowserWindow | null,
+  body: () => { left: number; top: number; width: number; height: number },
+): void {
   stopDrag()
   const deadline = Date.now() + MAX_MS
   timer = setInterval(() => {
@@ -112,7 +140,8 @@ export function startDrag(grip: Grip, liveWindow: () => BrowserWindow | null): v
     const at = containToWorkArea(
       cursor.x - grip.offsetX,
       cursor.y - grip.offsetY,
-      target.getBounds(),
+      body(),
+      KEEP_ON_SCREEN,
     )
     target.setPosition(at.x, at.y)
   }, TICK_MS)

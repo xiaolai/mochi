@@ -5,7 +5,8 @@ import { createBubble, type BubbleColours } from './bubble'
 import { createUtterance } from './utterance'
 import { createAttending, levelOf, type Attention } from './attending'
 import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
-import { layoutFor, BREATHING_UNITS } from '@shared/avatar-layout'
+import { roomFor, type Room, type SidePreference } from './place'
+import { layoutFor, feetY, BREATHING_UNITS } from '@shared/avatar-layout'
 
 /**
  * Her, on screen.
@@ -65,6 +66,8 @@ export interface Face {
    * authority and user content is read exactly once, upstream.
    */
   wear(face: FaceSpec): void
+  /** Which side of her the bubble should sit on, or `auto`. */
+  prefersBubble(side: SidePreference): void
   /** Turn the bubble on for this persona, with the surface it draws on. */
   showWords(colours: BubbleColours | null): void
   /**
@@ -78,6 +81,9 @@ export interface Face {
   /** Stop the loop, release the analyser, drop the canvas. */
   dispose(): void
 }
+
+/** How close to the edge of the display a bubble may sit. */
+const SCREEN_INSET = 8
 
 /** Long enough to read as a fade, short enough not to feel like a delay. */
 const CHIP_FADE_S = 0.12
@@ -128,22 +134,68 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    */
   function herCorner(): { right: number; top: number } {
     const layout = layoutFor(worn, worn.size)
-    const clearance = BREATHING_UNITS * layout.scale
     return {
       right: canvas.clientWidth / 2 + layout.bodyWidth / 2,
-      top: canvas.clientHeight - clearance - layout.bodyHeight,
+      top: feetY(canvas.clientHeight, BREATHING_UNITS * layout.scale) - layout.bodyHeight,
     }
   }
 
-  /** What the bubble points at: her centre, and the top of her head. */
-  function herHead(): { centreX: number; top: number } {
+  /**
+   * Her whole body in the canvas, which is what the bubble is placed AROUND.
+   *
+   * This used to be `herHead` — her centre and the top of her head — which is
+   * everything a bubble above her needs and not enough for one anywhere else.
+   */
+  function herBox(): { left: number; top: number; width: number; height: number } {
     const layout = layoutFor(worn, worn.size)
-    const clearance = BREATHING_UNITS * layout.scale
     return {
-      centreX: canvas.clientWidth / 2,
-      top: canvas.clientHeight - clearance - layout.bodyHeight,
+      left: canvas.clientWidth / 2 - layout.bodyWidth / 2,
+      top: feetY(canvas.clientHeight, BREATHING_UNITS * layout.scale) - layout.bodyHeight,
+      width: layout.bodyWidth,
+      height: layout.bodyHeight,
     }
   }
+  /**
+   * Where the bubble may go, in canvas pixels — read from the DOM, not from main.
+   *
+   * `screenX`/`screenY` and `screen.avail*` are standard and available here, so
+   * the renderer already knows where its window sits and where the usable
+   * screen is. Asking main for it would be a message, a cache and a staleness
+   * question, for an answer the page can read directly on the frame it needs it.
+   *
+   * Read every frame rather than on a move event: she is dragged by main
+   * repositioning the window, so there is no event here to hang it on, and the
+   * read is two properties.
+   */
+  function roomOnScreen(): Room {
+    return roomFor(
+      { width: canvas.clientWidth, height: canvas.clientHeight },
+      { x: window.screenX, y: window.screenY },
+      {
+        // `availLeft`/`availTop` are real and implemented, and are missing from
+        // the DOM lib's `Screen` — they are in the CSSOM View spec's appendix
+        // rather than its interface. Read through a narrow cast rather than
+        // widening `Screen` globally, which would let a typo elsewhere compile.
+        x: (window.screen as unknown as { availLeft?: number }).availLeft ?? 0,
+        y: (window.screen as unknown as { availTop?: number }).availTop ?? 0,
+        width: window.screen.availWidth,
+        height: window.screen.availHeight,
+      },
+      SCREEN_INSET,
+    )
+  }
+
+  /**
+   * Which side of her somebody asked the bubble to sit on.
+   *
+   * Owned by main — it is in `preferences.json` beside the worn persona — and
+   * pushed here on change. `auto` until main says otherwise, which is also what
+   * it means when nobody has chosen.
+   */
+  let bubbleSide: SidePreference = 'auto'
+  /** The last answer sent up, so an unchanged one is not sent again. */
+  let lastOffered = ''
+
   const bubble = createBubble()
   /**
    * What she is saying, owned HERE rather than inside the bubble.
@@ -419,10 +471,23 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         colours,
         utterance.text(),
         utterance.at(),
-        herHead(),
+        herBox(),
+        roomOnScreen(),
+        bubbleSide,
         overBubble,
         troubles,
       )
+      // Only when it CHANGES. The menu is rebuilt from this, and rebuilding it
+      // sixty times a second would be sixty IPC messages for an answer that
+      // moves when she is dragged across a screen edge.
+      const now = bubble.offered()
+      if (now !== null) {
+        const key = `${now.available.join(',')}|${now.using}`
+        if (key !== lastOffered) {
+          lastOffered = key
+          window.mochi.sides(now.available, now.using)
+        }
+      }
     }
 
     const at = pointerOnWindow()
@@ -501,6 +566,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     },
     finished: (itemId: string, interrupted: boolean) => utterance.finished(itemId, interrupted),
     heard: () => ({ text: utterance.text(), at: utterance.at(), itemId: utterance.itemId() }),
+    prefersBubble: (side: SidePreference) => {
+      bubbleSide = side
+    },
     troubled: (count: number) => {
       troubles = Math.max(0, count)
     },
@@ -511,6 +579,10 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     wear: (face: FaceSpec) => {
       worn = face
       avatar.setSizePercent(face.size)
+      // Main clamps HER to the display during a drag, not the window, and only
+      // this side knows how big she is. Sent on every wear because that is
+      // exactly when it changes.
+      window.mochi.body(herBox())
       // Her appearance, and the rate. A different character means a different
       // VOICE, and the learned speaking rate belongs to the voice —
       // `Pacer.restart()` keeps it on purpose, which is right between two

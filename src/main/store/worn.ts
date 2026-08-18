@@ -76,7 +76,17 @@ export function readWornPersonaId(userData: string): string | null {
  */
 export function writeWornPersonaId(userData: string, id: string): void {
   if (!isPersonaId(id)) throw new Error(`refusing to remember an unusable persona id: ${id}`)
+  writeMerged(userData, { activePersonaId: id })
+}
 
+/**
+ * Change some keys and keep the rest.
+ *
+ * Read, change, write the whole object back — see the note at the top of this
+ * file. Two callers now, which is why it is a function: a second one that
+ * wrote only its own key would silently drop the first one's.
+ */
+function writeMerged(userData: string, changes: Record<string, unknown>): void {
   // Everything already there, kept. See the note above: this file is older than
   // this application and holds keys it does not understand.
   let existing: Record<string, unknown> = {}
@@ -97,5 +107,35 @@ export function writeWornPersonaId(userData: string, id: string): void {
     console.warn(`[worn] ${logBoundedRead(read.reason)}; replacing it`)
   }
 
-  writeJsonAtomically(join(userData, PREFERENCES), { ...existing, activePersonaId: id })
+  writeJsonAtomically(join(userData, PREFERENCES), { ...existing, ...changes })
+}
+
+/**
+ * Which side of her the bubble is asked to sit on.
+ *
+ * In `preferences.json` beside the worn persona rather than in the persona
+ * itself: it is a fact about this screen and this desk, not about who she is.
+ * Wearing somebody else should not move her speech to the other side.
+ */
+export type BubbleSide = 'auto' | 'above' | 'below' | 'left' | 'right'
+
+const SIDES: readonly string[] = ['auto', 'above', 'below', 'left', 'right']
+
+export function readBubbleSide(userData: string): BubbleSide {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return 'auto'
+  try {
+    const value: unknown = JSON.parse(read.text)
+    const found = (value as { bubbleSide?: unknown } | null)?.bubbleSide
+    return typeof found === 'string' && SIDES.includes(found) ? (found as BubbleSide) : 'auto'
+  } catch {
+    // The reader for the persona id already says so on this file; a second
+    // warning for the same broken JSON is noise.
+    return 'auto'
+  }
+}
+
+export function writeBubbleSide(userData: string, side: BubbleSide): void {
+  if (!SIDES.includes(side)) throw new Error(`not a side the bubble can sit on: ${side}`)
+  writeMerged(userData, { bubbleSide: side })
 }

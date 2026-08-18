@@ -96,6 +96,12 @@ const api: MochiApi = {
   menu() {
     ipcRenderer.send(guard('companion:menu'))
   },
+  body(box: { left: number; top: number; width: number; height: number }) {
+    ipcRenderer.send(guard('companion:body'), box)
+  },
+  sides(available: readonly string[], using: string) {
+    ipcRenderer.send(guard('companion:sides'), { available, using })
+  },
   grab(offsetX: number, offsetY: number) {
     ipcRenderer.send(guard('companion:grab'), { offsetX, offsetY })
   },

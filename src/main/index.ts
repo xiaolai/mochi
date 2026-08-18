@@ -25,12 +25,25 @@ import {
 } from './voice/credential'
 import { activePersona, loadPersonas, personasRoot, savePersonaTo } from './store/personas'
 import { readPolicy } from './store/policy'
-import { readWornPersonaId, writeWornPersonaId } from './store/worn'
+import {
+  readBubbleSide,
+  readWornPersonaId,
+  writeBubbleSide,
+  writeWornPersonaId,
+  type BubbleSide,
+} from './store/worn'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { createProblems } from './problems'
 import { createTray, trayMenuTemplate, type TrayHandle, type TrayModel } from './tray'
 import { parseGrip, startDrag, stopDrag } from './drag'
+import { FEET_FROM_TOP, WINDOW_W } from '@shared/avatar-layout'
+
+/**
+ * Her body before the renderer has said where it is — the same nominal one the
+ * window was first positioned against.
+ */
+const NOMINAL_BODY = { left: (WINDOW_W - 94) / 2, top: FEET_FROM_TOP - 73, width: 94, height: 73 }
 import { discoverInstalled, type Installed } from './capability/installed'
 import {
   applyChange,
@@ -118,8 +131,35 @@ function menuModel(): TrayModel {
   return {
     personas: [...catalog.personas.values()].map((one) => ({ id: one.id, name: one.name })),
     wornId: activePersona(catalog, readWornPersonaId(userData)).persona.id,
+    bubble: { ...bubbleSides, asked: readBubbleSide(userData) },
   }
 }
+
+/**
+ * Which sides the bubble can currently go on, as last reported by the renderer.
+ *
+ * Held rather than asked for, because the menu is built the moment somebody
+ * clicks the icon and the renderer cannot be questioned synchronously. It goes
+ * stale only between her being dragged and the next frame, and a stale entry
+ * costs nothing: a side that no longer fits is not honoured either way.
+ */
+let bubbleSides: { available: readonly string[]; using: string } = {
+  available: ['above'],
+  using: 'above',
+}
+
+ipcMain.on('companion:sides', (_event, value: unknown) => {
+  if (typeof value !== 'object' || value === null) return
+  const said = value as { available?: unknown; using?: unknown }
+  if (!Array.isArray(said.available) || typeof said.using !== 'string') return
+  bubbleSides = {
+    available: said.available.filter((one): one is string => typeof one === 'string'),
+    using: said.using,
+  }
+  // The menu is rebuilt on demand, but a menu already open is a snapshot — and
+  // this is the value it snapshots.
+  tray?.refresh()
+})
 
 /**
  * What the menu does, shared by the menu bar item and the right-click on her.
@@ -140,6 +180,18 @@ const menuHandlers = {
     // The menu has already drawn the radio as moved. Saying nothing when the
     // write failed would leave it lying about what is on disk.
     if (!written.ok) console.error(`[menu] could not wear ${id}: ${written.why}`)
+    tray?.refresh()
+  },
+  onBubbleSide: (side: string) => {
+    try {
+      writeBubbleSide(app.getPath('userData'), side as BubbleSide)
+    } catch (error: unknown) {
+      console.error(`[menu] could not set the bubble side: ${String(error)}`)
+      return
+    }
+    // Straight to the renderer as well as to disk: the file is read on the next
+    // session, and somebody who picked a side wants to see it move now.
+    companion?.webContents.send('voice:send', { type: '__mochi_bubble_side__', side })
     tray?.refresh()
   },
   onQuit: () => {
@@ -169,11 +221,42 @@ const menuHandlers = {
  * four thousand would put her origin four thousand pixels left of the pointer
  * on the very first tick.
  */
+/**
+ * Where she is inside her window. Believed only as far as it is checked.
+ *
+ * It comes from a page and it decides the drag clamp, so a nonsense box would
+ * let her be dragged off the display and never come back. The fallback is the
+ * nominal body the window was first placed against — wrong for a resized
+ * avatar, and wrong in the direction that keeps her reachable.
+ */
+let herBody = NOMINAL_BODY
+
+ipcMain.on('companion:body', (_event, value: unknown) => {
+  if (typeof value !== 'object' || value === null) return
+  const box = value as Record<string, unknown>
+  const read = (key: string): number | null => {
+    const found = box[key]
+    return typeof found === 'number' && Number.isFinite(found) && found >= 0 ? found : null
+  }
+  const left = read('left')
+  const top = read('top')
+  const width = read('width')
+  const height = read('height')
+  // A zero-sized body would make the clamp meaningless in both directions.
+  if (left === null || top === null || width === null || height === null) return
+  if (width <= 0 || height <= 0) return
+  herBody = { left, top, width, height }
+})
+
 ipcMain.on('companion:grab', (_event, value: unknown) => {
   if (companion === null) return
   const grip = parseGrip(value, companion.getBounds())
   if (grip === null) return
-  startDrag(grip, () => companion)
+  startDrag(
+    grip,
+    () => companion,
+    () => herBody,
+  )
 })
 
 ipcMain.on('companion:drop', () => {
@@ -382,6 +465,7 @@ ipcMain.handle('voice:config', () => {
     greeting: greetingFor(resolved.persona),
     face: avatar.face,
     problems: problems.count(),
+    bubbleSide: readBubbleSide(userData),
     tools: registry.tools,
   }
 })

@@ -39,6 +39,24 @@ export const COMPANION_CHANNELS = [
   /** She was asked for her conversations. Main owns the window; this opens it. */
   'history:open',
   /**
+   * Which sides the bubble could go on right now, and which it is using.
+   *
+   * Sent when the answer CHANGES, not every frame. The menu is built from it,
+   * and a menu that offers a side which cannot be honoured is the one thing
+   * this must not produce — so the list comes from the same function that does
+   * the placing rather than from a second guess about it.
+   */
+  'companion:sides',
+  /**
+   * Where she is INSIDE her window, in CSS pixels.
+   *
+   * Sent when it changes — a different avatar, a different size — because main
+   * cannot work it out. The window is far larger than she is and the drag
+   * clamps HER to the display rather than the window, so without this main
+   * would either park her inland or let her walk off the edge.
+   */
+  'companion:body',
+  /**
    * She was grabbed — the pointer went down on her painted pixels.
    *
    * Carries WHERE on her she was grabbed, so she does not jump on the first
@@ -308,6 +326,14 @@ export interface SessionConfig {
    * enough to mark the control that opens the window where they are readable.
    */
   readonly problems: number
+  /**
+   * Which side of her the bubble was last asked to sit on.
+   *
+   * On the config because it is read from the same file as the worn persona and
+   * is wanted at the same moment — the alternative is a second message that
+   * arrives after the first frame has already been drawn on the wrong side.
+   */
+  readonly bubbleSide: string
 }
 
 /**
@@ -332,6 +358,10 @@ export interface MochiApi {
   copy(text: string): void
   /** Ask for the context menu, at the cursor. */
   menu(): void
+  /** Where she is inside her window, so main can keep HER on the display. */
+  body(box: { left: number; top: number; width: number; height: number }): void
+  /** Which sides the bubble can go on, and which it is on. For the menu. */
+  sides(available: readonly string[], using: string): void
   /** Start moving her. `offsetX/Y` is where on her the pointer went down. */
   grab(offsetX: number, offsetY: number): void
   drop(): void

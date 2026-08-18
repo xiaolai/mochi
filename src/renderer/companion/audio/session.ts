@@ -43,6 +43,8 @@ export interface Session {
   readonly face: FaceSpec
   /** How many things main could not do. See `SessionConfig.problems`. */
   readonly problems: number
+  /** Which side of her the bubble was asked to sit on. See `SessionConfig`. */
+  readonly bubbleSide: string
   /** Open the microphone. Off until this is called — see point 4 above. */
   listen(on: boolean): void
   /** Idempotent, and the only path that releases anything. */
@@ -373,6 +375,7 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     bubble: config.bubble,
     face: config.face,
     problems: config.problems,
+    bubbleSide: config.bubbleSide,
     listen(on: boolean) {
       if (micTrack !== null) micTrack.enabled = on
       window.mochi.report({ kind: 'state', state: on ? 'listening' : 'muted' })

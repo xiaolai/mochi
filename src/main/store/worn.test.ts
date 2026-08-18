@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { readWornPersonaId, writeWornPersonaId } from './worn'
+import { readBubbleSide, readWornPersonaId, writeBubbleSide, writeWornPersonaId } from './worn'
 
 let userData = ''
 beforeEach(() => {
@@ -97,5 +97,32 @@ describe('remembering who is worn', () => {
     // hold something the reader must then reject on every launch.
     expect(() => writeWornPersonaId(userData, '../elsewhere')).toThrow()
     expect(readWornPersonaId(userData)).toBeNull()
+  })
+})
+
+describe('which side the bubble sits on', () => {
+  it('is auto until somebody says otherwise', () => {
+    // Also what a missing file, a broken file, and an unrecognised value mean:
+    // there is exactly one answer for "nobody has chosen", and it is the one
+    // that works everywhere.
+    expect(readBubbleSide(userData)).toBe('auto')
+    writeFileSync(join(userData, 'preferences.json'), '{ not json')
+    expect(readBubbleSide(userData)).toBe('auto')
+    writeFileSync(join(userData, 'preferences.json'), JSON.stringify({ bubbleSide: 'sideways' }))
+    expect(readBubbleSide(userData)).toBe('auto')
+  })
+
+  it('remembers a side, and keeps the worn persona while doing it', () => {
+    // Two writers into one file. A second that wrote only its own key would
+    // silently drop the first one's — which is somebody's persona.
+    writeWornPersonaId(userData, 'loki')
+    writeBubbleSide(userData, 'left')
+    expect(readBubbleSide(userData)).toBe('left')
+    expect(readWornPersonaId(userData)).toBe('loki')
+  })
+
+  it('refuses a side that is not one', () => {
+    expect(() => writeBubbleSide(userData, 'diagonally' as never)).toThrow()
+    expect(readBubbleSide(userData)).toBe('auto')
   })
 })

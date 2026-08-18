@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, screen } from 'electron'
+import { FEET_FROM_TOP, WINDOW_H, WINDOW_W } from '@shared/avatar-layout'
 
 /**
  * Her window: a shape on the desktop, not a rectangle with her inside it.
@@ -26,17 +27,50 @@ import { app, BrowserWindow, nativeTheme, screen } from 'electron'
  */
 
 /** Big enough for the widest frame she can reach, in CSS pixels. */
-const SIZE = 320
+/**
+ * How far she rests from the corner she starts in.
+ *
+ * Measured to HER, not to her window. The window is `WINDOW_W` x `WINDOW_H` —
+ * far larger than she is, because the bubble is drawn inside it and has to be
+ * able to go above, below or beside her — so with her in a corner most of it
+ * hangs off the display. Positioning the WINDOW with a margin would park her
+ * hundreds of pixels inland.
+ */
+const MARGIN = 24
+
+/**
+ * Where she stands inside her own window: horizontally centred, feet at
+ * `FEET_FROM_TOP`.
+ *
+ * A nominal body, because the window is created before the persona resolves and
+ * therefore before her real size is known. It only decides where she FIRST
+ * appears; a bigger avatar starts a little closer to the corner, which nobody
+ * will notice and which one drag corrects for good.
+ */
+const NOMINAL = { width: 94, height: 73 }
 
 export function createCompanionWindow(): BrowserWindow {
   const display = screen.getPrimaryDisplay().workArea
   const window = new BrowserWindow({
-    width: SIZE,
-    height: SIZE,
-    // Bottom right, inset by a margin. Somewhere out of the way, and where the
-    // Dock is not — she starts where nothing else lives.
-    x: display.x + display.width - SIZE - 24,
-    y: display.y + display.height - SIZE - 24,
+    width: WINDOW_W,
+    height: WINDOW_H,
+    /**
+     * Created somewhere it FITS, then moved. This is not a style choice.
+     *
+     * macOS constrains a window at creation to be entirely on screen, and it
+     * does so by SHRINKING it: asked for 980x560 at the bottom right, it
+     * produced 882x504 — the same window at exactly 0.9 — because that is what
+     * fits in the corner. Her window is deliberately larger than the screen
+     * allows there, since the bubble is drawn inside it and has to have
+     * somewhere to go.
+     *
+     * `setPosition` afterwards is NOT constrained, which is how the drag has
+     * been putting her against an edge all along. So the window is born in the
+     * corner of the work area, where it fits at full size, and moved to where
+     * she actually belongs on the next line.
+     */
+    x: display.x,
+    y: display.y,
     /**
      * Held back until the first paint, and safe to do so HERE only.
      *
@@ -73,6 +107,16 @@ export function createCompanionWindow(): BrowserWindow {
   const at = window.getBounds()
   console.log(
     `[window] ${at.width}x${at.height} at ${at.x},${at.y} on a ${display.width}x${display.height} work area`,
+  )
+
+  /**
+   * Where she actually starts: bottom right, HER inset by a margin, with the
+   * window's overhang hanging off the display. See the note on the size above
+   * for why this is a move rather than a position.
+   */
+  window.setPosition(
+    Math.round(display.x + display.width - MARGIN - (WINDOW_W + NOMINAL.width) / 2),
+    Math.round(display.y + display.height - MARGIN - FEET_FROM_TOP),
   )
 
   window.setAlwaysOnTop(true, 'screen-saver')

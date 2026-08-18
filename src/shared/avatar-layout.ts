@@ -68,6 +68,63 @@ export const BREATHING_UNITS = 8
  */
 export const BASE_UNIT_SCALE = 0.94
 
+/**
+ * Her window, and where in it she stands.
+ *
+ * It is much bigger than she is, and that is the whole point: **the bubble is
+ * drawn inside this window**, so wherever the bubble may go, the window has to
+ * already be there. A 320-square window could only ever put the bubble above
+ * her, because that was the only place inside it with room.
+ *
+ * The numbers come from the worst case rather than from taste:
+ *
+ * - A bubble is at most `BUBBLE_ROOM` tall (eight wrapped lines, plus its gap
+ *   and tail) and about 404 wide (its text column, padding and controls).
+ * - She is at most 188 x 147, at 200%.
+ * - Vertically: a bubble above, her, and a bubble below — and `FEET_FROM_TOP`
+ *   is chosen so both fit at every size she can be set to.
+ * - Horizontally: she sits in the middle, and the window is wide enough for a
+ *   whole bubble to stand BESIDE her — `her width + 2 x (box + reach)`, which
+ *   is 94 + 2 x 430. Anything narrower and "put it on her left" is a choice
+ *   that cannot be honoured, which is worse than not offering it.
+ *
+ * The cost is a large transparent window, and it is nearly free: it is
+ * click-through everywhere except her silhouette and the bubble itself.
+ */
+export const WINDOW_W = 980
+export const WINDOW_H = 560
+/**
+ * Where her base rests, measured from the TOP of the canvas.
+ *
+ * Fixed rather than a fraction of the canvas, so that changing her size moves
+ * her head and not her feet — the ground stays where it is, which is what
+ * "standing on something" means. Leaves 340 above her feet and 220 below them,
+ * and both clear `BUBBLE_ROOM` at every size in `SIZE_PERCENT`.
+ */
+export const FEET_FROM_TOP = 340
+/** The tallest a bubble gets, including the gap and tail that reach for her. */
+export const BUBBLE_ROOM = 190
+
+/**
+ * Where she stands inside a canvas of a given height.
+ *
+ * ONE rule, called by the rig that draws her and by the code that anchors the
+ * bubble to her. They used to compute it separately — one as a fraction of the
+ * canvas and one as an offset from its bottom — which agree only when the
+ * canvas happens to be exactly her layout's height.
+ */
+export function feetY(cssHeight: number, clearance: number): number {
+  // Clamped, so a canvas smaller than the standing height still rests her on
+  // something rather than dropping her through the floor. The tuner sizes its
+  // own cells and is the caller that hits this.
+  //
+  // `clearance` is in PIXELS and therefore scaled — `BREATHING_UNITS` is in her
+  // design units, and passing it raw put her 4px low at 50% and 4px high at
+  // 150%, which is the whole distance between resting on the ground and
+  // hovering over it.
+  return Math.min(FEET_FROM_TOP, cssHeight - clearance)
+}
+
 /** What the size setting accepts, as a percentage of `BASE_UNIT_SCALE`. */
 export const SIZE_PERCENT = { min: 50, max: 200, step: 5, fallback: 100 } as const
 

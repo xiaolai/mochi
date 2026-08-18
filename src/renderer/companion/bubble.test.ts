@@ -74,8 +74,11 @@ function seconds(
   for (let i = 0; i < howMany * 60; i += 1) bubble.step(quietFor, 1 / 60, begun)
 }
 
-/** Where she stands on a 320 canvas at size 100: centred, head at 239. */
-const HER = { centreX: 160, top: 239 }
+/** Where she stands on her 980x560 canvas at size 100: centred, feet at 340. */
+const HER = { left: 443, top: 267, width: 94, height: 73 }
+
+/** The whole canvas on screen, which is the ordinary case. */
+const ROOM = { left: 0, top: 0, right: 980, bottom: 560 }
 
 function paint(
   bubble: ReturnType<typeof createBubble>,
@@ -85,7 +88,7 @@ function paint(
   problems = 0,
 ) {
   const rec = recorder()
-  const painted = bubble.draw(rec.ctx, 320, COLOURS, said, at, HER, hovered, problems)
+  const painted = bubble.draw(rec.ctx, 980, COLOURS, said, at, HER, ROOM, 'auto', hovered, problems)
   return { ...rec, painted, text: rec.drawn.map((one) => one.text).join('') }
 }
 
@@ -226,7 +229,10 @@ describe('what fits on screen', () => {
     const drawn = paint(bubble, long, 1800).drawn.filter((one) => one.text !== '⋯')
     const shown = drawn.map((one) => one.text).join('').length
     expect(shown).toBeGreaterThan(0)
-    expect(shown).toBeLessThanOrEqual(8 * 40)
+    // Eight lines at this recorder's 7px-per-character measure against the
+    // 340px reading column — `LINES * (TEXT_W / 7)`. The old bound said 40 a
+    // line, which was the 256px column the canvas used to force.
+    expect(shown).toBeLessThanOrEqual(8 * Math.ceil(340 / 7))
   })
 
   it('keeps her own line in view when the passage is taller than the bubble', () => {

@@ -82,6 +82,7 @@ async function open(): Promise<void> {
     // Whatever main could not do while assembling all of the above. Usually
     // none; when there are any, the shoulder control says so on its own.
     face.troubled(session.problems)
+    face.prefersBubble(session.bubbleSide as Parameters<typeof face.prefersBubble>[0])
     // The microphone opens only once the session is up, so she is never
     // transmitting into a peer that is still being negotiated.
     session.listen(true)
@@ -104,6 +105,13 @@ window.mochi.onSend((frame) => {
   // a reconnect that could not be scheduled. The count on `session.problems` is
   // a snapshot taken at the door; this is how it stays true afterwards.
   if (type === '__mochi_problems__') face.troubled(Number((frame as { count?: unknown }).count))
+  // Somebody picked a side in the menu bar. Straight through, because they are
+  // looking at her while they pick it.
+  if (type === '__mochi_bubble_side__') {
+    face.prefersBubble(
+      String((frame as { side?: unknown }).side) as Parameters<typeof face.prefersBubble>[0],
+    )
+  }
 })
 
 void open()
