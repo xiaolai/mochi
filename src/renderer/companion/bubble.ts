@@ -45,7 +45,6 @@
  * not a gate.**
  */
 
-import { wordAt } from './pace'
 import { wrapByWord } from './wrap'
 
 /** Seconds of silence before it goes. The design's number. */
@@ -54,14 +53,15 @@ export const FADE_AFTER_QUIET_S = 1.2
 /** And how long the fade itself takes, once it starts. */
 const FADE_S = 0.35
 
-/** Never more than this on screen. A bubble is a glance, not a transcript. */
-const MAX_CHARS = 220
-
-/** How much of what is still to come to keep in view, dimmed. */
-const AHEAD = 80
-
-/** Lines that fit. The rest scrolls past. */
-const LINES = 4
+/**
+ * Lines the bubble may grow to.
+ *
+ * Eight rather than four because most of what she says fits in eight, and text
+ * that fits never moves at all — which is the whole point of the change. Her
+ * window is 320 tall and she stands 97 of it, so this is what is actually
+ * available above her head.
+ */
+const LINES = 8
 
 export interface BubbleColours {
   /** The opaque surface. See rule 2. */
@@ -113,7 +113,7 @@ export interface Bubble {
 /** One run of text on a line, and how it should look. */
 interface Run {
   readonly text: string
-  readonly style: 'said' | 'saying' | 'ahead'
+  readonly style: 'said' | 'ahead'
 }
 
 /**
@@ -123,36 +123,66 @@ interface Run {
  * measured in — passing an offset from a different string is the mistake this
  * signature exists to make hard to write.
  */
-export function runsFor(line: string, start: number, from: number, to: number): readonly Run[] {
+export function runsFor(line: string, start: number, at: number): readonly Run[] {
   const end = start + line.length
   const cut = (a: number, b: number): string =>
     line.slice(Math.max(0, a - start), Math.max(0, Math.min(line.length, b - start)))
 
   const runs: Run[] = [
-    { text: cut(start, Math.min(from, end)), style: 'said' },
-    { text: cut(Math.max(start, from), Math.min(to, end)), style: 'saying' },
-    { text: cut(Math.max(start, to), end), style: 'ahead' },
+    { text: cut(start, Math.min(at, end)), style: 'said' },
+    { text: cut(Math.max(start, at), end), style: 'ahead' },
   ]
   return runs.filter((run) => run.text !== '')
 }
 
 export function createBubble(): Bubble {
   let opacity = 0
+  /**
+   * The wrap, cached against the text it was made from.
+   *
+   * The whole text is wrapped, not a sliding window around the cursor. A window
+   * that slides with the cursor makes every page a slightly different page, so
+   * paging on top of it still moves the words — which is the thing being fixed.
+   *
+   * Caching is what makes that affordable: the text changes a few times a
+   * second as deltas arrive, and this draws sixty. Keyed on the text and the
+   * width, because either one changing invalidates it.
+   */
+  let wrapped: { text: string; width: number; lines: string[] } | null = null
+
+  function linesFor(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    maxWidth: number,
+  ): readonly string[] {
+    if (wrapped !== null && wrapped.text === text && wrapped.width === maxWidth) {
+      return wrapped.lines
+    }
+    const lines = wrapByWord(text, maxWidth, (one) => ctx.measureText(one).width)
+    wrapped = { text, width: maxWidth, lines }
+    return lines
+  }
 
   return {
-    step(quietFor: number, dtSeconds: number, begun: boolean) {
+    step(_quietFor: number, dtSeconds: number, begun: boolean) {
+      // Fades IN only. It stays until the next utterance replaces it or the
+      // bubble is turned off.
+      //
+      // This retires v1's rule 1 — *fade 1.2s after the analyser reports her
+      // audio ended* — deliberately rather than by forgetting it. That rule
+      // existed to stop the bubble being retired EARLY, because the data
+      // channel says "done" seconds before she stops speaking (§19, and §57
+      // measured minutes on a long answer). A bubble that is not retired at all
+      // cannot be retired early, so the hazard the rule guarded against is
+      // gone with it. `quietFor` is kept in the signature because the caller
+      // still has it and a future state — "she cannot reach a voice" — will
+      // want it.
       if (!begun) return
-      if (quietFor >= FADE_AFTER_QUIET_S) {
-        // She has stopped. Fade — but the TEXT is not this module's to destroy,
-        // and emptying it here is what once made the bubble unable to come back
-        // for the rest of a two-minute story.
-        opacity = Math.max(0, opacity - dtSeconds / FADE_S)
-        return
-      }
       opacity = Math.min(1, opacity + dtSeconds / FADE_S)
     },
     clear() {
       opacity = 0
+      wrapped = null
     },
     draw(ctx, width, colours, text, at) {
       if (text === '' || opacity <= 0) return false
@@ -166,45 +196,39 @@ export function createBubble(): Bubble {
       ctx.font = '13px -apple-system, system-ui, sans-serif'
       ctx.textBaseline = 'top'
 
-      // A window around the cursor: what she has just said, plus a glimpse of
-      // what is coming. Bounded so a 1101-character story is not re-measured
-      // sixty times a second for four lines of output.
-      const cursor = at
-      const to = Math.min(text.length, cursor + AHEAD)
-      const from = Math.max(0, to - MAX_CHARS)
-      const visible = text.slice(from, to)
-
-      // Wrapped by MEASUREMENT, not by character count: she is routinely
-      // speaking Chinese, where a glyph is about twice the width of a Latin one.
-      // Where it is allowed to break is `wrap.ts` — a separate question with a
-      // separate answer per script.
-      const lines = wrapByWord(visible, maxWidth, (one) => ctx.measureText(one).width)
-
-      const word = wordAt(text, cursor)
-      const wordFrom = (word?.from ?? cursor) - from
-      const wordTo = (word?.to ?? cursor) - from
-
-      // Which LINE she is on, and a window of lines around it.
+      // The WHOLE text, wrapped once and cached — see `linesFor`. There is no
+      // window sliding along with the cursor: a window that slides makes every
+      // page a slightly different page, so paging on top of one still moves the
+      // words, which is the thing being fixed.
       //
-      // Taking the last four instead was wrong in a way that only shows on real
-      // text: a passage with a paragraph break wraps to more lines than fit, and
-      // the last four are then entirely past the cursor — every word dimmed, no
-      // underline anywhere, on screen for the whole paragraph. The character
-      // window bounds the WORK; the line window is what has to follow her.
+      // Wrapped by MEASUREMENT, not by character count: she is routinely
+      // speaking Chinese, where a glyph is about twice the width of a Latin
+      // one. Where it may break is `wrap.ts` — a separate question with a
+      // separate answer per script.
+      const cursor = at
+      const lines = linesFor(ctx, text, maxWidth)
+
+      // Where she has got to. No word span: the underline is gone, because it
+      // claimed WORD-level precision that §60 measured this cursor does not
+      // have (−3% to −22%). The ink boundary claims only "about here", which is
+      // what is known.
+      const spoken = cursor
+
+      // Which LINE she is on, and which PAGE that is.
+      //
+      // Paged, not scrolled. Following the cursor line by line makes the text a
+      // teleprompter: it moves continuously and the reader's eye chases it. A
+      // page holds still until she leaves it, so the text moves once every
+      // eight lines instead of on every one.
       let cursorLine = 0
       let scanned = 0
       for (const [index, line] of lines.entries()) {
-        if (wordFrom < scanned + line.length) {
-          cursorLine = index
-          break
-        }
-        scanned += line.length
         cursorLine = index
+        if (spoken < scanned + line.length) break
+        scanned += line.length
       }
-      // Her line sits second from the bottom, so one line of what is coming is
-      // always visible — the whole point of showing the unsaid text at all.
-      const last = Math.max(0, lines.length - LINES)
-      const start = Math.min(last, Math.max(0, cursorLine - (LINES - 2)))
+      const page = Math.floor(cursorLine / LINES)
+      const start = page * LINES
       const shown = lines.slice(start, start + LINES)
       let offset = 0
       for (const line of lines.slice(0, start)) offset += line.length
@@ -230,16 +254,12 @@ export function createBubble(): Bubble {
       shown.forEach((line, row) => {
         const top = y + pad + row * lineHeight
         let left = x + pad
-        for (const run of runsFor(line, lineStart, wordFrom, wordTo)) {
+        for (const run of runsFor(line, lineStart, spoken)) {
           // Dimmed rather than hidden — the point of showing it at all.
           ctx.globalAlpha = opacity * (run.style === 'ahead' ? 0.38 : 1)
           ctx.fillStyle = colours.ink
           ctx.fillText(run.text, left, top)
-          const runWidth = ctx.measureText(run.text).width
-          if (run.style === 'saying') {
-            ctx.fillRect(left, top + lineHeight - 4, runWidth, 1)
-          }
-          left += runWidth
+          left += ctx.measureText(run.text).width
         }
         lineStart += line.length
       })

@@ -50,41 +50,31 @@ function paint(bubble: ReturnType<typeof createBubble>, said: string, at: number
 }
 
 describe('cutting a line into runs', () => {
-  it('splits at the word being said', () => {
-    expect(runsFor('the owl taps', 0, 4, 7)).toEqual([
+  it('splits at where she has got to', () => {
+    expect(runsFor('the owl taps', 0, 4)).toEqual([
       { text: 'the ', style: 'said' },
-      { text: 'owl', style: 'saying' },
-      { text: ' taps', style: 'ahead' },
+      { text: 'owl taps', style: 'ahead' },
     ])
   })
 
   it('is all still-to-come when the cursor is before the line', () => {
-    expect(runsFor('later text', 100, 4, 7)).toEqual([{ text: 'later text', style: 'ahead' }])
+    expect(runsFor('later text', 100, 4)).toEqual([{ text: 'later text', style: 'ahead' }])
   })
 
   it('is all said when the cursor is past the line', () => {
-    expect(runsFor('earlier text', 0, 900, 903)).toEqual([{ text: 'earlier text', style: 'said' }])
+    expect(runsFor('earlier text', 0, 900)).toEqual([{ text: 'earlier text', style: 'said' }])
   })
 
-  it('handles a word straddling the start of the line', () => {
-    // The wrap can put a break anywhere; the underlined word does not have to
-    // begin on the line it is being drawn on.
-    expect(runsFor('owl taps', 4, 2, 7)).toEqual([
-      { text: 'owl', style: 'saying' },
-      { text: ' taps', style: 'ahead' },
-    ])
+  it('handles a boundary that falls before the line begins', () => {
+    // The wrap can put a break anywhere; the boundary does not have to fall on
+    // the line being drawn.
+    expect(runsFor('owl taps', 4, 2)).toEqual([{ text: 'owl taps', style: 'ahead' }])
   })
 
   it('never loses or duplicates a character', () => {
-    for (const [from, to] of [
-      [0, 0],
-      [3, 3],
-      [0, 12],
-      [-5, 2],
-      [8, 99],
-    ] as const) {
+    for (const at of [0, 3, 12, -5, 99]) {
       expect(
-        runsFor('the owl taps', 0, from, to)
+        runsFor('the owl taps', 0, at)
           .map((one) => one.text)
           .join(''),
       ).toBe('the owl taps')
@@ -131,21 +121,16 @@ describe('what she has not said yet', () => {
     expect(Math.min(...alphas)).toBeLessThan(Math.max(...alphas))
   })
 
-  it('underlines the word the cursor is on', () => {
+  it('underlines nothing at all', () => {
+    // An underline claims WORD-level precision. §60 measured this cursor at
+    // −3% to −22%, so the ink boundary — which claims only "about here" — is
+    // the strongest thing the estimate can honestly say.
     const bubble = createBubble()
     seconds(bubble, 1, 0)
-    expect(paint(bubble, LINE, 20).rules.length).toBeGreaterThan(0)
+    expect(paint(bubble, LINE, 20).rules).toEqual([])
   })
 
-  it('underlines the first word from the very start', () => {
-    // Rather than waiting for the cursor to leave zero, which would leave the
-    // opening word of every utterance unmarked while she says it.
-    const bubble = createBubble()
-    seconds(bubble, 1, 0)
-    expect(paint(bubble, LINE, 0).rules.length).toBeGreaterThan(0)
-  })
-
-  it('moves the underline along as the cursor advances', () => {
+  it('moves the ink boundary along as the cursor advances', () => {
     const bubble = createBubble()
     seconds(bubble, 1, 0)
     const early = paint(bubble, LINE, 4).drawn.find((one) => one.alpha === 1)?.text ?? ''
@@ -161,39 +146,25 @@ describe('when it goes away, and when it comes back', () => {
     expect(paint(bubble, LINE, 10).painted).toBe(true)
   })
 
-  it('goes only after the sound has been gone for the designed interval', () => {
-    // THE design rule: fade 1.2s after the ANALYSER reports her audio ended,
-    // not after the data channel says the response is done — the wire is early,
-    // and §19 found the lead is not even a constant.
+  it('STAYS once she has stopped, however long the silence', () => {
+    // The retirement of v1's rule 1, asserted rather than assumed. That rule
+    // faded 1.2s after the analyser reported her audio ended, and existed to
+    // stop the bubble being retired EARLY — the data channel says "done"
+    // seconds before she stops (§19; minutes on a long answer, §57). A bubble
+    // that is never retired cannot be retired early.
     const bubble = createBubble()
     seconds(bubble, 2, 0)
-    bubble.step(FADE_AFTER_QUIET_S - 0.1, 1 / 60, true)
+    seconds(bubble, 30, FADE_AFTER_QUIET_S + 1)
     expect(paint(bubble, LINE, 10).painted).toBe(true)
-
-    seconds(bubble, 2, FADE_AFTER_QUIET_S + 1)
-    expect(paint(bubble, LINE, 10).painted).toBe(false)
   })
 
-  it('comes back after a pause instead of staying gone', () => {
-    // The fade must not be one-way. A pause between two sentences of one
-    // utterance is a pause, and treating it as the end is what left the bubble
-    // unable to return for the rest of a two-minute story.
+  it('does not flicker through a pause mid-utterance', () => {
     const bubble = createBubble()
-    seconds(bubble, 2, 0)
-    seconds(bubble, 2, FADE_AFTER_QUIET_S + 1)
-    expect(paint(bubble, LINE, 10).painted).toBe(false)
+    seconds(bubble, 1, 0)
+    seconds(bubble, 3, FADE_AFTER_QUIET_S + 1)
+    expect(paint(bubble, LINE, 10).painted).toBe(true)
     seconds(bubble, 1, 0)
     expect(paint(bubble, LINE, 10).painted).toBe(true)
-  })
-
-  it('still fades out after the utterance has ended', () => {
-    // Regression, and it shipped: the fade was gated on the utterance still
-    // being live, so opacity froze wherever it stood — a half-transparent
-    // bubble parked on the desktop with nothing left to move it.
-    const bubble = createBubble()
-    seconds(bubble, 2, 0)
-    seconds(bubble, 3, FADE_AFTER_QUIET_S + 1, /* begun, but no longer speaking */ true)
-    expect(paint(bubble, LINE, 10).painted).toBe(false)
   })
 
   it('forgets its fade when the bubble is turned off', () => {
@@ -205,12 +176,15 @@ describe('when it goes away, and when it comes back', () => {
 })
 
 describe('what fits on screen', () => {
-  it('keeps only a window of something very long', () => {
-    // A bubble is a glance, not a transcript.
+  it('shows one page of something very long, not the whole thing', () => {
+    // A bubble is a glance, not a transcript. Eight lines of it, and the rest
+    // is what the conversations window is for.
     const bubble = createBubble()
     seconds(bubble, 2, 0)
     const long = 'word '.repeat(400)
-    expect(paint(bubble, long, 1800).text.length).toBeLessThan(300)
+    const shown = paint(bubble, long, 1800).text.length
+    expect(shown).toBeGreaterThan(0)
+    expect(shown).toBeLessThanOrEqual(8 * 40)
   })
 
   it('keeps her own line in view when the passage is taller than the bubble', () => {
@@ -221,9 +195,28 @@ describe('what fits on screen', () => {
     seconds(bubble, 2, 0)
     const passage =
       'first line of the story here\n\nsecond paragraph begins\n\nthird one\n\nfourth\n\nfifth'
-    const { drawn, rules } = paint(bubble, passage, 10)
+    const { drawn } = paint(bubble, passage, 10)
     expect(drawn.some((one) => one.alpha === 1)).toBe(true)
-    expect(rules.length).toBeGreaterThan(0)
+  })
+
+  it('HOLDS STILL as she speaks, and flips a page rather than scrolling', () => {
+    // The point of the change. Following the cursor line by line makes the
+    // text a teleprompter: it moves continuously and the reader's eye chases
+    // it. A page holds until she leaves it.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    // Numbered, because `'word '.repeat(n)` renders every page as the same
+    // string — a fixture that cannot tell a held page from a turned one.
+    const long = Array.from({ length: 300 }, (_, i) => `w${String(i).padStart(3, '0')}`).join(' ')
+
+    const frames = [0, 20, 40, 60, 80].map((at) => paint(bubble, long, at).text)
+    // Everything inside the first page is the SAME text, however far the
+    // boundary has moved through it.
+    expect(new Set(frames).size).toBe(1)
+
+    // Far enough along and the page has turned — one change, not eighty.
+    const later = paint(bubble, long, 900).text
+    expect(later).not.toBe(frames[0])
   })
 
   it('wraps by measurement, not by counting characters', () => {
