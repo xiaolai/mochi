@@ -1,6 +1,7 @@
 import { MochiAvatar } from './rig/mochi'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createBubble, type BubbleColours } from './bubble'
+import { createUtterance } from './utterance'
 import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
 
 /**
@@ -31,12 +32,22 @@ import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
 export interface Face {
   /** Her voice, once the peer hands it over. Drives the mouth. */
   hear(stream: MediaStream): void
-  /** One fragment of what she is saying. Ignored unless the bubble is on. */
-  saying(delta: string, responseId: string): void
-  /** Her voice for this response has started. Paces the bubble's cursor. */
-  speaks(responseId: string): void
+  /** One fragment of what she is saying, with the ITEM it belongs to. */
+  saying(delta: string, itemId: string): void
+  /** Her voice for this item has started. Paces the cursor. */
+  speaks(itemId: string): void
   /** And has finished, naturally or by interruption. The two differ; see `pace.ts`. */
-  finished(responseId: string, interrupted: boolean): void
+  finished(itemId: string, interrupted: boolean): void
+  /**
+   * Where she is estimated to have got to, for whoever files what was heard.
+   *
+   * Read at the moment of a barge-in. §60 scored this against transcripts of her
+   * own truncated audio: −3% to −22%, always short, against +446% to +513% for
+   * filing everything she generated.
+   */
+  heard(): { text: string; at: number; itemId: string | null }
+  /** A different character is being worn. Drops the voice's learned rate. */
+  wear(): void
   /** Turn the bubble on for this persona, with the surface it draws on. */
   showWords(colours: BubbleColours | null): void
   /** Stop the loop, release the analyser, drop the canvas. */
@@ -63,6 +74,14 @@ export function showFace(canvas: HTMLCanvasElement): Face {
 
   const avatar = new MochiAvatar(ctx, { size: 'fit-canvas' })
   const bubble = createBubble()
+  /**
+   * What she is saying, owned HERE rather than inside the bubble.
+   *
+   * The bubble is one consumer of it; the archive is the other, and the archive
+   * must work for a persona with no bubble — which is the default. Every feed
+   * below is therefore unconditional, and only the DRAWING is gated on colours.
+   */
+  const utterance = createUtterance()
 
   /**
    * ONE envelope, driving both the mouth and the bubble.
@@ -145,14 +164,17 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // the window between an utterance's first delta and its first audio, where
     // the analyser very much exists. The rule belongs to the fade, so it lives
     // in `step`.
-    bubble.step(envelope.quietFor, seconds)
+    utterance.step(envelope.quietFor, seconds)
+    bubble.step(envelope.quietFor, seconds, utterance.begun())
     lastAt = now
 
     avatar.render(now)
     // AFTER her, so it sits above rather than behind. It is asked nothing about
     // the mouse: `hitTest` below is the avatar's alone, which is what keeps the
     // design's promise that a bubble cannot enlarge her hit region.
-    if (colours !== null) bubble.draw(ctx, canvas.clientWidth, colours)
+    if (colours !== null) {
+      bubble.draw(ctx, canvas.clientWidth, colours, utterance.text(), utterance.at())
+    }
 
     const onHer = pointer !== null && avatar.hitTest(pointer.x, pointer.y)
 
@@ -184,20 +206,21 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   frame = requestAnimationFrame(tick)
 
   return {
-    saying: (delta: string, responseId: string) => {
-      if (colours !== null) bubble.add(delta, responseId)
-    },
-    speaks: (responseId: string) => {
-      if (colours !== null) bubble.speaks(responseId)
-    },
-    finished: (responseId: string, interrupted: boolean) => {
-      if (colours !== null) bubble.finished(responseId, interrupted)
-    },
+    // Unconditional, all three. Gating these on the bubble is what made the
+    // estimate not exist for the default persona.
+    saying: (delta: string, itemId: string) => utterance.add(delta, itemId),
+    speaks: (itemId: string) => utterance.speaks(itemId),
+    finished: (itemId: string, interrupted: boolean) => utterance.finished(itemId, interrupted),
+    heard: () => ({ text: utterance.text(), at: utterance.at(), itemId: utterance.itemId() }),
     showWords: (next: BubbleColours | null) => {
       colours = next
-      // Turning it off forgets what was on it, so switching to a character
-      // without a bubble and back does not resurrect the previous one's words.
       if (next === null) bubble.clear()
+    },
+    wear: () => {
+      // A different character means a different VOICE, and the learned speaking
+      // rate belongs to the voice. `Pacer.restart()` keeps it on purpose.
+      utterance.wear()
+      bubble.clear()
     },
     hear(stream: MediaStream) {
       // One context, reused. A second `AudioContext` per reconnect is a real

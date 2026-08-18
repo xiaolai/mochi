@@ -40,6 +40,24 @@ export type ServerFrame =
       readonly responseId: string
     }
   /**
+   * The server cut her off, and says how much audio had played.
+   *
+   * §27: on WebRTC this arrives **unsolicited** after an `output_audio_buffer.clear`
+   * — nothing here asks for it. It carries `item_id`, `content_index` and
+   * `audio_end_ms`, and **no `response_id`**, which makes `item_id` the only key
+   * that joins it to the transcript.
+   *
+   * `audioEndMs` is the one signal about what she was actually HEARD saying.
+   * §58/§59 established that the truncated TEXT is not stored anywhere — this
+   * number is all there is.
+   */
+  | {
+      readonly kind: 'truncated'
+      readonly itemId: string
+      readonly contentIndex: number
+      readonly audioEndMs: number
+    }
+  /**
    * The hour is up. Its own kind because the remedy is completely different
    * from every other error: nothing is wrong, reconnect (§53).
    */
@@ -180,6 +198,22 @@ export function parseServerFrame(text: string): ServerFrame {
       kind: 'saying',
       delta: value['delta'] as string,
       responseId: value['response_id'] as string,
+    }
+  }
+
+  if (type === 'conversation.item.truncated') {
+    const itemId = value['item_id']
+    const audioEndMs = value['audio_end_ms']
+    // Written from a captured frame, not from a page: the observed keys are
+    // `[type, event_id, item_id, content_index, audio_end_ms]`.
+    if (typeof itemId !== 'string' || typeof audioEndMs !== 'number') {
+      return { kind: 'malformed', type, missing: ['item_id', 'audio_end_ms'] }
+    }
+    return {
+      kind: 'truncated',
+      itemId,
+      contentIndex: typeof value['content_index'] === 'number' ? value['content_index'] : 0,
+      audioEndMs,
     }
   }
 

@@ -1,4 +1,5 @@
 import { parseServerFrame } from '@shared/realtime/frames'
+import { createPending, type Spoken } from './pending'
 
 /**
  * The live session: her ears, her voice, and the wire between them.
@@ -81,7 +82,9 @@ export interface SessionCallbacks {
    * fact the pacing can calibrate itself against. Barge-in is routine here
    * (§17), so conflating them would poison the estimate constantly.
    */
-  readonly onFinished: (responseId: string, interrupted: boolean) => void
+  readonly onFinished: (id: string, interrupted: boolean) => void
+  /** Where the cursor had reached. Read at the barge-in; see `settle`. */
+  readonly heard: () => { text: string; at: number; itemId: string | null }
 }
 
 const CHANNEL = 'oai-events'
@@ -93,6 +96,10 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   let closed = false
 
   function shutdown(): void {
+    // A turn she began and was cut off in, whose transcript never arrived, is
+    // still a fact. Filed as an empty `cut` marker rather than lost.
+    for (const spoken of pending.flush()) file(spoken)
+
     // ABOVE the guard, and that order is the whole point — see point 3.
     for (const track of media?.getTracks() ?? []) track.stop()
     media = null
@@ -111,6 +118,25 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     shutdown()
     callbacks.onState({ failed: why })
     throw new Error(why)
+  }
+
+  const pending = createPending()
+
+  function file(spoken: Spoken | null): void {
+    if (spoken === null) return
+    if (spoken.interruptedAt === null) {
+      window.mochi.report({ kind: 'said', transcript: spoken.transcript, heard: null })
+      return
+    }
+    // The estimate is read HERE, at the barge-in — the cursor keeps no history,
+    // and by the time the transcript arrives she has long stopped.
+    const heard = callbacks.heard()
+    window.mochi.report({
+      kind: 'said',
+      transcript: spoken.transcript,
+      // Observations only. Main decides how much of it is remembered.
+      heard: { at: heard.at, interruptedAt: spoken.interruptedAt },
+    })
   }
 
   /** Frame types already announced this session — see the `other` case below. */
@@ -161,8 +187,14 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
         callbacks.onSaying(frame.delta, frame.responseId)
         break
       case 'said':
-        window.mochi.report({ kind: 'said', transcript: frame.transcript })
+        file(pending.said(frame.itemId, frame.transcript))
         break
+      case 'truncated': {
+        const spoken = pending.truncated(frame.itemId, Date.now())
+        callbacks.onFinished(frame.itemId, true)
+        file(spoken)
+        break
+      }
       case 'audio-buffer':
         /**
          * `started` marks when HER VOICE for this response begins — and that,
@@ -177,7 +209,9 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
          * such signal — the analyser hears sound but cannot attribute it.
          */
         if (frame.phase === 'started') callbacks.onSpeaks(frame.responseId)
-        else callbacks.onFinished(frame.responseId, frame.phase === 'cleared')
+        else if (frame.phase === 'stopped') callbacks.onFinished(frame.responseId, false)
+        // `cleared` is handled by the `truncated` frame instead, which is the
+        // one carrying the item id the archive needs.
         break
       case 'session-expired':
         // Not a failure. An hour passed (§53), and main already has a timer.

@@ -21,12 +21,43 @@ const OBSERVED = JSON.parse(
 
 const frame = (type: string): string => JSON.stringify(OBSERVED[type])
 
+describe('the truncation verdict', () => {
+  it('reads the item id and how much audio had played', () => {
+    // The ONLY signal about what she was actually heard saying: §58 and §59
+    // established the truncated TEXT is not stored anywhere, on either
+    // transport. This number is all there is.
+    const parsed = parseServerFrame(frame('conversation.item.truncated'))
+    expect(parsed).toEqual({
+      kind: 'truncated',
+      itemId: 'item_observed',
+      contentIndex: 0,
+      audioEndMs: 14180,
+    })
+  })
+
+  it('carries NO response id, which is why the join key is the item', () => {
+    // A design keyed on `response_id` joins on a field that is not there. This
+    // asserts the absence, because the absence is the load-bearing fact.
+    const captured = JSON.parse(frame('conversation.item.truncated')) as Record<string, unknown>
+    expect(Object.keys(captured)).not.toContain('response_id')
+    expect(Object.keys(captured)).toContain('item_id')
+  })
+
+  it('is LOUD when the fields are not what was observed', () => {
+    const parsed = parseServerFrame(
+      JSON.stringify({ type: 'conversation.item.truncated', event_id: 'e' }),
+    )
+    expect(parsed.kind).toBe('malformed')
+  })
+})
+
 describe('frames captured from the live service', () => {
   it('has the fixture the rest of this file depends on', () => {
     // If the fixture is ever emptied, every assertion below would pass
     // vacuously against `undefined`. Counted first.
     expect(Object.keys(OBSERVED).sort()).toEqual([
       'conversation.item.input_audio_transcription.completed',
+      'conversation.item.truncated',
       'error',
       'output_audio_buffer.cleared',
       'output_audio_buffer.started',

@@ -1,3 +1,5 @@
+import { isDense } from '@shared/script'
+
 /**
  * Where a line may break, for text that is routinely both English and Chinese.
  *
@@ -23,12 +25,6 @@
  * Widths come from the caller. This file never measures, so it is testable
  * against a made-up metric and unchanged by the canvas it is drawn on.
  */
-
-/**
- * Scripts written without spaces, which may therefore break between any two
- * glyphs. Kana, CJK ideographs, Hangul, and the full-width forms.
- */
-const NO_SPACES = /[⺀-〿぀-ヿ㐀-䶿一-鿿豈-﫿가-힯＀-￯]/u
 
 /** May not begin a line, so it clings to whatever precedes it. */
 const NO_START = /[，。、；：？！）］｝」』〉》〕】…‥・ー～,.;:!?)\]}%]/u
@@ -98,7 +94,7 @@ function atomize(text: string): string[] {
       else current += glyph
       continue
     }
-    if (NO_SPACES.test(glyph)) {
+    if (isDense(glyph)) {
       // An opening bracket in hand keeps this glyph with it; closing first would
       // push the bracket out as an atom of its own and let a line end on it.
       if (current !== '' && NO_END.test(current.slice(-1))) current += glyph

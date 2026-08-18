@@ -66,7 +66,8 @@ async function open(): Promise<void> {
       },
       onSaying: (delta, responseId) => face.saying(delta, responseId),
       onSpeaks: (responseId) => face.speaks(responseId),
-      onFinished: (responseId, interrupted) => face.finished(responseId, interrupted),
+      onFinished: (id, interrupted) => face.finished(id, interrupted),
+      heard: () => face.heard(),
     })
     // Off unless this persona asked for it. The surface is opaque paper rather
     // than her colour: the design settles it as a rule — anything carrying

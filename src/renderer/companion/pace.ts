@@ -33,6 +33,8 @@
  * word still readable. **The estimate is a reading aid, not a gate.**
  */
 
+import { costOf, isDense } from '@shared/script'
+
 /**
  * Seeded from §57 — 15.1 chars/s for English, and a Chinese glyph costing 3.68
  * of those. Wall-clock including her pauses, which is why it is only a seed:
@@ -40,7 +42,6 @@
  * figure is higher. One completed utterance replaces it.
  */
 const SEED_RATE = 15.1
-export const CJK_COST = SEED_RATE / 4.1
 
 /**
  * The band a learned rate must fall in, in cost units per second of sound.
@@ -56,12 +57,6 @@ const FASTEST = 60
 /** How much of the new measurement to believe. Enough to adapt within two or
  * three utterances, little enough that one odd sentence does not swing it. */
 const LEARN = 0.35
-
-const CJK = /[⺀-〿぀-ヿ㐀-䶿一-鿿豈-﫿가-힯＀-￯]/u
-
-export function costOf(glyph: string): number {
-  return CJK.test(glyph) ? CJK_COST : 1
-}
 
 /** Where one word starts and ends around an index. Half-open, like `slice`. */
 export interface Span {
@@ -86,18 +81,18 @@ export function wordAt(text: string, index: number): Span | null {
   while (at < text.length && /\s/u.test(text[at] ?? '')) at += 1
   if (at >= text.length) return null
   const here = text[at] ?? ''
-  if (CJK.test(here)) return { from: at, to: at + 1 }
+  if (isDense(here)) return { from: at, to: at + 1 }
 
   let from = at
   while (from > 0) {
     const before = text[from - 1] ?? ''
-    if (/\s/u.test(before) || CJK.test(before)) break
+    if (/\s/u.test(before) || isDense(before)) break
     from -= 1
   }
   let to = at + 1
   while (to < text.length) {
     const after = text[to] ?? ''
-    if (/\s/u.test(after) || CJK.test(after)) break
+    if (/\s/u.test(after) || isDense(after)) break
     to += 1
   }
   return { from, to }

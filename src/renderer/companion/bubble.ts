@@ -45,7 +45,7 @@
  * not a gate.**
  */
 
-import { createPacer, wordAt } from './pace'
+import { wordAt } from './pace'
 import { wrapByWord } from './wrap'
 
 /** Seconds of silence before it goes. The design's number. */
@@ -54,24 +54,11 @@ export const FADE_AFTER_QUIET_S = 1.2
 /** And how long the fade itself takes, once it starts. */
 const FADE_S = 0.35
 
-/**
- * How recently there must have been sound for the cursor to be moving.
- *
- * Much tighter than the fade's 1.2s, and they are different questions. "Is she
- * still in this utterance" tolerates a pause; "is she saying a word right now"
- * does not, and using the fade's threshold for both advanced the cursor through
- * every pause at full speed.
- */
-const SOUNDING_S = 0.25
-
 /** Never more than this on screen. A bubble is a glance, not a transcript. */
 const MAX_CHARS = 220
 
 /** How much of what is still to come to keep in view, dimmed. */
 const AHEAD = 80
-
-/** Held so a long story is not truncated before she has read it. */
-const MAX_HELD = 20_000
 
 /** Lines that fit. The rest scrolls past. */
 const LINES = 4
@@ -84,46 +71,11 @@ export interface BubbleColours {
 
 export interface Bubble {
   /**
-   * One fragment of what she is generating, with the response it belongs to.
+   * Advance the fade.
    *
-   * **The id is what marks a new utterance, and a boundary for text has to come
-   * from the text.** The first version cleared the bubble on
-   * `output_audio_buffer.started` — the event that says her AUDIO has begun —
-   * and the bubble then showed only a suffix of what she said, observed on
-   * screen: `"how's everything going?"` of `"Hi, I'm back, how's everything
-   * going?"`.
-   *
-   * §56 measured the pair: text arrived first in 6 of 6 responses, by 0–320ms,
-   * and for a one-word utterance that window carries all of it. §19 is *not*
-   * evidence here and was briefly miscited as though it were: it measured the
-   * pair of ENDINGS.
-   */
-  add(delta: string, responseId: string): void
-  /**
-   * Her audio for this response has begun — `output_audio_buffer.started`,
-   * which carries the id.
-   *
-   * The anchor everything hangs on, and the ONLY correct use of that event
-   * here. As a boundary between one utterance's text and the next it is wrong,
-   * for the reason `add` gives; as "her voice for THIS response starts now" it
-   * is exact, and it is the only signal that is — the analyser hears sound but
-   * cannot say whose.
-   */
-  speaks(responseId: string): void
-  /**
-   * Her audio finished on its own, or she was cut off.
-   *
-   * The two are different frames (`.stopped` against `.cleared`) and the
-   * difference is load-bearing: only the natural end means she said everything
-   * that was generated, which is the one fact `pace.ts` can calibrate against.
-   */
-  finished(responseId: string, interrupted: boolean): void
-  /**
-   * Advance the fade and the cursor. `quietFor` is the mouth's own measurement.
-   *
-   * **`quietFor` answers "how long since sound", which means nothing until
-   * there has been sound — and it cannot say whose.** Three call sites got some
-   * form of this wrong before it was treated as one rule:
+   * `quietFor` is the analyser's own measurement, and it **cannot say whose
+   * sound it is** — three call sites got some form of that wrong before it was
+   * treated as one rule:
    *
    * - Before the analyser exists, `quietFor` is `Infinity` — correct for
    *   "nothing has ever been heard" — and it retired the bubble one frame after
@@ -132,23 +84,30 @@ export interface Bubble {
    *   but describes the silence BEFORE her. The bubble reached the desktop at
    *   alpha 0.24: `#f4f2ea` over `(30,30,45)` read `(81,81,90)`, which is
    *   `1 − 0.27/0.35` of a 0.35s fade.
-   * - Sound from the PREVIOUS utterance counted as this one's. When she answered
-   *   in two responses, the second's text arrived while the first was still
-   *   playing; the gap between them then satisfied "she has gone quiet", and the
-   *   bubble faded and **emptied itself** — so it flashed while she was silent
-   *   and was gone for the whole minute she then spent speaking.
-   */
-  step(quietFor: number, dtSeconds: number): void
-  /**
-   * Forget everything, because the bubble was turned off.
+   * - Sound from the PREVIOUS utterance counted as this one's, so the gap
+   *   between two responses satisfied "she has gone quiet" and the bubble faded
+   *   and emptied itself.
    *
-   * Without it a persona with no bubble, worn after one that had it, would
-   * bring the previous character's last sentence back the moment it was
-   * switched on again.
+   * Hence `begun`, which comes from the utterance rather than from a clock. It
+   * gates the fade on THIS response having started, and outlives `speaking` on
+   * purpose — the end of an utterance is exactly when a fade should run.
    */
+  step(quietFor: number, dtSeconds: number, begun: boolean): void
+  /** Turned off: forget the fade so a re-enable does not flash the last state. */
   clear(): void
-  /** Draw, if there is anything to draw. Returns whether it painted. */
-  draw(ctx: CanvasRenderingContext2D, width: number, colours: BubbleColours): boolean
+  /**
+   * Draw, if there is anything to draw. Returns whether it painted.
+   *
+   * `text` and `at` come from the utterance, which owns them because the
+   * archive needs them too and does not care what the persona looks like.
+   */
+  draw(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    colours: BubbleColours,
+    text: string,
+    at: number,
+  ): boolean
 }
 
 /** One run of text on a line, and how it should look. */
@@ -178,82 +137,24 @@ export function runsFor(line: string, start: number, from: number, to: number): 
 }
 
 export function createBubble(): Bubble {
-  /** Everything generated for the current response — the future included. */
-  let text = ''
   let opacity = 0
-  let saying: string | null = null
-  /**
-   * Whether THIS response's audio has begun. Not "whether there was sound".
-   *
-   * Survives the end of the utterance, because it answers "has this ever been
-   * on screen" and the fade needs that long after `speaking` is false.
-   */
-  let begun = false
-  /** Whether it is still going. Gates the CURSOR only — see `step`. */
-  let speaking = false
-  const pacer = createPacer()
-
-  function beginUtterance(responseId: string): void {
-    saying = responseId
-    text = ''
-    begun = false
-    speaking = false
-    pacer.restart()
-  }
 
   return {
-    add(delta: string, responseId: string) {
-      if (responseId !== saying) beginUtterance(responseId)
-      // Held whole, not trimmed to what fits: `MAX_CHARS` bounds what is SHOWN,
-      // and trimming here would throw away the end of a story before she has
-      // read it. Bounded well above any real utterance so it cannot grow without
-      // limit on a session that never ends.
-      if (text.length < MAX_HELD) text += delta
-      pacer.wrote(text)
-      // Deliberately NOT `opacity = 1`. Text arriving is not her speaking — that
-      // is the whole of §56 — and a bubble that appears on arrival appears
-      // during the silence before her.
-    },
-    speaks(responseId: string) {
-      if (responseId !== saying) beginUtterance(responseId)
-      begun = true
-      speaking = true
-      pacer.began()
-    },
-    finished(responseId: string, interrupted: boolean) {
-      // A frame for an utterance that is no longer on screen is not this one's
-      // business, and acting on it would stop a live cursor.
-      if (responseId !== saying) return
-      speaking = false
-      if (interrupted) pacer.cut()
-      else pacer.ended()
-    },
-    step(quietFor: number, dtSeconds: number) {
-      // `begun`, not `speaking`. Gating the FADE on the utterance still being
-      // live froze the bubble wherever its opacity happened to be the moment
-      // `.stopped` arrived — half-transparent, on screen, for ever. The end of
-      // an utterance is precisely when a fade should be running.
-      if (text === '' || !begun) return
-      // The cursor, though, only moves while this response is actually going.
-      if (speaking) pacer.step(dtSeconds, quietFor < SOUNDING_S)
-
+    step(quietFor: number, dtSeconds: number, begun: boolean) {
+      if (!begun) return
       if (quietFor >= FADE_AFTER_QUIET_S) {
-        // She has stopped. Fade — but keep the text, because a pause between two
-        // sentences is not the end of the utterance, and emptying here is what
-        // made the bubble unable to come back.
+        // She has stopped. Fade — but the TEXT is not this module's to destroy,
+        // and emptying it here is what once made the bubble unable to come back
+        // for the rest of a two-minute story.
         opacity = Math.max(0, opacity - dtSeconds / FADE_S)
         return
       }
       opacity = Math.min(1, opacity + dtSeconds / FADE_S)
     },
     clear() {
-      text = ''
       opacity = 0
-      saying = null
-      speaking = false
-      pacer.restart()
     },
-    draw(ctx, width, colours) {
+    draw(ctx, width, colours, text, at) {
       if (text === '' || opacity <= 0) return false
 
       const pad = 10
@@ -268,7 +169,7 @@ export function createBubble(): Bubble {
       // A window around the cursor: what she has just said, plus a glimpse of
       // what is coming. Bounded so a 1101-character story is not re-measured
       // sixty times a second for four lines of output.
-      const cursor = pacer.at()
+      const cursor = at
       const to = Math.min(text.length, cursor + AHEAD)
       const from = Math.max(0, to - MAX_CHARS)
       const visible = text.slice(from, to)
@@ -325,11 +226,11 @@ export function createBubble(): Bubble {
       ctx.roundRect(x, y, boxWidth, boxHeight, radius)
       ctx.fill()
 
-      let at = offset
+      let lineStart = offset
       shown.forEach((line, row) => {
         const top = y + pad + row * lineHeight
         let left = x + pad
-        for (const run of runsFor(line, at, wordFrom, wordTo)) {
+        for (const run of runsFor(line, lineStart, wordFrom, wordTo)) {
           // Dimmed rather than hidden — the point of showing it at all.
           ctx.globalAlpha = opacity * (run.style === 'ahead' ? 0.38 : 1)
           ctx.fillStyle = colours.ink
@@ -340,7 +241,7 @@ export function createBubble(): Bubble {
           }
           left += runWidth
         }
-        at += line.length
+        lineStart += line.length
       })
       ctx.restore()
       return true

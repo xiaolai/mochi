@@ -99,7 +99,7 @@
     }
   },
   "conversation.item.input_audio_transcription.completed": {
-    "_note": "KEYS observed live 2026-08-17; values synthesised \u2014 a real transcript is what somebody said out loud and does not belong in a committed file.",
+    "_note": "KEYS observed live 2026-08-17; values synthesised — a real transcript is what somebody said out loud and does not belong in a committed file.",
     "type": "conversation.item.input_audio_transcription.completed",
     "event_id": "event_observed",
     "item_id": "item_observed",
@@ -127,5 +127,13 @@
     "content_index": 0,
     "delta": "one fragment ",
     "obfuscation": "xxxxxxxxxxxxxxx"
+  },
+  "conversation.item.truncated": {
+    "_note": "KEYS observed live 2026-08-17 (probe-retrieve-after-truncate); values from a real run.",
+    "type": "conversation.item.truncated",
+    "event_id": "event_observed",
+    "item_id": "item_observed",
+    "content_index": 0,
+    "audio_end_ms": 14180
   }
 }

@@ -31,8 +31,22 @@ import type { Speaker, Transcripts } from './transcripts'
 export interface Conversation {
   /** Wear a persona. Ends whatever was being written for the last one. */
   wear(personaId: string): void
-  /** Write one turn. Starts the conversation if this is the first. */
-  file(who: Speaker, text: string): void
+  /**
+   * Write one turn. Starts the conversation if this is the first.
+   *
+   * `cut` marks a turn she was interrupted in, and `at` is when it HAPPENED
+   * rather than when the frame describing it arrived. Both matter and both were
+   * absent:
+   *
+   * - Empty text is normally silence and is dropped. An empty turn with `cut`
+   *   is not silence — it is a turn she began and was cut off in before a word
+   *   of it survived, and losing that is worse than recording it.
+   * - `response.output_audio_transcript.done` can arrive **16 seconds** after
+   *   the barge-in that ended it (measured). Stamping at arrival puts her
+   *   fragment after the user turn that interrupted her and reverses the
+   *   archive's order.
+   */
+  file(who: Speaker, text: string, spoken?: { readonly cut: boolean; readonly at: number }): void
   /** Close the conversation, if one is open. Idempotent. */
   end(): void
   /** Whether anything is currently being written. For assertions and the log. */
@@ -88,8 +102,10 @@ export function createConversation(input: {
       wearing = personaId
     },
 
-    file(who: Speaker, text: string) {
-      if (wearing === null || text.trim() === '') return
+    file(who: Speaker, text: string, spoken?: { cut: boolean; at: number }) {
+      const cut = spoken?.cut ?? false
+      // Silence is not a turn — EXCEPT a cut marker, which is empty on purpose.
+      if (wearing === null || (text.trim() === '' && !cut)) return
       if (!keeps(wearing)) return
       if (live === null) {
         live = transcripts.begin(wearing, now())
@@ -103,7 +119,8 @@ export function createConversation(input: {
         }
         say(`conversation begun for ${wearing}`)
       }
-      transcripts.say(live, who, text, now())
+      // `spoken.at` is when she was interrupted, not when this frame arrived.
+      transcripts.say(live, who, text, spoken?.at ?? now(), cut)
     },
 
     end,

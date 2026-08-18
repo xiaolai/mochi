@@ -113,6 +113,15 @@ async function show(token: string, term: string): Promise<void> {
     const said = document.createElement('p')
     said.append(marked(turn.text, term))
     block.append(who, said)
+    if (turn.cut) {
+      // Said out loud rather than implied by a short line. The boundary is an
+      // ESTIMATE (§60: −3% to −22%, always short), so a reader who can see that
+      // it was cut can also discount the last few words.
+      const note = document.createElement('div')
+      note.className = 'cut'
+      note.textContent = turn.text === '' ? 'interrupted before she got a word out' : 'interrupted'
+      block.append(note)
+    }
     transcript.append(block)
   }
   paneEl.replaceChildren(transcript)

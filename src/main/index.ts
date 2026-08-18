@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { existsSync } from 'node:fs'
 import { greetingFor, instructionsFor } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
+import { heardPortion } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'
 import type { VoiceReport } from '@shared/ipc'
 import { loadCapabilities } from './capability/load'
@@ -268,8 +269,20 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
     return
   }
   if (event?.kind === 'said') {
-    console.log(`[voice] said: ${event.transcript}`)
-    conversation().file('her', event.transcript)
+    if (event.heard === null) {
+      // She finished: everything generated was spoken.
+      console.log(`[voice] said: ${event.transcript}`)
+      conversation().file('her', event.transcript)
+      return
+    }
+    const heard = heardPortion(event.transcript, event.heard.at)
+    console.log(
+      `[voice] said (cut): ${heard.length} of ${event.transcript.length} chars — "${heard.slice(-48)}"`,
+    )
+    // The interruption's timestamp, not this frame's: the transcript can arrive
+    // 16 seconds late, which would file her fragment AFTER the user turn that
+    // cut it off and reverse the archive's order.
+    conversation().file('her', heard, { cut: true, at: event.heard.interruptedAt })
     return
   }
   if (event?.kind === 'pointer') {
@@ -333,7 +346,7 @@ ipcMain.handle('history:turns', (_event, token: unknown) => {
   if (persona === null || typeof token !== 'string') return []
   return transcripts()
     .turns(persona, token)
-    .map((one) => ({ at: one.at, who: one.who, text: one.text }))
+    .map((one) => ({ at: one.at, who: one.who, text: one.text, cut: one.cut }))
 })
 
 ipcMain.handle('history:search', (_event, query: unknown) => {

@@ -91,8 +91,25 @@ export type VoiceReport =
    * decision, made in main, and the renderer neither knows it nor should.
    */
   | { readonly kind: 'heard'; readonly transcript: string }
-  /** What she said. Same treatment, same reason. */
-  | { readonly kind: 'said'; readonly transcript: string }
+  /**
+   * What she said — with what is known about how much of it she was HEARD
+   * saying.
+   *
+   * `heard` is null when she finished naturally: everything generated was
+   * spoken, so there is nothing to cut. When she was interrupted it carries the
+   * renderer's OBSERVATIONS and nothing more — where the cursor had reached,
+   * and when the barge-in happened. Main does the cutting, because what is
+   * remembered is a decision and decisions are main's.
+   *
+   * §58 measured the cost of not doing this: **~80–82% of an interrupted turn**
+   * filed as though she had spoken it, and §55 counted 38 truncations in an
+   * hour of ordinary use.
+   */
+  | {
+      readonly kind: 'said'
+      readonly transcript: string
+      readonly heard: { readonly at: number; readonly interruptedAt: number } | null
+    }
   /**
    * Whether the cursor is inside her silhouette right now.
    *
@@ -169,6 +186,15 @@ export interface HistoryTurn {
   readonly at: number
   readonly who: 'her' | 'you'
   readonly text: string
+  /**
+   * She was cut off partway through this one.
+   *
+   * Carried because the window is the only place a reader can see it, and
+   * without it an interrupted turn is indistinguishable from a short one — the
+   * text was silently shortened and nothing says so. An empty text with `cut`
+   * is a turn she began and was cut off in before a word survived.
+   */
+  readonly cut: boolean
 }
 
 /** One search result, with the conversation it came from so it can be opened. */
