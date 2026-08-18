@@ -420,13 +420,7 @@ ipcMain.on('clipboard:write', (_event, text: unknown) => {
 })
 
 ipcMain.on('history:open', () => {
-  // Logged because the only way to ask for this window is a control that is
-  // invisible until hovered. "Nothing happened" then has two readings — the
-  // click never arrived, or the window opened somewhere unexpected — and they
-  // need completely different fixes.
-  const window = showHistoryWindow()
-  const at = window.getBounds()
-  console.log(`[history] window ${at.width}x${at.height} at ${at.x},${at.y}`)
+  showHistoryWindow()
 })
 
 ipcMain.handle('history:list', () => {
@@ -459,9 +453,7 @@ ipcMain.handle('history:turns', (_event, token: unknown) => {
 ipcMain.handle('history:problems', () => problems.all())
 
 ipcMain.on('history:settings', () => {
-  const window = showSettingsWindow()
-  const at = window.getBounds()
-  console.log(`[settings] window ${at.width}x${at.height} at ${at.x},${at.y}`)
+  showSettingsWindow()
 })
 
 /**

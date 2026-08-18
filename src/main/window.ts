@@ -149,6 +149,18 @@ function bringForward(window: BrowserWindow): void {
   window.show()
   if (process.platform === 'darwin') app.focus({ steal: true })
   window.focus()
+  /**
+   * Logged HERE, not at the call sites, because there are two of each now — a
+   * control on her bubble and an item in the menu bar.
+   *
+   * The line used to live in the IPC handler, so opening a window from the tray
+   * said nothing at all. "Nothing happened" has two readings — the click never
+   * arrived, or the window opened somewhere unexpected — and they need
+   * completely different fixes. One of them being silent is how they become
+   * indistinguishable.
+   */
+  const at = window.getBounds()
+  console.log(`[window] ${window.getTitle()} ${at.width}x${at.height} at ${at.x},${at.y}`)
 }
 
 /**
