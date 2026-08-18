@@ -42,6 +42,18 @@ function guardHistory(channel: string): string {
  */
 const role = process.argv.find((one) => one.startsWith('--mochi-role='))?.slice(13) ?? 'companion'
 
+/**
+ * Exactly the roles this application constructs. Anything else gets NOTHING.
+ *
+ * This used to be `if (history) … else companion`, so an unrecognised role fell
+ * through to the **privileged** API — the one that mints keys and exchanges SDP
+ * offers. A default that widens authority is the wrong direction for a default
+ * to fail in, and it becomes load-bearing the moment a third window exists:
+ * a capability runner whose role string is misspelt would receive the voice
+ * bridge rather than nothing at all.
+ */
+const ROLES = new Set(['companion', 'history'])
+
 const api: MochiApi = {
   async open() {
     return (await ipcRenderer.invoke(guard('voice:open'))) as Awaited<ReturnType<MochiApi['open']>>
@@ -92,5 +104,12 @@ const history: MochiHistoryApi = {
 // One or the other, never both. The conversations window has no business
 // minting a key, and the companion has no business reading a transcript --
 // exposing both to both would make the two allowlists decorative.
-if (role === 'history') contextBridge.exposeInMainWorld('mochiHistory', history)
-else contextBridge.exposeInMainWorld('mochi', api)
+if (!ROLES.has(role)) {
+  // Loud, and empty. Silence here would present as a page whose API is simply
+  // undefined, which reads as a bug in the page rather than a refusal.
+  console.error(`[preload] refusing to expose any API: unknown role "${role}"`)
+} else if (role === 'history') {
+  contextBridge.exposeInMainWorld('mochiHistory', history)
+} else {
+  contextBridge.exposeInMainWorld('mochi', api)
+}
