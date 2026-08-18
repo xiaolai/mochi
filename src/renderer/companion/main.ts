@@ -65,6 +65,7 @@ async function open(): Promise<void> {
         /* main schedules the reconnect; nothing to do here */
       },
       onSaying: (delta, responseId) => face.saying(delta, responseId),
+      onMicrophone: (stream) => face.listen(stream),
       onSpeaks: (responseId) => face.speaks(responseId),
       onFinished: (id, interrupted) => face.finished(id, interrupted),
       heard: () => face.heard(),

@@ -51,6 +51,15 @@ export interface SessionCallbacks {
   readonly onState: (state: SessionState) => void
   /** Her voice, handed straight out. Nothing here decides what it means. */
   readonly onRemote: (stream: MediaStream) => void
+  /**
+   * The MICROPHONE, handed out for the same reason.
+   *
+   * §62 measured the service taking 1026ms to say the user stopped talking, and
+   * `eagerness` not moving it. The microphone knows in a fraction of that, and
+   * the gap is the whole of the dead window — so the face gets the stream and
+   * decides locally, rather than waiting to be told something it can hear.
+   */
+  readonly onMicrophone: (stream: MediaStream) => void
   /** The session announced its own deadline. Main schedules the reconnect. */
   readonly onExpiry: (expiresAt: number) => void
   /**
@@ -318,6 +327,7 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   // Disabled until `listen(true)` — see point 4.
   micTrack.enabled = false
   peer.addTrack(micTrack, media)
+  callbacks.onMicrophone(media)
 
   await peer.setLocalDescription(await peer.createOffer())
   const offer = peer.localDescription?.sdp

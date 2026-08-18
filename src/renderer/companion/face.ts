@@ -3,6 +3,7 @@ import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createBubble, type BubbleColours } from './bubble'
 import { createUtterance } from './utterance'
+import { createAttending, levelOf, type Attention } from './attending'
 import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
 import { layoutFor, BREATHING_UNITS } from '@shared/avatar-layout'
 
@@ -34,6 +35,14 @@ import { layoutFor, BREATHING_UNITS } from '@shared/avatar-layout'
 export interface Face {
   /** Her voice, once the peer hands it over. Drives the mouth. */
   hear(stream: MediaStream): void
+  /**
+   * The microphone, so she can tell they stopped without waiting to be told.
+   *
+   * §62: the service takes 1026ms at the median to report it, and no setting
+   * shortens that. This does not make her faster — it makes the wait legible,
+   * which is a different problem with a different fix.
+   */
+  listen(stream: MediaStream): void
   /** One fragment of what she is saying, with the ITEM it belongs to. */
   saying(delta: string, itemId: string): void
   /** Her voice for this item has started. Paces the cursor. */
@@ -136,6 +145,14 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * below is therefore unconditional, and only the DRAWING is gated on colours.
    */
   const utterance = createUtterance()
+  const attending = createAttending()
+
+  /** The microphone's own analyser. Hers drives the mouth; this drives nothing
+   *  she says — only whether she looks like she is waiting on somebody. */
+  let mic: AnalyserNode | null = null
+  let micSamples: Float32Array<ArrayBuffer> | null = null
+  /** So the reaction fires on the CHANGE, not on every frame of the state. */
+  let attention: Attention = 'idle'
 
   /**
    * ONE envelope, driving both the mouth and the bubble.
@@ -180,8 +197,12 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   // The pointer, in the rig's normalised space. `forward: true` on the window's
   // ignore-mouse flag is what keeps these arriving while clicks pass through.
   let pointer: { x: number; y: number } | null = null
+  /** She is waiting on an answer, so her gaze is not the cursor's to move. */
+  let thinking = false
+
   window.addEventListener('mousemove', (event) => {
     pointer = { x: event.clientX, y: event.clientY }
+    if (thinking) return
     avatar.lookAt(
       (event.clientX / canvas.clientWidth) * 2 - 1,
       (event.clientY / canvas.clientHeight) * 2 - 1,
@@ -264,6 +285,31 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // the window between an utterance's first delta and its first audio, where
     // the analyser very much exists. The rule belongs to the fade, so it lives
     // in `step`.
+    // What the microphone knows, a second before the service says it.
+    if (mic !== null && micSamples !== null) {
+      mic.getFloatTimeDomainData(micSamples)
+      const now = attending.step(levelOf(micSamples), seconds)
+      if (now !== attention) {
+        attention = now
+        if (now === 'considering') {
+          /**
+           * She reacts to the silence while the service is still deciding what
+           * it means. Her own body rather than a spinner: a companion that
+           * shows a progress indicator has stopped being a companion, and the
+           * rig already has the vocabulary — a small sway, and her gaze coming
+           * off the cursor the way anybody's does when they start thinking.
+           */
+          avatar.playMotion('sway')
+          avatar.lookAt(0.35, -0.5)
+          thinking = true
+        }
+        if (now === 'hearing') {
+          // Attention back on whoever is talking.
+          thinking = false
+        }
+      }
+    }
+
     utterance.step(envelope.quietFor, seconds)
     bubble.step(envelope.quietFor, seconds, utterance.begun())
     lastAt = now
@@ -327,7 +373,13 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // Unconditional, all three. Gating these on the bubble is what made the
     // estimate not exist for the default persona.
     saying: (delta: string, itemId: string) => utterance.add(delta, itemId),
-    speaks: (itemId: string) => utterance.speaks(itemId),
+    speaks: (itemId: string) => {
+      // She has an answer, so the waiting is over whatever the microphone
+      // thinks — and her gaze returns to whoever she is talking to.
+      attending.answered()
+      thinking = false
+      utterance.speaks(itemId)
+    },
     finished: (itemId: string, interrupted: boolean) => utterance.finished(itemId, interrupted),
     heard: () => ({ text: utterance.text(), at: utterance.at(), itemId: utterance.itemId() }),
     showWords: (next: BubbleColours | null) => {
@@ -344,6 +396,13 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       avatar.setFace(face)
       utterance.wear()
       bubble.clear()
+    },
+    listen(stream: MediaStream) {
+      audio ??= new AudioContext()
+      mic ??= audio.createAnalyser()
+      mic.fftSize = 1024
+      micSamples ??= new Float32Array(new ArrayBuffer(mic.fftSize * 4))
+      audio.createMediaStreamSource(stream).connect(mic)
     },
     hear(stream: MediaStream) {
       // One context, reused. A second `AudioContext` per reconnect is a real
