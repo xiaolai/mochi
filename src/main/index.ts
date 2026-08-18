@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, clipboard, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain, Menu, shell } from 'electron'
 import { existsSync, mkdirSync } from 'node:fs'
 import { greetingFor, instructionsFor, VOICE_NAMES } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
@@ -29,7 +29,7 @@ import { readWornPersonaId, writeWornPersonaId } from './store/worn'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { createProblems } from './problems'
-import { createTray, type TrayHandle } from './tray'
+import { createTray, trayMenuTemplate, type TrayHandle, type TrayModel } from './tray'
 import { discoverInstalled, type Installed } from './capability/installed'
 import {
   applyChange,
@@ -104,6 +104,67 @@ let companion: BrowserWindow | null = null
  * before then.
  */
 let tray: TrayHandle | null = null
+
+/**
+ * Who she is and who she could be, read fresh on every rebuild.
+ *
+ * Not held: the persona shelf is files on disk and somebody may add one while
+ * this is running, so a cached list would be stale the first time it mattered.
+ */
+function menuModel(): TrayModel {
+  const userData = app.getPath('userData')
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  return {
+    personas: [...catalog.personas.values()].map((one) => ({ id: one.id, name: one.name })),
+    wornId: activePersona(catalog, readWornPersonaId(userData)).persona.id,
+  }
+}
+
+/**
+ * What the menu does, shared by the menu bar item and the right-click on her.
+ *
+ * ONE set, deliberately. Two summonings of the same menu is a feature; two
+ * DEFINITIONS of it is how the item you added to one goes missing from the
+ * other, and neither is obviously the wrong one when somebody notices.
+ */
+const menuHandlers = {
+  onConversations: () => {
+    showHistoryWindow()
+  },
+  onSettings: () => {
+    showSettingsWindow()
+  },
+  onWear: (id: string) => {
+    const written = wearPersona(id)
+    // The menu has already drawn the radio as moved. Saying nothing when the
+    // write failed would leave it lying about what is on disk.
+    if (!written.ok) console.error(`[menu] could not wear ${id}: ${written.why}`)
+    tray?.refresh()
+  },
+  onQuit: () => {
+    app.quit()
+  },
+}
+
+/**
+ * Right-clicking her pops the same menu the menu bar item does.
+ *
+ * A real `NSMenu` through `Menu.popup`, not a drawing on her canvas: the system
+ * gives keyboard navigation, the correct appearance in both themes, the ⌘Q
+ * glyph, and dismissal behaviour nobody has to reimplement. Her canvas can draw
+ * a speech bubble; it has no business drawing a menu.
+ *
+ * The renderer only asks when the pointer is on her painted pixels, which is
+ * also the only time the window is accepting the mouse at all — so a right
+ * click on the empty part of her window still reaches the desktop behind, and
+ * this needs no hit region of its own.
+ */
+ipcMain.on('companion:menu', () => {
+  if (companion === null) return
+  Menu.buildFromTemplate(trayMenuTemplate(menuModel(), menuHandlers, app.getName())).popup({
+    window: companion,
+  })
+})
 
 /**
  * What is in the user's capabilities folder, read once at startup.
@@ -634,34 +695,7 @@ void app.whenReady().then(
      * Its model is read fresh on every rebuild rather than held: the persona
      * shelf is files on disk, and somebody may add one while this is running.
      */
-    tray = createTray(
-      () => {
-        const userData = app.getPath('userData')
-        const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
-        return {
-          personas: [...catalog.personas.values()].map((one) => ({ id: one.id, name: one.name })),
-          wornId: activePersona(catalog, readWornPersonaId(userData)).persona.id,
-        }
-      },
-      {
-        onConversations: () => {
-          showHistoryWindow()
-        },
-        onSettings: () => {
-          showSettingsWindow()
-        },
-        onWear: (id) => {
-          const written = wearPersona(id)
-          // The menu has already drawn the radio as moved. Saying nothing when
-          // the write failed would leave it lying about what is on disk.
-          if (!written.ok) console.error(`[tray] could not wear ${id}: ${written.why}`)
-          tray?.refresh()
-        },
-        onQuit: () => {
-          app.quit()
-        },
-      },
-    )
+    tray = createTray(menuModel, menuHandlers)
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) companion = createCompanionWindow()

@@ -39,6 +39,15 @@ export const COMPANION_CHANNELS = [
   /** She was asked for her conversations. Main owns the window; this opens it. */
   'history:open',
   /**
+   * Right-clicked on her painted pixels. Main pops the menu.
+   *
+   * Main, not the renderer, because the menu is a real `NSMenu` — the system
+   * draws it, navigates it and dismisses it. A menu drawn on her canvas would
+   * be a second implementation of something the platform already does better,
+   * and it would have to be kept in step with the menu bar item's.
+   */
+  'companion:menu',
+  /**
    * Put her words on the clipboard.
    *
    * Main, not the renderer: the clipboard is a system surface, and this is the
@@ -310,6 +319,8 @@ export interface MochiApi {
   history(): void
   /** Copy her words. There is no selecting text in a canvas. */
   copy(text: string): void
+  /** Ask for the context menu, at the cursor. */
+  menu(): void
   /** Tell main what the session is doing. */
   report(event: VoiceReport): void
   /** Frames main wants put on the data channel — the ledger's answers. */

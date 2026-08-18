@@ -268,6 +268,24 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     return null
   }
 
+  /**
+   * Right-clicking her asks main for the menu — the same one the menu bar item
+   * shows, because it is the same `NSMenu`.
+   *
+   * Gated on her SILHOUETTE, per-pixel, exactly as the left click is. Her
+   * window is 320 square and she occupies a fraction of it: a context menu on
+   * the empty part would be a 320-pixel invisible target sitting on somebody's
+   * desktop, and right-clicking the desktop is supposed to reach the desktop.
+   *
+   * `preventDefault` because Chromium would otherwise offer its own menu —
+   * reload, inspect, and the vocabulary of a web page, on a character.
+   */
+  window.addEventListener('contextmenu', (event) => {
+    event.preventDefault()
+    if (!avatar.hitTest(event.clientX, event.clientY)) return
+    window.mochi.menu()
+  })
+
   window.addEventListener('click', (event) => {
     const control = hitsControls(event.clientX, event.clientY)
     if (control === 'close') {
