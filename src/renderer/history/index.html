@@ -17,6 +17,7 @@
         --line: #e2e0d7;
         --hers: #8fc9a9;
         --accent: #2f6f4f;
+        --alarm: #c23a4c;
       }
       @media (prefers-color-scheme: dark) {
         :root {
@@ -27,6 +28,7 @@
           --line: #34362f;
           --hers: #5f9c7c;
           --accent: #9fd8b8;
+          --alarm: #e2748a;
         }
       }
 
@@ -151,6 +153,61 @@
         font-style: italic;
         margin-top: 2px;
       }
+      /*
+        The problems strip. Hidden entirely when there is nothing wrong, which
+        is almost always — it is a footer, not a tab, because a permanent tab
+        for a normally-empty surface trains people to ignore it.
+      */
+      .troubles {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        width: 100%;
+        padding: 9px 12px;
+        border: 0;
+        border-top: 1px solid var(--line);
+        background: transparent;
+        color: var(--quiet);
+        font: inherit;
+        text-align: left;
+        cursor: default;
+      }
+      .troubles:hover {
+        background: var(--raised);
+      }
+      .troubles[aria-current='true'] {
+        background: var(--raised);
+        box-shadow: inset 2px 0 0 var(--alarm);
+      }
+      .troubles .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--alarm);
+        flex: none;
+      }
+      .problem {
+        margin: 0 0 14px;
+      }
+      .problem .where {
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--alarm);
+      }
+      .problem p {
+        margin: 2px 0 0;
+        white-space: pre-wrap;
+      }
+      .problem .subject {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--quiet);
+      }
+      .lead {
+        color: var(--quiet);
+        margin: 0 0 18px;
+      }
       mark {
         background: var(--hers);
         color: var(--ink);
@@ -165,6 +222,9 @@
           <input id="q" type="search" placeholder="Search what was said" autocomplete="off" />
         </div>
         <div class="list" id="list"></div>
+        <button class="troubles" id="troubles" type="button" hidden>
+          <span class="dot"></span><span id="troubles-label"></span>
+        </button>
       </aside>
       <main id="pane"></main>
     </div>

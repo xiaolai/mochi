@@ -4,6 +4,7 @@ import {
   isHistoryChannel,
   type HistoryConversation,
   type HistoryHit,
+  type HistoryProblem,
   type HistoryTurn,
   type MochiApi,
   type MochiHistoryApi,
@@ -95,6 +96,9 @@ const history: MochiHistoryApi = {
       guardHistory('history:turns'),
       token,
     )) as readonly HistoryTurn[]
+  },
+  async problems() {
+    return (await ipcRenderer.invoke(guardHistory('history:problems'))) as readonly HistoryProblem[]
   },
   async search(query: string) {
     return (await ipcRenderer.invoke(

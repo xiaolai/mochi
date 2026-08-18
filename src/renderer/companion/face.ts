@@ -67,6 +67,14 @@ export interface Face {
   wear(face: FaceSpec): void
   /** Turn the bubble on for this persona, with the surface it draws on. */
   showWords(colours: BubbleColours | null): void
+  /**
+   * How many things main could not do, so the shoulder control can say so.
+   *
+   * A COUNT, not the problems themselves: the renderer that draws her has no
+   * business holding the text of a persona that failed to parse, and cannot do
+   * anything with it. The window that CAN read them asks main directly.
+   */
+  troubled(count: number): void
   /** Stop the loop, release the analyser, drop the canvas. */
   dispose(): void
 }
@@ -183,6 +191,15 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    */
   let chip = 0
 
+  /**
+   * Things main could not do. Zero, almost always.
+   *
+   * While it is not zero the control shows itself unbidden — see `chip.ts`,
+   * which explains why a badge that waits to be hovered is not a way of telling
+   * anybody anything.
+   */
+  let troubles = 0
+
   function fit(): void {
     const ratio = window.devicePixelRatio
     const { clientWidth: width, clientHeight: height } = canvas
@@ -240,13 +257,14 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   // chip being visible: its rectangle is only solid while it is, and acting on
   // a click there when it is not would be a button hidden in empty desktop.
   /** Which control a point is on, if any. */
-  function hitsControls(x: number, y: number): 'copy' | 'close' | null {
+  function hitsControls(x: number, y: number): 'copy' | 'close' | 'history' | null {
     const found = bubble.controls()
     if (found === null || colours === null) return null
     const inside = (r: { x: number; y: number; w: number; h: number }): boolean =>
       x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h
     if (inside(found.copy)) return 'copy'
     if (inside(found.close)) return 'close'
+    if (inside(found.history)) return 'history'
     return null
   }
 
@@ -254,6 +272,10 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     const control = hitsControls(event.clientX, event.clientY)
     if (control === 'close') {
       bubble.dismiss()
+      return
+    }
+    if (control === 'history') {
+      window.mochi.history()
       return
     }
     if (control === 'copy') {
@@ -331,20 +353,29 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         utterance.at(),
         herHead(),
         overBubble,
+        troubles,
       )
     }
 
     const at = pointerOnWindow()
     const onHer = at !== null && avatar.hitTest(at.x, at.y)
 
-    // The hover control, over everything, including the bubble: it is the only
-    // thing here that can be clicked, so nothing may sit on top of it.
-    const wanted = chipVisible(at, onHer, herCorner()) ? 1 : 0
+    /**
+     * ONE way into her conversations at a time, never two.
+     *
+     * While the bubble is up the control is inside it, beside copy and close —
+     * a chip floating at her shoulder as well would be a second speech-bubble
+     * glyph next to an actual speech bubble, pointing at the same window. The
+     * chip is what remains when there is no bubble: a persona with the bubble
+     * turned off, or one the reader has dismissed.
+     */
+    const inBubble = bubble.controls() !== null
+    const wanted = !inBubble && chipVisible(at, onHer, herCorner(), troubles) ? 1 : 0
     chip =
       wanted > chip
         ? Math.min(1, chip + seconds / CHIP_FADE_S)
         : Math.max(0, chip - seconds / CHIP_FADE_S)
-    drawChip(ctx, herCorner(), CHIP_COLOURS, chip)
+    drawChip(ctx, herCorner(), CHIP_COLOURS, chip, troubles)
 
     // Only when it CHANGES. Asking main to toggle the window flag sixty times a
     // second would be sixty IPC messages a second for an answer that changes
@@ -382,6 +413,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     },
     finished: (itemId: string, interrupted: boolean) => utterance.finished(itemId, interrupted),
     heard: () => ({ text: utterance.text(), at: utterance.at(), itemId: utterance.itemId() }),
+    troubled: (count: number) => {
+      troubles = Math.max(0, count)
+    },
     showWords: (next: BubbleColours | null) => {
       colours = next
       if (next === null) bubble.clear()

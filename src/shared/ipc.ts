@@ -69,6 +69,8 @@ export const HISTORY_CHANNELS = [
   'history:turns',
   /** Full-text search across hers. */
   'history:search',
+  /** Everything that went wrong, for the window that can show it. */
+  'history:problems',
 ] as const
 
 export type HistoryChannel = (typeof HISTORY_CHANNELS)[number]
@@ -165,6 +167,15 @@ export interface SessionConfig {
    * reader of user content in the process with the least authority.
    */
   readonly face: FaceSpec
+  /**
+   * How many things went wrong while assembling all this.
+   *
+   * A COUNT on the config rather than a channel of its own: the problems worth
+   * showing all happen while resolving who she is and what she looks like, so
+   * they are all known by the time this is answered. The companion needs only
+   * enough to mark the control that opens the window where they are readable.
+   */
+  readonly problems: number
 }
 
 /**
@@ -235,7 +246,17 @@ export interface HistoryHit {
  * The role decides which one is installed, so the other is not merely
  * unreachable — it was never constructed.
  */
+/** One thing that went wrong, as the window lists it. */
+export interface HistoryProblem {
+  readonly area: string
+  readonly subject: string | null
+  readonly detail: string
+  readonly at: number
+}
+
 export interface MochiHistoryApi {
+  /** Everything that went wrong this launch, newest first. */
+  problems(): Promise<readonly HistoryProblem[]>
   /** Whoever is worn. The window never gets to name a persona. */
   list(): Promise<{
     readonly persona: string

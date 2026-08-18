@@ -21,6 +21,7 @@ import { readPolicy } from './store/policy'
 import { readWornPersonaId } from './store/worn'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
+import { createProblems } from './problems'
 import { packageFolder } from './store/personas'
 import { createTranscripts, type Transcripts } from './store/transcripts'
 import { createConversation, type Conversation } from './store/conversation'
@@ -55,11 +56,22 @@ function builtinCapabilities(): string {
     : join(app.getAppPath(), 'resources', 'capabilities')
 }
 
+/**
+ * Everything that went wrong, kept where somebody can be shown it.
+ *
+ * Each `console.error` below has a companion line here. The console is for
+ * whoever launched this from a terminal; a packaged app has no console, and
+ * every one of these paths falls back to something that works — so from the
+ * outside a rejected file is indistinguishable from the app ignoring it.
+ */
+const problems = createProblems()
+
 const loaded = loadCapabilities(builtinCapabilities())
 for (const problem of loaded.problems) {
   // Loud. A capability that failed to load is a thing she can no longer do, and
   // silence here presents as her declining to do it.
   console.error(`[capability] ${problem.folder}: ${problem.kind}`)
+  problems.note('capability', problem.folder, problem.kind)
 }
 const registry = createRegistry(loaded.manifests, [])
 console.log(
@@ -72,6 +84,22 @@ let companion: BrowserWindow | null = null
 const ledger = createLedger({
   registry,
   send: (frame: AnswerFrame) => companion?.webContents.send('voice:send', frame),
+})
+
+/**
+ * Keep the shoulder badge true after the door has closed.
+ *
+ * `session.problems` answers the count once, when the config is asked for. Half
+ * of these happen later — a capability that threw mid-conversation, a reconnect
+ * that could not be scheduled — and those are exactly the ones that present as
+ * her quietly declining to do something.
+ *
+ * A private frame on `voice:send`, following `__mochi_reconnect__`: the channel
+ * already crosses in this direction, and a channel per lifecycle event is the
+ * shape v1's 45 message kinds grew out of.
+ */
+problems.watch((count) => {
+  companion?.webContents.send('voice:send', { type: '__mochi_problems__', count })
 })
 
 /**
@@ -181,13 +209,17 @@ ipcMain.handle('voice:config', () => {
   const catalog = loadPersonas(userData, {}, ranBefore)
   for (const problem of catalog.problems) {
     console.error(`[persona] ${problem.kind}`)
+    problems.note('persona', null, problem.kind)
   }
   // Which persona was last worn, remembered across restarts. Getting this wrong
   // is not cosmetic: the archive is scoped per persona, so defaulting to the
   // built-in on an installation whose history is under another name shows her
   // an empty memory and presents as "recall does not work".
   const resolved = activePersona(catalog, readWornPersonaId(userData))
-  if (resolved.problem !== null) console.error(`[persona] ${resolved.problem.kind}`)
+  if (resolved.problem !== null) {
+    console.error(`[persona] ${resolved.problem.kind}`)
+    problems.note('persona', resolved.persona.id, resolved.problem.kind)
+  }
 
   // A new session is a new conversation. Ending the previous one here rather
   // than on teardown covers the reconnect path too, which is the common case:
@@ -219,6 +251,7 @@ ipcMain.handle('voice:config', () => {
   // debuggable outcome this feature can have.
   for (const problem of avatar.problems) {
     console.error(`[avatar] ${problem.file}: ${problem.reason}`)
+    problems.note('avatar', problem.file, problem.reason)
   }
   console.log(`[avatar] ${avatar.source ?? 'built-in'}`)
 
@@ -232,6 +265,7 @@ ipcMain.handle('voice:config', () => {
     bubble: resolved.persona.bubble,
     greeting: greetingFor(resolved.persona),
     face: avatar.face,
+    problems: problems.count(),
     tools: registry.tools,
   }
 })
@@ -263,6 +297,7 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
       console.log(`[capability] ${name} -> ${JSON.stringify(output).slice(0, 120)}`)
     } catch (error: unknown) {
       console.error(`[capability] ${name} threw:`, error)
+      problems.note('capability', name, String(error))
       ledger.answer(callId, {
         status: 'unavailable',
         guidance: 'That did not work just now. Say so plainly rather than guessing at a result.',
@@ -279,6 +314,7 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
     if (schedule.kind === 'unusable') {
       // Never silently "then never reconnect": the session still dies in an hour.
       console.error(`[voice] cannot schedule a reconnect: ${schedule.why}`)
+      problems.note('voice', null, `cannot schedule a reconnect: ${schedule.why}`)
       return
     }
     const ms = schedule.kind === 'in' ? schedule.ms : 0
@@ -385,6 +421,8 @@ ipcMain.handle('history:turns', (_event, token: unknown) => {
     .turns(persona, token)
     .map((one) => ({ at: one.at, who: one.who, text: one.text, cut: one.cut }))
 })
+
+ipcMain.handle('history:problems', () => problems.all())
 
 ipcMain.handle('history:search', (_event, query: unknown) => {
   const persona = wearing

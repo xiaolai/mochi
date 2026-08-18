@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { BrowserWindow, screen } from 'electron'
+import { app, BrowserWindow, nativeTheme, screen } from 'electron'
 
 /**
  * Her window: a shape on the desktop, not a rectangle with her inside it.
@@ -37,6 +37,18 @@ export function createCompanionWindow(): BrowserWindow {
     // Dock is not — she starts where nothing else lives.
     x: display.x + display.width - SIZE - 24,
     y: display.y + display.height - SIZE - 24,
+    /**
+     * Held back until the first paint, and safe to do so HERE only.
+     *
+     * The conversations window did exactly this and never opened: a hidden
+     * window in an app that is never frontmost is never composited, so it never
+     * paints and `ready-to-show` never fires. See `bringForward`.
+     *
+     * Hers is the exception, and not by luck — she is `alwaysOnTop` at
+     * screen-saver level and marked visible on every workspace a few lines
+     * below, which is what keeps her composited whatever has focus. A third
+     * window copying this pattern without those two would hang the same way.
+     */
     show: false,
     frame: false,
     transparent: true,
@@ -107,11 +119,42 @@ export function createCompanionWindow(): BrowserWindow {
  */
 let history: BrowserWindow | null = null
 
+/**
+ * Show it, and make sure it lands where the person who asked is looking.
+ *
+ * This window used to be created with `show: false` and shown from
+ * `ready-to-show`, which is the pattern every Electron guide gives for avoiding
+ * a white flash. **It never fired**, so the conversations window was created,
+ * reported `isVisible()`, logged its bounds — and did not exist. Nobody had
+ * ever seen it.
+ *
+ * The reason is this app's own shape. It runs as an accessory — `LSUIElement`
+ * in the packaged bundle, `setActivationPolicy('accessory')` in development —
+ * so that she can sit on the desktop without being an app you switch to. An
+ * accessory app is never frontmost, a hidden window in a background app is
+ * never composited, and a window that is never composited never paints. So the
+ * event that was waiting for the first paint waited for ever.
+ *
+ * The window is therefore created already shown, with a background colour that
+ * matches the document. That is what `ready-to-show` was avoiding — a white
+ * rectangle for one frame — and setting the colour avoids it without depending
+ * on an event that this app cannot rely on.
+ *
+ * `focus({ steal: true })` is what makes an accessory app frontmost. Without it
+ * the window opens behind whatever is in front, on an app that cannot be
+ * activated by clicking it, and the only way back is the control on her bubble.
+ */
+function bringForward(window: BrowserWindow): void {
+  window.show()
+  if (process.platform === 'darwin') app.focus({ steal: true })
+  window.focus()
+}
+
 export function showHistoryWindow(): BrowserWindow {
   if (history !== null && !history.isDestroyed()) {
     // Raise the one that exists rather than opening another.
     if (history.isMinimized()) history.restore()
-    history.focus()
+    bringForward(history)
     return history
   }
 
@@ -120,7 +163,9 @@ export function showHistoryWindow(): BrowserWindow {
     height: 620,
     minWidth: 480,
     minHeight: 360,
-    show: false,
+    // Shown from the start — see `bringForward` for why waiting for the first
+    // paint never returns here. The colour is what `ready-to-show` was for.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1d1a' : '#f7f6f1',
     title: 'Conversations',
     // Her window hides from this; this one belongs in it.
     skipTaskbar: false,
@@ -136,7 +181,7 @@ export function showHistoryWindow(): BrowserWindow {
   window.on('closed', () => {
     history = null
   })
-  window.once('ready-to-show', () => window.show())
+  bringForward(window)
 
   const devServerUrl = process.env.ELECTRON_RENDERER_URL
   if (devServerUrl === undefined) {

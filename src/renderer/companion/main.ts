@@ -79,6 +79,9 @@ async function open(): Promise<void> {
     // utterance is paced against the right voice rather than the last one's.
     face.wear(session.face)
     face.showWords(session.bubble ? { paper: '#f4f2ea', ink: '#2b2c25' } : null)
+    // Whatever main could not do while assembling all of the above. Usually
+    // none; when there are any, the shoulder control says so on its own.
+    face.troubled(session.problems)
     // The microphone opens only once the session is up, so she is never
     // transmitting into a peer that is still being negotiated.
     session.listen(true)
@@ -95,7 +98,12 @@ async function open(): Promise<void> {
  * lifecycle event — which is the shape v1's 45 message kinds grew out of.
  */
 window.mochi.onSend((frame) => {
-  if ((frame as { type?: unknown }).type === '__mochi_reconnect__') void open()
+  const type = (frame as { type?: unknown }).type
+  if (type === '__mochi_reconnect__') void open()
+  // Problems keep happening after the session opens — a capability that threw,
+  // a reconnect that could not be scheduled. The count on `session.problems` is
+  // a snapshot taken at the door; this is how it stays true afterwards.
+  if (type === '__mochi_problems__') face.troubled(Number((frame as { count?: unknown }).count))
 })
 
 void open()

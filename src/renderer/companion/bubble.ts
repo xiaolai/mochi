@@ -46,7 +46,7 @@
  */
 
 import { wrapByWord } from './wrap'
-import { CHECK, CLOSE, COPY, strokeIcon } from './icons'
+import { CHECK, CLOSE, COPY, HISTORY, strokeIcon } from './icons'
 
 /** Seconds of silence before it goes. The design's number. */
 export const FADE_AFTER_QUIET_S = 1.2
@@ -110,9 +110,11 @@ export interface Bubble {
     at: number,
     her: Anchor,
     hovered: boolean,
+    /** How many things main could not do, for the badge on the history control. */
+    problems?: number,
   ): boolean
   /** Where its controls are, so the caller can route the mouse to them. */
-  controls(): { readonly copy: Rect; readonly close: Rect } | null
+  controls(): { readonly copy: Rect; readonly close: Rect; readonly history: Rect } | null
   /** Whether a point is anywhere on it — for hover, not for clicks. */
   covers(x: number, y: number): boolean
   /** Dismiss what is showing. The NEXT utterance still appears. */
@@ -180,7 +182,31 @@ const GAP = 18
  * three and the only one that never surprises anybody.
  */
 const BUTTON = 16
-const CONTROLS_W = BUTTON * 2 + 12
+/** Between stacked buttons. Enough to separate two 24-grid glyphs, no more. */
+const BUTTON_GAP = 4
+/**
+ * ONE column, at the right edge, not a row across the top.
+ *
+ * A row put three buttons into the first line's width, which is where the
+ * sentence starts — so the opening words of every utterance were squeezed into
+ * whatever was left. A column costs the same room on every line instead of a
+ * lot on one, and it gives each control a fixed place: the close button is
+ * always the top right corner, wherever the text ends.
+ */
+const CONTROLS_W = BUTTON + 8
+/** Room for the whole column, so a one-line bubble is not shorter than it. */
+const CONTROLS_H = BUTTON * 3 + BUTTON_GAP * 2 + 8
+
+/** The problem badge on the history control. A dot: a digit at this size is mush. */
+const DOT = 3.5
+/**
+ * Not themed, unlike everything else here.
+ *
+ * The rest of the bubble's colour is handed in so she can sit on a light
+ * desktop or a dark one. This one is not decoration — it means "read me" — and
+ * a red that politely adapts to its surroundings can lose that argument.
+ */
+const ALARM = '#d1495b'
 
 export function createBubble(): Bubble {
   let opacity = 0
@@ -190,9 +216,16 @@ export function createBubble(): Bubble {
   let frames = 0
   /** Dismissed by hand. Reset by the next utterance, not by the next frame. */
   let hidden = ''
-  /** When a copy was confirmed, so the button can say so and then stop. */
-  let confirmedAt = 0
-  let laidOut: { copy: Rect; close: Rect; box: Rect } | null = null
+  /**
+   * When a copy was confirmed, so the button can say so and then stop.
+   *
+   * `null`, not `0`. Zero is a real frame number — the one the bubble opens on
+   * — so a zero here read as "just copied" and the button showed a tick for the
+   * first second and a half of EVERY utterance, confirming something nobody
+   * had done.
+   */
+  let confirmedAt: number | null = null
+  let laidOut: { copy: Rect; close: Rect; history: Rect; box: Rect } | null = null
   /**
    * The wrap, cached against the text it was made from.
    *
@@ -253,13 +286,16 @@ export function createBubble(): Bubble {
     copied() {
       confirmedAt = frames
     },
-    controls: () => (laidOut === null ? null : { copy: laidOut.copy, close: laidOut.close }),
+    controls: () =>
+      laidOut === null
+        ? null
+        : { copy: laidOut.copy, close: laidOut.close, history: laidOut.history },
     covers(x: number, y: number) {
       if (laidOut === null) return false
       const { box } = laidOut
       return x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h
     },
-    draw(ctx, width, colours, text, at, her, hovered) {
+    draw(ctx, width, colours, text, at, her, hovered, problems = 0) {
       shownText = text
       if (text === '' || opacity <= 0 || text === hidden) {
         laidOut = null
@@ -321,7 +357,10 @@ export function createBubble(): Bubble {
           Math.max(...shown.map((one) => ctx.measureText(one).width)) + pad * 2 + CONTROLS_W,
         ),
       )
-      const boxHeight = shown.length * lineHeight + pad * 2
+      // Tall enough for the text OR for the control column, whichever needs
+      // more. Without the floor, "Yes." makes a box shorter than the three
+      // stacked buttons and the last one hangs off the bottom edge.
+      const boxHeight = Math.max(shown.length * lineHeight + pad * 2, CONTROLS_H)
 
       /**
        * Just above her head, not at the top of the window.
@@ -371,9 +410,20 @@ export function createBubble(): Bubble {
        * dark desktop and looked detached from the thing they belong to. Inside
        * means they are always on her paper.
        */
-      const close = { x: x + boxWidth - pad - BUTTON, y: y + 4, w: BUTTON, h: BUTTON }
-      const copy = { x: close.x - BUTTON - 4, y: close.y, w: BUTTON, h: BUTTON }
-      laidOut = { copy, close, box: { x, y, w: boxWidth, h: boxHeight } }
+      /**
+       * Down the right edge, in the order somebody reaches for them: close at
+       * the top corner where a close button belongs, copy under it, and the way
+       * into her conversations at the bottom.
+       *
+       * That last one used to float at her shoulder as a chip of its own, which
+       * put a second speech-bubble glyph beside an actual speech bubble and left
+       * two controls on screen for one utterance.
+       */
+      const column = x + boxWidth - pad - BUTTON + 2
+      const close = { x: column, y: y + 4, w: BUTTON, h: BUTTON }
+      const copy = { x: column, y: close.y + BUTTON + BUTTON_GAP, w: BUTTON, h: BUTTON }
+      const history = { x: column, y: copy.y + BUTTON + BUTTON_GAP, w: BUTTON, h: BUTTON }
+      laidOut = { copy, close, history, box: { x, y, w: boxWidth, h: boxHeight } }
 
       let lineStart = offset
       shown.forEach((line, row) => {
@@ -397,15 +447,45 @@ export function createBubble(): Bubble {
        * click-through and only these two rectangles ever become solid.
        */
       if (hovered) {
-        const fresh = frames - confirmedAt < 90
+        const fresh = confirmedAt !== null && frames - confirmedAt < 90
         ctx.globalAlpha = opacity
         for (const [rect, icon] of [
-          [copy, fresh ? CHECK : COPY],
           [close, CLOSE],
+          [copy, fresh ? CHECK : COPY],
+          [history, HISTORY],
         ] as const) {
           // Inset, so Lucide's 24-grid artwork has the margin it is drawn for.
           strokeIcon(ctx, icon, { x: rect.x + 2, y: rect.y + 2, size: rect.w - 4 }, colours.ink)
         }
+      }
+
+      /**
+       * Something main could not do — said WITHOUT waiting to be hovered.
+       *
+       * Every other control here is hover-only, because permanent chrome on
+       * something meant to be glanced at is chrome you stop seeing. This one is
+       * the exception on purpose: the case it exists for is somebody editing a
+       * persona file, reloading, and seeing nothing change — because the file
+       * was rejected and a default took over. They have no reason to hover.
+       */
+      if (problems > 0) {
+        ctx.globalAlpha = opacity
+        if (!hovered) {
+          strokeIcon(
+            ctx,
+            HISTORY,
+            { x: history.x + 2, y: history.y + 2, size: history.w - 4 },
+            colours.ink,
+          )
+        }
+        ctx.fillStyle = colours.paper
+        ctx.beginPath()
+        ctx.arc(history.x + history.w - 2, history.y + 2, DOT + 1.5, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = ALARM
+        ctx.beginPath()
+        ctx.arc(history.x + history.w - 2, history.y + 2, DOT, 0, Math.PI * 2)
+        ctx.fill()
       }
 
       // More above, and nothing else would say so. A page that turns without a

@@ -53,29 +53,30 @@ describe('when it shows', () => {
   })
 })
 
-describe('what it draws', () => {
-  function recorder() {
-    const calls: string[] = []
-    const ctx = {
-      save: () => calls.push('save'),
-      restore: () => calls.push('restore'),
-      beginPath() {},
-      roundRect() {},
-      moveTo() {},
-      lineTo() {},
-      closePath() {},
-      arc() {},
-      fill() {
-        calls.push(`fill:${String(ctx.fillStyle)}`)
-      },
-      fillStyle: '' as string,
-      globalAlpha: 1,
-    }
-    return { ctx: ctx as unknown as CanvasRenderingContext2D, calls, raw: ctx }
+/** A context that records what was asked of it, shared by both blocks below. */
+function recorder() {
+  const calls: string[] = []
+  const ctx = {
+    save: () => calls.push('save'),
+    restore: () => calls.push('restore'),
+    beginPath() {},
+    roundRect() {},
+    moveTo() {},
+    lineTo() {},
+    closePath() {},
+    arc() {},
+    fill() {
+      calls.push(`fill:${String(ctx.fillStyle)}`)
+    },
+    fillStyle: '' as string,
+    globalAlpha: 1,
   }
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls, raw: ctx }
+}
 
-  const COLOURS = { paper: '#f4f2ea', ink: '#2b2c25' }
+const COLOURS = { paper: '#f4f2ea', ink: '#2b2c25' }
 
+describe('what it draws', () => {
   it('paints its own opaque surface, like anything else she sits in front of', () => {
     const { ctx, calls, raw } = recorder()
     drawChip(ctx, HER, COLOURS, 1)
@@ -100,5 +101,37 @@ describe('what it draws', () => {
     drawChip(ctx, HER, COLOURS, 0.5)
     expect(calls[0]).toBe('save')
     expect(calls[calls.length - 1]).toBe('restore')
+  })
+})
+
+describe('when something needs reading', () => {
+  it('shows itself with no pointer anywhere near the window', () => {
+    // The case this exists for: somebody edits an avatar file, reloads, and she
+    // looks exactly the same — because the file was rejected. They have no
+    // reason to hover, so a badge that waits to be hovered tells nobody
+    // anything.
+    expect(visible(null, false, HER, 1)).toBe(true)
+  })
+
+  it('goes back to hover-only when there is nothing wrong', () => {
+    expect(visible(null, false, HER, 0)).toBe(false)
+  })
+
+  it('paints the dot, and does not when the count is zero', () => {
+    const withOne = recorder()
+    drawChip(withOne.ctx, HER, COLOURS, 1, 1)
+    expect(withOne.calls).toContain('fill:#d1495b')
+
+    const withNone = recorder()
+    drawChip(withNone.ctx, HER, COLOURS, 1, 0)
+    expect(withNone.calls).not.toContain('fill:#d1495b')
+  })
+
+  it('draws nothing at all when faded out, badge included', () => {
+    // The early return is what keeps sixty paths a second off the canvas while
+    // she is not hovered. A badge drawn past it would reinstate them.
+    const { ctx, calls } = recorder()
+    drawChip(ctx, HER, COLOURS, 0, 3)
+    expect(calls).toEqual([])
   })
 })

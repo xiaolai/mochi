@@ -4,6 +4,8 @@ import { createBubble, runsFor, FADE_AFTER_QUIET_S } from './bubble'
 /** A context that records rather than paints. Nothing here needs pixels. */
 function recorder() {
   const filled: string[] = []
+  const strokes: string[] = []
+  const arcs: string[] = []
   const drawn: { text: string; alpha: number }[] = []
   const rules: number[] = []
   const ctx = {
@@ -25,13 +27,35 @@ function recorder() {
       // The underline. Its width is the assertion that a word was marked.
       rules.push(w)
     },
+    // The icons: Lucide artwork is stroked on a scaled grid, and the problem
+    // badge is a pair of arcs.
+    translate() {},
+    scale() {},
+    stroke(path?: unknown) {
+      strokes.push(path === undefined ? 'rect' : 'path')
+    },
+    arc() {
+      arcs.push(String(ctx.fillStyle))
+    },
+    strokeStyle: '' as string,
+    lineWidth: 0,
+    lineCap: '' as CanvasLineCap,
+    lineJoin: '' as CanvasLineJoin,
     measureText: (text: string) => ({ width: text.length * 7 }),
     font: '',
     textBaseline: '' as CanvasTextBaseline,
     fillStyle: '' as string,
     globalAlpha: 1,
   }
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, filled, drawn, rules, raw: ctx }
+  return {
+    ctx: ctx as unknown as CanvasRenderingContext2D,
+    filled,
+    drawn,
+    rules,
+    strokes,
+    arcs,
+    raw: ctx,
+  }
 }
 
 const COLOURS = { paper: '#f4f2ea', ink: '#2b2c25' }
@@ -50,9 +74,15 @@ function seconds(
 /** Where she stands on a 320 canvas at size 100: centred, head at 239. */
 const HER = { centreX: 160, top: 239 }
 
-function paint(bubble: ReturnType<typeof createBubble>, said: string, at: number, hovered = false) {
+function paint(
+  bubble: ReturnType<typeof createBubble>,
+  said: string,
+  at: number,
+  hovered = false,
+  problems = 0,
+) {
   const rec = recorder()
-  const painted = bubble.draw(rec.ctx, 320, COLOURS, said, at, HER, hovered)
+  const painted = bubble.draw(rec.ctx, 320, COLOURS, said, at, HER, hovered, problems)
   return { ...rec, painted, text: rec.drawn.map((one) => one.text).join('') }
 }
 
@@ -242,5 +272,130 @@ describe('what fits on screen', () => {
     const bubble = createBubble()
     seconds(bubble, 2, 0)
     expect(paint(bubble, 'a '.repeat(80), 100).drawn.length).toBeGreaterThan(1)
+  })
+})
+
+describe('the way into her conversations', () => {
+  function shown(problems = 0, hovered = false) {
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    return {
+      bubble,
+      painted: paint(bubble, 'Hey there, this is what I said.', 30, hovered, problems),
+    }
+  }
+
+  it('is a control in the bubble, under copy and close', () => {
+    // It used to be a chip floating at her shoulder, which put a second
+    // speech-bubble glyph beside an actual speech bubble.
+    const { bubble } = shown()
+    const controls = bubble.controls()
+    expect(controls).not.toBeNull()
+    if (controls === null) return
+    // One column, down the right edge: close, copy, then this.
+    expect(controls.history.x).toBe(controls.copy.x)
+    expect(controls.copy.x).toBe(controls.close.x)
+    expect(controls.close.y).toBeLessThan(controls.copy.y)
+    expect(controls.copy.y).toBeLessThan(controls.history.y)
+    // Inside the paper, not straddling its edge.
+    expect(controls.history.x).toBeGreaterThan(0)
+  })
+
+  it('does not overlap the button above it', () => {
+    const { bubble } = shown()
+    const controls = bubble.controls()
+    if (controls === null) throw new Error('expected controls')
+    expect(controls.close.y + controls.close.h).toBeLessThanOrEqual(controls.copy.y)
+    expect(controls.copy.y + controls.copy.h).toBeLessThanOrEqual(controls.history.y)
+  })
+
+  it('stays inside a bubble too short to hold it otherwise', () => {
+    // "Yes." is one line. Without a floor on the box height the bottom control
+    // hangs off the paper and is drawn over the desktop. `covers` is the
+    // bubble's own answer to "is this point on me", which is the thing being
+    // asserted rather than an arithmetic restatement of it.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    paint(bubble, 'Yes.', 4)
+    const controls = bubble.controls()
+    if (controls === null) throw new Error('expected controls')
+    for (const corner of [
+      [controls.history.x, controls.history.y],
+      [controls.history.x + controls.history.w, controls.history.y + controls.history.h],
+    ] as const) {
+      expect(bubble.covers(corner[0], corner[1])).toBe(true)
+    }
+  })
+
+  it('reports nothing while the bubble is not on screen, so the chip can take over', () => {
+    // This is the whole "one way in at a time" rule: `face.ts` asks exactly
+    // this question before it draws the shoulder chip.
+    const bubble = createBubble()
+    expect(bubble.controls()).toBeNull()
+    seconds(bubble, 1, 0)
+    paint(bubble, 'Something.', 4)
+    expect(bubble.controls()).not.toBeNull()
+    bubble.dismiss()
+    paint(bubble, 'Something.', 4)
+    expect(bubble.controls()).toBeNull()
+  })
+})
+
+describe('saying that something went wrong', () => {
+  function shown(problems: number, hovered: boolean) {
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    return paint(bubble, 'Hey there, this is what I said.', 30, hovered, problems)
+  }
+
+  it('marks the control WITHOUT waiting to be hovered', () => {
+    // Everything else here is hover-only, because permanent chrome on a glance
+    // surface is chrome you stop seeing. This is the exception on purpose: the
+    // person whose edited file was rejected has no reason to hover.
+    expect(shown(1, false).arcs).toContain('#d1495b')
+  })
+
+  it('draws the icon under it, so the mark is attached to something', () => {
+    // Without this the dot floats in blank paper with no control beneath it.
+    const quiet = shown(0, false)
+    const troubled = shown(1, false)
+    expect(quiet.strokes.length).toBe(0)
+    expect(troubled.strokes.length).toBeGreaterThan(0)
+  })
+
+  it('marks nothing when nothing is wrong', () => {
+    expect(shown(0, false).arcs).not.toContain('#d1495b')
+    expect(shown(0, true).arcs).not.toContain('#d1495b')
+  })
+
+  it('still marks it while hovered, without drawing the icon twice', () => {
+    const troubled = shown(2, true)
+    expect(troubled.arcs).toContain('#d1495b')
+    // Three controls hovered: history (3 paths), copy (1 rect + 1 path), close
+    // (2 paths). An eighth stroke would mean history was drawn twice.
+    expect(troubled.strokes.length).toBe(7)
+  })
+})
+
+describe('the copy button says what happened, and only what happened', () => {
+  it('offers to copy on a fresh bubble rather than confirming a copy nobody made', () => {
+    // `confirmedAt` used to start at 0, which is a real frame number — the one
+    // the bubble opens on. So the tick showed for the first second and a half
+    // of every utterance. The two icons differ by their rounded rect: `copy`
+    // has one, `check` is a bare path.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    const fresh = paint(bubble, 'Something she said.', 5, true)
+    expect(fresh.strokes).toContain('rect')
+  })
+
+  it('confirms after an actual copy, then goes back', () => {
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    bubble.copied()
+    expect(paint(bubble, 'Something she said.', 5, true).strokes).not.toContain('rect')
+    // 90 frames later it is offering again.
+    seconds(bubble, 2, 0)
+    expect(paint(bubble, 'Something she said.', 5, true).strokes).toContain('rect')
   })
 })

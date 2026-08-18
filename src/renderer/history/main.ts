@@ -1,4 +1,4 @@
-import type { HistoryConversation, HistoryHit, MochiHistoryApi } from '@shared/ipc'
+import type { HistoryConversation, HistoryHit, HistoryProblem, MochiHistoryApi } from '@shared/ipc'
 import { highlight, lengthLabel, whenLabel } from './format'
 
 declare global {
@@ -21,6 +21,8 @@ declare global {
  */
 
 const list = document.querySelector('#list')
+const troubles = document.querySelector('#troubles')
+const troublesLabel = document.querySelector('#troubles-label')
 const pane = document.querySelector('#pane')
 const query = document.querySelector('#q')
 if (!(list instanceof HTMLElement) || !(pane instanceof HTMLElement)) {
@@ -29,10 +31,15 @@ if (!(list instanceof HTMLElement) || !(pane instanceof HTMLElement)) {
 if (!(query instanceof HTMLInputElement)) {
   throw new Error('history: the search field is missing')
 }
+if (!(troubles instanceof HTMLButtonElement) || !(troublesLabel instanceof HTMLElement)) {
+  throw new Error('history: the problems strip is missing')
+}
 // Re-bound so the narrowing survives into the closures below.
 const listEl: HTMLElement = list
 const paneEl: HTMLElement = pane
 const queryEl: HTMLInputElement = query
+const troublesEl: HTMLButtonElement = troubles
+const troublesLabelEl: HTMLElement = troublesLabel
 
 /** Which conversation is open, so re-rendering the list does not lose it. */
 let open: string | null = null
@@ -89,6 +96,7 @@ function row(
   button.addEventListener('click', () => {
     open = token
     void show(token, snippet?.term ?? '')
+    troublesEl.setAttribute('aria-current', 'false')
     for (const other of listEl.querySelectorAll('.entry')) {
       other.setAttribute('aria-current', String(other === button))
     }
@@ -190,6 +198,67 @@ function group(hits: readonly HistoryHit[]): readonly HitGroup[] {
   return [...found.values()]
 }
 
+/**
+ * What main could not do, in the window that can actually show it.
+ *
+ * There are eleven `console.error` sites in main and a packaged app has no
+ * console. Every one of them is a fallback that WORKED — a default persona, a
+ * built-in avatar — so from outside they are indistinguishable from the app
+ * ignoring the file somebody just wrote. That is the least debuggable outcome
+ * this application can produce, and it was produced twice in one afternoon.
+ *
+ * A footer strip rather than a second tab: normally there is nothing here, and
+ * a permanent tab onto an empty surface is a thing people learn to skip.
+ */
+function renderProblems(problems: readonly HistoryProblem[]): void {
+  open = null
+  for (const other of listEl.querySelectorAll('.entry')) other.setAttribute('aria-current', 'false')
+  troublesEl.setAttribute('aria-current', 'true')
+
+  const page = document.createElement('div')
+  page.className = 'transcript'
+  const lead = document.createElement('p')
+  lead.className = 'lead'
+  // Says what it is AND what it is not. Everything here already fell back to
+  // something working, so the reader is being told about a file that was
+  // ignored, not about a broken app.
+  lead.textContent =
+    'Things she could not load since she woke up. Each one fell back to a working default, so nothing here stopped her — but a file you edited may not be the one she is using.'
+  page.append(lead)
+
+  for (const problem of problems) {
+    const block = document.createElement('div')
+    block.className = 'problem'
+    const where = document.createElement('div')
+    where.className = 'where'
+    where.textContent = `${problem.area} · ${clockLabel(problem.at)}`
+    const detail = document.createElement('p')
+    detail.textContent = problem.detail
+    block.append(where, detail)
+    if (problem.subject !== null) {
+      const subject = document.createElement('div')
+      subject.className = 'subject'
+      subject.textContent = problem.subject
+      block.append(subject)
+    }
+    page.append(block)
+  }
+  paneEl.replaceChildren(page)
+  paneEl.scrollTop = 0
+}
+
+/** Wall-clock, not "3 minutes ago": these are all from one launch. */
+function clockLabel(at: number): string {
+  return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+troublesEl.addEventListener('click', () => {
+  // Asked again on every click rather than kept: more can arrive while the
+  // window is open — a capability that throws mid-conversation is exactly the
+  // kind that does.
+  void window.mochiHistory.problems().then(renderProblems)
+})
+
 let searching: number | null = null
 queryEl.addEventListener('input', () => {
   // Debounced. Every keystroke is an FTS5 query and an IPC round trip, and a
@@ -205,6 +274,12 @@ queryEl.addEventListener('input', () => {
       renderHits(group(hits), term)
     })
   }, 140)
+})
+
+void window.mochiHistory.problems().then((problems) => {
+  if (problems.length === 0) return
+  troublesEl.hidden = false
+  troublesLabelEl.textContent = `${String(problems.length)} ${problems.length === 1 ? 'problem' : 'problems'}`
 })
 
 void window.mochiHistory

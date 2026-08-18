@@ -1,5 +1,5 @@
 /**
- * Two icons from Lucide, as path data.
+ * A few icons from Lucide, as path data.
  *
  * Lucide (ISC licensed) rather than shapes drawn by hand: a `×` typed as a
  * glyph and a `⧉` borrowed from the Unicode block are whatever the system font
@@ -44,6 +44,18 @@ export const CLOSE: Icon = {
 export const CHECK: Icon = {
   rects: [],
   paths: ['M20 6 9 17l-5-5'],
+}
+
+/**
+ * `history` — lucide-static 1.31.0, for the conversations she remembers.
+ *
+ * A clock winding back, not another speech bubble. The control lives INSIDE
+ * her speech bubble now, and a speech-bubble glyph drawn on a speech bubble
+ * says nothing about what pressing it does.
+ */
+export const HISTORY: Icon = {
+  rects: [],
+  paths: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5', 'M12 7v5l4 2'],
 }
 
 /**
