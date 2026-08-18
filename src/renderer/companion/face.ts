@@ -1,11 +1,10 @@
 import { MochiAvatar } from './rig/mochi'
-import type { FaceSpec } from '@shared/avatar-spec'
+import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createBubble, type BubbleColours } from './bubble'
 import { createUtterance } from './utterance'
 import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
 import { layoutFor, BREATHING_UNITS } from '@shared/avatar-layout'
-import { MOCHI } from '@shared/avatar-spec'
 
 /**
  * Her, on screen.
@@ -94,8 +93,13 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * larger than her on purpose: the bubble draws above her head and needs the
    * width to be readable, and the chip needs the corner.
    */
-  const SIZE_PERCENT = 100
-  const avatar = new MochiAvatar(ctx, { size: SIZE_PERCENT })
+  /**
+   * She starts at the built-in's size and is re-sized the moment a face is
+   * worn. `MOCHI.size` rather than a literal, so there is one answer to "how
+   * big is she by default" and it lives in the format.
+   */
+  let worn: FaceSpec = MOCHI
+  const avatar = new MochiAvatar(ctx, { size: worn.size, face: worn })
 
   /**
    * Where she actually is on the canvas, from the module that decides it.
@@ -106,7 +110,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * canvas and a stale corner would leave the chip behind.
    */
   function herCorner(): { right: number; top: number } {
-    const layout = layoutFor(MOCHI, SIZE_PERCENT)
+    const layout = layoutFor(worn, worn.size)
     const clearance = BREATHING_UNITS * layout.scale
     return {
       right: canvas.clientWidth / 2 + layout.bodyWidth / 2,
@@ -256,6 +260,8 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       if (next === null) bubble.clear()
     },
     wear: (face: FaceSpec) => {
+      worn = face
+      avatar.setSizePercent(face.size)
       // Her appearance, and the rate. A different character means a different
       // VOICE, and the learned speaking rate belongs to the voice —
       // `Pacer.restart()` keeps it on purpose, which is right between two

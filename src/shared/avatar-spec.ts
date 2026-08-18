@@ -26,6 +26,20 @@
  */
 
 export interface FaceSpec {
+  /**
+   * How big she is on screen, as a percentage of the base scale.
+   *
+   * Part of the FACE, because "how she looks" includes how much room she takes
+   * — and because leaving it out made it a code change: `showFace` hardcoded
+   * `size: 100`, so somebody who wanted a smaller mochi had to edit
+   * TypeScript, rebuild, and hope. That is the exact thing this format exists
+   * to stop.
+   *
+   * 100 puts her `bodyW` of 100 units at `BASE_UNIT_SCALE` — about 94 CSS
+   * pixels, which is also the size v1's design handoff specified for her
+   * window.
+   */
+  readonly size: number
   /** FULL width, in design units. */
   readonly bodyW: number
   /** FULL height. She rests on the surface, so this is not a half-extent. */
@@ -113,6 +127,9 @@ export interface Bound {
  * what is safe to render, not of what looks good. Taste is the designer's.
  */
 export const FACE_BOUNDS: Readonly<Record<NumericKey, Bound>> = {
+  // The same band `clampSizePercent` enforces in `avatar-layout`, stated here
+  // because this is where a user-supplied value is refused.
+  size: { min: 50, max: 200, step: 5 },
   bodyW: { min: 20, max: 400, step: 1 },
   bodyH: { min: 20, max: 400, step: 1 },
   // Not 1: at the very top the shape degenerates to a spike with no underside.
@@ -317,6 +334,7 @@ function readFaceSpec(value: unknown): ParseResult {
  * right, leaving a band uncovered along the lower-left edge (fitted IoU 0.928).
  */
 export const MOCHI: FaceSpec = {
+  size: 100,
   bodyW: 100,
   bodyH: 78,
   waist: 0.295,

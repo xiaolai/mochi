@@ -20,6 +20,7 @@ import { activePersona, loadPersonas, personasRoot } from './store/personas'
 import { readPolicy } from './store/policy'
 import { readWornPersonaId } from './store/worn'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
+import { setAsideV1 } from './store/inherited'
 import { packageFolder } from './store/personas'
 import { createTranscripts, type Transcripts } from './store/transcripts'
 import { createConversation, type Conversation } from './store/conversation'
@@ -386,6 +387,21 @@ ipcMain.handle('history:search', (_event, query: unknown) => {
 
 void app.whenReady().then(
   () => {
+    /**
+     * v1's leftovers, moved aside before anything reads this directory.
+     *
+     * The bundle id is shared, so v2 launches into v1's userData. Most of it is
+     * wanted — the archive, the personas, the notes — and a short, verified
+     * list is not: `store/inherited.ts` says which and why. Moved, never
+     * deleted, into one dated folder.
+     */
+    const stamp = new Date().toISOString().slice(0, 10)
+    for (const { name, to } of setAsideV1(app.getPath('userData'), stamp, (file, reason) =>
+      console.error(`[inherited] could not set aside ${file}: ${reason}`),
+    )) {
+      console.log(`[inherited] ${name} -> ${to}/ (v1's, nothing here reads it)`)
+    }
+
     companion = createCompanionWindow()
 
     app.on('activate', () => {
