@@ -11,6 +11,10 @@ function recorder() {
     restore() {},
     beginPath() {},
     roundRect() {},
+    // The tail is a path, not a rounded rect.
+    moveTo() {},
+    lineTo() {},
+    closePath() {},
     fill() {
       filled.push(String(ctx.fillStyle))
     },
@@ -43,9 +47,12 @@ function seconds(
   for (let i = 0; i < howMany * 60; i += 1) bubble.step(quietFor, 1 / 60, begun)
 }
 
-function paint(bubble: ReturnType<typeof createBubble>, said: string, at: number) {
+/** Where she stands on a 320 canvas at size 100: centred, head at 239. */
+const HER = { centreX: 160, top: 239 }
+
+function paint(bubble: ReturnType<typeof createBubble>, said: string, at: number, hovered = false) {
   const rec = recorder()
-  const painted = bubble.draw(rec.ctx, 320, COLOURS, said, at)
+  const painted = bubble.draw(rec.ctx, 320, COLOURS, said, at, HER, hovered)
   return { ...rec, painted, text: rec.drawn.map((one) => one.text).join('') }
 }
 
@@ -182,7 +189,9 @@ describe('what fits on screen', () => {
     const bubble = createBubble()
     seconds(bubble, 2, 0)
     const long = 'word '.repeat(400)
-    const shown = paint(bubble, long, 1800).text.length
+    // The page marker is drawn text too, and it is not part of what she said.
+    const drawn = paint(bubble, long, 1800).drawn.filter((one) => one.text !== '⋯')
+    const shown = drawn.map((one) => one.text).join('').length
     expect(shown).toBeGreaterThan(0)
     expect(shown).toBeLessThanOrEqual(8 * 40)
   })
@@ -217,6 +226,16 @@ describe('what fits on screen', () => {
     // Far enough along and the page has turned — one change, not eighty.
     const later = paint(bubble, long, 900).text
     expect(later).not.toBe(frames[0])
+  })
+
+  it('marks that there is text above, once there is', () => {
+    // A page that turns without a mark leaves the reader unaware they missed
+    // anything at all — the one thing paging costs that scrolling did not.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    const long = 'word '.repeat(300)
+    expect(paint(bubble, long, 10).drawn.some((one) => one.text === '⋯')).toBe(false)
+    expect(paint(bubble, long, 1200).drawn.some((one) => one.text === '⋯')).toBe(true)
   })
 
   it('wraps by measurement, not by counting characters', () => {

@@ -117,6 +117,16 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       top: canvas.clientHeight - clearance - layout.bodyHeight,
     }
   }
+
+  /** What the bubble points at: her centre, and the top of her head. */
+  function herHead(): { centreX: number; top: number } {
+    const layout = layoutFor(worn, worn.size)
+    const clearance = BREATHING_UNITS * layout.scale
+    return {
+      centreX: canvas.clientWidth / 2,
+      top: canvas.clientHeight - clearance - layout.bodyHeight,
+    }
+  }
   const bubble = createBubble()
   /**
    * What she is saying, owned HERE rather than inside the bubble.
@@ -182,11 +192,57 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     avatar.lookAt(0, 0)
   })
 
+  /**
+   * The pointer, or null if it is not actually over this window.
+   *
+   * `mouseleave` is not enough on its own. A cursor that JUMPS out — warped by
+   * a script, or moved fast across the edge — can leave without the event
+   * arriving, and the last known position then sits there for ever. The visible
+   * symptom is hover state that never lets go: the bubble's controls stayed on
+   * screen with the pointer on the other side of the display.
+   *
+   * Checked against the canvas every frame instead, because that is a fact
+   * rather than an event that may or may not come.
+   */
+  function pointerOnWindow(): { x: number; y: number } | null {
+    if (pointer === null) return null
+    const inside =
+      pointer.x >= 0 &&
+      pointer.y >= 0 &&
+      pointer.x <= canvas.clientWidth &&
+      pointer.y <= canvas.clientHeight
+    return inside ? pointer : null
+  }
+
   // `click` rather than `mousedown`, so a drag that happens to start on the chip
   // and end elsewhere does not open a window nobody asked for. Guarded on the
   // chip being visible: its rectangle is only solid while it is, and acting on
   // a click there when it is not would be a button hidden in empty desktop.
+  /** Which control a point is on, if any. */
+  function hitsControls(x: number, y: number): 'copy' | 'close' | null {
+    const found = bubble.controls()
+    if (found === null || colours === null) return null
+    const inside = (r: { x: number; y: number; w: number; h: number }): boolean =>
+      x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h
+    if (inside(found.copy)) return 'copy'
+    if (inside(found.close)) return 'close'
+    return null
+  }
+
   window.addEventListener('click', (event) => {
+    const control = hitsControls(event.clientX, event.clientY)
+    if (control === 'close') {
+      bubble.dismiss()
+      return
+    }
+    if (control === 'copy') {
+      // The WHOLE utterance, not the page on screen. There is no selecting text
+      // in a canvas, so this button is the only way her words leave the window
+      // — copying a fragment of them would be a worse answer than none.
+      window.mochi.copy(utterance.text())
+      bubble.copied()
+      return
+    }
     if (chip <= 0) return
     if (!chipHits(event.clientX, event.clientY, herCorner())) return
     window.mochi.history()
@@ -217,14 +273,27 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // the mouse: `hitTest` below is the avatar's alone, which is what keeps the
     // design's promise that a bubble cannot enlarge her hit region.
     if (colours !== null) {
-      bubble.draw(ctx, canvas.clientWidth, colours, utterance.text(), utterance.at())
+      // Hover is read BEFORE drawing, so the controls appear on the same frame
+      // the pointer arrives rather than one behind it.
+      const here = pointerOnWindow()
+      const overBubble = here !== null && bubble.covers(here.x, here.y)
+      bubble.draw(
+        ctx,
+        canvas.clientWidth,
+        colours,
+        utterance.text(),
+        utterance.at(),
+        herHead(),
+        overBubble,
+      )
     }
 
-    const onHer = pointer !== null && avatar.hitTest(pointer.x, pointer.y)
+    const at = pointerOnWindow()
+    const onHer = at !== null && avatar.hitTest(at.x, at.y)
 
     // The hover control, over everything, including the bubble: it is the only
     // thing here that can be clicked, so nothing may sit on top of it.
-    const wanted = chipVisible(pointer, onHer, herCorner()) ? 1 : 0
+    const wanted = chipVisible(at, onHer, herCorner()) ? 1 : 0
     chip =
       wanted > chip
         ? Math.min(1, chip + seconds / CHIP_FADE_S)
@@ -239,8 +308,14 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // one deliberate exception to "only painted pixels take the mouse" — a
     // control nobody can click is not a control. It is exactly the size of the
     // control and disappears with it.
-    const onChip = chip > 0 && pointer !== null && chipHits(pointer.x, pointer.y, herCorner())
-    const on = onHer || onChip
+    const onChip = chip > 0 && at !== null && chipHits(at.x, at.y, herCorner())
+    // Only the bubble's CONTROLS, never its text. The design's rule is that
+    // only painted pixels of HERS take the mouse; two small buttons are the
+    // same deliberate exception the chip already makes, and the paragraph
+    // beside them stays click-through so she does not become a solid slab over
+    // somebody's desktop.
+    const onControls = at !== null && hitsControls(at.x, at.y) !== null
+    const on = onHer || onChip || onControls
     if (on !== solid) {
       solid = on
       window.mochi.report({ kind: 'pointer', onHer: on })

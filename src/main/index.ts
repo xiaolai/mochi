@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain } from 'electron'
 import { existsSync } from 'node:fs'
 import { greetingFor, instructionsFor } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
@@ -340,6 +340,15 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
  * then is right and is not an error state: nothing is being worn, so there is
  * no "her" whose conversations these would be.
  */
+ipcMain.on('clipboard:write', (_event, text: unknown) => {
+  // Checked, not trusted: this comes from a renderer, and `writeText` will take
+  // whatever it is given. Bounded because the clipboard is shared with every
+  // other application on the machine.
+  if (typeof text !== 'string' || text === '') return
+  clipboard.writeText(text.slice(0, 100_000))
+  console.log(`[clipboard] ${text.length} chars`)
+})
+
 ipcMain.on('history:open', () => {
   // Logged because the only way to ask for this window is a control that is
   // invisible until hovered. "Nothing happened" then has two readings — the

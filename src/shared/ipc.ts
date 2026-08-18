@@ -38,6 +38,14 @@ export const COMPANION_CHANNELS = [
   'voice:send',
   /** She was asked for her conversations. Main owns the window; this opens it. */
   'history:open',
+  /**
+   * Put her words on the clipboard.
+   *
+   * Main, not the renderer: the clipboard is a system surface, and this is the
+   * process that owns system surfaces. It also means the text crossing is
+   * whatever the renderer already has on screen rather than a new read.
+   */
+  'clipboard:write',
 ] as const
 
 export type CompanionChannel = (typeof COMPANION_CHANNELS)[number]
@@ -177,6 +185,8 @@ export interface MochiApi {
   call(name: string, callId: string, args: string): void
   /** Open the conversations window. Main owns every window, so main opens it. */
   history(): void
+  /** Copy her words. There is no selecting text in a canvas. */
+  copy(text: string): void
   /** Tell main what the session is doing. */
   report(event: VoiceReport): void
   /** Frames main wants put on the data channel — the ledger's answers. */

@@ -107,7 +107,30 @@ export interface Bubble {
     colours: BubbleColours,
     text: string,
     at: number,
+    her: Anchor,
+    hovered: boolean,
   ): boolean
+  /** Where its controls are, so the caller can route the mouse to them. */
+  controls(): { readonly copy: Rect; readonly close: Rect } | null
+  /** Whether a point is anywhere on it — for hover, not for clicks. */
+  covers(x: number, y: number): boolean
+  /** Dismiss what is showing. The NEXT utterance still appears. */
+  dismiss(): void
+  /** Say that a copy just happened, so the button can confirm it. */
+  copied(): void
+}
+
+/** Her top edge and centre, in CSS pixels: what the bubble points at. */
+export interface Anchor {
+  readonly centreX: number
+  readonly top: number
+}
+
+export interface Rect {
+  readonly x: number
+  readonly y: number
+  readonly w: number
+  readonly h: number
 }
 
 /** One run of text on a line, and how it should look. */
@@ -135,8 +158,29 @@ export function runsFor(line: string, start: number, at: number): readonly Run[]
   return runs.filter((run) => run.text !== '')
 }
 
+/**
+ * The tail, and how far its tip stops short of her head.
+ *
+ * `GAP` is measured from the TIP, not from the bubble's underside, so it is
+ * the distance somebody actually sees. Six read as crowding her; the tail only
+ * has to point, not touch.
+ */
+const TAIL = 8
+const GAP = 18
+/** The control buttons, shown on hover. */
+const BUTTON = 18
+
 export function createBubble(): Bubble {
   let opacity = 0
+  /** What is on screen right now, so `dismiss` can name it. */
+  let shownText = ''
+  /** A frame counter, only for timing the copy confirmation. */
+  let frames = 0
+  /** Dismissed by hand. Reset by the next utterance, not by the next frame. */
+  let hidden = ''
+  /** When a copy was confirmed, so the button can say so and then stop. */
+  let confirmedAt = 0
+  let laidOut: { copy: Rect; close: Rect; box: Rect } | null = null
   /**
    * The wrap, cached against the text it was made from.
    *
@@ -178,14 +222,37 @@ export function createBubble(): Bubble {
       // still has it and a future state — "she cannot reach a voice" — will
       // want it.
       if (!begun) return
+      frames += 1
       opacity = Math.min(1, opacity + dtSeconds / FADE_S)
     },
     clear() {
       opacity = 0
       wrapped = null
+      hidden = ''
+      laidOut = null
     },
-    draw(ctx, width, colours, text, at) {
-      if (text === '' || opacity <= 0) return false
+    dismiss() {
+      // The TEXT is remembered, not a flag: the next utterance is different
+      // text, so it shows without anything having to reset this. A boolean
+      // would have to be cleared by somebody, and whoever forgot would leave
+      // the bubble permanently off with no way to tell why.
+      hidden = shownText
+    },
+    copied() {
+      confirmedAt = frames
+    },
+    controls: () => (laidOut === null ? null : { copy: laidOut.copy, close: laidOut.close }),
+    covers(x: number, y: number) {
+      if (laidOut === null) return false
+      const { box } = laidOut
+      return x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h
+    },
+    draw(ctx, width, colours, text, at, her, hovered) {
+      shownText = text
+      if (text === '' || opacity <= 0 || text === hidden) {
+        laidOut = null
+        return false
+      }
 
       const pad = 10
       const radius = 12
@@ -238,8 +305,21 @@ export function createBubble(): Bubble {
         Math.max(...shown.map((one) => ctx.measureText(one).width)) + pad * 2,
       )
       const boxHeight = shown.length * lineHeight + pad * 2
-      const x = (width - boxWidth) / 2
-      const y = pad
+
+      /**
+       * Just above her head, not at the top of the window.
+       *
+       * The window is far taller than she is, so a bubble pinned to its top
+       * edge floated two hundred pixels away from the thing saying the words.
+       * Proximity is half of what makes it read as HERS; the tail is the other
+       * half.
+       *
+       * Clamped to the window rather than allowed to run off it: the window is
+       * what sits in the screen corner, so anything above its edge is simply
+       * clipped away, and a clipped first line is worse than a lower bubble.
+       */
+      const x = Math.max(pad, Math.min(width - boxWidth - pad, her.centreX - boxWidth / 2))
+      const y = Math.max(pad, her.top - GAP - TAIL - boxHeight)
 
       ctx.globalAlpha = opacity
       // Opaque, per rule 2 — the alpha above fades the WHOLE bubble in and out,
@@ -249,6 +329,28 @@ export function createBubble(): Bubble {
       ctx.beginPath()
       ctx.roundRect(x, y, boxWidth, boxHeight, radius)
       ctx.fill()
+
+      /**
+       * The tail: a small triangle from the underside, pointing at her head.
+       *
+       * This is what makes the box read as SPEECH rather than as a notification
+       * that happens to be nearby. It points at HER centre, not at the box's,
+       * because those come apart the moment the box is clamped to the window
+       * edge — and a tail pointing at nothing is worse than no tail.
+       */
+      const tip = Math.max(x + radius + TAIL, Math.min(x + boxWidth - radius - TAIL, her.centreX))
+      ctx.beginPath()
+      ctx.moveTo(tip - TAIL, y + boxHeight - 1)
+      ctx.lineTo(tip, y + boxHeight + TAIL)
+      ctx.lineTo(tip + TAIL, y + boxHeight - 1)
+      ctx.closePath()
+      ctx.fill()
+
+      // Where the controls are, whether or not they are being drawn: `covers`
+      // needs the box every frame so hover can be detected before they appear.
+      const copy = { x: x + boxWidth - BUTTON * 2 - 6, y: y - BUTTON / 2, w: BUTTON, h: BUTTON }
+      const close = { x: x + boxWidth - BUTTON - 2, y: y - BUTTON / 2, w: BUTTON, h: BUTTON }
+      laidOut = { copy, close, box: { x, y, w: boxWidth, h: boxHeight } }
 
       let lineStart = offset
       shown.forEach((line, row) => {
@@ -263,6 +365,40 @@ export function createBubble(): Bubble {
         }
         lineStart += line.length
       })
+      /**
+       * Controls, on hover only.
+       *
+       * Always-visible buttons put permanent chrome on something meant to be
+       * glanced at. Hover is detectable without taking the mouse — the window
+       * forwards `mousemove` while clicks pass through — so the text stays
+       * click-through and only these two rectangles ever become solid.
+       */
+      if (hovered) {
+        const fresh = frames - confirmedAt < 90
+        for (const [rect, glyph] of [
+          [copy, fresh ? '✓' : '⧉'],
+          [close, '×'],
+        ] as const) {
+          ctx.globalAlpha = opacity
+          ctx.fillStyle = colours.ink
+          ctx.beginPath()
+          ctx.roundRect(rect.x, rect.y, rect.w, rect.h, rect.w / 2)
+          ctx.fill()
+          ctx.fillStyle = colours.paper
+          ctx.font = '11px -apple-system, system-ui, sans-serif'
+          ctx.fillText(glyph, rect.x + 5, rect.y + 4)
+        }
+      }
+
+      // More above, and nothing else would say so. A page that turns without a
+      // mark leaves the reader unaware they missed anything at all.
+      if (start > 0) {
+        ctx.globalAlpha = opacity * 0.5
+        ctx.fillStyle = colours.ink
+        ctx.font = '11px -apple-system, system-ui, sans-serif'
+        ctx.fillText('⋯', x + pad, y + 1)
+      }
+
       ctx.restore()
       return true
     },

@@ -78,6 +78,9 @@ const api: MochiApi = {
   history() {
     ipcRenderer.send(guard('history:open'))
   },
+  copy(text: string) {
+    ipcRenderer.send(guard('clipboard:write'), text)
+  },
 }
 
 const history: MochiHistoryApi = {
