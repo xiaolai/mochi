@@ -6,13 +6,13 @@ function recorder() {
   const filled: string[] = []
   const strokes: string[] = []
   const arcs: string[] = []
+  const rects: { x: number; y: number; w: number; h: number; alpha: number }[] = []
   const drawn: { text: string; alpha: number }[] = []
   const rules: number[] = []
   const ctx = {
     save() {},
     restore() {},
     beginPath() {},
-    roundRect() {},
     // The tail is a path, not a rounded rect.
     moveTo() {},
     lineTo() {},
@@ -23,10 +23,6 @@ function recorder() {
     fillText(text: string) {
       drawn.push({ text, alpha: ctx.globalAlpha })
     },
-    fillRect(_x: number, _y: number, w: number) {
-      // The underline. Its width is the assertion that a word was marked.
-      rules.push(w)
-    },
     // The icons: Lucide artwork is stroked on a scaled grid, and the problem
     // badge is a pair of arcs.
     translate() {},
@@ -36,6 +32,12 @@ function recorder() {
     },
     arc() {
       arcs.push(String(ctx.fillStyle))
+    },
+    // Rounded rects, so the reading rail can be told from the bubble's own box
+    // by its width. Recorded with the alpha in force, which is what separates
+    // the rail's track from its thumb.
+    roundRect(x: number, y: number, w: number, h: number) {
+      rects.push({ x, y, w, h, alpha: ctx.globalAlpha })
     },
     strokeStyle: '' as string,
     lineWidth: 0,
@@ -54,6 +56,7 @@ function recorder() {
     rules,
     strokes,
     arcs,
+    rects,
     raw: ctx,
   }
 }
@@ -258,14 +261,65 @@ describe('what fits on screen', () => {
     expect(later).not.toBe(frames[0])
   })
 
-  it('marks that there is text above, once there is', () => {
-    // A page that turns without a mark leaves the reader unaware they missed
-    // anything at all — the one thing paging costs that scrolling did not.
+  it('says how much more there is, and where in it the reader is', () => {
+    // Two earlier attempts at this were rejected against the running app. A `⋯`
+    // in the top-left padding read as a SECOND BUBBLE behind the first — it was
+    // reported as exactly that. A fade at the edges then sat almost entirely in
+    // the ten pixels of padding and said nothing.
+    //
+    // The rail is identified by its width: everything else rounded here is the
+    // bubble's own box or a copy icon on a scaled grid.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    const rail = (said: string, at: number) =>
+      paint(bubble, said, at).rects.filter((one) => one.w === 3)
+
+    expect(rail('Short enough.', 5)).toEqual([])
+    // Track and thumb, in that order.
+    expect(rail('word '.repeat(300), 10).length).toBe(2)
+  })
+
+  it('draws the thumb over the track, not instead of it', () => {
+    // Without a track the thumb is a floating mark with no scale behind it, and
+    // "how much more" goes back to being unanswered.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    const rail = paint(bubble, 'word '.repeat(300), 10).rects.filter((one) => one.w === 3)
+    const [track, thumb] = rail
+    if (track === undefined || thumb === undefined) throw new Error('expected a track and a thumb')
+    expect(thumb.h).toBeLessThan(track.h)
+    expect(thumb.alpha).toBeGreaterThan(track.alpha)
+    expect(thumb.x).toBe(track.x)
+  })
+
+  it('moves the thumb down as she goes, and reaches the bottom at the end', () => {
     const bubble = createBubble()
     seconds(bubble, 1, 0)
     const long = 'word '.repeat(300)
-    expect(paint(bubble, long, 10).drawn.some((one) => one.text === '⋯')).toBe(false)
-    expect(paint(bubble, long, 1200).drawn.some((one) => one.text === '⋯')).toBe(true)
+    const thumbAt = (at: number) => {
+      const rail = paint(bubble, long, at).rects.filter((one) => one.w === 3)
+      const [track, thumb] = rail
+      if (track === undefined || thumb === undefined) throw new Error('expected a rail')
+      return { y: thumb.y, flush: thumb.y + thumb.h - (track.y + track.h) }
+    }
+    const first = thumbAt(10)
+    const last = thumbAt(long.length)
+    expect(last.y).toBeGreaterThan(first.y)
+    // Flush with the end of the track on the last line, not short of it — the
+    // thumb travels `track - thumb`, not the whole track.
+    expect(Math.abs(last.flush)).toBeLessThan(0.5)
+  })
+
+  it('keeps the rail clear of the control column', () => {
+    // The buttons end at `boxWidth - pad + 2`. A rail drawn under them would be
+    // invisible exactly when somebody is reaching for the scroll.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    const painted = paint(bubble, 'word '.repeat(300), 10, true)
+    const rail = painted.rects.filter((one) => one.w === 3)[0]
+    const controls = bubble.controls()
+    if (rail === undefined || controls === null) throw new Error('expected a rail and controls')
+    expect(rail.x).toBeGreaterThanOrEqual(controls.close.x + controls.close.w)
   })
 
   it('wraps by measurement, not by counting characters', () => {
@@ -397,5 +451,83 @@ describe('the copy button says what happened, and only what happened', () => {
     // 90 frames later it is offering again.
     seconds(bubble, 2, 0)
     expect(paint(bubble, 'Something she said.', 5, true).strokes).toContain('rect')
+  })
+})
+
+describe('the reader can go back through what she said', () => {
+  /**
+   * Every word DIFFERENT, on purpose.
+   *
+   * The first version of this used `'word '.repeat(300)`, so every line was
+   * identical and a one-line shift produced a byte-identical string — the tests
+   * for moving by a line and for clamping both passed nothing and failed
+   * nothing. A fixture that cannot show the thing being asserted is worse than
+   * no fixture.
+   */
+  const LONG = Array.from({ length: 300 }, (_, i) => `w${String(i)}`).join(' ')
+
+  function shownFrom(bubble: ReturnType<typeof createBubble>, at: number): string {
+    return paint(bubble, LONG, at).text
+  }
+
+  it('follows her until somebody scrolls, then holds', () => {
+    // Two sources for one number would be two sources of truth. The scroll is
+    // an OVERRIDE: while nobody has scrolled the page is chosen by where she
+    // has got to, and the moment somebody does it stops following.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    shownFrom(bubble, 1200)
+    bubble.scrollBy(-3)
+    const held = shownFrom(bubble, 1200)
+    // She keeps talking; the page does not move with her any more.
+    expect(shownFrom(bubble, 1800)).toBe(held)
+  })
+
+  it('moves by a line, in the direction asked', () => {
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    const start = shownFrom(bubble, 1200)
+    bubble.scrollBy(-1)
+    const up = shownFrom(bubble, 1200)
+    expect(up).not.toBe(start)
+    bubble.scrollBy(1)
+    expect(shownFrom(bubble, 1200)).toBe(start)
+  })
+
+  it('stops at the top instead of banking a debt', () => {
+    // A long flick past the beginning must not have to be scrolled back off
+    // before the text moves again — the clamped value is written back.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    shownFrom(bubble, 1200)
+    bubble.scrollBy(-9999)
+    const top = shownFrom(bubble, 1200)
+    bubble.scrollBy(1)
+    expect(shownFrom(bubble, 1200)).not.toBe(top)
+  })
+
+  it('stops at the end the same way', () => {
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    shownFrom(bubble, 10)
+    bubble.scrollBy(9999)
+    const end = shownFrom(bubble, 10)
+    bubble.scrollBy(-1)
+    expect(shownFrom(bubble, 10)).not.toBe(end)
+  })
+
+  it('goes back to following her when she says something else', () => {
+    // Arriving at her next sentence still parked in the middle of the last one
+    // is the failure this prevents.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    shownFrom(bubble, 1200)
+    bubble.scrollBy(-4)
+    const parked = shownFrom(bubble, 1200)
+    const next = paint(bubble, 'A different thing entirely, ' + 'said '.repeat(300), 1200).text
+    expect(next).not.toBe(parked)
+    // And it is following again: her cursor moves the page.
+    const later = paint(bubble, 'A different thing entirely, ' + 'said '.repeat(300), 2400).text
+    expect(later).not.toBe(next)
   })
 })

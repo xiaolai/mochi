@@ -113,6 +113,13 @@ export interface Bubble {
     /** How many things main could not do, for the badge on the history control. */
     problems?: number,
   ): boolean
+  /**
+   * Move the reader's position, in lines. Positive is further into the text.
+   *
+   * Until this is called the page follows her; after it, it holds where the
+   * reader left it until the next utterance.
+   */
+  scrollBy(lines: number): void
   /** Where its controls are, so the caller can route the mouse to them. */
   controls(): { readonly copy: Rect; readonly close: Rect; readonly history: Rect } | null
   /** Whether a point is anywhere on it — for hover, not for clicks. */
@@ -197,6 +204,17 @@ const CONTROLS_W = BUTTON + 8
 /** Room for the whole column, so a one-line bubble is not shorter than it. */
 const CONTROLS_H = BUTTON * 3 + BUTTON_GAP * 2 + 8
 
+/**
+ * The reading rail: how much more there is, and where in it the reader is.
+ *
+ * Three pixels wide and inset five from the right edge, which puts it clear of
+ * the control column by three — the buttons end at `boxWidth - pad + 2`.
+ */
+const RAIL_W = 3
+const RAIL_INSET = 5
+/** So a very long passage still has a thumb somebody can see. */
+const RAIL_MIN = 14
+
 /** The problem badge on the history control. A dot: a digit at this size is mush. */
 const DOT = 3.5
 /**
@@ -216,6 +234,18 @@ export function createBubble(): Bubble {
   let frames = 0
   /** Dismissed by hand. Reset by the next utterance, not by the next frame. */
   let hidden = ''
+  /**
+   * Which line the reader scrolled to, or null while the page follows her.
+   *
+   * Two sources for one number would be two sources of truth, so this is an
+   * OVERRIDE rather than a second input: while it is null the page is chosen by
+   * where she has got to, and the moment somebody scrolls it stops following
+   * and holds. A new utterance clears it — the alternative is arriving at her
+   * next sentence still parked in the middle of the last one.
+   */
+  let scrolledTo: number | null = null
+  /** Where the page would be if nobody had scrolled. `scrollBy` starts here. */
+  let followingLine = 0
   /**
    * When a copy was confirmed, so the button can say so and then stop.
    *
@@ -275,6 +305,7 @@ export function createBubble(): Bubble {
       wrapped = null
       hidden = ''
       laidOut = null
+      scrolledTo = null
     },
     dismiss() {
       // The TEXT is remembered, not a flag: the next utterance is different
@@ -286,6 +317,13 @@ export function createBubble(): Bubble {
     copied() {
       confirmedAt = frames
     },
+    scrollBy(lines: number) {
+      // Recorded, not clamped: how far it CAN go depends on the wrap, which is
+      // known only inside `draw` where the width is. Draw clamps and writes the
+      // clamped value back, so a long scroll past the end does not accumulate a
+      // debt that has to be scrolled back through.
+      scrolledTo = (scrolledTo ?? followingLine) + lines
+    },
     controls: () =>
       laidOut === null
         ? null
@@ -296,6 +334,10 @@ export function createBubble(): Bubble {
       return x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h
     },
     draw(ctx, width, colours, text, at, her, hovered, problems = 0) {
+      // A different utterance is a different thing to read, so the reader's
+      // position goes back to following her. Without this, her next sentence
+      // opens parked in the middle of the last one.
+      if (text !== shownText) scrolledTo = null
       shownText = text
       if (text === '' || opacity <= 0 || text === hidden) {
         laidOut = null
@@ -343,7 +385,20 @@ export function createBubble(): Bubble {
         scanned += line.length
       }
       const page = Math.floor(cursorLine / LINES)
-      const start = page * LINES
+      /**
+       * Where the reader is, which is where SHE is until somebody says otherwise.
+       *
+       * Clamped here rather than in `scrollBy`, because how far it can go
+       * depends on the wrap and the wrap depends on the width — neither of
+       * which that method knows. The clamped value is written back so a long
+       * flick past the end does not bank a debt that has to be scrolled off
+       * before the text moves again.
+       */
+      const lastStart = Math.max(0, lines.length - LINES)
+      followingLine = Math.min(page * LINES, lastStart)
+      const start =
+        scrolledTo === null ? followingLine : Math.max(0, Math.min(scrolledTo, lastStart))
+      if (scrolledTo !== null) scrolledTo = start
       const shown = lines.slice(start, start + LINES)
       let offset = 0
       for (const line of lines.slice(0, start)) offset += line.length
@@ -488,13 +543,42 @@ export function createBubble(): Bubble {
         ctx.fill()
       }
 
-      // More above, and nothing else would say so. A page that turns without a
-      // mark leaves the reader unaware they missed anything at all.
-      if (start > 0) {
-        ctx.globalAlpha = opacity * 0.5
+      /**
+       * How much more there is, and where in it the reader is.
+       *
+       * Two earlier attempts, both rejected against the running app. A `⋯` at
+       * half alpha in the top-left padding, beside a rounded corner, **read as
+       * a second bubble peeking out from behind this one** and was reported as
+       * exactly that. A fade at the top and bottom edges then sat almost
+       * entirely in the ten pixels of padding, where it said nothing at all —
+       * and making it tall enough to read meant eating the line somebody was
+       * trying to read.
+       *
+       * A rail touches no text, cannot be mistaken for another surface, and
+       * says more than either: not just THAT there is more, but how much and
+       * whereabouts. It is drawn in the right margin, clear of the control
+       * column by a few pixels, and only when the passage does not fit.
+       */
+      if (lines.length > LINES) {
+        const trackTop = y + pad
+        const trackHeight = boxHeight - pad * 2
+        const thumbHeight = Math.max(RAIL_MIN, (trackHeight * LINES) / lines.length)
+        // Positioned over the range it can actually travel, so the thumb is
+        // flush with the bottom on the last line rather than short of it.
+        const travel = trackHeight - thumbHeight
+        const progress = lastStart === 0 ? 0 : start / lastStart
+        const railX = x + boxWidth - RAIL_INSET
+
+        ctx.globalAlpha = opacity * 0.12
         ctx.fillStyle = colours.ink
-        ctx.font = '11px -apple-system, system-ui, sans-serif'
-        ctx.fillText('⋯', x + pad, y + 1)
+        ctx.beginPath()
+        ctx.roundRect(railX, trackTop, RAIL_W, trackHeight, RAIL_W / 2)
+        ctx.fill()
+
+        ctx.globalAlpha = opacity * 0.42
+        ctx.beginPath()
+        ctx.roundRect(railX, trackTop + travel * progress, RAIL_W, thumbHeight, RAIL_W / 2)
+        ctx.fill()
       }
 
       ctx.restore()

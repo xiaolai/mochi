@@ -280,6 +280,25 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * `preventDefault` because Chromium would otherwise offer its own menu —
    * reload, inspect, and the vocabulary of a web page, on a character.
    */
+  /**
+   * Wheeling over the bubble moves the reader's place in what she said.
+   *
+   * `passive: false` because this is prevented: without it a scroll over her
+   * window scrolls the page behind, and the page behind is a 320-square canvas
+   * with nothing to scroll — so the gesture would visibly do nothing at all.
+   */
+  window.addEventListener(
+    'wheel',
+    (event) => {
+      if (colours === null) return
+      if (!bubble.covers(event.clientX, event.clientY)) return
+      event.preventDefault()
+      // A line per notch, in the direction the content moves under the eye.
+      bubble.scrollBy(event.deltaY > 0 ? 1 : -1)
+    },
+    { passive: false },
+  )
+
   window.addEventListener('contextmenu', (event) => {
     event.preventDefault()
     if (!avatar.hitTest(event.clientX, event.clientY)) return
@@ -409,7 +428,27 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // same deliberate exception the chip already makes, and the paragraph
     // beside them stays click-through so she does not become a solid slab over
     // somebody's desktop.
-    const onControls = at !== null && hitsControls(at.x, at.y) !== null
+    /**
+     * The WHOLE bubble takes the mouse now, not only its buttons.
+     *
+     * This widens the one deliberate exception to "only painted pixels take the
+     * mouse", and it is worth saying what it buys and what it costs.
+     *
+     * It buys the only thing that made the bubble's own "there is more above"
+     * mark honest: **the wheel does not reach a click-through window at all**.
+     * `setIgnoreMouseEvents(true, { forward: true })` forwards mouse MOVES and
+     * nothing else — measured, by wheeling over her body (arrives) and over the
+     * bubble (does not). So a scrollable bubble and a click-through bubble are
+     * mutually exclusive, and a paged panel nobody can page is worse than
+     * either.
+     *
+     * It costs the ability to click through the bubble to whatever is behind
+     * it. That is the smaller loss: the bubble is opaque paper with words on
+     * it, and clicking THROUGH an opaque panel is the surprising behaviour, not
+     * the other way round. Her silhouette rule is untouched — the paragraph is
+     * only solid while the pointer is inside it, and the × dismisses it.
+     */
+    const onControls = at !== null && bubble.covers(at.x, at.y)
     const on = onHer || onChip || onControls
     if (on !== solid) {
       solid = on
