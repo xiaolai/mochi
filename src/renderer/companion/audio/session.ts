@@ -1,4 +1,5 @@
 import { parseServerFrame } from '@shared/realtime/frames'
+import type { FaceSpec } from '@shared/avatar-spec'
 import { createPending, type Spoken } from './pending'
 
 /**
@@ -38,6 +39,8 @@ export type SessionState =
 export interface Session {
   /** Whether this persona asked for her words to be shown. Off by default. */
   readonly bubble: boolean
+  /** How she looks, resolved and validated in main. See `SessionConfig.face`. */
+  readonly face: FaceSpec
   /** Open the microphone. Off until this is called — see point 4 above. */
   listen(on: boolean): void
   /** Idempotent, and the only path that releases anything. */
@@ -356,6 +359,7 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
 
   return {
     bubble: config.bubble,
+    face: config.face,
     listen(on: boolean) {
       if (micTrack !== null) micTrack.enabled = on
       window.mochi.report({ kind: 'state', state: on ? 'listening' : 'muted' })

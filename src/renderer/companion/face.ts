@@ -1,4 +1,5 @@
 import { MochiAvatar } from './rig/mochi'
+import type { FaceSpec } from '@shared/avatar-spec'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createBubble, type BubbleColours } from './bubble'
 import { createUtterance } from './utterance'
@@ -48,8 +49,14 @@ export interface Face {
    * filing everything she generated.
    */
   heard(): { text: string; at: number; itemId: string | null }
-  /** A different character is being worn. Drops the voice's learned rate. */
-  wear(): void
+  /**
+   * A different character is being worn: her face, and a new voice.
+   *
+   * The face arrives as DATA from main, already validated by `parseFaceSpec`.
+   * Nothing here reads a file — the renderer is the process with the least
+   * authority and user content is read exactly once, upstream.
+   */
+  wear(face: FaceSpec): void
   /** Turn the bubble on for this persona, with the surface it draws on. */
   showWords(colours: BubbleColours | null): void
   /** Stop the loop, release the analyser, drop the canvas. */
@@ -248,9 +255,12 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       colours = next
       if (next === null) bubble.clear()
     },
-    wear: () => {
-      // A different character means a different VOICE, and the learned speaking
-      // rate belongs to the voice. `Pacer.restart()` keeps it on purpose.
+    wear: (face: FaceSpec) => {
+      // Her appearance, and the rate. A different character means a different
+      // VOICE, and the learned speaking rate belongs to the voice —
+      // `Pacer.restart()` keeps it on purpose, which is right between two
+      // utterances of one voice and wrong between two voices.
+      avatar.setFace(face)
       utterance.wear()
       bubble.clear()
     },

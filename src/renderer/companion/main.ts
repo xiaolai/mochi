@@ -73,6 +73,10 @@ async function open(): Promise<void> {
     // than her colour: the design settles it as a rule — anything carrying
     // words gets its own opaque surface, because she may sit on anything, a
     // photograph included, and a translucent one has no contrast ratio at all.
+    // Her appearance first: `wear` also drops the previous voice's learned
+    // speaking rate, and doing it before she can speak means the first
+    // utterance is paced against the right voice rather than the last one's.
+    face.wear(session.face)
     face.showWords(session.bubble ? { paper: '#f4f2ea', ink: '#2b2c25' } : null)
     // The microphone opens only once the session is up, so she is never
     // transmitting into a peer that is still being negotiated.

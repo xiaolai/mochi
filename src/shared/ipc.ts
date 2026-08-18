@@ -124,6 +124,8 @@ export type VoiceReport =
   /** Anything else worth saying once. */
   | { readonly kind: 'note'; readonly text: string }
 
+import type { FaceSpec } from './avatar-spec'
+
 /** What `session.update` is built from. Assembled in main; sent by the renderer. */
 export interface SessionConfig {
   /** Who she is: persona, her note about the user, the rules. Never empty. */
@@ -146,6 +148,15 @@ export interface SessionConfig {
    * respond to, and a system prompt only shapes an answer to something.
    */
   readonly greeting: string
+  /**
+   * How she looks — the whole `FaceSpec`, resolved in main.
+   *
+   * Data, not a path. The renderer never reads the avatars folder: the format
+   * is deliberately non-executable and bounded, and it is validated once, in
+   * main, by `parseFaceSpec`. A renderer that loaded files would be a second
+   * reader of user content in the process with the least authority.
+   */
+  readonly face: FaceSpec
 }
 
 /**

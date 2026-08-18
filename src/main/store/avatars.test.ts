@@ -142,12 +142,22 @@ describe('seedAvatars', () => {
     expect(resolveAvatarById(root, 'mochi').face).toEqual(MOCHI)
   })
 
-  it('never overwrites a file that is already there', () => {
+  it('REFRESHES the two files it ships, and only those', () => {
+    // Changed deliberately, from "never overwrites anything". These two are
+    // documentation, not user data: `README.txt` is prose we wrote and the
+    // `.example` suffix says whose the other one is. The README told this
+    // machine "the first valid one alphabetically wins" — behaviour the loader
+    // has never had — and following it means dropping a file in, restarting,
+    // and watching nothing happen with no error, because nothing is wrong.
+    //
+    // The example refreshing is worth as much: it is `{name, ...MOCHI}`
+    // serialised, so a change to the built-in that did not reach it would ship
+    // a template that disagrees with the thing it is a template of.
     const root = join(workspace(), 'avatars')
     mkdirSync(root)
-    writeFileSync(join(root, EXAMPLE_FILE), 'mine, do not touch')
+    writeFileSync(join(root, EXAMPLE_FILE), 'stale, from an older build')
     seedAvatars(root)
-    expect(readFileSync(join(root, EXAMPLE_FILE), 'utf8')).toBe('mine, do not touch')
+    expect(readFileSync(join(root, EXAMPLE_FILE), 'utf8')).toContain('"bodyW"')
   })
 
   it('fills in a seed file that is missing, without touching the others', () => {
@@ -157,10 +167,13 @@ describe('seedAvatars', () => {
     // retried. Per-file and exclusive means a partial failure self-heals.
     const root = join(workspace(), 'avatars')
     mkdirSync(root)
-    writeFileSync(join(root, EXAMPLE_FILE), 'mine, do not touch')
+    writeFileSync(join(root, 'somebody-elses.json'), 'mine, do not touch')
     seedAvatars(root)
     expect(existsSync(join(root, README_FILE))).toBe(true)
-    expect(readFileSync(join(root, EXAMPLE_FILE), 'utf8')).toBe('mine, do not touch')
+    expect(existsSync(join(root, EXAMPLE_FILE))).toBe(true)
+    // And somebody else's avatar is still theirs. The refresh above is for the
+    // two files this project ships and nothing else in the folder.
+    expect(readFileSync(join(root, 'somebody-elses.json'), 'utf8')).toBe('mine, do not touch')
   })
 
   it('is idempotent', () => {
@@ -208,5 +221,35 @@ describe('the real default walks the real plugin path', () => {
     const result = parseFaceSpec(JSON.parse(JSON.stringify(MOCHI)))
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.face).toEqual(MOCHI)
+  })
+})
+
+describe('the files we ship into the folder', () => {
+  it('refreshes a stale README rather than leaving it lying', () => {
+    // A v1-era README survived on disk claiming "the first valid one
+    // alphabetically wins" — behaviour this code has never had. Somebody
+    // following it drops a file in, restarts, and nothing happens, with no
+    // error, because nothing is wrong. That cost real time before it was found.
+    const root = join(workspace(), 'avatars')
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, README_FILE), 'the first valid one alphabetically wins')
+
+    seedAvatars(root)
+
+    const now = readFileSync(join(root, README_FILE), 'utf8')
+    expect(now).not.toContain('alphabetically')
+    expect(now).toContain('FILENAME')
+  })
+
+  it('never touches a user’s own avatar', () => {
+    // The refresh above is only for the two files this project ships. Somebody
+    // else's work in this folder is theirs.
+    const root = join(workspace(), 'avatars')
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'mine.json'), '{"mine":true}')
+
+    seedAvatars(root)
+
+    expect(readFileSync(join(root, 'mine.json'), 'utf8')).toBe('{"mine":true}')
   })
 })

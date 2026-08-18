@@ -19,6 +19,8 @@ import {
 import { activePersona, loadPersonas, personasRoot } from './store/personas'
 import { readPolicy } from './store/policy'
 import { readWornPersonaId } from './store/worn'
+import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
+import { packageFolder } from './store/personas'
 import { createTranscripts, type Transcripts } from './store/transcripts'
 import { createConversation, type Conversation } from './store/conversation'
 import { recall } from './store/memory'
@@ -195,6 +197,30 @@ ipcMain.handle('voice:config', () => {
   conversation().wear(resolved.persona.id)
   wearing = resolved.persona.id
 
+  /**
+   * Her face, from the folder the user can actually edit.
+   *
+   * `store/avatars.ts` and `parseFaceSpec` have existed and been tested since
+   * before this session; nothing had ever called them, so every mochi rendered
+   * from the built-in constant and "user-authored appearance" was a directory
+   * with no reader. `seedAvatars` writes the folder, an example and a README on
+   * first run, because a plugin format nobody can see the shape of is not one.
+   */
+  const avatars = avatarsRoot(userData)
+  seedAvatars(avatars)
+  const avatar = resolveFaceFor(
+    avatars,
+    packageFolder(resolved.persona.id, catalog.sources),
+    resolved.persona.avatarId,
+  )
+  // LOUD, and per file. An avatar that silently did not load presents as "the
+  // app ignored my file", which the store's own comment calls the least
+  // debuggable outcome this feature can have.
+  for (const problem of avatar.problems) {
+    console.error(`[avatar] ${problem.file}: ${problem.reason}`)
+  }
+  console.log(`[avatar] ${avatar.source ?? 'built-in'}`)
+
   const note = recall(userData, resolved.persona.id)
   console.log(
     `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars, bubble ${resolved.persona.bubble ? 'on' : 'off'}`,
@@ -204,6 +230,7 @@ ipcMain.handle('voice:config', () => {
     voice: resolved.persona.voice,
     bubble: resolved.persona.bubble,
     greeting: greetingFor(resolved.persona),
+    face: avatar.face,
     tools: registry.tools,
   }
 })

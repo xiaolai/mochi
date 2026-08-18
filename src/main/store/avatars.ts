@@ -24,7 +24,7 @@
  * after shipping.
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MOCHI, parseFaceSpec, type FaceSpec } from '@shared/avatar-spec'
 import { isPersonaId } from '@shared/persona'
@@ -84,14 +84,34 @@ export function seedAvatars(root: string): void {
     mkdirSync(root, { recursive: true })
     for (const [name, body] of seeds) {
       try {
-        // `wx` fails rather than overwrites, which does two jobs at once: it
-        // never clobbers a user's file, and it is atomic -- an `existsSync`
+        // `wx` fails rather than overwrites, which is atomic -- an `existsSync`
         // check followed by a write is a race, and a partial failure under the
         // old "skip if the folder exists" guard was PERMANENT, because the
         // folder existed forever after and the missing README never returned.
         writeFileSync(join(root, name), body, { flag: 'wx' })
       } catch (error: unknown) {
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+        /**
+         * It already exists — and THESE TWO FILES are refreshed anyway.
+         *
+         * `wx` alone left a v1-era README on disk claiming "the first valid one
+         * alphabetically wins", which this code has never done: a persona names
+         * her avatar by filename or wears the built-in. Somebody following that
+         * README drops a file in, restarts, and nothing happens — with no error,
+         * because nothing is wrong. **A README that lies is worse than one that
+         * is overwritten.**
+         *
+         * Only these two. They are ours: `README.txt` is documentation and
+         * `.example` says so in its name. A user's own `*.json` avatars are
+         * never touched by this function at all.
+         */
+        try {
+          if (readFileSync(join(root, name), 'utf8') !== body) {
+            writeFileSync(join(root, name), body)
+          }
+        } catch {
+          /* unreadable is not worth failing a launch over */
+        }
       }
     }
   } catch (error: unknown) {
