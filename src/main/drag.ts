@@ -123,26 +123,99 @@ export function stopDrag(): void {
   timer = null
 }
 
+/**
+ * Where the window goes, and how high she stands in it, for one cursor position.
+ *
+ * Expressed entirely in terms of HER. The window and the stance are both
+ * derived at the end, which is what makes this reversible: an earlier version
+ * subtracted from the CURRENT stance, so once she had been raised she never
+ * came back down — dragged to the top and back to the corner, she stayed
+ * standing at the top of her canvas with the bubble stuck below her.
+ *
+ * The two answers are one calculation. **macOS will not put a window's top
+ * above the work area** — no overhang there, unlike the other three edges — so
+ * whatever the window cannot rise by, she rises by inside it. Her position on
+ * screen is what was asked for either way, which is the only thing that makes
+ * dragging her to the top of the display feel like anything at all.
+ */
+export function dragTo(
+  cursor: { x: number; y: number },
+  /** Where within HER body the pointer went down. Not within the window. */
+  gripInHer: { x: number; y: number },
+  her: { left: number; width: number; height: number },
+  work: { x: number; y: number; width: number; height: number },
+  keep: number,
+  defaultFeet: number,
+  minimumFeet: number,
+): { readonly x: number; readonly y: number; readonly feetFromTop: number } {
+  // Where she wants to be, kept on the display — a drag cannot put her
+  // somewhere with no way back.
+  const left = clamp(
+    cursor.x - gripInHer.x,
+    work.x + keep,
+    Math.max(work.x + keep, work.x + work.width - keep - her.width),
+  )
+  const top = clamp(
+    cursor.y - gripInHer.y,
+    work.y + keep,
+    Math.max(work.y + keep, work.y + work.height - keep - her.height),
+  )
+
+  /**
+   * She stands as low in her canvas as the default allows, and higher only
+   * where the window would otherwise have to rise above the work area.
+   *
+   * Derived from `defaultFeet` every tick, never from the last answer, so it
+   * returns to normal the moment there is room again.
+   */
+  const feetFromTop = clamp(
+    Math.min(defaultFeet, top + her.height - work.y),
+    minimumFeet,
+    defaultFeet,
+  )
+
+  return { x: left - her.left, y: top + her.height - feetFromTop, feetFromTop }
+}
+
 export function startDrag(
   grip: Grip,
   liveWindow: () => BrowserWindow | null,
   body: () => { left: number; top: number; width: number; height: number },
+  onStance: (feetFromTop: number) => void,
+  defaultFeet: number,
 ): void {
   stopDrag()
   const deadline = Date.now() + MAX_MS
+  // Taken ONCE, against the body as it was when she was grabbed. Recomputing it
+  // each tick against a body that this drag is moving would make the grip chase
+  // itself the moment the stance changed.
+  const held = body()
+  const gripInHer = { x: grip.offsetX - held.left, y: grip.offsetY - held.top }
+
   timer = setInterval(() => {
     const target = liveWindow()
     if (target === null || target.isDestroyed() || Date.now() > deadline) return stopDrag()
     const cursor = screen.getCursorScreenPoint()
-    // Clamped, so a drag cannot put her somewhere with no way back. Dragged
-    // past an edge she would be gone for the rest of the run and it would look
-    // exactly like a crash.
-    const at = containToWorkArea(
-      cursor.x - grip.offsetX,
-      cursor.y - grip.offsetY,
-      body(),
+    const { workArea } = screen.getDisplayNearestPoint(cursor)
+    const to = dragTo(
+      cursor,
+      gripInHer,
+      held,
+      workArea,
       KEEP_ON_SCREEN,
+      defaultFeet,
+      held.height + FLOOR_CLEARANCE,
     )
-    target.setPosition(at.x, at.y)
+    target.setPosition(to.x, to.y)
+    onStance(to.feetFromTop)
   }, TICK_MS)
 }
+
+/**
+ * The gap kept under her feet when she stands at the very top of her canvas.
+ *
+ * Her own breathing room, in round pixels rather than design units, because
+ * this is a floor rather than a layout: a few pixels either way is invisible,
+ * and the alternative is threading her scale through the drag.
+ */
+const FLOOR_CLEARANCE = 10

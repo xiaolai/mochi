@@ -102,6 +102,28 @@ export const WINDOW_H = 560
  * and both clear `BUBBLE_ROOM` at every size in `SIZE_PERCENT`.
  */
 export const FEET_FROM_TOP = 340
+
+/**
+ * How high in her own canvas she can stand, and why she ever needs to.
+ *
+ * **macOS pins a window's top edge to the work area.** It will not let one sit
+ * under the menu bar, and unlike the other three edges there is no overhang
+ * allowed — `setPosition` above it silently lands at the work top. Her feet
+ * being a fixed 340 into the canvas therefore meant she could never be closer
+ * than about 270 pixels to the top of the display: dragged upwards, she stopped
+ * dead in mid-air.
+ *
+ * So her standing height moves. When the window is against the top of the
+ * screen she stands near the top of her canvas instead, which puts her where
+ * the cursor asked and leaves the room BELOW her — which is where the bubble
+ * then goes. The two facts are the same fact.
+ *
+ * The floor is her own clearance: she may stand at the very top of the canvas
+ * and no higher, because above that she is not drawn at all.
+ */
+export function minimumFeet(bodyHeight: number, clearance: number): number {
+  return bodyHeight + clearance
+}
 /** The tallest a bubble gets, including the gap and tail that reach for her. */
 export const BUBBLE_ROOM = 190
 
@@ -113,7 +135,7 @@ export const BUBBLE_ROOM = 190
  * canvas and one as an offset from its bottom — which agree only when the
  * canvas happens to be exactly her layout's height.
  */
-export function feetY(cssHeight: number, clearance: number): number {
+export function feetY(cssHeight: number, clearance: number, feetFromTop = FEET_FROM_TOP): number {
   // Clamped, so a canvas smaller than the standing height still rests her on
   // something rather than dropping her through the floor. The tuner sizes its
   // own cells and is the caller that hits this.
@@ -122,7 +144,7 @@ export function feetY(cssHeight: number, clearance: number): number {
   // design units, and passing it raw put her 4px low at 50% and 4px high at
   // 150%, which is the whole distance between resting on the ground and
   // hovering over it.
-  return Math.min(FEET_FROM_TOP, cssHeight - clearance)
+  return Math.min(feetFromTop, cssHeight - clearance)
 }
 
 /** What the size setting accepts, as a percentage of `BASE_UNIT_SCALE`. */

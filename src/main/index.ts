@@ -231,6 +231,15 @@ const menuHandlers = {
  */
 let herBody = NOMINAL_BODY
 
+/**
+ * How far into her window she is standing.
+ *
+ * Normally `FEET_FROM_TOP`. It shrinks when she is dragged against the top of
+ * the display, because macOS will not lift the window any further and she rises
+ * inside it instead — see `dragTo`. Held here because main is what moves her.
+ */
+let herFeet: number = FEET_FROM_TOP
+
 ipcMain.on('companion:body', (_event, value: unknown) => {
   if (typeof value !== 'object' || value === null) return
   const box = value as Record<string, unknown>
@@ -256,6 +265,14 @@ ipcMain.on('companion:grab', (_event, value: unknown) => {
     grip,
     () => companion,
     () => herBody,
+    (feet) => {
+      if (feet === herFeet) return
+      herFeet = feet
+      // Straight through on the frame it changes. She is being dragged, so a
+      // stance that arrived a frame late would show as her jumping.
+      companion?.webContents.send('voice:send', { type: '__mochi_stance__', feetFromTop: feet })
+    },
+    FEET_FROM_TOP,
   )
 })
 

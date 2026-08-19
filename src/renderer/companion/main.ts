@@ -107,6 +107,11 @@ window.mochi.onSend((frame) => {
   if (type === '__mochi_problems__') face.troubled(Number((frame as { count?: unknown }).count))
   // Somebody picked a side in the menu bar. Straight through, because they are
   // looking at her while they pick it.
+  // She was dragged against the top of the display and had to rise inside her
+  // own window to get there. See `dragTo`.
+  if (type === '__mochi_stance__') {
+    face.stands(Number((frame as { feetFromTop?: unknown }).feetFromTop))
+  }
   if (type === '__mochi_bubble_side__') {
     face.prefersBubble(
       String((frame as { side?: unknown }).side) as Parameters<typeof face.prefersBubble>[0],

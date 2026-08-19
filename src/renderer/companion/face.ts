@@ -6,7 +6,7 @@ import { createUtterance } from './utterance'
 import { createAttending, levelOf, type Attention } from './attending'
 import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
 import { roomFor, type Room, type SidePreference } from './place'
-import { layoutFor, feetY, BREATHING_UNITS } from '@shared/avatar-layout'
+import { layoutFor, feetY, BREATHING_UNITS, FEET_FROM_TOP } from '@shared/avatar-layout'
 
 /**
  * Her, on screen.
@@ -68,6 +68,13 @@ export interface Face {
   wear(face: FaceSpec): void
   /** Which side of her the bubble should sit on, or `auto`. */
   prefersBubble(side: SidePreference): void
+  /**
+   * How far into her window she is standing.
+   *
+   * Main drives it: dragged against the top of the display the window can rise
+   * no further, so she rises inside it instead. See `dragTo`.
+   */
+  stands(feetFromTop: number): void
   /** Turn the bubble on for this persona, with the surface it draws on. */
   showWords(colours: BubbleColours | null): void
   /**
@@ -136,7 +143,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     const layout = layoutFor(worn, worn.size)
     return {
       right: canvas.clientWidth / 2 + layout.bodyWidth / 2,
-      top: feetY(canvas.clientHeight, BREATHING_UNITS * layout.scale) - layout.bodyHeight,
+      top: feetY(canvas.clientHeight, BREATHING_UNITS * layout.scale, feet) - layout.bodyHeight,
     }
   }
 
@@ -150,7 +157,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     const layout = layoutFor(worn, worn.size)
     return {
       left: canvas.clientWidth / 2 - layout.bodyWidth / 2,
-      top: feetY(canvas.clientHeight, BREATHING_UNITS * layout.scale) - layout.bodyHeight,
+      top: feetY(canvas.clientHeight, BREATHING_UNITS * layout.scale, feet) - layout.bodyHeight,
       width: layout.bodyWidth,
       height: layout.bodyHeight,
     }
@@ -193,6 +200,8 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * it means when nobody has chosen.
    */
   let bubbleSide: SidePreference = 'auto'
+  /** How far into the canvas she is standing. See `stands`. */
+  let feet = FEET_FROM_TOP
   /** The last answer sent up, so an unchanged one is not sent again. */
   let lastOffered = ''
 
@@ -568,6 +577,13 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     heard: () => ({ text: utterance.text(), at: utterance.at(), itemId: utterance.itemId() }),
     prefersBubble: (side: SidePreference) => {
       bubbleSide = side
+    },
+    stands: (feetFromTop: number) => {
+      if (!Number.isFinite(feetFromTop) || feetFromTop <= 0) return
+      feet = feetFromTop
+      avatar.setFeet(feetFromTop)
+      // Her box moved, and the drag clamp in main is expressed against it.
+      window.mochi.body(herBox())
     },
     troubled: (count: number) => {
       troubles = Math.max(0, count)

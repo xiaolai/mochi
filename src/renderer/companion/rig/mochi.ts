@@ -22,7 +22,14 @@ import {
   type VisemeWeights,
 } from '@shared/avatar'
 import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
-import { BREATHING_UNITS, SQUASH_LIMIT, feetY, fitToCanvas, layoutFor } from '@shared/avatar-layout'
+import {
+  BREATHING_UNITS,
+  FEET_FROM_TOP,
+  SQUASH_LIMIT,
+  feetY,
+  fitToCanvas,
+  layoutFor,
+} from '@shared/avatar-layout'
 import { IdleLayer } from './idle'
 import { blendLook, type Look } from './looks'
 import { BUILT_IN_MOTIONS, poseAt, progress, type MotionClip, type MotionPose } from './motion'
@@ -100,6 +107,8 @@ export class MochiAvatar implements AvatarBackend {
 
   private cssWidth = 0
   private cssHeight = 0
+  /** How far into the canvas she stands. See `setFeet`. */
+  private feetFromTop = FEET_FROM_TOP
   private pixelRatio = 1
   private disposed = false
 
@@ -163,6 +172,17 @@ export class MochiAvatar implements AvatarBackend {
    * sentence; recreating the backend would drop the session's mouth state and
    * restart the blink schedule.
    */
+  /**
+   * How far into the canvas she stands.
+   *
+   * Set by main during a drag: against the top of the display the window can
+   * rise no further, so she rises inside it instead. See `dragTo`.
+   */
+  setFeet(feetFromTop: number): void {
+    if (!Number.isFinite(feetFromTop) || feetFromTop <= 0) return
+    this.feetFromTop = feetFromTop
+  }
+
   setSizePercent(percent: number | 'fit-canvas'): void {
     if (percent === this.sizePercent) return
     this.sizePercent = percent
@@ -447,7 +467,7 @@ export class MochiAvatar implements AvatarBackend {
     const originY =
       layout === null
         ? this.cssHeight * (1 - (BREATHING_UNITS * scale) / this.cssHeight)
-        : feetY(this.cssHeight, BREATHING_UNITS * scale)
+        : feetY(this.cssHeight, BREATHING_UNITS * scale, this.feetFromTop)
 
     const base: BodyShape = {
       halfWidth: (face.bodyW / 2) * scale,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clamp, parseGrip } from './drag'
+import { clamp, dragTo, parseGrip } from './drag'
 
 const BOUNDS = { x: 0, y: 0, width: 320, height: 320 }
 
@@ -48,5 +48,67 @@ describe('clamping', () => {
     // with crossed bounds this returns the maximum, placing her further out
     // than the value it was asked to correct.
     expect(clamp(5, 10, 0)).toBe(0)
+  })
+})
+
+describe('dragging her to the top of the display', () => {
+  /** Her, and where she stands, on a 980x560 canvas at size 100. */
+  const HER = { left: 443, width: 94, height: 73 }
+  const WORK = { x: 0, y: 30, width: 2560, height: 1410 }
+  const FEET = 340
+  const KEEP = 4
+  const FLOOR = HER.height + 10
+
+  /** Grabbed dead centre of her. */
+  const GRIP = { x: 47, y: 36 }
+
+  const to = (x: number, y: number) => dragTo({ x, y }, GRIP, HER, WORK, KEEP, FEET, FLOOR)
+
+  it('leaves her standing height alone in the middle of the screen', () => {
+    expect(to(1200, 700).feetFromTop).toBe(FEET)
+  })
+
+  it('puts her exactly where the cursor asked', () => {
+    const at = to(1200, 700)
+    // Her left and top on screen, reconstructed from the window and the stance.
+    expect(at.x + HER.left).toBe(1200 - GRIP.x)
+    expect(at.y + at.feetFromTop - HER.height).toBe(700 - GRIP.y)
+  })
+
+  it('raises her INSIDE the window when the window cannot rise', () => {
+    // macOS will not put a window's top above the work area. Before this, her
+    // feet were a fixed 340 into the canvas and she stopped dead about 270
+    // pixels short of the top of the display.
+    const at = to(1200, 100)
+    expect(at.y).toBe(WORK.y)
+    expect(at.feetFromTop).toBeLessThan(FEET)
+    // And still exactly where the cursor asked.
+    expect(at.y + at.feetFromTop - HER.height).toBe(100 - GRIP.y)
+  })
+
+  it('lets her reach the very top of the display', () => {
+    const at = to(1200, -500)
+    expect(at.y + at.feetFromTop - HER.height).toBe(WORK.y + KEEP)
+  })
+
+  it('comes back DOWN when there is room again', () => {
+    // The failure this replaced: the stance was subtracted from its own last
+    // value, so once she had been raised she never came back — dragged to the
+    // top and home again, she stayed standing at the top of her canvas with the
+    // bubble stuck below her.
+    expect(to(1200, 100).feetFromTop).toBeLessThan(FEET)
+    expect(to(1200, 700).feetFromTop).toBe(FEET)
+  })
+
+  it('stops when she is standing at the very top of her own canvas', () => {
+    // Above that she is not drawn at all, so there is nothing further to give.
+    expect(to(1200, -5000).feetFromTop).toBe(FLOOR)
+  })
+
+  it('still keeps her on the display', () => {
+    const at = to(9000, 9000)
+    expect(at.x + HER.left + HER.width).toBeLessThanOrEqual(WORK.x + WORK.width - KEEP)
+    const herTop = at.y + at.feetFromTop - HER.height
+    expect(herTop + HER.height).toBeLessThanOrEqual(WORK.y + WORK.height - KEEP)
   })
 })
