@@ -162,9 +162,14 @@
         gap: var(--s4);
       }
       .card:hover {
-        border-color: var(--her);
+        border-color: var(--gold);
       }
-      /* The ring, in HER colour — the open character, and nothing else. */
+      /*
+        The ring is one of the TWO jobs her colour keeps — the worn character.
+        Everything else that used to be green is gold now, because a selected
+        row and a focus outline are things you operate rather than things that
+        say who she is. See `tokens.css`.
+      */
       .card[aria-current='true'] {
         border-color: var(--her);
         box-shadow:
@@ -333,8 +338,8 @@
         cursor: default;
       }
       .tab[aria-current='true'] {
-        background: var(--her-wash);
-        color: var(--ink-brand);
+        background: var(--gold-wash);
+        color: var(--gold);
       }
       /*
         AFTER the display, and it has to be. `[hidden]` is a UA rule of
@@ -401,8 +406,8 @@
         background: var(--hair-soft);
       }
       .entry[aria-current='true'] {
-        background: var(--her-wash);
-        box-shadow: inset 2px 0 0 var(--her);
+        background: var(--gold-wash);
+        box-shadow: inset 2px 0 0 var(--gold);
       }
       .entry .when {
         font-size: var(--t-sm);
@@ -534,23 +539,27 @@
         cursor: default;
       }
       button.plain:hover:not(:disabled) {
-        border-color: var(--her);
+        border-color: var(--gold);
       }
       button.plain:disabled {
         color: var(--ink-3);
       }
-      /* Her colour, on the one control that commits something. */
-      button.her {
-        background: var(--her);
-        border-color: var(--her);
-        color: var(--her-ink);
+      /*
+        The one control that commits something. Gold rather than her colour: a
+        primary button is chrome, and `--gold-ink` flips by scheme because gold
+        is mid-luminance — see `tokens.css` for why that is not a mistake.
+      */
+      button.primary {
+        background: var(--gold);
+        border-color: var(--gold);
+        color: var(--gold-ink);
       }
       button.arming {
         color: var(--red);
         border-color: var(--red);
       }
       :focus-visible {
-        outline: 2px solid var(--ink-brand);
+        outline: 2px solid var(--gold);
         outline-offset: 1px;
       }
       input[type='text'],
@@ -592,8 +601,8 @@
         user-select: text;
       }
       mark {
-        background: var(--her-wash);
-        color: var(--ink-brand);
+        background: var(--gold-wash);
+        color: var(--gold);
         border-radius: var(--r0);
       }
       /* Says what happened, on its own opaque surface with an elevation. */

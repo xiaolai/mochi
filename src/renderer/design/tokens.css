@@ -140,8 +140,11 @@
    * accent, and *"borrowing the system blue makes the one window with her name
    * on it look like it belongs to something else."* One property covers every
    * native control in all three windows.
+   *
+   * The CHROME gold rather than her colour: a checkbox is something you
+   * operate, not something that says who she is.
    */
-  accent-color: var(--her);
+  accent-color: var(--gold);
 
   /* ---- surfaces: warm paper, and a warm near-black rather than a cold grey - */
   --paper: light-dark(#f4f1ea, #1a1b14);
@@ -164,6 +167,50 @@
      10.94:1 on their own paper; 9.28:1 and 8.99:1 on their own wash. */
   --ink-brand: light-dark(#24463a, #a9d8bd);
   --her-wash: light-dark(#eaf4ee, #1e2e25);
+
+  /*
+   * ---- the chrome, which is NOT her -------------------------------------
+   *
+   * Focus rings, the open group, a selected row, a search hit, the one button
+   * that commits something. These used to take the worn persona's colour, and
+   * `accent.ts` argued against that for a reason worth keeping: her hue then
+   * repaints every control in the application, so installing a character is
+   * installing a UI theme. Her colour keeps the two jobs that are actually
+   * about her — the worn card, and a swatch when one is being chosen.
+   *
+   * The hue comes from `site/index.html`, so the app and the public page are
+   * one system rather than two. The VALUES do not: the site's `#b68235` is
+   * 2.99:1 on this paper and 3.08:1 on its own wash, against the 4.5 floor
+   * `accent.ts` enforces on personas — so the site ships a gold that was never
+   * measured, and adopting it unchanged would have this application breaking
+   * the rule it refuses a persona for breaking.
+   *
+   * Darkened by the least that clears every pairing, with `shade()`, so it is
+   * still gold rather than brown. Every ratio below is from this repository's
+   * own `contrast()`:
+   *
+   * |                        | light | dark |
+   * | ---                    | ---   | ---  |
+   * | gold on `--paper`      | 5.42  | 8.57 |
+   * | gold on `--paper-2`    | 5.82  | 7.84 |
+   * | gold on `--paper-3`    | 4.82  | 6.63 |
+   * | gold on `--gold-wash`  | 4.80  | 5.15 |
+   * | `--ink` on the wash    | 14.15 | 8.58 |
+   * | `--ink-2` on the wash  | 6.86  | 4.87 |
+   * | `--gold-ink` on gold   | 6.12  | 8.91 |
+   *
+   * `--gold-ink` FLIPS by scheme, which looks like a mistake and is not: gold
+   * is mid-luminance, so the light half is dark enough to carry white and the
+   * dark half is light enough to carry ink. White on the dark gold is 2.02:1.
+   *
+   * The wash is a TINT and never a text surface on its own terms — 1.13:1
+   * against paper in light. It is paired with a gold edge, as the site does,
+   * because a wash that reads as a boundary on warm paper would be too dark
+   * for gold to sit on.
+   */
+  --gold: light-dark(#7f5b25, #e1ad66);
+  --gold-wash: light-dark(#eee2d1, #4f3d24);
+  --gold-ink: light-dark(#ffffff, #16170f);
 
   /* ---- status: a fill, an edge, and an ink that reads ON the fill --------- */
   /* 5.84:1 light, 7.86:1 dark, each on its own -bg. */

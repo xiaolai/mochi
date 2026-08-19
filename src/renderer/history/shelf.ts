@@ -383,7 +383,7 @@ function actions(worn: ShelfView['characters'][number], handlers: ShelfHandlers)
     act()
   }
 
-  const make = element('button', 'plain her', 'New')
+  const make = element('button', 'plain primary', 'New')
   make.type = 'button'
   make.addEventListener('click', () => {
     if (named() === '') return handlers.say('A new character needs a name.', true)

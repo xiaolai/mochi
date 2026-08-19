@@ -67,14 +67,21 @@
         background: var(--hair-soft);
       }
       /*
-        HER colour marks the open group. `--her-wash` and `--ink-brand` are
-        written onto the document by `accent.ts` from the worn face — the
-        design's second semantic rule: the accent is her, and there is no second
-        place to set an app colour.
+        The CHROME marks the open group, not her.
+
+        This took the worn persona's colour, which is the thing `accent.ts`
+        argues against at length: her hue then repaints every control in the
+        application, so installing a character installs a UI theme. Gold is
+        fixed; her colour keeps the two jobs that are about her.
+
+        The bar carries the boundary and the wash carries the tint — a wash dark
+        enough to read as an edge on warm paper would be too dark for gold to
+        sit on. See `tokens.css` for the measurements.
       */
       .tab[aria-current='true'] {
-        background: var(--her-wash);
-        color: var(--ink-brand);
+        background: var(--gold-wash);
+        box-shadow: inset 2px 0 0 var(--gold);
+        color: var(--gold);
         font-weight: 600;
       }
       .tab .grow {
@@ -155,7 +162,7 @@
       select:focus-visible,
       input:focus-visible,
       button:focus-visible {
-        outline: 2px solid var(--ink-brand);
+        outline: 2px solid var(--gold);
         outline-offset: 1px;
       }
       button {
@@ -169,7 +176,7 @@
         cursor: default;
       }
       button:hover:not(:disabled) {
-        border-color: var(--ink-brand);
+        border-color: var(--gold);
       }
       button:disabled {
         color: var(--ink-3);
@@ -230,7 +237,7 @@
       .cap .name {
         font-family: var(--mono);
         font-size: var(--t-data);
-        color: var(--ink-brand);
+        color: var(--gold);
       }
       .cap .desc {
         margin: var(--s0) 0 0;
