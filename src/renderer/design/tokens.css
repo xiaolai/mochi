@@ -355,6 +355,30 @@ button.btn.arming {
 }
 
 /*
+ * `hidden` MEANS hidden, in every window.
+ *
+ * The UA gives `[hidden]` a `display: none` of the lowest possible weight, so
+ * ANY author rule that sets `display` on the same element silently defeats it.
+ * The attribute stays in the DOM, the accessibility tree still reports the
+ * element as hidden, and it is on screen. Nothing about the markup looks wrong.
+ *
+ * This repository has now shipped that bug twice from one cause: `.panel` was
+ * `display: flex`, so the inactive tab's contents sat under the active one; and
+ * `.warn` was `display: flex`, so a chip reading "0 problems" stayed in the
+ * drawer with nothing to report. The first was patched where it was found. The
+ * second was three lines away in the same file and was missed, which is the
+ * argument for fixing the CLASS here rather than the instance there.
+ *
+ * `!important` is the point, not a shortcut: the whole failure is that the
+ * normal cascade lets a `display` win, and a rule that can be outranked would
+ * reintroduce the bug the first time somebody writes `display` on a hideable
+ * element. Anything that needs to be visible must not carry the attribute.
+ */
+[hidden] {
+  display: none !important;
+}
+
+/*
  * Honoured, not ignored -- the same rule the handoff states for duration. The
  * shelf has little motion of its own; when it gets some, it belongs here.
  */

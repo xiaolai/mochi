@@ -219,7 +219,17 @@
         gap: var(--s6);
         padding: 0 var(--s6) var(--s6);
       }
-      .open {
+      /*
+        The open character's column, by id rather than by class.
+
+        It was `.open`, and so is the microphone pill's lit state — one global
+        stylesheet, two meanings, and this rule came second, so `display: flex;
+        flex-direction: column; overflow-y: auto` landed on the PILL: its dot
+        stacked above its label and it became a scroll container 43px tall. An
+        id cannot collide with a state class, which is why the fix is here and
+        not a more specific selector that would only postpone it.
+      */
+      #pane {
         min-height: 0;
         overflow-y: auto;
         display: flex;
@@ -342,14 +352,12 @@
         color: var(--gold);
       }
       /*
-        AFTER the display, and it has to be. `[hidden]` is a UA rule of
-        `display: none`, and any explicit `display` on the element beats it — so
-        the inactive tab's panel stayed on screen under the active one, which is
-        exactly what the screenshot showed.
+        No `.panel[hidden]` here any more, and no `.warn[hidden]` either. Both
+        were the same defect — an author `display` outranking the UA's rule for
+        the attribute — and it is answered once, for all three windows, by
+        `[hidden]` in `tokens.css`. Patching it per element is what let the
+        drawer ship a chip that read "0 problems".
       */
-      .panel[hidden] {
-        display: none;
-      }
       .panel {
         flex: 1;
         min-height: 0;
@@ -619,7 +627,7 @@
       <div class="cards" id="characters"></div>
 
       <div class="body">
-        <div class="open" id="pane"></div>
+        <div id="pane"></div>
         <aside>
           <div class="tabs" id="tabs"></div>
           <div class="panel" id="panel-wake"></div>
