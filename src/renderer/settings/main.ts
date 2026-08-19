@@ -1,4 +1,4 @@
-import type { MochiSettingsApi, Revealable, SettingsView } from '@shared/ipc'
+import type { LookupChange, MochiSettingsApi, Revealable, SettingsView } from '@shared/ipc'
 
 declare global {
   interface Window {
@@ -21,12 +21,14 @@ declare global {
  */
 
 const who = document.querySelector('#who')
+const lookup = document.querySelector('#lookup')
 const capabilities = document.querySelector('#capabilities')
 const folders = document.querySelector('#folders')
 const said = document.querySelector('#said')
 if (
   !(who instanceof HTMLElement) ||
   !(capabilities instanceof HTMLElement) ||
+  !(lookup instanceof HTMLElement) ||
   !(folders instanceof HTMLElement) ||
   !(said instanceof HTMLElement)
 ) {
@@ -34,6 +36,7 @@ if (
 }
 const whoEl: HTMLElement = who
 const capsEl: HTMLElement = capabilities
+const lookupEl: HTMLElement = lookup
 const foldersEl: HTMLElement = folders
 const saidEl: HTMLElement = said
 
@@ -168,6 +171,87 @@ async function change(what: Parameters<MochiSettingsApi['save']>[0]): Promise<vo
   await load()
 }
 
+async function changeLookup(what: LookupChange): Promise<void> {
+  const result = await window.mochiSettings.lookup(what)
+  if (!result.ok) {
+    say(result.why, true)
+    // Re-read, so a refused control snaps back to what is actually stored
+    // rather than sitting on a value nothing accepted.
+    await load()
+    return
+  }
+  say('Saved. It applies to her next lookup.')
+  await load()
+}
+
+/**
+ * How a lookup runs: where she reads, whether she may search, which profile.
+ *
+ * These were settable only by hand-editing `preferences.json` — a file nothing
+ * documents — while the workspace is the thing that decides what she can read
+ * at all. A capability nobody can point at a directory is a capability that
+ * answers about an empty folder.
+ */
+function renderLookup(view: SettingsView): void {
+  const workspace = document.createElement('input')
+  workspace.type = 'text'
+  workspace.value = view.lookup.workspace
+  workspace.spellcheck = false
+  workspace.addEventListener('change', () => {
+    if (workspace.value.trim() === view.lookup.workspace) return
+    void changeLookup({ workspace: workspace.value })
+  })
+
+  const search = document.createElement('select')
+  options(
+    search,
+    view.lookup.webSearchModes.map((mode) => ({
+      value: mode,
+      // `follow` is not one of Codex's own values — it is the ABSENCE of the
+      // flag, leaving whatever the machine is configured for in charge. Saying
+      // so is the difference between a choice and a mystery.
+      label: mode === 'follow' ? 'follow the machine' : mode,
+    })),
+    view.lookup.webSearch,
+  )
+  search.addEventListener('change', () => {
+    void changeLookup({ webSearch: search.value })
+  })
+
+  const profile = document.createElement('input')
+  profile.type = 'text'
+  profile.value = view.lookup.profile ?? ''
+  profile.spellcheck = false
+  profile.placeholder = 'none'
+  profile.addEventListener('change', () => {
+    const name = profile.value.trim()
+    void changeLookup({ profile: name === '' ? null : name })
+  })
+
+  lookupEl.replaceChildren(
+    field('Workspace', workspace),
+    field('Web search', search),
+    field('Codex profile', profile),
+  )
+
+  if (view.lookup.workspaceIsDefault) {
+    const note = document.createElement('p')
+    note.className = 'note'
+    note.textContent = 'Nobody has chosen one, so this is the default.'
+    lookupEl.append(note)
+  }
+  if (view.lookup.profilePath !== null) {
+    // The FILE is the thing somebody edits. "There is a profile, somewhere,
+    // called something" is not an instruction anybody can follow.
+    const note = document.createElement('p')
+    note.className = 'note'
+    const path = document.createElement('code')
+    path.textContent = view.lookup.profilePath
+    note.append('Settings for it live in ', path)
+    lookupEl.append(note)
+  }
+}
+
 function renderCapabilities(view: SettingsView): void {
   if (view.capabilities.length === 0) {
     capsEl.textContent = 'None.'
@@ -216,6 +300,7 @@ async function load(): Promise<void> {
   const view = await window.mochiSettings.read()
   renderWho(view)
   renderCapabilities(view)
+  renderLookup(view)
   renderFolders(view)
 }
 

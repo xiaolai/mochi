@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, ipcMain, Menu, shell } from 'electron'
 import { existsSync, mkdirSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
@@ -31,6 +32,11 @@ import {
   readWebSearch,
   readWorkspace,
   readProfile,
+  writeWorkspace,
+  writeWebSearch,
+  writeProfile,
+  isProfileName,
+  WORKSPACE_DIR,
   guardStopAt,
   readWornPersonaId,
   writeBubbleSide,
@@ -47,7 +53,12 @@ import { createProblems } from './problems'
 import { leftoverCapabilities, legacyCapabilitiesRoot } from './capability/legacy'
 import type { CapabilityDeps } from '../capabilities/kind'
 import { isLocated, locateCodex } from '../capabilities/ask-workspace/locate'
-import { codexHome, profileFor, seedProfile } from '../capabilities/ask-workspace/profile'
+import {
+  codexHome,
+  profileFile,
+  profileFor,
+  seedProfile,
+} from '../capabilities/ask-workspace/profile'
 import { createTray, trayMenuTemplate, type TrayHandle, type TrayModel } from './tray'
 import { parseGrip, startDrag, stopDrag } from './drag'
 import { FEET_FROM_TOP, WINDOW_W } from '@shared/avatar-layout'
@@ -59,7 +70,9 @@ import { FEET_FROM_TOP, WINDOW_W } from '@shared/avatar-layout'
 const NOMINAL_BODY = { left: (WINDOW_W - 94) / 2, top: FEET_FROM_TOP - 73, width: 94, height: 73 }
 import {
   applyChange,
+  applyLookup,
   folderFor,
+  listLookup,
   listAvatars,
   listCapabilities,
   listPersonas,
@@ -432,6 +445,22 @@ function transcripts(): Transcripts {
 }
 
 /**
+ * Which Codex profile a lookup layers right now.
+ *
+ * ONE implementation, because two things ask: the capability that runs the
+ * lookup, and the window that shows what it will do. A window that computed
+ * this differently would be showing somebody a setting that is not the one in
+ * force, which is worse than showing nothing.
+ */
+function currentProfile(): string | null {
+  return profileFor(
+    codexHome(process.env, app.getPath('home')),
+    readProfile(app.getPath('userData')),
+    (path) => existsSync(path),
+  )
+}
+
+/**
  * Everything a capability may ask main for.
  *
  * FUNCTIONS, not values, and every one of them: the store opens lazily, the
@@ -471,12 +500,7 @@ const capabilityDeps: CapabilityDeps = {
     return guardStopAt(userData, readWorkspace(userData))
   },
   webSearch: () => readWebSearch(app.getPath('userData')),
-  codexProfile: () =>
-    profileFor(
-      codexHome(process.env, app.getPath('home')),
-      readProfile(app.getPath('userData')),
-      (path) => existsSync(path),
-    ),
+  codexProfile: currentProfile,
   now: () => Date.now(),
 }
 
@@ -761,6 +785,16 @@ ipcMain.handle('settings:read', (): SettingsView => {
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],
     capabilities: listCapabilities(registry),
+    lookup: listLookup({
+      workspace: readWorkspace(userData),
+      defaultWorkspace: join(userData, WORKSPACE_DIR),
+      webSearch: readWebSearch(userData),
+      profile: currentProfile(),
+      profilePath: (() => {
+        const name = currentProfile()
+        return name === null ? null : profileFile(codexHome(process.env, app.getPath('home')), name)
+      })(),
+    }),
     folders: {
       avatars: folderFor(userData, 'avatars'),
       personas: folderFor(userData, 'personas'),
@@ -847,6 +881,37 @@ ipcMain.handle('settings:save', (_event, change: unknown): SettingsWrite => {
  * the path instead would be a file browser running with this application's
  * authority, reachable from a page.
  */
+/**
+ * Change how a lookup runs. Checked here, then written one field at a time.
+ *
+ * `applyLookup` decides what is acceptable and this decides what that means on
+ * disk — the same split as `applyChange` and `savePersonaTo`. Each writer is
+ * the one that already owns its own validation, so nothing here re-states a
+ * rule that lives in the store.
+ */
+ipcMain.handle('settings:lookup', (_event, change: unknown): SettingsWrite => {
+  if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
+  const asked = applyLookup(change, isProfileName)
+  if (!asked.ok) return refuse(asked.why)
+
+  const userData = app.getPath('userData')
+  try {
+    if (asked.change.workspace !== undefined) writeWorkspace(userData, asked.change.workspace)
+    if (asked.change.webSearch !== undefined) {
+      writeWebSearch(userData, asked.change.webSearch)
+    }
+    if (asked.change.profile !== undefined) writeProfile(userData, asked.change.profile)
+  } catch (error: unknown) {
+    // Loud, and reported where somebody will see it. A setting that silently
+    // did not land is the failure this window exists to remove.
+    console.error('[settings] could not change the lookup:', error)
+    problems.note('settings', null, `a lookup setting could not be saved: ${String(error)}`)
+    return refuse(String(error))
+  }
+  console.log(`[settings] lookup changed: ${Object.keys(asked.change).join(', ')}`)
+  return { ok: true }
+})
+
 ipcMain.on('settings:reveal', (_event, what: unknown) => {
   if (!(REVEALABLE as readonly unknown[]).includes(what)) {
     console.error(`[settings] refusing to reveal an unknown folder: ${String(what)}`)

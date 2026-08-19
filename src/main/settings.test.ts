@@ -4,7 +4,15 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERSONA } from '@shared/persona'
 import { REVEALABLE } from '@shared/ipc'
-import { applyChange, folderFor, listAvatars, listCapabilities } from './settings'
+import { WEB_SEARCH_MODES } from '@shared/delegation'
+import {
+  applyChange,
+  applyLookup,
+  folderFor,
+  listAvatars,
+  listCapabilities,
+  listLookup,
+} from './settings'
 import { createRegistry } from '@shared/capability/registry'
 import { parseManifest } from '@shared/capability/manifest'
 
@@ -140,5 +148,96 @@ describe('naming a folder', () => {
     // it now would offer a "Show" button that CREATES the folder — pointing
     // somebody at a place to put work that this build would then ignore.
     expect(REVEALABLE).toEqual(['avatars', 'personas'])
+  })
+})
+
+describe('how a lookup runs', () => {
+  const isProfileName = (value: unknown): boolean =>
+    typeof value === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(value)
+
+  it('says when the workspace is only the default, rather than making the window guess', () => {
+    // The default is a path main computes. A window that recomputed it would be
+    // the second place that rule lives, and the two would drift.
+    const shown = listLookup({
+      workspace: '/u/workspace',
+      defaultWorkspace: '/u/workspace',
+      webSearch: 'follow',
+      profile: null,
+      profilePath: null,
+    })
+    expect(shown.workspaceIsDefault).toBe(true)
+    expect(
+      listLookup({
+        workspace: '/somewhere/else',
+        defaultWorkspace: '/u/workspace',
+        webSearch: 'follow',
+        profile: null,
+        profilePath: null,
+      }).workspaceIsDefault,
+    ).toBe(false)
+  })
+
+  it('offers every value Codex accepts, and does not invent one', () => {
+    // This project shipped `on`/`off` once. It typechecked, its tests passed —
+    // they asserted the string reached the argv — and the CLI rejected it on the
+    // first real run.
+    const shown = listLookup({
+      workspace: '/w',
+      defaultWorkspace: '/w',
+      webSearch: 'follow',
+      profile: null,
+      profilePath: null,
+    })
+    expect(shown.webSearchModes).toEqual([...WEB_SEARCH_MODES])
+  })
+
+  it('names no profile file when no profile is in force', () => {
+    // Pointing at a path that is not there is worse than pointing at nothing.
+    const shown = listLookup({
+      workspace: '/w',
+      defaultWorkspace: '/w',
+      webSearch: 'follow',
+      profile: null,
+      profilePath: '/somewhere/mochi.config.toml',
+    })
+    expect(shown.profilePath).toBeNull()
+  })
+
+  it('refuses a workspace that is not a full path', () => {
+    // A relative path resolves against whatever the process considers its
+    // working directory — `/` for a packaged app — so it would silently point
+    // her somewhere nobody chose. Refusing here is what lets somebody be told.
+    for (const bad of ['notes', './notes', '../notes', '~/notes', '']) {
+      const asked = applyLookup({ workspace: bad }, isProfileName)
+      expect(asked.ok, bad).toBe(false)
+    }
+    expect(applyLookup({ workspace: '/Users/them/notes' }, isProfileName).ok).toBe(true)
+  })
+
+  it('refuses a web search value Codex does not have', () => {
+    expect(applyLookup({ webSearch: 'on' }, isProfileName).ok).toBe(false)
+    expect(applyLookup({ webSearch: 'live' }, isProfileName).ok).toBe(true)
+  })
+
+  it('refuses a profile name that would reach out of Codex home', () => {
+    // It becomes `<name>.config.toml` inside `$CODEX_HOME`.
+    expect(applyLookup({ profile: '../escape' }, isProfileName).ok).toBe(false)
+    expect(applyLookup({ profile: 'mochi' }, isProfileName).ok).toBe(true)
+  })
+
+  it('takes null as a profile, because none is a real choice', () => {
+    const asked = applyLookup({ profile: null }, isProfileName)
+    expect(asked.ok).toBe(true)
+    if (!asked.ok) return
+    expect(asked.change.profile).toBeNull()
+  })
+
+  it('carries only the fields it was given, so an absent one is left alone', () => {
+    // The same reason `applyChange` folds field by field: a spread would let a
+    // page clear settings it never mentioned.
+    const asked = applyLookup({ webSearch: 'live' }, isProfileName)
+    expect(asked.ok).toBe(true)
+    if (!asked.ok) return
+    expect(asked.change).toEqual({ webSearch: 'live' })
   })
 })

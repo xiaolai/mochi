@@ -153,6 +153,16 @@ export const SETTINGS_CHANNELS = [
   'settings:save',
   /** Show me where these files are. A KIND, never a path. */
   'settings:reveal',
+  /**
+   * Change how a lookup runs — the workspace, web search, the Codex profile.
+   *
+   * ONE channel carrying a partial rather than three carrying a value each.
+   * This contract already grew once for exactly that reason: v1 had 45 message
+   * kinds, three of which were a per-tool triple, and adding a capability meant
+   * adding to the contract. A settings surface that adds a channel per setting
+   * is the same shape with a different subject.
+   */
+  'settings:lookup',
 ] as const
 
 export type SettingsChannel = (typeof SETTINGS_CHANNELS)[number]
@@ -213,6 +223,34 @@ export interface SettingsCapability {
   readonly description: string
 }
 
+/**
+ * How a lookup runs, as the settings window shows it.
+ *
+ * `workspace` is a PATH, and it is the one place a path crosses this bridge.
+ * That is a deliberate exception rather than an oversight: it is the value being
+ * displayed and edited, and somebody choosing a directory has to see which one.
+ * It travels back through `settings:lookup`, where main checks it — the renderer
+ * naming a path is not the renderer choosing what may be read.
+ */
+export interface SettingsLookup {
+  readonly workspace: string
+  /** True when nobody has chosen, so the window can say it is the default. */
+  readonly workspaceIsDefault: boolean
+  readonly webSearch: string
+  /** Every value Codex accepts, plus `follow`. See `WEB_SEARCH_MODES`. */
+  readonly webSearchModes: readonly string[]
+  /** The Codex profile in force, or null for none. */
+  readonly profile: string | null
+  /** Where that file is, so somebody can go and edit it. Null when none. */
+  readonly profilePath: string | null
+}
+
+/** What may be changed about a lookup. Absent means unchanged. */
+export interface LookupChange {
+  readonly workspace?: string
+  readonly webSearch?: string
+  readonly profile?: string | null
+}
 /** Everything the settings window draws, answered in one call. */
 export interface SettingsView {
   readonly wornId: string
@@ -220,6 +258,7 @@ export interface SettingsView {
   readonly avatars: readonly SettingsAvatar[]
   readonly voices: readonly string[]
   readonly capabilities: readonly SettingsCapability[]
+  readonly lookup: SettingsLookup
   /** Named for display. Opening one goes through `settings:reveal` by kind. */
   readonly folders: Readonly<Record<Revealable, string>>
 }
@@ -240,6 +279,7 @@ export interface MochiSettingsApi {
   read(): Promise<SettingsView>
   wear(id: string): Promise<SettingsWrite>
   save(change: PersonaChange): Promise<SettingsWrite>
+  lookup(change: LookupChange): Promise<SettingsWrite>
   reveal(what: Revealable): void
 }
 

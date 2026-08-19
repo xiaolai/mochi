@@ -10,6 +10,7 @@ import {
   type MochiApi,
   type MochiHistoryApi,
   type MochiSettingsApi,
+  type LookupChange,
   type PersonaChange,
   type Revealable,
   type SettingsView,
@@ -152,6 +153,9 @@ const settings: MochiSettingsApi = {
   },
   reveal(what: Revealable) {
     ipcRenderer.send(guardSettings('settings:reveal'), what)
+  },
+  async lookup(change: LookupChange) {
+    return (await ipcRenderer.invoke(guardSettings('settings:lookup'), change)) as SettingsWrite
   },
 }
 

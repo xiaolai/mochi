@@ -20,6 +20,8 @@ import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { VOICE_NAMES, isPersonaId, type Persona, type VoiceName } from '@shared/persona'
 import type {
+  LookupChange,
+  SettingsLookup,
   PersonaChange,
   Revealable,
   SettingsAvatar,
@@ -27,6 +29,7 @@ import type {
   SettingsPersona,
   SettingsWrite,
 } from '@shared/ipc'
+import { WEB_SEARCH_MODES, isWebSearchMode, type WebSearchMode } from '@shared/delegation'
 import type { Registry } from '@shared/capability/registry'
 import { PERSONAS_DIR, type PersonaCatalog } from './store/personas'
 import { AVATARS_DIR } from './store/avatars'
@@ -88,6 +91,102 @@ export function listPersonas(catalog: PersonaCatalog): readonly SettingsPersona[
  */
 export function listCapabilities(registry: Registry): readonly SettingsCapability[] {
   return registry.tools.map((tool) => ({ name: tool.name, description: tool.description }))
+}
+
+/**
+ * How a lookup runs, in a shape a page can draw.
+ *
+ * `workspaceIsDefault` rather than leaving the window to compare strings: the
+ * default is a path this module computes, and a window that recomputed it would
+ * be the second place that rule lives.
+ *
+ * The profile PATH is included because the file is the thing somebody edits,
+ * and "there is a file, somewhere, called something" is not an instruction
+ * anybody can follow. Null when no profile is in force — there is no file to
+ * point at, and inventing one would be pointing at something that is not there.
+ */
+export function listLookup(input: {
+  readonly workspace: string
+  readonly defaultWorkspace: string
+  readonly webSearch: string
+  readonly profile: string | null
+  readonly profilePath: string | null
+}): SettingsLookup {
+  return {
+    workspace: input.workspace,
+    workspaceIsDefault: input.workspace === input.defaultWorkspace,
+    webSearch: input.webSearch,
+    webSearchModes: [...WEB_SEARCH_MODES],
+    profile: input.profile,
+    profilePath: input.profile === null ? null : input.profilePath,
+  }
+}
+
+/**
+ * A change that has been checked, in the types the stores actually take.
+ *
+ * NARROWER than `LookupChange`, which is the wire shape and has to accept
+ * whatever a page sent. Carrying the validated value back as a `string` would
+ * make every caller assert it again — and an assertion is what somebody writes
+ * instead of a check when the two drift.
+ */
+export interface CheckedLookup {
+  readonly workspace?: string
+  readonly webSearch?: WebSearchMode
+  readonly profile?: string | null
+}
+
+/**
+ * Fold a page's request about a lookup into calls main will make — field by
+ * field, refusing anything unrecognised.
+ *
+ * The same shape as `applyChange`, and for the same reason: a spread would let
+ * a page set whatever the type happens to allow today. Every field here decides
+ * what runs on somebody's machine, so each is checked rather than passed on.
+ *
+ * Returns the changes to APPLY rather than applying them, so the rule about
+ * what is acceptable is testable without a filesystem.
+ */
+export function applyLookup(
+  change: LookupChange,
+  isProfileName: (value: unknown) => boolean,
+):
+  | { readonly ok: true; readonly change: CheckedLookup }
+  | { readonly ok: false; readonly why: string } {
+  const next: { workspace?: string; webSearch?: WebSearchMode; profile?: string | null } = {}
+
+  if (change.workspace !== undefined) {
+    const workspace = change.workspace.trim()
+    // ABSOLUTE only. A relative path is resolved against whatever the process
+    // considers its working directory, which for a packaged app is `/` — so it
+    // would silently point her somewhere nobody chose. `readWorkspace` already
+    // refuses one on the way out; refusing it here is what lets somebody be
+    // TOLD, rather than having their choice quietly ignored.
+    if (!workspace.startsWith('/')) {
+      return { ok: false, why: 'A workspace has to be a full path, starting with a slash.' }
+    }
+    next.workspace = workspace
+  }
+
+  if (change.webSearch !== undefined) {
+    if (!isWebSearchMode(change.webSearch)) {
+      return { ok: false, why: `There is no web search setting called ${change.webSearch}.` }
+    }
+    next.webSearch = change.webSearch
+  }
+
+  if (change.profile !== undefined) {
+    // Null is "no profile", which is a real choice rather than a missing value.
+    if (change.profile !== null && !isProfileName(change.profile)) {
+      return {
+        ok: false,
+        why: 'A profile name is lowercase letters, digits and hyphens, starting with a letter.',
+      }
+    }
+    next.profile = change.profile
+  }
+
+  return { ok: true, change: next }
 }
 
 function isVoice(value: unknown): value is VoiceName {
