@@ -1,0 +1,255 @@
+/*
+ * The design language of the shell.
+ *
+ * Ported from `dev-docs/design_handoff_mochi_shell/tokens-additive.css`, whose
+ * values are kept EXACTLY — every ratio in its comments was measured with this
+ * repository's own `contrast()`, so a value changed here is a measurement
+ * silently invalidated. `Mochi Extended.dc.html` renders against this
+ * vocabulary; if the window stops looking like the artifact, one of the two has
+ * drifted and this file is the place to look.
+ *
+ * ## It was "additive" to a file that does not exist
+ *
+ * The handoff writes itself as an addition to `design/tokens.css`. There is no
+ * such file in this repository and never was — it belongs to v1, alongside
+ * `docs/plan.md` and `shared/i18n/messages.ts`, which
+ * `CHECKED-2026-08-19.md` already lists as absent. So this is the whole sheet
+ * rather than the second half of one, and the few roles the additive file
+ * referenced without defining (`--duration`, `--duration-fast`) are defined
+ * here.
+ *
+ * ## `light-dark()`, not two blocks
+ *
+ * The pair lives in ONE declaration so a role cannot be defined in one scheme
+ * and forgotten in the other — which is what a `@media (prefers-color-scheme)`
+ * block lets happen, and what the three windows did before this file existed.
+ * It needs `color-scheme` set, which `:root` does below.
+ *
+ * ## Her colour is NOT in here
+ *
+ * `--her`, `--her-hover`, `--her-ink`, `--her-wash` and `--ink-brand` are
+ * written onto the document at runtime by `accent.ts`, from the worn face's
+ * `colBody`. The fallbacks below are the built-in's own green, so a window that
+ * paints before a persona resolves is already the right colour rather than
+ * briefly grey. `contrastFailures` is what stops a persona's hue shipping an
+ * unreadable interface.
+ */
+
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./fonts/archivo-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./fonts/archivo-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Archivo Narrow';
+  font-style: normal;
+  font-weight: 500 600;
+  font-display: swap;
+  src: url('./fonts/archivo-narrow-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Archivo Narrow';
+  font-style: normal;
+  font-weight: 500 600;
+  font-display: swap;
+  src: url('./fonts/archivo-narrow-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/ibm-plex-mono-400-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/ibm-plex-mono-400-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/ibm-plex-mono-500-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/ibm-plex-mono-500-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  /*
+   * Both schemes are real, and this is what makes `light-dark()` resolve.
+   * Without it every one of those pairs silently answers with its light half.
+   */
+  color-scheme: light dark;
+  /*
+   * Checkboxes, radios and progress in HER colour rather than the system's.
+   *
+   * `accent.ts` opens on exactly this: the first settings window used the OS
+   * accent, and *"borrowing the system blue makes the one window with her name
+   * on it look like it belongs to something else."* One property covers every
+   * native control in all three windows.
+   */
+  accent-color: var(--her);
+
+  /* ---- surfaces: warm paper, and a warm near-black rather than a cold grey - */
+  --paper: light-dark(#f4f1ea, #1a1b14);
+  --paper-2: light-dark(#fbf9f4, #22231a);
+  --paper-3: light-dark(#e9e4d7, #2e3024);
+  --rule: light-dark(#dbd5c6, #3c3e30);
+
+  /* ---- ink. light: 16.00 / 7.76 / 5.77 -- dark: 14.26 / 8.09 / 7.65 ------- */
+  --ink: light-dark(#16170f, #ece9dd);
+  --ink-2: light-dark(#4a4c40, #b3b2a1);
+  /* The pale end. Bounded by the DESKTOP, not by paper: 4.66:1 light, 4.63:1
+     dark. Anything paler than this is a line, not a word. */
+  --ink-3: light-dark(#5e5f50, #aead9c);
+
+  /* ---- hers. FALLBACKS ONLY -- accent.ts overwrites all five from colBody -- */
+  --her: #8ec8a8;
+  --her-hover: #7db095;
+  --her-ink: #16170f;
+  /* Her colour AS TEXT: dark green on paper, light green on dark. 9.25:1 and
+     10.94:1 on their own paper; 9.28:1 and 8.99:1 on their own wash. */
+  --ink-brand: light-dark(#24463a, #a9d8bd);
+  --her-wash: light-dark(#eaf4ee, #1e2e25);
+
+  /* ---- status: a fill, an edge, and an ink that reads ON the fill --------- */
+  /* 5.84:1 light, 7.86:1 dark, each on its own -bg. */
+  --red: light-dark(#b3261e, #f2a6a1);
+  --red-bg: light-dark(#fdefee, #33201f);
+  /* 6.89:1 light, 8.70:1 dark. */
+  --warn-ink: light-dark(#6f5010, #e2c078);
+  --warn-line: light-dark(#9a6f14, #a9821f);
+  --warn-bg: light-dark(#fdf6e6, #2c2517);
+
+  /* ---- type: three roles. Display+body, labels, data --------------------- */
+  --sans:
+    'Archivo', -apple-system, system-ui, 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK SC',
+    sans-serif;
+  --narrow: 'Archivo Narrow', 'Archivo', system-ui, 'PingFang SC', 'Hiragino Sans', sans-serif;
+  /* Sarasa is Iosevka fitted to Source Han at exactly two Latin cells per CJK
+     glyph, so a mono column of mixed script still aligns. IBM Plex Mono has no
+     CJK at all, which is why the fallback is NAMED rather than left to the OS --
+     and this app puts CJK and English on the same line by design. */
+  --mono: 'IBM Plex Mono', 'Sarasa Mono SC', 'Sarasa Mono J', ui-monospace, Menlo, monospace;
+
+  --t-title: clamp(30px, 4.4vw, 46px);
+  --t-h2: 26px;
+  --t-h3: 21px;
+  --t-lead: 17px;
+  --t-body: 15px; /* the floor for anything she says aloud */
+  --t-ui: 14px;
+  --t-sm: 13px;
+  --t-cap: 12.5px;
+  --t-data: 12px;
+  --t-label: 11px;
+  --t-micro: 10.5px;
+  --track: 0.14em; /* labels only, and labels are always uppercase */
+
+  /* ---- rhythm ------------------------------------------------------------ */
+  --s0: 2px;
+  --s1: 4px;
+  --s2: 6px;
+  --s3: 8px;
+  --s4: 12px;
+  --s5: 16px;
+  --s6: 20px;
+  --s7: 26px;
+  --s8: 72px;
+  --s-px: 1px;
+  --s-desk: 32px;
+
+  /* ---- shape: seven radii, each with a job ------------------------------- */
+  --r0: 2px; /* a bar */
+  --r1: 4px; /* a swatch, a chip */
+  --r2: 8px; /* anything you touch */
+  --r3: 10px; /* a stage inside a card */
+  --r4: 12px; /* a card */
+  --r5: 14px; /* a window */
+  --r-pill: 999px; /* a badge */
+
+  /* ---- elevation. On dark, a shadow is nearly invisible, so the hairline
+     carries more of the separation -- hence the per-scheme alphas. ---------- */
+  --hair: light-dark(rgb(22 23 15 / 12%), rgb(236 233 221 / 14%));
+  --hair-soft: light-dark(rgb(22 23 15 / 6%), rgb(236 233 221 / 8%));
+  --hair-desk: inset 0 0 0 1px light-dark(rgb(0 0 0 / 10%), rgb(236 233 221 / 10%));
+  --lift-1:
+    0 1px 2px light-dark(rgb(22 23 15 / 10%), rgb(0 0 0 / 40%)),
+    0 8px 18px light-dark(rgb(22 23 15 / 14%), rgb(0 0 0 / 46%));
+  --lift-2: 0 12px 30px light-dark(rgb(0 0 0 / 22%), rgb(0 0 0 / 58%));
+  --lift-window:
+    0 24px 60px light-dark(rgb(0 0 0 / 18%), rgb(0 0 0 / 62%)),
+    0 0 0 0.5px light-dark(rgb(0 0 0 / 20%), rgb(236 233 221 / 16%));
+
+  /*
+   * Motion. Referenced by the reduced-motion block below and never defined in
+   * the additive file, because they belonged to the base it was added to.
+   */
+  --duration-fast: 120ms;
+  --duration: 220ms;
+
+  --reading: 82ch;
+}
+
+/*
+ * Honoured, not ignored -- the same rule the handoff states for duration. The
+ * shelf has little motion of its own; when it gets some, it belongs here.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration: 0ms;
+  }
+}
