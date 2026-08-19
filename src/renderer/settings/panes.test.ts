@@ -16,6 +16,7 @@ import { PANES } from './panes'
 function settled(): SettingsView {
   return {
     face: MOCHI,
+    pronoun: 'she',
     capabilities: [{ name: 'ask_workspace', description: 'Look something up.' }],
     grants: [
       { id: 'microphone', allowed: true, lastUsed: { kind: 'not-recorded' } },

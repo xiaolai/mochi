@@ -1,4 +1,57 @@
 import type { NoteAction, PersonaAction, PersonaChange, ShelfView } from '@shared/ipc'
+import { forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
+
+/**
+ * Every sentence on this sheet that is ABOUT her, one phrasing per pronoun.
+ *
+ * Collected here rather than written at each site because that is what makes
+ * them reviewable as a set: a translator, or anybody adding a fourth pronoun,
+ * has one list to read instead of eight. Nothing that is not about her is here
+ * -- `prompt`, `notes`, `workspace` are labels for fields and are the same word
+ * whoever is worn.
+ */
+const SAYS = {
+  noFile: {
+    she: 'the built-in, with no file of her own',
+    he: 'the built-in, with no file of his own',
+    it: 'the built-in, with no file of its own',
+  },
+  nextWake: {
+    she: 'from her next wake',
+    he: 'from his next wake',
+    it: 'from its next wake',
+  },
+  bubble: {
+    she: 'show her words above her head',
+    he: 'show his words above his head',
+    it: 'show its words above its head',
+  },
+  noPrompt: {
+    she: 'She has no prompt of her own.',
+    he: 'He has no prompt of his own.',
+    it: 'It has no prompt of its own.',
+  },
+  noNotes: {
+    she: 'She has not written anything down about you yet.',
+    he: 'He has not written anything down about you yet.',
+    it: 'It has not written anything down about you yet.',
+  },
+  restore: {
+    she: 'Put the built-in back as she ships',
+    he: 'Put the built-in back as he ships',
+    it: 'Put the built-in back as it ships',
+  },
+  willBeTold: {
+    she: 'What she will be told',
+    he: 'What he will be told',
+    it: 'What it will be told',
+  },
+  assembled: {
+    she: 'Assembled from the plates on the left, on her next wake. Nothing here is sent until then.',
+    he: 'Assembled from the plates on the left, on his next wake. Nothing here is sent until then.',
+    it: 'Assembled from the plates on the left, on its next wake. Nothing here is sent until then.',
+  },
+} as const satisfies Readonly<Record<string, ByPronoun>>
 
 /**
  * The characters half of the shelf.
@@ -138,13 +191,13 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
   }
 
   page.append(
-    namePlate(worn, handlers),
+    namePlate(worn, view.pronoun, handlers),
     facePlate(view, worn, handlers),
     voicePlate(view, worn, handlers),
     promptPlate(view, worn, handlers),
     workspacePlate(view),
     memoryPlate(view, handlers),
-    actions(worn, handlers),
+    actions(worn, view.pronoun, handlers),
   )
   return page
 }
@@ -157,7 +210,11 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
  * twice, and the one on top would be the one that is not a control. Editing a
  * character happens in the plates, which is where 1a puts every other field.
  */
-function namePlate(worn: ShelfView['characters'][number], handlers: ShelfHandlers): HTMLElement {
+function namePlate(
+  worn: ShelfView['characters'][number],
+  pronoun: Pronoun,
+  handlers: ShelfHandlers,
+): HTMLElement {
   const name = element('input')
   name.type = 'text'
   name.value = worn.name
@@ -173,7 +230,7 @@ function namePlate(worn: ShelfView['characters'][number], handlers: ShelfHandler
   })
   // Where her file is, beside the field that renames it — the one place that
   // answers "which of these on disk am I editing".
-  return plate('name', name, worn.source ?? 'the built-in, with no file of her own')
+  return plate('name', name, worn.source ?? forPronoun(SAYS.noFile, pronoun))
 }
 
 /** A plate: a tracked label, a control, and what it actually resolved to. */
@@ -251,7 +308,7 @@ function voicePlate(
   })
   // §21 locks the voice after her first audio, so a change is a reconnect
   // rather than an update — which is the same shape as changing who she is.
-  return plate('voice', voice, 'from her next wake')
+  return plate('voice', voice, forPronoun(SAYS.nextWake, view.pronoun))
 }
 
 /**
@@ -278,7 +335,7 @@ function promptPlate(
   bubble.addEventListener('change', () => {
     handlers.save({ id: worn.id, bubble: bubble.checked })
   })
-  const label = element('label', undefined, 'show her words above her head')
+  const label = element('label', undefined, forPronoun(SAYS.bubble, view.pronoun))
   label.htmlFor = 'bubble'
   const wrap = element('div', 'row')
   wrap.append(bubble, label)
@@ -287,7 +344,7 @@ function promptPlate(
   const body = element('div', 'body-pad')
   const text = element('pre')
   text.textContent =
-    view.plates.prompt === '' ? 'She has no prompt of her own.' : view.plates.prompt
+    view.plates.prompt === '' ? forPronoun(SAYS.noPrompt, view.pronoun) : view.plates.prompt
   if (view.plates.prompt === '') text.classList.add('empty-note')
   body.append(text)
 
@@ -343,8 +400,7 @@ function memoryPlate(view: ShelfView, handlers: ShelfHandlers): HTMLElement {
 
   const body = element('div', 'body-pad')
   const text = element('pre')
-  text.textContent =
-    view.note.text === '' ? 'She has not written anything down about you yet.' : view.note.text
+  text.textContent = view.note.text === '' ? forPronoun(SAYS.noNotes, view.pronoun) : view.note.text
   if (view.note.text === '') text.classList.add('empty-note')
   body.append(text)
 
@@ -360,7 +416,11 @@ function memoryPlate(view: ShelfView, handlers: ShelfHandlers): HTMLElement {
  * and her conversations are filed under: choosing one from here would be
  * choosing whose leftovers a new character inherits.
  */
-function actions(worn: ShelfView['characters'][number], handlers: ShelfHandlers): HTMLElement {
+function actions(
+  worn: ShelfView['characters'][number],
+  pronoun: Pronoun,
+  handlers: ShelfHandlers,
+): HTMLElement {
   const wrap = element('div', 'actions')
 
   const name = element('input')
@@ -408,7 +468,7 @@ function actions(worn: ShelfView['characters'][number], handlers: ShelfHandlers)
     // The built-in has no file to delete. What somebody actually wants here is
     // her original prompt back, which lives in the source and not in this
     // window — so without this, editing her is a one-way door.
-    const restore = element('button', 'btn', 'Put the built-in back as she ships')
+    const restore = element('button', 'btn', forPronoun(SAYS.restore, pronoun))
     restore.type = 'button'
     restore.addEventListener('click', () => {
       once(() => {
@@ -449,16 +509,12 @@ function actions(worn: ShelfView['characters'][number], handlers: ShelfHandlers)
 export function assembledPanel(view: ShelfView): readonly HTMLElement[] {
   const head = element('div', 'row')
   head.append(
-    element('h4', undefined, 'What she will be told'),
+    element('h4', undefined, forPronoun(SAYS.willBeTold, view.pronoun)),
     element('span', 'grow'),
     element('span', 'meta', `${String(view.assembled.length)} chars`),
   )
   const body = element('pre')
   body.textContent = view.assembled
-  const foot = element(
-    'p',
-    'note',
-    'Assembled from the plates on the left, on her next wake. Nothing here is sent until then.',
-  )
+  const foot = element('p', 'note', forPronoun(SAYS.assembled, view.pronoun))
   return [head, body, foot]
 }

@@ -18,6 +18,7 @@ import {
   type ShelfView,
   type VoiceReport,
 } from '@shared/ipc'
+import type { Pronoun } from '@shared/pronoun'
 import { CAPABILITIES } from '../capabilities'
 import { createLedger, type AnswerFrame } from './capability/ledger'
 import { handleCall } from './capability/dispatch'
@@ -215,6 +216,7 @@ function menuModel(): TrayModel {
   return {
     personas: [...catalog.personas.values()].map((one) => ({ id: one.id, name: one.name })),
     wornId: activePersona(catalog, readWornPersonaId(userData)).persona.id,
+    pronoun: activePersona(catalog, readWornPersonaId(userData)).persona.pronoun,
     bubble: { ...bubbleSides, asked: readBubbleSide(userData) },
     resting,
     keys: {
@@ -581,6 +583,18 @@ let sessionPersona: string | null = null
  * settings window — and the last two only want it to take her colour from. Two
  * derivations of "what does she look like" would be two accents.
  */
+/**
+ * Which words the worn character takes.
+ *
+ * Its own read rather than a field threaded through `wornFace`, because the two
+ * callers want different things and neither wants both: the shelf already has
+ * the persona in hand, settings has only a path.
+ */
+function wornPronoun(userData: string): Pronoun {
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  return activePersona(catalog, readWornPersonaId(userData)).persona.pronoun
+}
+
 function wornFace(userData: string): FaceSpec {
   const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
   const worn = activePersona(catalog, readWornPersonaId(userData)).persona
@@ -1035,6 +1049,9 @@ ipcMain.handle('settings:read', (): SettingsView => {
     // way `voice:config` does, so the settings window and her own window are
     // never two answers to what she looks like.
     face: wornFace(userData),
+    // Read the same way her face is, and from the same persona, so this window
+    // and her own can never disagree about who is worn.
+    pronoun: wornPronoun(userData),
     capabilities: listCapabilities(registry),
     grants: listGrants(readGrants(userData), readUsage(userData)),
     lookup: listLookup({
@@ -1121,6 +1138,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
       packageFolder(worn.id, catalog.sources),
       worn.avatarId,
     ).face,
+    pronoun: worn.pronoun,
     // Her state, for the strip across the top. `resting` is held in this
     // process because three things change it; the grant is read from disk
     // because one window changes it and this is another.

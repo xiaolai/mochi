@@ -28,7 +28,14 @@ describe('the only way out', () => {
     // of the Dock, and `window-all-closed` does not quit on macOS — so without
     // this the only exit is Activity Monitor.
     const bare = trayMenuTemplate(
-      { personas: [], wornId: 'mochi', bubble: BUBBLE, resting: RESTING, keys: KEYS },
+      {
+        personas: [],
+        wornId: 'mochi',
+        pronoun: 'she' as const,
+        bubble: BUBBLE,
+        resting: RESTING,
+        keys: KEYS,
+      },
       HANDLERS,
       'Mochi',
     )
@@ -37,7 +44,14 @@ describe('the only way out', () => {
 
   it('spells the shortcut out, because there is no application menu to carry it', () => {
     const template = trayMenuTemplate(
-      { personas: [], wornId: 'mochi', bubble: BUBBLE, resting: RESTING, keys: KEYS },
+      {
+        personas: [],
+        wornId: 'mochi',
+        pronoun: 'she' as const,
+        bubble: BUBBLE,
+        resting: RESTING,
+        keys: KEYS,
+      },
       HANDLERS,
       'Mochi',
     )
@@ -47,7 +61,14 @@ describe('the only way out', () => {
 
   it('offers both windows, which are otherwise reached only by hovering her', () => {
     const template = trayMenuTemplate(
-      { personas: [], wornId: 'mochi', bubble: BUBBLE, resting: RESTING, keys: KEYS },
+      {
+        personas: [],
+        wornId: 'mochi',
+        pronoun: 'she' as const,
+        bubble: BUBBLE,
+        resting: RESTING,
+        keys: KEYS,
+      },
       HANDLERS,
       'Mochi',
     )
@@ -62,6 +83,7 @@ describe('who she is, and who she could be', () => {
       { id: 'loki', name: 'Loki' },
     ],
     wornId: 'loki',
+    pronoun: 'she' as const,
     bubble: BUBBLE,
     resting: RESTING,
     keys: KEYS,
@@ -89,6 +111,7 @@ describe('who she is, and who she could be', () => {
     const alone = {
       personas: [{ id: 'mochi', name: 'Mochi' }],
       wornId: 'mochi',
+      pronoun: 'she' as const,
       bubble: BUBBLE,
       resting: RESTING,
       keys: KEYS,
@@ -104,6 +127,7 @@ describe('who she is, and who she could be', () => {
     const stray = {
       personas: [{ id: 'mochi', name: 'Mochi' }],
       wornId: 'nobody',
+      pronoun: 'she' as const,
       bubble: BUBBLE,
       resting: RESTING,
       keys: KEYS,
@@ -125,6 +149,7 @@ describe('choosing where she speaks from', () => {
   const AT_CORNER = {
     personas: [{ id: 'mochi', name: 'Mochi' }],
     wornId: 'mochi',
+    pronoun: 'she' as const,
     bubble: { available: ['above', 'left'], asked: 'auto', using: 'above' },
     resting: RESTING,
     keys: KEYS,
@@ -187,7 +212,13 @@ describe('resting and hiding', () => {
       one.type === 'separator' ? '—' : String(one.label),
     )
   }
-  const BASE = { personas: [], wornId: 'mochi', bubble: BUBBLE, keys: KEYS }
+  const BASE = {
+    personas: [],
+    wornId: 'mochi',
+    pronoun: 'she' as const,
+    bubble: BUBBLE,
+    keys: KEYS,
+  }
 
   it('says what pressing it DOES, not what she currently is', () => {
     // Read at a glance by somebody who wants her quiet NOW. A checkbox marked

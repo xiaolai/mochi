@@ -1,5 +1,6 @@
 import type { GrantUse, LookupChange, Revealable, ScreenChange, SettingsView } from '@shared/ipc'
 import { GRANT_SPECS } from '@shared/grants'
+import { forPronoun, type ByPronoun } from '@shared/pronoun'
 
 /**
  * The six groups, one at a time.
@@ -34,6 +35,101 @@ import { GRANT_SPECS } from '@shared/grants'
  * looking at.
  */
 
+/**
+ * Every sentence in this window that is ABOUT her, one phrasing per pronoun.
+ *
+ * Group NAMES are deliberately mixed in with them rather than kept apart:
+ * "Looking things up" and "Keys" are the same words whoever is worn, and
+ * writing each three times would put one word in three slots and invite
+ * somebody to change one of them. `Pane.label` is therefore `string |
+ * ByPronoun`, and `label()` is what reads either kind -- which is the case
+ * `pronoun.ts` describes and the reason that function exists.
+ */
+const SAYS = {
+  mayDo: { she: 'What she may do', he: 'What he may do', it: 'What it may do' },
+  atOnce: {
+    she:
+      'Turning one off takes effect at once, and she is told — she will say she can no longer ' +
+      'do it rather than quietly failing. Speaking first is the exception: it is decided when ' +
+      'she wakes, so that one applies from her next wake.',
+    he:
+      'Turning one off takes effect at once, and he is told — he will say he can no longer ' +
+      'do it rather than quietly failing. Speaking first is the exception: it is decided when ' +
+      'he wakes, so that one applies from his next wake.',
+    it:
+      'Turning one off takes effect at once, and it is told — it will say it can no longer ' +
+      'do it rather than quietly failing. Speaking first is the exception: it is decided when ' +
+      'it wakes, so that one applies from its next wake.',
+  },
+  told: {
+    she: 'What she is told she can do',
+    he: 'What he is told he can do',
+    it: 'What it is told it can do',
+  },
+  noTools: {
+    she: 'Nothing. She is offered no tools at all, which is a fault in this build.',
+    he: 'Nothing. He is offered no tools at all, which is a fault in this build.',
+    it: 'Nothing. It is offered no tools at all, which is a fault in this build.',
+  },
+  noCli: {
+    she: 'The Codex CLI could not be found, so she cannot look anything up.',
+    he: 'The Codex CLI could not be found, so he cannot look anything up.',
+    it: 'The Codex CLI could not be found, so it cannot look anything up.',
+  },
+  noCliLong: {
+    she:
+      'The Codex CLI could not be found on this machine, so nothing here has anything to ' +
+      'run. She says so out loud rather than answering from memory.',
+    he:
+      'The Codex CLI could not be found on this machine, so nothing here has anything to ' +
+      'run. He says so out loud rather than answering from memory.',
+    it:
+      'The Codex CLI could not be found on this machine, so nothing here has anything to ' +
+      'run. It says so out loud rather than answering from memory.',
+  },
+  sides: {
+    she:
+      'A side that will not fit is not honoured — dragged into a corner she puts her words ' +
+      'wherever there is room. Whether she shows them at all is per character, on the shelf.',
+    he:
+      'A side that will not fit is not honoured — dragged into a corner he puts his words ' +
+      'wherever there is room. Whether he shows them at all is per character, on the shelf.',
+    it:
+      'A side that will not fit is not honoured — dragged into a corner it puts its words ' +
+      'wherever there is room. Whether it shows them at all is per character, on the shelf.',
+  },
+  kept: {
+    she:
+      'What she remembers and how long conversations are kept are per character, and live ' +
+      'on the shelf with the character they belong to.',
+    he:
+      'What he remembers and how long conversations are kept are per character, and live ' +
+      'on the shelf with the character they belong to.',
+    it:
+      'What it remembers and how long conversations are kept are per character, and live ' +
+      'on the shelf with the character they belong to.',
+  },
+  everythingOf: {
+    she: 'Everything of hers is under ',
+    he: 'Everything of his is under ',
+    it: 'Everything of its is under ',
+  },
+  whoSheIs: {
+    she:
+      'Who she is — her name, her voice, her face, her prompt, her bubble and what she ' +
+      'remembers about you — is on the shelf, with the character it belongs to. This ' +
+      'window holds only what is true whoever is worn.',
+    he:
+      'Who he is — his name, his voice, his face, his prompt, his bubble and what he ' +
+      'remembers about you — is on the shelf, with the character it belongs to. This ' +
+      'window holds only what is true whoever is worn.',
+    it:
+      'Who it is — its name, its voice, its face, its prompt, its bubble and what it ' +
+      'remembers about you — is on the shelf, with the character it belongs to. This ' +
+      'window holds only what is true whoever is worn.',
+  },
+} as const satisfies Readonly<Record<string, ByPronoun>>
+
 export interface PaneHandlers {
   readonly lookup: (change: LookupChange) => void
   readonly screen: (change: ScreenChange) => void
@@ -44,7 +140,8 @@ export interface PaneHandlers {
 
 export interface Pane {
   readonly id: string
-  readonly label: string
+  /** What the nav calls it. A table only when the name is about HER. */
+  readonly label: string | ByPronoun
   /** Why this group needs looking at, or null. Drives the dot in the nav. */
   readonly attention: (view: SettingsView) => string | null
   readonly render: (view: SettingsView, handlers: PaneHandlers) => readonly Node[]
@@ -104,7 +201,7 @@ function lastUsedLabel(use: GrantUse): string {
 /** 5b's four standing grants, and everything she is told she can do. */
 const MAY_DO: Pane = {
   id: 'may-do',
-  label: 'What she may do',
+  label: SAYS.mayDo,
   attention: () => null,
   render(view, handlers) {
     const rows = view.grants.map((grant) => {
@@ -114,7 +211,7 @@ const MAY_DO: Pane = {
       const left = element('div')
       left.append(
         element('div', 'name', spec?.label ?? grant.id),
-        element('p', 'desc', spec?.detail ?? ''),
+        element('p', 'desc', spec === undefined ? '' : forPronoun(spec.detail, view.pronoun)),
       )
 
       const allowed = element('input')
@@ -135,26 +232,11 @@ const MAY_DO: Pane = {
       return row
     })
 
-    const note = element(
-      'p',
-      'note',
-      'Turning one off takes effect at once, and she is told — she will say she can no longer ' +
-        'do it rather than quietly failing. Speaking first is the exception: it is decided when ' +
-        'she wakes, so that one applies from her next wake.',
-    )
+    const note = element('p', 'note', forPronoun(SAYS.atOnce, view.pronoun))
 
-    const heading = element('h3', undefined, 'What she is told she can do')
+    const heading = element('h3', undefined, forPronoun(SAYS.told, view.pronoun))
     if (view.capabilities.length === 0) {
-      return [
-        ...rows,
-        note,
-        heading,
-        element(
-          'p',
-          'note',
-          'Nothing. She is offered no tools at all, which is a fault in this build.',
-        ),
-      ]
+      return [...rows, note, heading, element('p', 'note', forPronoun(SAYS.noTools, view.pronoun))]
     }
     return [
       ...rows,
@@ -183,10 +265,7 @@ const MAY_DO: Pane = {
 const LOOKING: Pane = {
   id: 'looking',
   label: 'Looking things up',
-  attention: (view) =>
-    view.lookup.codexFound
-      ? null
-      : 'The Codex CLI could not be found, so she cannot look anything up.',
+  attention: (view) => (view.lookup.codexFound ? null : forPronoun(SAYS.noCli, view.pronoun)),
   render(view, handlers) {
     const workspace = element('input')
     workspace.type = 'text'
@@ -235,14 +314,7 @@ const LOOKING: Pane = {
     if (!view.lookup.codexFound) {
       // First, because everything below it is configuration for something that
       // cannot run. Without this the failure presents as her declining to help.
-      parts.unshift(
-        element(
-          'p',
-          'note bad',
-          'The Codex CLI could not be found on this machine, so nothing here has anything to ' +
-            'run. She says so out loud rather than answering from memory.',
-        ),
-      )
+      parts.unshift(element('p', 'note bad', forPronoun(SAYS.noCliLong, view.pronoun)))
     }
     if (view.lookup.workspaceIsDefault) {
       parts.push(element('p', 'note', 'Nobody has chosen one, so this is the default.'))
@@ -279,12 +351,7 @@ const ON_SCREEN: Pane = {
     })
     return [
       field('Speech bubble', side),
-      element(
-        'p',
-        'note',
-        'A side that will not fit is not honoured — dragged into a corner she puts her words ' +
-          'wherever there is room. Whether she shows them at all is per character, on the shelf.',
-      ),
+      element('p', 'note', forPronoun(SAYS.sides, view.pronoun)),
     ]
   },
 }
@@ -350,15 +417,7 @@ const WHERE: Pane = {
       row.append(left, open)
       return row
     })
-    return [
-      ...rows,
-      element(
-        'p',
-        'note',
-        'What she remembers and how long conversations are kept are per character, and live ' +
-          'on the shelf with the character they belong to.',
-      ),
-    ]
+    return [...rows, element('p', 'note', forPronoun(SAYS.kept, view.pronoun))]
   },
 }
 
@@ -369,18 +428,15 @@ const ABOUT: Pane = {
   attention: () => null,
   render(view) {
     const where = element('p', 'note')
-    where.append('Everything of hers is under ', element('code', undefined, view.about.userData))
+    where.append(
+      forPronoun(SAYS.everythingOf, view.pronoun),
+      element('code', undefined, view.about.userData),
+    )
     return [
       field('Application', element('div', undefined, `${view.about.name} ${view.about.version}`)),
       field('Electron', element('div', undefined, view.about.electron)),
       where,
-      element(
-        'p',
-        'note',
-        'Who she is — her name, her voice, her face, her prompt, her bubble and what she ' +
-          'remembers about you — is on the shelf, with the character it belongs to. This ' +
-          'window holds only what is true whoever is worn.',
-      ),
+      element('p', 'note', forPronoun(SAYS.whoSheIs, view.pronoun)),
     ]
   },
 }

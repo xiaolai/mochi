@@ -27,11 +27,19 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { Menu, Tray, app, nativeImage } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
+import { forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
 
 export interface TrayModel {
   /** Everyone she could be, and who she is. */
   readonly personas: readonly { readonly id: string; readonly name: string }[]
   readonly wornId: string
+  /**
+   * Which words this menu uses for the worn character.
+   *
+   * Six of its labels are about her rather than about the app, and every one of
+   * them said "her" whatever the persona stored.
+   */
+  readonly pronoun: Pronoun
   /**
    * Where the bubble could go right now, what was asked for, and where it is.
    *
@@ -92,7 +100,7 @@ export function trayMenuTemplate(
      * and there would be no way to tell the two apart.
      */
     {
-      label: model.resting.asleep ? 'Wake her' : 'Let her rest',
+      label: forPronoun(model.resting.asleep ? WAKE : REST, model.pronoun),
       // Spread rather than `?? undefined`: with `exactOptionalPropertyTypes` an
       // explicit `undefined` is not the same as an absent key, and an absent
       // key is what "no accelerator" means.
@@ -100,7 +108,7 @@ export function trayMenuTemplate(
       click: handlers.onRest,
     },
     {
-      label: model.resting.hidden ? 'Show her' : 'Hide her',
+      label: forPronoun(model.resting.hidden ? SHOW : HIDE, model.pronoun),
       ...(model.keys.hide === null ? {} : { accelerator: model.keys.hide }),
       click: handlers.onHide,
     },
@@ -142,7 +150,12 @@ export function trayMenuTemplate(
          * that the feature is broken rather than that the screen ends there.
          */
         ...model.bubble.available.map((side): MenuItemConstructorOptions => ({
-          label: SIDE_NAMES[side] ?? side,
+          // `?? side` keeps a side this menu has no name for readable rather
+          // than blank -- the raw key is at least true.
+          label: (() => {
+            const named = SIDE_NAMES[side]
+            return named === undefined ? side : forPronoun(named, model.pronoun)
+          })(),
           type: 'radio',
           checked: model.bubble.asked === side,
           click: () => {
@@ -164,12 +177,24 @@ export function trayMenuTemplate(
  * "Above her" rather than "Top", because the menu is about where she speaks
  * from, not about a corner of a box.
  */
-const SIDE_NAMES: Readonly<Record<string, string>> = {
-  above: 'Above her',
-  below: 'Below her',
-  left: 'To her left',
-  right: 'To her right',
+const SIDE_NAMES: Readonly<Record<string, ByPronoun>> = {
+  above: { she: 'Above her', he: 'Above him', it: 'Above it' },
+  below: { she: 'Below her', he: 'Below him', it: 'Below it' },
+  left: { she: 'To her left', he: 'To his left', it: 'To its left' },
+  right: { she: 'To her right', he: 'To his right', it: 'To its right' },
 }
+
+/**
+ * The four labels that are about HER rather than about the app.
+ *
+ * "Shelf…" and "Settings…" are not here and should not be: they name windows,
+ * and writing them three times would put the same word in three slots and
+ * invite somebody to change one of them.
+ */
+const WAKE: ByPronoun = { she: 'Wake her', he: 'Wake him', it: 'Wake it' }
+const REST: ByPronoun = { she: 'Let her rest', he: 'Let him rest', it: 'Let it rest' }
+const SHOW: ByPronoun = { she: 'Show her', he: 'Show him', it: 'Show it' }
+const HIDE: ByPronoun = { she: 'Hide her', he: 'Hide him', it: 'Hide it' }
 
 /**
  * Which asset, per platform. Conventions, not duplication.

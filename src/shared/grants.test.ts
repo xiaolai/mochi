@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PRONOUNS } from './pronoun'
 import {
   allowsCapability,
   grantsNotice,
@@ -33,7 +34,15 @@ describe('the four', () => {
     for (const spec of GRANT_SPECS) {
       expect(spec.withheld.trim().length).toBeGreaterThan(0)
       expect(spec.label.trim().length).toBeGreaterThan(0)
-      expect(spec.detail.trim().length).toBeGreaterThan(0)
+      // Every form, not just one: a table with an empty `it` reads as covered
+      // and ships a blank line to anybody who chose that pronoun.
+      // Every form, not just one: a table with an empty `it` reads as covered
+      // and ships a blank line to anybody who chose that pronoun.
+      for (const pronoun of PRONOUNS) expect(spec.detail[pronoun].trim().length).toBeGreaterThan(0)
+      // And three DIFFERENT sentences. Copying the row and forgetting to change
+      // the pronoun is the way one of these goes wrong, and it is invisible
+      // unless somebody reads all three side by side.
+      expect(new Set(PRONOUNS.map((one) => spec.detail[one])).size).toBe(PRONOUNS.length)
     }
   })
 })

@@ -7,6 +7,7 @@ import type {
   SettingsWrite,
   ShelfView,
 } from '@shared/ipc'
+import { DEFAULT_PRONOUN, forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
 import { applyAccent } from '../design/apply-accent'
 import { highlight, lengthLabel, whenLabel } from './format'
 import { assembledPanel, characterCards, characterSheet, type ShelfHandlers } from './shelf'
@@ -227,28 +228,84 @@ function renderWake(): void {
  * click. A wake opens a new session, so nothing is torn down; the sheet says
  * as much rather than leaving somebody to wonder whether it took.
  */
+/**
+ * Every message this window writes that is ABOUT her, one phrasing per pronoun.
+ *
+ * Read against `shelf.pronoun`, which is re-read on every draw, so a character
+ * switch rewords these on the same pass that redraws the sheet.
+ */
+const SAYS = {
+  worn: {
+    she: 'Worn. She will be this character from her next wake.',
+    he: 'Worn. He will be this character from his next wake.',
+    it: 'Worn. It will be this character from its next wake.',
+  },
+  saved: {
+    she: 'Saved. It takes effect on her next wake.',
+    he: 'Saved. It takes effect on his next wake.',
+    it: 'Saved. It takes effect on its next wake.',
+  },
+  deleted: {
+    she: 'Deleted, with her notes and her conversations. The built-in is worn now.',
+    he: 'Deleted, with his notes and his conversations. The built-in is worn now.',
+    it: 'Deleted, with its notes and its conversations. The built-in is worn now.',
+  },
+  restored: {
+    she: 'The built-in is back as she ships.',
+    he: 'The built-in is back as he ships.',
+    it: 'The built-in is back as it ships.',
+  },
+  made: {
+    she: 'Made, and worn. She will be this character from her next wake.',
+    he: 'Made, and worn. He will be this character from his next wake.',
+    it: 'Made, and worn. It will be this character from its next wake.',
+  },
+  /** The speaker's name on a transcript turn. The other one is always "you". */
+  spoke: { she: 'her', he: 'him', it: 'it' },
+  cutEarly: {
+    she: 'interrupted before she got a word out',
+    he: 'interrupted before he got a word out',
+    it: 'interrupted before it got a word out',
+  },
+  noTalks: {
+    she: 'Nothing has been kept yet. Conversations appear here once she has been awake and retention is on.',
+    he: 'Nothing has been kept yet. Conversations appear here once he has been awake and retention is on.',
+    it: 'Nothing has been kept yet. Conversations appear here once it has been awake and retention is on.',
+  },
+  troubles: {
+    she: 'Things she could not load since she woke up. Each one fell back to a working default, so nothing here stopped her — but a file you edited may not be the one she is using.',
+    he: 'Things he could not load since he woke up. Each one fell back to a working default, so nothing here stopped him — but a file you edited may not be the one he is using.',
+    it: 'Things it could not load since it woke up. Each one fell back to a working default, so nothing here stopped it — but a file you edited may not be the one it is using.',
+  },
+} as const satisfies Readonly<Record<string, ByPronoun>>
+
+/**
+ * Which words to use right now.
+ *
+ * `DEFAULT_PRONOUN` until the first read answers, which is the same fallback
+ * `parsePersona` applies to a file that does not say -- not a guess invented
+ * here.
+ */
+function saying(): Pronoun {
+  return shelf?.pronoun ?? DEFAULT_PRONOUN
+}
+
 const handlers: ShelfHandlers = {
   wear: (id) => {
     generation += 1
-    void write(
-      () => window.mochiHistory.wear(id),
-      'Worn. She will be this character from her next wake.',
-    )
+    void write(() => window.mochiHistory.wear(id), forPronoun(SAYS.worn, saying()))
   },
   save: (change) => {
-    void write(
-      () => window.mochiHistory.saveCharacter(change),
-      'Saved. It takes effect on her next wake.',
-    )
+    void write(() => window.mochiHistory.saveCharacter(change), forPronoun(SAYS.saved, saying()))
   },
   persona: (action) => {
     void write(
       () => window.mochiHistory.character(action),
       action.kind === 'delete'
-        ? 'Deleted, with her notes and her conversations. The built-in is worn now.'
+        ? forPronoun(SAYS.deleted, saying())
         : action.kind === 'restore-built-in'
-          ? 'The built-in is back as she ships.'
-          : 'Made, and worn. She will be this character from her next wake.',
+          ? forPronoun(SAYS.restored, saying())
+          : forPronoun(SAYS.made, saying()),
     )
   },
   memory: (action) => {
@@ -382,7 +439,7 @@ async function show(token: string, term: string): Promise<void> {
     block.className = `turn ${turn.who}`
     const who = document.createElement('div')
     who.className = 'who'
-    who.textContent = turn.who === 'her' ? 'her' : 'you'
+    who.textContent = turn.who === 'her' ? forPronoun(SAYS.spoke, saying()) : 'you'
     const said = document.createElement('p')
     said.append(marked(turn.text, term))
     block.append(who, said)
@@ -392,7 +449,7 @@ async function show(token: string, term: string): Promise<void> {
       // it was cut can also discount the last few words.
       const note = document.createElement('div')
       note.className = 'cut'
-      note.textContent = turn.text === '' ? 'interrupted before she got a word out' : 'interrupted'
+      note.textContent = turn.text === '' ? forPronoun(SAYS.cutEarly, saying()) : 'interrupted'
       block.append(note)
     }
     transcript.append(block)
@@ -403,10 +460,7 @@ async function show(token: string, term: string): Promise<void> {
 
 function renderList(now: number): void {
   if (conversations.length === 0) {
-    empty(
-      listEl,
-      'Nothing has been kept yet. Conversations appear here once she has been awake and retention is on.',
-    )
+    empty(listEl, forPronoun(SAYS.noTalks, saying()))
     return
   }
   listEl.replaceChildren(
@@ -518,8 +572,7 @@ function renderProblems(problems: readonly HistoryProblem[]): void {
   // Says what it is AND what it is not. Everything here already fell back to
   // something working, so the reader is being told about a file that was
   // ignored, not about a broken app.
-  lead.textContent =
-    'Things she could not load since she woke up. Each one fell back to a working default, so nothing here stopped her — but a file you edited may not be the one she is using.'
+  lead.textContent = forPronoun(SAYS.troubles, saying())
   page.append(lead)
 
   for (const problem of problems) {

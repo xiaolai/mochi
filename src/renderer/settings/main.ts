@@ -1,5 +1,12 @@
 import type { MochiSettingsApi, SettingsView, SettingsWrite } from '@shared/ipc'
 import { applyAccent } from '../design/apply-accent'
+import {
+  DEFAULT_PRONOUN,
+  forPronoun,
+  label as label_,
+  type ByPronoun,
+  type Pronoun,
+} from '@shared/pronoun'
 import { PANES, type PaneHandlers } from './panes'
 
 declare global {
@@ -78,12 +85,55 @@ async function write(act: () => Promise<SettingsWrite>, done: string): Promise<v
   await load()
 }
 
+/**
+ * The three messages this window writes that are about her.
+ *
+ * Read against the pronoun the LAST read answered with, because that is what is
+ * on screen at the moment the message appears.
+ */
+const SAYS = {
+  lookup: {
+    she: 'Saved. It applies to her next lookup.',
+    he: 'Saved. It applies to his next lookup.',
+    it: 'Saved. It applies to its next lookup.',
+  },
+  moved: {
+    she: 'Saved. She has moved her words already.',
+    he: 'Saved. He has moved his words already.',
+    it: 'Saved. It has moved its words already.',
+  },
+  nextWake: {
+    she: 'from her next wake',
+    he: 'from his next wake',
+    it: 'from its next wake',
+  },
+} as const satisfies Readonly<Record<string, ByPronoun>>
+
+/**
+ * The pronoun the last read answered with, for the handlers.
+ *
+ * `renderNav` and `renderPane` are handed the view and use `view.pronoun`
+ * directly; these three are event handlers with no view in scope, and the
+ * message they write appears against whatever is already drawn. Held rather
+ * than re-fetched for that reason -- fetching would be asking a second time
+ * about a window that has not been redrawn.
+ *
+ * `DEFAULT_PRONOUN` before the first read, which is the same fallback
+ * `parsePersona` applies to a file that does not say, not a guess invented
+ * here.
+ */
+let drawnPronoun: Pronoun = DEFAULT_PRONOUN
+
+function saying(): Pronoun {
+  return drawnPronoun
+}
+
 const handlers: PaneHandlers = {
   lookup: (change) => {
-    void write(() => window.mochiSettings.lookup(change), 'Saved. It applies to her next lookup.')
+    void write(() => window.mochiSettings.lookup(change), forPronoun(SAYS.lookup, saying()))
   },
   screen: (change) => {
-    void write(() => window.mochiSettings.screen(change), 'Saved. She has moved her words already.')
+    void write(() => window.mochiSettings.screen(change), forPronoun(SAYS.moved, saying()))
   },
   grant: (change) => {
     /**
@@ -94,7 +144,7 @@ const handlers: PaneHandlers = {
      * carrying its own sentence when the live session could not be told, so
      * this only ever speaks for the case where everything landed.
      */
-    const when = change.id === 'speak_first' ? 'from her next wake' : 'now'
+    const when = change.id === 'speak_first' ? forPronoun(SAYS.nextWake, saying()) : 'now'
     void write(
       () => window.mochiSettings.grant(change),
       change.allowed
@@ -125,7 +175,7 @@ function renderNav(view: SettingsView): void {
       button.setAttribute('aria-current', String(one.id === openPane))
 
       const label = document.createElement('span')
-      label.textContent = one.label
+      label.textContent = label_(one.label, view.pronoun)
       // The spacer, so the dot sits against the right edge whatever the label
       // is — the artifact's own row shape, and it survives translation.
       const grow = document.createElement('span')
@@ -168,7 +218,7 @@ function renderPane(view: SettingsView): void {
     return
   }
   const heading = document.createElement('h2')
-  heading.textContent = showing.label
+  heading.textContent = label_(showing.label, view.pronoun)
   paneEl.replaceChildren(heading, ...showing.render(view, handlers))
   // Only when the GROUP changes. Every write re-reads and redraws, so a switch
   // toggled halfway down a pane used to throw the page back to the top under
@@ -191,6 +241,7 @@ async function load(): Promise<void> {
    * re-reads on focus precisely so it never shows the last one's.
    */
   const unreadable = applyAccent(document.documentElement, view.face)
+  drawnPronoun = view.pronoun
   renderNav(view)
   renderPane(view)
   if (unreadable.length > 0) {

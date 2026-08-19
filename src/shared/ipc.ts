@@ -425,6 +425,16 @@ export interface SettingsView {
    * main computing them would be a second place the rule lives.
    */
   readonly face: FaceSpec
+  /**
+   * Which words this interface uses for the worn character.
+   *
+   * Sent rather than assumed, which is the whole reason `Persona.pronoun`
+   * exists: `persona.test.ts` says in so many words that switching character has
+   * to switch it too. It was validated, stored, migrated and tested for the
+   * length of this build and never rendered -- so `he` and `it` were both
+   * accepted and both still came out "her".
+   */
+  readonly pronoun: Pronoun
   readonly capabilities: readonly SettingsCapability[]
   /** The four standing grants, in the order `GRANT_SPECS` declares them. */
   readonly grants: readonly SettingsGrant[]
@@ -574,6 +584,7 @@ export type VoiceReport =
   | { readonly kind: 'note'; readonly text: string }
 
 import type { FaceSpec } from './avatar-spec'
+import type { Pronoun } from './pronoun'
 
 /** What `session.update` is built from. Assembled in main; sent by the renderer. */
 export interface SessionConfig {
@@ -808,6 +819,16 @@ export interface ShelfView {
   readonly characters: readonly ShelfCharacter[]
   readonly avatars: readonly SettingsAvatar[]
   readonly voices: readonly string[]
+  /**
+   * Which words this interface uses for the worn character.
+   *
+   * Sent rather than assumed, which is the whole reason `Persona.pronoun`
+   * exists: `persona.test.ts` says in so many words that switching character has
+   * to switch it too. It was validated, stored, migrated and tested for the
+   * length of this build and never rendered -- so `he` and `it` were both
+   * accepted and both still came out "her".
+   */
+  readonly pronoun: Pronoun
   readonly plates: ShelfPlates
   /**
    * Exactly what she will be told on the next wake.

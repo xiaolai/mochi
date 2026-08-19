@@ -36,6 +36,8 @@
  */
 
 /** The four. The order is the order they are drawn in. */
+import type { ByPronoun } from './pronoun'
+
 export const GRANTS = ['microphone', 'speak_first', 'ask_workspace', 'remember_this'] as const
 
 export type Grant = (typeof GRANTS)[number]
@@ -46,8 +48,16 @@ export interface GrantSpec {
   readonly id: Grant
   /** What it is called on screen. */
   readonly label: string
-  /** What turning it off actually stops, in one sentence. */
-  readonly detail: string
+  /**
+   * What turning it off actually stops, in one sentence, one phrasing per
+   * pronoun.
+   *
+   * The label above is NOT a table and should not become one: "Hear you" is
+   * "Hear you" whoever is worn, and four identical strings is a choice that is
+   * not one. This sentence is about her, so it has to vary -- `label()` in
+   * `pronoun.ts` is what reads either kind.
+   */
+  readonly detail: ByPronoun
   /**
    * The capability this withdraws from the wire, or null when it governs
    * something that is not a tool call.
@@ -66,28 +76,44 @@ export const GRANT_SPECS: readonly GrantSpec[] = [
   {
     id: 'microphone',
     label: 'Hear you',
-    detail: 'Open the microphone while she is awake.',
+    detail: {
+      she: 'Open the microphone while she is awake.',
+      he: 'Open the microphone while he is awake.',
+      it: 'Open the microphone while it is awake.',
+    },
     capability: null,
     withheld: 'Your microphone is off, so you cannot hear them at all right now.',
   },
   {
     id: 'speak_first',
     label: 'Speak first',
-    detail: 'Say hello when she wakes, without being spoken to.',
+    detail: {
+      she: 'Say hello when she wakes, without being spoken to.',
+      he: 'Say hello when he wakes, without being spoken to.',
+      it: 'Say hello when it wakes, without being spoken to.',
+    },
     capability: null,
     withheld: 'You may not speak before you are spoken to. Wait to be addressed.',
   },
   {
     id: 'ask_workspace',
     label: 'Read your workspace',
-    detail: 'Look things up in the one folder she is pointed at.',
+    detail: {
+      she: 'Look things up in the one folder she is pointed at.',
+      he: 'Look things up in the one folder he is pointed at.',
+      it: 'Look things up in the one folder it is pointed at.',
+    },
     capability: 'ask_workspace',
     withheld: 'You can no longer look anything up in their workspace.',
   },
   {
     id: 'remember_this',
     label: 'Keep a note',
-    detail: 'Write a fact into her long-term notes when asked to.',
+    detail: {
+      she: 'Write a fact into her long-term notes when asked to.',
+      he: 'Write a fact into his long-term notes when asked to.',
+      it: 'Write a fact into its long-term notes when asked to.',
+    },
     capability: 'remember_this',
     withheld: 'You can no longer write anything into your long-term notes.',
   },
