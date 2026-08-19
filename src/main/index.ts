@@ -1,6 +1,6 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, clipboard, ipcMain, Menu, shell } from 'electron'
-import { existsSync, mkdirSync } from 'node:fs'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { BUILT_IN_ID, greetingFor, instructionsFor, VOICE_NAMES } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
@@ -8,6 +8,7 @@ import { heardPortion } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'
 import {
   REVEALABLE,
+  type HistoryExport,
   type PersonaAction,
   type PersonaChange,
   type Revealable,
@@ -775,6 +776,49 @@ ipcMain.handle('history:turns', (_event, token: unknown) => {
 })
 
 ipcMain.handle('history:problems', () => problems.all())
+
+/**
+ * Everything she has, written where the person says.
+ *
+ * `exportFor` has existed and been tested since the store was written with no
+ * way out of the application. Memory is meant to stay "inspectable and
+ * deletable" — the settings window covers the note, and this is the other half:
+ * the conversations, in a shape somebody else could read.
+ *
+ * The PATH is chosen in main, through the system save panel. A renderer that
+ * named the destination would be a renderer able to write a file anywhere with
+ * this application's authority, which is the same rule `settings:reveal`
+ * follows for reading.
+ */
+ipcMain.handle('history:export', async (): Promise<HistoryExport> => {
+  const persona = wearing
+  // Nobody is worn until the first session configures itself. There is no "her"
+  // whose conversations these would be, which is not an error to report.
+  if (persona === null) return { ok: false, cancelled: false, why: 'Nobody is being worn yet.' }
+
+  const archive = transcripts().exportFor(persona)
+  const suggested = `mochi-${persona}-${new Date().toISOString().slice(0, 10)}.json`
+  const chosen = await dialog.showSaveDialog({
+    title: 'Export conversations',
+    defaultPath: suggested,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  })
+  // Dismissing the panel is not a failure and must not be reported as one.
+  if (chosen.canceled || chosen.filePath === undefined) return { ok: false, cancelled: true }
+
+  try {
+    // Not `writeJsonAtomically`: that is for files this app will read back, and
+    // its temp-file dance belongs inside our own directories rather than
+    // wherever somebody pointed a save panel.
+    writeFileSync(chosen.filePath, JSON.stringify(archive, null, 2), 'utf8')
+  } catch (error: unknown) {
+    console.error('[archive] could not export:', error)
+    problems.note('archive', chosen.filePath, `the export could not be written: ${String(error)}`)
+    return { ok: false, cancelled: false, why: String(error) }
+  }
+  console.log(`[archive] exported ${archive.sessions.length} conversations to ${chosen.filePath}`)
+  return { ok: true, path: chosen.filePath, conversations: archive.sessions.length }
+})
 
 ipcMain.on('history:settings', () => {
   showSettingsWindow()

@@ -126,6 +126,15 @@ export const HISTORY_CHANNELS = [
    * ability to read or write a setting by having it.
    */
   'history:settings',
+  /**
+   * Write everything she has for the worn persona to a file the person chooses.
+   *
+   * Here rather than in the settings window because this is about her
+   * CONVERSATIONS, and this is the window that holds them. The path is chosen
+   * in main through the system save panel — the page names no location, the
+   * same rule `settings:reveal` follows.
+   */
+  'history:export',
 ] as const
 
 export type HistoryChannel = (typeof HISTORY_CHANNELS)[number]
@@ -542,9 +551,24 @@ export interface HistoryProblem {
   readonly at: number
 }
 
+/**
+ * What came of an export.
+ *
+ * `cancelled` is a first-class answer rather than a failure: somebody who
+ * dismissed the save panel has not hit an error and should not be told they
+ * have. `path` comes back so the window can say where it went — "exported" with
+ * no location is a message somebody then has to go hunting after.
+ */
+export type HistoryExport =
+  | { readonly ok: true; readonly path: string; readonly conversations: number }
+  | { readonly ok: false; readonly cancelled: true }
+  | { readonly ok: false; readonly cancelled: false; readonly why: string }
+
 export interface MochiHistoryApi {
   /** Everything that went wrong this launch, newest first. */
   problems(): Promise<readonly HistoryProblem[]>
+  /** Save everything to a file. Answers what happened, for a status line. */
+  exportAll(): Promise<HistoryExport>
   /** Open the settings window. Opening it is all this can do. */
   settings(): void
   /** Whoever is worn. The window never gets to name a persona. */

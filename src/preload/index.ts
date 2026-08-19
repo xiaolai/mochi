@@ -5,6 +5,7 @@ import {
   isSettingsChannel,
   type HistoryConversation,
   type HistoryHit,
+  type HistoryExport,
   type HistoryProblem,
   type HistoryTurn,
   type MochiApi,
@@ -134,6 +135,9 @@ const history: MochiHistoryApi = {
   },
   settings() {
     ipcRenderer.send(guardHistory('history:settings'))
+  },
+  async exportAll() {
+    return (await ipcRenderer.invoke(guardHistory('history:export'))) as HistoryExport
   },
   async search(query: string) {
     return (await ipcRenderer.invoke(

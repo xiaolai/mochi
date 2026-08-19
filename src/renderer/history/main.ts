@@ -23,6 +23,7 @@ declare global {
 const list = document.querySelector('#list')
 const troubles = document.querySelector('#troubles')
 const settings = document.querySelector('#settings')
+const exporter = document.querySelector('#export')
 const troublesLabel = document.querySelector('#troubles-label')
 const pane = document.querySelector('#pane')
 const query = document.querySelector('#q')
@@ -38,8 +39,44 @@ if (!(troubles instanceof HTMLButtonElement) || !(troublesLabel instanceof HTMLE
 if (!(settings instanceof HTMLButtonElement)) {
   throw new Error('history: the settings button is missing')
 }
+if (!(exporter instanceof HTMLButtonElement)) {
+  throw new Error('history: the export button is missing')
+}
 settings.addEventListener('click', () => {
   window.mochiHistory.settings()
+})
+
+/**
+ * Everything she has, written where the person says.
+ *
+ * The label carries the outcome, because the save panel closing is ambiguous on
+ * its own — it looks the same whether the file was written or the person
+ * changed their mind. Cancelling says nothing at all: somebody who dismissed the
+ * panel has not made a mistake and does not need telling.
+ */
+const exportEl: HTMLButtonElement = exporter
+exportEl.addEventListener('click', () => {
+  exportEl.disabled = true
+  void window.mochiHistory
+    .exportAll()
+    .then((result) => {
+      if (result.ok) {
+        exportEl.textContent = `Exported ${String(result.conversations)} to ${result.path}`
+      } else if (!result.cancelled) {
+        exportEl.textContent = `Could not export: ${result.why}`
+      }
+    })
+    .catch((error: unknown) => {
+      exportEl.textContent = `Could not export: ${String(error)}`
+    })
+    .finally(() => {
+      exportEl.disabled = false
+      // Back to the label after long enough to read it. A button that keeps a
+      // result forever stops being a button.
+      setTimeout(() => {
+        exportEl.textContent = 'Export…'
+      }, 6000)
+    })
 })
 // Re-bound so the narrowing survives into the closures below.
 const listEl: HTMLElement = list
