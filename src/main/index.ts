@@ -1148,7 +1148,12 @@ ipcMain.handle('shelf:read', (): ShelfView => {
       restKey: claimed.find((one) => one.id === 'rest')?.refused === null ? SHORTCUTS.rest : null,
     },
     wornId: worn.id,
-    characters: listPersonas(catalog),
+    characters: listPersonas(
+      catalog,
+      (one) =>
+        resolveFaceFor(avatarsRoot(userData), packageFolder(one.id, catalog.sources), one.avatarId)
+          .face,
+    ),
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],
     plates: {

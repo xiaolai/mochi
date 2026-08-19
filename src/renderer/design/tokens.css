@@ -315,65 +315,57 @@
 }
 
 /*
- * ---- one component, and why it is in a file of values ---------------------
+ * The one component in this file: a button.
  *
- * `button-treatments.html` set four ways to draw a button against the same rows
- * in both locales and asked one narrow question: which stops you noticing that
- * the labels are different lengths? "Save / Revert" beside "真的删掉？" beside
- * "Put the built-in back as she ships" is a row of ragged rectangles, and the
- * widest label in the real message tables is 13.0ch against a narrowest of
- * 2.7ch.
+ * It was an underline for a while, on a study that asked which treatment stops
+ * you noticing that the labels are different lengths -- the real message tables
+ * run 2.7ch to 13.0ch, "Wear" beside "Put the built-in back as she ships". The
+ * study's finding was sound and its conclusion was too strong: what makes a row
+ * of boxes read as ragged is unequal WIDTH, and a width floor fixes that without
+ * giving up the box.
  *
- * Its answer, and the reason:
+ * The box is back because the design artifact draws boxes, and a bare underlined
+ * label is a weaker affordance than the thing it replaced -- "Delete Loki" as
+ * underlined text beside two other underlined texts reads as a list of links,
+ * not as three buttons one of which is destructive.
  *
- *   > A hard 1px edge at a near-square corner is what makes the eye line
- *   > rectangles up and read the difference between them.
- *
- * Two treatments survive that — an underline and a pill — and the underline
- * buys something the pill does not: **boxed means "type in me or choose from
- * me", underlined means "I does something"**, which these windows did not
- * previously distinguish. Every button in them was a bordered box with the same
- * radius as the `<select>` beside it.
- *
- * So the inputs keep their box and the buttons lose theirs, and the width floor
- * is what makes the rules equal length under unequal words.
- *
- * It lives HERE rather than in each document because both draw it identically,
- * and two copies of a careful thing is one careful thing and one liability —
- * `json-file.ts` makes the same argument about eight lines of rename. It is the
- * only component in this file, and it is here on that test rather than as the
- * start of a component layer.
+ * Inputs keep their own box and their own radius; the difference between "type
+ * in me" and "I do something" is now carried by fill and weight rather than by
+ * presence of a border, which is the distinction the artifact makes.
  */
 button.btn {
-  min-height: 32px;
-  /* The floor. Under it, "Wear" and "Put the built-in back" are two lengths of
-     rule and the row reads as ragged again. */
+  min-height: 30px;
+  /* The floor. Under it, "Wear" and "Put the built-in back" are two boxes of
+     different lengths and the row reads as ragged — which was the study's real
+     finding, and it is solved by a width floor rather than by removing the box. */
   min-width: calc(9ch + 28px);
-  padding: var(--s1) var(--s3) var(--s2);
-  border: 0;
-  border-bottom: 2px solid var(--rule);
-  border-radius: 0;
-  background: transparent;
+  padding: var(--s1) var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r2);
+  background: var(--paper);
   color: var(--ink);
   font: inherit;
   font-size: var(--t-sm);
   cursor: default;
 }
 button.btn:hover:not(:disabled) {
-  border-bottom-color: var(--gold);
+  border-color: var(--ink-3);
 }
 button.btn:disabled {
   color: var(--ink-3);
+  background: transparent;
 }
-/* The one that commits something. Gold, and still not a box. */
+/* The one that commits something. Her colour, filled, as the artifact draws it. */
 button.btn.primary {
-  border-bottom-color: var(--gold);
-  color: var(--gold);
+  background: var(--her-wash);
+  border-color: var(--her);
+  color: var(--ink-brand);
   font-weight: 600;
 }
 /* Armed to destroy. The second press is the one that does it. */
 button.btn.arming {
-  border-bottom-color: var(--red);
+  background: var(--red-bg);
+  border-color: var(--red);
   color: var(--red);
   font-weight: 600;
 }

@@ -1,5 +1,7 @@
 import type { NoteAction, PersonaAction, PersonaChange, ShelfView } from '@shared/ipc'
 import { forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
+import type { FaceSpec } from '@shared/avatar-spec'
+import { MochiAvatar } from '../companion/rig/mochi'
 
 /**
  * Every sentence on this sheet that is ABOUT her, one phrasing per pronoun.
@@ -140,6 +142,40 @@ function detail(list: HTMLElement, label: string, value: string): void {
  * conversations pane had to name a persona to a query, which is exactly the
  * property this window's allowlist exists to keep.
  */
+/**
+ * Her face on her own card, drawn by the rig that draws her on the desktop.
+ *
+ * The artifact anchors every card with a small coloured mochi; this build
+ * shipped four lines of text instead, on the one screen whose whole job is
+ * telling characters apart. A picture of her is also the only thing on the card
+ * that a persona's THEME changes, so without it two characters with different
+ * colours looked identical.
+ *
+ * The rig rather than a stored thumbnail, for the reason `shipped-icons.test.ts`
+ * had to be written: a second drawing of her is a second thing to keep in step.
+ * One frame, not a loop — `setIdle(false)` and `render(0)` is the same still
+ * pose the icon test measures, and a shelf of blinking faces would be motion
+ * competing with the one thing on screen that is actually alive.
+ */
+function faceTile(face: FaceSpec, px: number): HTMLCanvasElement {
+  const canvas = element('canvas', 'tile')
+  const ratio = Math.min(window.devicePixelRatio || 1, 3)
+  canvas.width = Math.round(px * ratio)
+  canvas.height = Math.round(px * ratio)
+  canvas.style.width = `${String(px)}px`
+  canvas.style.height = `${String(px)}px`
+  const ctx = canvas.getContext('2d')
+  if (ctx === null) return canvas
+  const avatar = new MochiAvatar(ctx, { face, size: 'fit-canvas', random: () => 0.5 })
+  avatar.resize(px, px, ratio)
+  avatar.setIdle(false)
+  avatar.render(0)
+  return canvas
+}
+
+/** SHE / HER, HE / HIM, IT / ITS — the caps line under her name. */
+const PRONOUN_CAPS: ByPronoun = { she: 'she / her', he: 'he / him', it: 'it / its' }
+
 export function characterCards(
   view: ShelfView,
   openId: string | null,
@@ -150,11 +186,20 @@ export function characterCards(
     card.type = 'button'
     card.setAttribute('aria-current', String(one.id === openId))
 
-    const head = element('div', 'row')
-    head.append(element('div', 'name', one.name))
-    // The ring says which is OPEN; this says which she actually is. They are
-    // the same card almost always, and the two questions are still different.
-    if (one.id === view.wornId) head.append(element('div', 'worn', 'worn'))
+    // Face beside name, which is the artifact's shape and the reason a card is
+    // recognisable across the room rather than only readable up close.
+    const head = element('div', 'head')
+    head.append(faceTile(one.face, 52))
+    const titles = element('div', 'titles')
+    titles.append(element('div', 'name', one.name))
+    // One caps line, two facts: whether she is the one being worn, and which
+    // words she takes. The ring already says which card is OPEN; this says who
+    // she is, which is a different question and the one the artifact answers.
+    const state = [one.id === view.wornId ? 'worn' : null, forPronoun(PRONOUN_CAPS, one.pronoun)]
+      .filter((part) => part !== null)
+      .join(' · ')
+    titles.append(element('div', 'worn', state))
+    head.append(titles)
     card.append(head)
 
     const facts = document.createElement('dl')

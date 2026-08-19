@@ -44,10 +44,18 @@
         height: 60px;
         display: flex;
         align-items: center;
-        gap: var(--s6);
+        gap: var(--s4);
         padding: 0 var(--s6);
         background: var(--paper-2);
         border-bottom: 1px solid var(--rule);
+      }
+      .topbar .divider {
+        margin-inline: var(--s2);
+      }
+      /* Her face beside the wordmark, as the artifact draws it. */
+      .mark {
+        flex: none;
+        display: block;
       }
       .wordmark {
         font-family: var(--narrow);
@@ -154,7 +162,7 @@
         overflow-x: auto;
       }
       .card {
-        width: 236px;
+        width: 268px;
         flex: none;
         text-align: left;
         background: var(--paper-2);
@@ -168,8 +176,27 @@
         flex-direction: column;
         gap: var(--s4);
       }
+      /* Her face, then her name over the one caps line that says who she is. */
+      .card .head {
+        display: flex;
+        align-items: center;
+        gap: var(--s4);
+      }
+      .card .tile {
+        flex: none;
+        display: block;
+      }
+      .card .titles {
+        min-width: 0;
+      }
+      /*
+        NOT gold. In the artifact gold is what "STAGED · NOT GRANTED" is written
+        in — a state that wants looking at — so a gold edge appearing under the
+        pointer says a character has a problem every time the mouse crosses it.
+        Hover is the quietest possible darkening of the edge it already has.
+      */
       .card:hover {
-        border-color: var(--gold);
+        border-color: var(--ink-3);
       }
       /*
         The ring is one of the TWO jobs her colour keeps — the worn character.
@@ -187,6 +214,7 @@
         font-size: var(--t-h3);
         font-weight: 600;
         letter-spacing: -0.01em;
+        overflow-wrap: anywhere;
       }
       .card .worn {
         font-family: var(--narrow);
@@ -194,6 +222,9 @@
         font-weight: 600;
         letter-spacing: 0.1em;
         text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .card[aria-current='true'] .worn {
         color: var(--ink-brand);
       }
       .card dl {
@@ -285,7 +316,13 @@
         border: 1px solid var(--rule);
         border-radius: var(--r3);
         background: var(--paper-2);
-        padding: var(--s4) var(--s5);
+        /*
+          The artifact's plates are one line of type with the controls sitting in
+          it; this build had them at 12px vertical and they read as a stack of
+          form rows rather than as a document with fields in it. 8px, and the
+          controls below lose a little height to match.
+        */
+        padding: var(--s3) var(--s5);
       }
       .plate .label {
         font-family: var(--narrow);
@@ -304,10 +341,13 @@
         align-items: center;
         gap: var(--s4);
       }
-      .plate .value > input[type='text'],
-      .plate .value > select {
+      .plate .value > input[type='text'] {
         flex: none;
         width: 220px;
+      }
+      /* Sized to its content now, because it is type rather than a control. */
+      .plate .value > select {
+        flex: none;
       }
       .plate .meta {
         font-family: var(--mono);
@@ -389,9 +429,21 @@
         color: var(--ink-3);
         cursor: default;
       }
+      /*
+        An underline, not a filled chip.
+
+        The artifact underlines the open tab and fills nothing, and a gold wash
+        behind two words is a much louder object than the thing it is labelling —
+        it read as a selected row rather than as a place in a strip. Gold is kept
+        as the mark; only the fill goes.
+      */
+      .tab {
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+      }
       .tab[aria-current='true'] {
-        background: var(--gold-wash);
-        color: var(--gold);
+        border-bottom-color: var(--gold);
+        color: var(--ink);
       }
       /*
         No `.panel[hidden]` here any more, and no `.warn[hidden]` either. Both
@@ -578,21 +630,56 @@
         flex: none;
       }
 
-      /* The button treatment is `button.btn` in tokens.css — an underline
-         rather than a box, so it cannot be mistaken for the select beside it. */
+      /* The button treatment is `button.btn` in tokens.css — a box, told apart
+         from the select beside it by fill and weight rather than by border. */
       :focus-visible {
         outline: 2px solid var(--gold);
         outline-offset: 1px;
       }
-      input[type='text'],
-      select {
-        padding: var(--s2) var(--s4);
+      /*
+        A field you TYPE in keeps its box; a field you CHOOSE from loses it.
+
+        The artifact has no `<select>` anywhere — it writes the value as plain
+        type with a quiet action beside it ("built-in mochi  94 × 73 pt · 100%"
+        … "SWAP · TUNE"), and a column of grey dropdown chrome is the single
+        biggest reason this window read as a form where the artifact reads as a
+        document. The box comes back on hover and focus, so the affordance is
+        still there the moment somebody goes looking for it.
+      */
+      input[type='text'] {
+        padding: var(--s1) var(--s3);
         border: 1px solid var(--rule);
         border-radius: var(--r2);
         background: var(--paper);
         color: inherit;
         font: inherit;
         font-size: var(--t-sm);
+      }
+      select {
+        appearance: none;
+        padding: var(--s1) var(--s6) var(--s1) var(--s2);
+        border: 1px solid transparent;
+        border-radius: var(--r2);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-size: var(--t-body);
+        /* The chevron, drawn rather than shipped: one token, both schemes. */
+        background-image:
+          linear-gradient(45deg, transparent 50%, currentColor 50%),
+          linear-gradient(135deg, currentColor 50%, transparent 50%);
+        background-position:
+          right 13px top 50%,
+          right 8px top 50%;
+        background-size:
+          5px 5px,
+          5px 5px;
+        background-repeat: no-repeat;
+      }
+      select:hover,
+      select:focus {
+        border-color: var(--rule);
+        background-color: var(--paper);
       }
       input[type='text'] {
         user-select: text;
@@ -652,6 +739,7 @@
   <body>
     <div id="app">
       <div class="topbar">
+        <canvas class="mark" id="mark"></canvas>
         <span class="wordmark">mochi</span>
         <span class="divider"></span>
         <span class="state"

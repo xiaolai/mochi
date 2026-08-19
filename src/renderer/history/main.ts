@@ -9,6 +9,7 @@ import type {
 } from '@shared/ipc'
 import { DEFAULT_PRONOUN, forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
 import { applyAccent } from '../design/apply-accent'
+import { MochiAvatar } from '../companion/rig/mochi'
 import { highlight, lengthLabel, whenLabel } from './format'
 import { assembledPanel, characterCards, characterSheet, type ShelfHandlers } from './shelf'
 
@@ -54,6 +55,7 @@ function need<T extends Element>(id: string, kind: new () => T): T {
   return found
 }
 
+const markEl = need('mark', HTMLCanvasElement)
 const stateEl = need('state', HTMLElement)
 const stateHowEl = need('state-how', HTMLElement)
 const micEl = need('mic', HTMLElement)
@@ -172,6 +174,28 @@ function renderCards(): void {
   )
   const many = shelf.characters.length
   charactersCountEl.textContent = `${String(many)} ${many === 1 ? 'character' : 'characters'}`
+}
+
+/**
+ * Her face beside the wordmark.
+ *
+ * The worn one, redrawn on every read, because switching character from the
+ * tray while this window is open changes who the strip is about. One frame — a
+ * blinking mark in a title bar is motion with nothing to say.
+ */
+function drawMark(face: ShelfView['face']): void {
+  const px = 22
+  const ratio = Math.min(window.devicePixelRatio || 1, 3)
+  markEl.width = Math.round(px * ratio)
+  markEl.height = Math.round(px * ratio)
+  markEl.style.width = `${String(px)}px`
+  markEl.style.height = `${String(px)}px`
+  const ctx = markEl.getContext('2d')
+  if (ctx === null) return
+  const avatar = new MochiAvatar(ctx, { face, size: 'fit-canvas', random: () => 0.5 })
+  avatar.resize(px, px, ratio)
+  avatar.setIdle(false)
+  avatar.render(0)
 }
 
 /** Draw the open character in the main column. */
@@ -363,6 +387,7 @@ async function readShelf(): Promise<void> {
    * The design's second semantic rule — the accent is her — and it is applied
    * on every read because the worn character can change from this very window.
    */
+  drawMark(view.face)
   const unreadable = applyAccent(document.documentElement, view.face)
   renderState(view)
   renderCards()

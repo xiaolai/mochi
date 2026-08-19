@@ -50,6 +50,7 @@ const DOCUMENTS: readonly {
     // Both halves: the character cards and the conversations that were here
     // first, plus the strip every write says what happened in.
     ids: [
+      'mark',
       'state',
       'state-how',
       'mic',

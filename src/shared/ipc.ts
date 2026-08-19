@@ -297,6 +297,19 @@ export interface SettingsPersona {
   readonly avatarId: string | null
   /** Where she came from, or null for the built-in. Shown, never sent back. */
   readonly source: string | null
+  /**
+   * Her face, RESOLVED, so the card can draw her.
+   *
+   * The artifact's cards are anchored by a small coloured mochi and this build
+   * shipped four lines of text where that face should be — the strongest piece
+   * of identity on the shelf, missing from the one screen that exists to tell
+   * characters apart. Resolved here rather than in the renderer for the reason
+   * `plates.face` gives: where it actually landed, not where it was asked to
+   * look.
+   */
+  readonly face: FaceSpec
+  /** Which words this character takes, for the line under her name. */
+  readonly pronoun: Pronoun
 }
 
 /**

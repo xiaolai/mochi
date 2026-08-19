@@ -17,6 +17,7 @@
  */
 
 import { readdirSync } from 'node:fs'
+import type { FaceSpec } from '@shared/avatar-spec'
 import { join } from 'node:path'
 import {
   PERSONA_LIMITS,
@@ -78,7 +79,10 @@ export function listAvatars(avatarsFolder: string): readonly SettingsAvatar[] {
 }
 
 /** The personas on the shelf, in a shape a page can draw and nothing more. */
-export function listPersonas(catalog: PersonaCatalog): readonly SettingsPersona[] {
+export function listPersonas(
+  catalog: PersonaCatalog,
+  faceFor: (persona: { id: string; avatarId: string | null }) => FaceSpec,
+): readonly SettingsPersona[] {
   return [...catalog.personas.values()]
     .map((persona) => ({
       id: persona.id,
@@ -87,6 +91,11 @@ export function listPersonas(catalog: PersonaCatalog): readonly SettingsPersona[
       bubble: persona.bubble,
       avatarId: persona.avatarId,
       source: catalog.sources.get(persona.id) ?? null,
+      // Injected rather than resolved here: resolution needs the avatars root
+      // and the persona's package folder, and this module is the shape of a
+      // page rather than a reader of disk.
+      face: faceFor(persona),
+      pronoun: persona.pronoun,
     }))
     .sort((a, b) => (a.name < b.name ? -1 : 1))
 }
