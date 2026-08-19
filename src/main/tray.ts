@@ -213,10 +213,27 @@ const HIDE: ByPronoun = { she: 'Hide her', he: 'Hide him', it: 'Hide it' }
  * but it is a guess, and this comment is here so the next person finds a known
  * gap rather than an oversight.
  */
-function iconFile(): string {
-  if (process.platform === 'darwin') return 'trayTemplate.png'
-  if (process.platform !== 'win32') return 'tray.png'
+export function iconFileFor(platform: NodeJS.Platform): string {
+  if (platform === 'darwin') return 'trayTemplate.png'
+  if (platform !== 'win32') return 'tray.png'
   return 'trayWin-onDark-16.png'
+}
+
+/**
+ * The platform is an ARGUMENT above, and that is the whole point of the split.
+ *
+ * `findings.md` §16 records that the Windows branch "has never been executed
+ * anywhere", and while this read `process.platform` directly it could not be:
+ * on a Mac the `win32` line is unreachable, so nothing could check that the file
+ * it names is even present in the build. It is now exercised by
+ * `tray-assets.test.ts` on every run, on every platform.
+ *
+ * What that does NOT do is render anything. Whether Windows draws her correctly
+ * in a real notification area is still unverified, and no test in this
+ * repository can say otherwise -- see §16.
+ */
+function iconFile(): string {
+  return iconFileFor(process.platform)
 }
 
 /**

@@ -51,11 +51,18 @@ files:
 # path can reach. The tray failure this prevents is not cosmetic: an invisible
 # tray icon is an app nobody can quit.
 #
-# Nothing consumes these yet. The v1 tray and settings window went to the archive
-# with the rest of the rewrite, so this is staged for the code that replaces
-# them. The assets themselves survived and are still the ones `pnpm dist` ships;
-# what did not survive is the generator that produced them, so treat
-# `resources/` as hand-maintained until a v2 rig can regenerate it.
+# `tray.ts` consumes these now -- this note said "nothing consumes these yet"
+# until the v2 tray landed and was not updated with it.
+#
+# What is still true is the second half: the generator that produced them did not
+# survive the rewrite, so `resources/` is hand-maintained. `shipped-icons.test.ts`
+# is what stands in for the generator -- it measures every asset here against the
+# rig that draws her, so the two can no longer come apart silently even though
+# nothing regenerates one from the other.
+#
+# Eight of the tray files -- `trayWin-onLight-*` -- are copied by this block and
+# selected by no code path, because the Windows taskbar-theme query was not
+# carried over. `tray-assets.test.ts` names them so the set cannot grow quietly.
 extraResources:
   - from: resources/tray
     to: tray
