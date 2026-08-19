@@ -3,186 +3,273 @@
   <head>
     <meta charset="UTF-8" />
     <title>Settings</title>
+    <!--
+      The design language, in one file for all three windows. Every value in it
+      is the handoff's, and the ratios in its comments were measured with this
+      repository's own `contrast()` — so this is a link rather than a paste,
+      because a second copy is a second thing to get wrong.
+    -->
+    <link rel="stylesheet" href="../design/tokens.css" />
     <style>
       /*
-        One column, read top to bottom. The same two schemes as the
-        conversations window, because she can sit on a light desktop or a dark
-        one and so can this.
+        2b, at 780 x 620: a nav column and one group at a time.
+
+        Everything here is a token. That is not tidiness — the artifact
+        (`Mochi Extended.dc.html`) renders against exactly this vocabulary, so a
+        literal written here is a place the window and the design can drift
+        without either of them looking wrong.
       */
-      :root {
-        --paper: #f7f6f1;
-        --raised: #ffffff;
-        --ink: #23241f;
-        --quiet: #6d6f66;
-        --line: #e2e0d7;
-        --accent: #2f6f4f;
-        --alarm: #c23a4c;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --paper: #1c1d1a;
-          --raised: #242622;
-          --ink: #eceade;
-          --quiet: #9a9c92;
-          --line: #34362f;
-          --accent: #9fd8b8;
-          --alarm: #e2748a;
-        }
-      }
       * {
         box-sizing: border-box;
       }
       html,
       body {
         margin: 0;
-        /*
-          No `height: 100%` here, unlike the conversations window. That page is
-          two panes that scroll independently and must fill the frame; this one
-          is a document that runs past the bottom, and pinning it to the
-          viewport height left the folders and half the capabilities unreachable
-          — the page did not scroll at all.
-        */
+        height: 100%;
         background: var(--paper);
         color: var(--ink);
-        font:
-          13px/1.55 -apple-system,
-          system-ui,
-          sans-serif;
+        font: var(--t-ui) / 1.5 var(--sans);
+        /* She is a companion, not a document. The paths and the values opt
+           back into selection below; nothing else is text to drag over. */
+        user-select: none;
       }
-      main {
-        max-width: 54ch;
-        margin: 0 auto;
-        padding: 26px 24px 60px;
+      #app {
+        display: grid;
+        grid-template-columns: 196px 1fr;
+        height: 100%;
       }
-      h2 {
-        font-size: 12px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--quiet);
-        margin: 30px 0 10px;
+
+      /* ---- the nav column -------------------------------------------------- */
+      nav {
+        background: var(--paper-2);
+        border-right: 1px solid var(--rule);
+        padding: var(--s3) 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-px);
+        overflow-y: auto;
+      }
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: var(--s3);
+        width: 100%;
+        padding: var(--s2) var(--s4);
+        border: 0;
+        background: transparent;
+        color: var(--ink-2);
+        font: inherit;
+        font-weight: 400;
+        text-align: left;
+        cursor: default;
+      }
+      .tab:hover {
+        background: var(--hair-soft);
+      }
+      /*
+        HER colour marks the open group. `--her-wash` and `--ink-brand` are
+        written onto the document by `accent.ts` from the worn face — the
+        design's second semantic rule: the accent is her, and there is no second
+        place to set an app colour.
+      */
+      .tab[aria-current='true'] {
+        background: var(--her-wash);
+        color: var(--ink-brand);
         font-weight: 600;
       }
-      h2:first-of-type {
-        margin-top: 0;
+      .tab .grow {
+        flex: 1;
       }
+      /*
+        A dot means somebody should LOOK, and only two things earn one: a key
+        another application took, and a Codex CLI that is not installed. A
+        withheld grant is a decision, and a dot on a decision is how a dot stops
+        being worth looking at.
+      */
+      .tab .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--warn-line);
+        flex: none;
+      }
+      .nav-note {
+        margin: auto 0 0;
+        padding: var(--s5) var(--s4) 0;
+        font-size: var(--t-cap);
+        color: var(--ink-3);
+      }
+
+      /* ---- the pane -------------------------------------------------------- */
+      main {
+        overflow-y: auto;
+        min-height: 0;
+        padding: var(--s6) var(--s6) var(--s8);
+        display: flex;
+        flex-direction: column;
+        gap: var(--s6);
+      }
+      main > * {
+        max-width: 62ch;
+      }
+      /* Labels are always uppercase, and uppercase is always tracked. */
+      h2,
+      h3 {
+        margin: 0;
+        font-family: var(--narrow);
+        font-size: var(--t-label);
+        font-weight: 700;
+        letter-spacing: var(--track);
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      h2 {
+        font-size: var(--t-data);
+      }
+
+      /* ---- controls -------------------------------------------------------- */
       .field {
         display: grid;
-        grid-template-columns: 120px 1fr;
+        grid-template-columns: 152px 1fr;
         align-items: center;
-        gap: 10px;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--line);
+        gap: var(--s4);
+        padding: var(--s3) 0;
+        border-bottom: 1px solid var(--rule);
       }
-      .field label {
-        color: var(--quiet);
+      .field > label {
+        color: var(--ink-2);
       }
       select,
       input[type='text'] {
         width: 100%;
-        padding: 5px 8px;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--raised);
+        padding: var(--s2) var(--s4);
+        border: 1px solid var(--rule);
+        border-radius: var(--r2);
+        background: var(--paper-2);
         color: inherit;
         font: inherit;
       }
-      select:focus,
-      input:focus {
-        outline: 2px solid var(--accent);
-        outline-offset: -1px;
+      input[type='text'] {
+        user-select: text;
+      }
+      select:focus-visible,
+      input:focus-visible,
+      button:focus-visible {
+        outline: 2px solid var(--ink-brand);
+        outline-offset: 1px;
+      }
+      button {
+        padding: var(--s1) var(--s4);
+        border: 1px solid var(--rule);
+        border-radius: var(--r2);
+        background: var(--paper-2);
+        color: inherit;
+        font: inherit;
+        font-size: var(--t-sm);
+        cursor: default;
+      }
+      button:hover:not(:disabled) {
+        border-color: var(--ink-brand);
+      }
+      button:disabled {
+        color: var(--ink-3);
       }
       .switch {
         display: flex;
         align-items: center;
-        gap: 8px;
-      }
-      button {
-        padding: 5px 11px;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--raised);
-        color: inherit;
-        font: inherit;
-        cursor: default;
-      }
-      button:hover {
-        border-color: var(--accent);
+        gap: var(--s3);
       }
       .note {
-        color: var(--quiet);
-        margin: 6px 0 0;
+        margin: var(--s2) 0 0;
+        font-size: var(--t-cap);
+        color: var(--ink-3);
       }
+      .note.bad {
+        color: var(--red);
+      }
+      code {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-3);
+        overflow-wrap: anywhere;
+        user-select: text;
+      }
+
+      /* ---- 5b, the standing grants ----------------------------------------- */
+      .grant {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--s5);
+        padding: var(--s4) 0;
+        border-bottom: 1px solid var(--rule);
+      }
+      .grant .name {
+        font-size: var(--t-body);
+      }
+      .grant .desc {
+        margin: var(--s0) 0 0;
+        font-size: var(--t-sm);
+        color: var(--ink-2);
+      }
+      .grant .right {
+        flex: none;
+        text-align: right;
+      }
+      .grant .used {
+        margin-top: var(--s1);
+        font-family: var(--mono);
+        font-size: var(--t-label);
+        color: var(--ink-3);
+      }
+      /* A capability, drawn as data — because a tool name is data. */
       .cap {
-        padding: 9px 0;
-        border-bottom: 1px solid var(--line);
+        padding: var(--s3) 0;
+        border-bottom: 1px solid var(--rule);
       }
       .cap .name {
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-brand);
       }
       .cap .desc {
-        color: var(--quiet);
-        margin: 3px 0 0;
-      }
-      .note-body {
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-        margin: 0 0 10px;
-        padding: 10px;
-        max-height: 40vh;
-        overflow-y: auto;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        font: inherit;
-      }
-      .note-body.empty {
-        color: var(--quiet);
-      }
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-        margin-top: 14px;
-        padding-top: 14px;
-        border-top: 1px solid var(--line);
-      }
-      .actions input {
-        width: 10em;
-      }
-      .row {
-        display: flex;
-        gap: 8px;
-      }
-      .arming {
-        color: var(--alarm);
+        margin: var(--s0) 0 0;
+        font-size: var(--t-sm);
+        color: var(--ink-2);
       }
       .folder {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--line);
+        gap: var(--s5);
+        padding: var(--s3) 0;
+        border-bottom: 1px solid var(--rule);
       }
-      .folder code {
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 11px;
-        color: var(--quiet);
-        overflow-wrap: anywhere;
+      .refused {
+        font-size: var(--t-label);
+        color: var(--red);
       }
-      /* Says what happened, where the thing that happened is. */
+
+      /*
+        Says what happened, over the pane it happened in. Its own opaque surface
+        with an elevation — the handoff's structural rule, and the one that
+        holds whatever is behind it.
+      */
       #said {
-        position: sticky;
-        bottom: 0;
-        margin-top: 20px;
-        padding: 9px 12px;
-        border-radius: 8px;
-        background: var(--raised);
-        border: 1px solid var(--line);
+        position: fixed;
+        left: calc(196px + var(--s5));
+        right: var(--s5);
+        bottom: var(--s5);
+        margin: 0;
+        padding: var(--s3) var(--s5);
+        border-radius: var(--r2);
+        background: var(--paper-2);
+        box-shadow: var(--lift-1);
+        font-size: var(--t-sm);
       }
       #said.bad {
-        border-color: var(--alarm);
-        color: var(--alarm);
+        color: var(--red);
+        background: var(--red-bg);
       }
       #said:empty {
         display: none;
@@ -190,19 +277,11 @@
     </style>
   </head>
   <body>
-    <main>
-      <h2>Who she is</h2>
-      <div id="who"></div>
-      <h2>What she can do</h2>
-      <div id="capabilities"></div>
-      <h2>What she remembers about you</h2>
-      <div id="note"></div>
-      <h2>Looking things up</h2>
-      <div id="lookup"></div>
-      <h2>Where things live</h2>
-      <div id="folders"></div>
-      <p id="said" role="status" aria-live="polite"></p>
-    </main>
+    <div id="app">
+      <nav id="nav"></nav>
+      <main id="pane"></main>
+    </div>
+    <p id="said" role="status" aria-live="polite"></p>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

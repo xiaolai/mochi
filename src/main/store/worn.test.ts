@@ -12,7 +12,10 @@ import {
   isProfileName,
   readProfile,
   writeProfile,
+  readGrants,
+  writeGrant,
 } from './worn'
+import { DEFAULT_GRANTS, WITHHELD_GRANTS } from '@shared/grants'
 
 let userData = ''
 beforeEach(() => {
@@ -201,5 +204,76 @@ describe('the Codex profile', () => {
       JSON.stringify({ codexProfile: '../../etc/passwd' }),
     )
     expect(readProfile(userData)).toBeNull()
+  })
+})
+
+describe('what she may do while nobody is watching', () => {
+  it('allows everything until somebody says otherwise', () => {
+    // A companion that arrives unable to hear you is not a safer companion.
+    expect(readGrants(userData)).toEqual(DEFAULT_GRANTS)
+  })
+
+  it('remembers a refusal', () => {
+    writeGrant(userData, 'ask_workspace', false)
+    expect(readGrants(userData).ask_workspace).toBe(false)
+    expect(readGrants(userData).remember_this).toBe(true)
+  })
+
+  it('keeps every other key in the file', () => {
+    // The whole reason there is one writer for this file: a second one that
+    // knew only its own key would drop the worn persona.
+    writePreferences({ activePersonaId: 'loki', bubbleSide: 'left' })
+    writeGrant(userData, 'microphone', false)
+    expect(readWornPersonaId(userData)).toBe('loki')
+    expect(readBubbleSide(userData)).toBe('left')
+    expect(readGrants(userData).microphone).toBe(false)
+  })
+
+  it('keeps the other refusals when one is changed back', () => {
+    writeGrant(userData, 'ask_workspace', false)
+    writeGrant(userData, 'remember_this', false)
+    writeGrant(userData, 'ask_workspace', true)
+    expect(readGrants(userData)).toEqual({
+      ...DEFAULT_GRANTS,
+      ask_workspace: true,
+      remember_this: false,
+    })
+  })
+
+  it('honours a stored refusal even beside keys it does not understand', () => {
+    writePreferences({ grants: { ask_workspace: false, wobble: true } })
+    expect(readGrants(userData).ask_workspace).toBe(false)
+  })
+
+  it('WITHHOLDS everything for a file nothing can parse', () => {
+    // Absent means nobody has said no. A file that is there and cannot be read
+    // holds somebody's answers and this process cannot see them — and reading
+    // that as "allowed" is the one direction that lets her do something they
+    // may have said she may not. `hasPolicy` draws the same line for retention.
+    writeFileSync(join(userData, 'preferences.json'), '{ not json')
+    expect(readGrants(userData)).toEqual(WITHHELD_GRANTS)
+  })
+
+  it('WITHHOLDS everything for valid JSON that is not an object', () => {
+    // `null`, `[]` and `"broken"` all parse, and `.grants` on each of them
+    // reads as `undefined` — which is absent, which is allowed. So a
+    // preferences file replaced by any of them re-enabled every permission,
+    // through the one path that had already been made to fail closed twice.
+    for (const root of ['null', '[]', '"broken"', '42']) {
+      writeFileSync(join(userData, 'preferences.json'), root)
+      expect(readGrants(userData)).toEqual(WITHHELD_GRANTS)
+    }
+  })
+
+  it('refuses to write permissions over a file it could not read', () => {
+    // Otherwise a transient read failure becomes four permanent refusals
+    // nobody made: `readGrants` answers "all withheld", and writing THAT back
+    // would put it on disk.
+    writeFileSync(join(userData, 'preferences.json'), '{ not json')
+    expect(() => writeGrant(userData, 'microphone', true)).toThrow()
+  })
+
+  it('refuses to write something that is not a grant', () => {
+    expect(() => writeGrant(userData, 'sudo' as never, true)).toThrow()
   })
 })

@@ -44,9 +44,12 @@ function harness(capabilities: readonly Capability[]) {
   const frames: AnswerFrame[] = []
   const noted: string[] = []
   const byName = new Map(capabilities.map((one) => [one.manifest.name, one]))
+  const uses: string[] = []
   const ledger = createLedger({
     registry: createRegistry(capabilities.map((one) => one.manifest)),
     send: (frame) => frames.push(frame),
+    now: () => 1_000,
+    used: (name) => uses.push(name),
   })
   const dispatch: Dispatch = {
     capabilities: byName,
@@ -55,8 +58,9 @@ function harness(capabilities: readonly Capability[]) {
     note: (name, detail) => noted.push(`${name}: ${detail}`),
     log: () => {},
     warn: () => {},
+    withheld: () => null,
   }
-  return { dispatch, ledger, frames, noted }
+  return { dispatch, ledger, frames, noted, uses }
 }
 
 /** What actually went on the wire for a call, in order. */
@@ -185,6 +189,8 @@ describe('a call that cannot be run', () => {
     const ledger = createLedger({
       registry: createRegistry([one.manifest]),
       send: (frame) => frames.push(frame),
+      now: () => 1_000,
+      used: () => {},
     })
     handleCall(
       {
@@ -194,6 +200,7 @@ describe('a call that cannot be run', () => {
         note: (name, detail) => noted.push(`${name}: ${detail}`),
         log: () => {},
         warn: () => {},
+        withheld: () => null,
       },
       CALL,
     )
@@ -229,6 +236,8 @@ describe('an observer that fails', () => {
     const ledger = createLedger({
       registry: createRegistry([one.manifest]),
       send: (frame) => frames.push(frame),
+      now: () => 1_000,
+      used: () => {},
     })
     const angry = (): never => {
       throw new Error('the window has been destroyed')
@@ -242,6 +251,7 @@ describe('an observer that fails', () => {
           note: angry,
           log: angry,
           warn: angry,
+          withheld: () => null,
         },
         CALL,
       ),
@@ -258,6 +268,8 @@ describe('an observer that fails', () => {
     const ledger = createLedger({
       registry: createRegistry([one.manifest]),
       send: (frame) => frames.push(frame),
+      now: () => 1_000,
+      used: () => {},
     })
     const angry = (): never => {
       throw new Error('the window has been destroyed')
@@ -270,6 +282,7 @@ describe('an observer that fails', () => {
         note: angry,
         log: angry,
         warn: angry,
+        withheld: () => null,
       },
       { name: 'slow', callId: 'call_6', args: '{}' },
     )
@@ -292,6 +305,87 @@ describe('an observer that fails', () => {
   })
 })
 
+describe('a capability whose grant has been taken away', () => {
+  it('is answered with a sentence rather than run', () => {
+    // The switch is in a window somebody can open mid-conversation, so the tool
+    // list she is holding is a snapshot. A model that calls a withdrawn
+    // capability must get something it can say out loud — a refusal she cannot
+    // explain presents as her declining to help, which is the failure
+    // `notBuilt` was deleted from this repository for.
+    let ran = false
+    const one = immediate('fast', () => {
+      ran = true
+      return { status: 'ok' }
+    })
+    const { dispatch, frames } = harness([one])
+    handleCall({ ...dispatch, withheld: () => 'They turned it off. Say so plainly.' }, CALL)
+
+    expect(ran).toBe(false)
+    expect(outputs(frames, 'call_1')).toEqual([
+      { status: 'not-allowed', guidance: 'They turned it off. Say so plainly.' },
+    ])
+  })
+
+  it('is answered rather than dropped, so nothing is left hanging', () => {
+    const { dispatch, ledger } = harness([immediate('fast', () => ({ status: 'ok' }))])
+    handleCall({ ...dispatch, withheld: () => 'no' }, CALL)
+    expect(ledger.unanswered()).toEqual([])
+    expect(ledger.undelivered()).toEqual([])
+  })
+
+  it('does not start a deferred capability either', async () => {
+    // The expensive one. A lookup that ran and then had its answer thrown away
+    // would be a revoked capability still reading the workspace.
+    let ran = false
+    const slow = deferred('slow', async () => {
+      ran = true
+      return { status: 'ok' }
+    })
+    const { dispatch, frames } = harness([slow])
+    handleCall({ ...dispatch, withheld: () => 'no' }, { name: 'slow', callId: 'c', args: '{}' })
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(ran).toBe(false)
+    expect(outputs(frames, 'c')).toEqual([{ status: 'not-allowed', guidance: 'no' }])
+  })
+
+  it('is refused, not run, when what is allowed cannot be read', () => {
+    // `withheld` reads a file, so it genuinely can throw — and unguarded it
+    // escaped `handleCall` with the call already accepted, which hangs the
+    // conversation for the rest of the session. Fails CLOSED: a permission
+    // this process could not read is not one it may act on.
+    let ran = false
+    const one = immediate('fast', () => {
+      ran = true
+      return { status: 'ok' }
+    })
+    const { dispatch, ledger, frames } = harness([one])
+    expect(() =>
+      handleCall(
+        {
+          ...dispatch,
+          withheld: () => {
+            throw new Error('preferences.json could not be read')
+          },
+        },
+        CALL,
+      ),
+    ).not.toThrow()
+
+    expect(ran).toBe(false)
+    expect(ledger.unanswered()).toEqual([])
+    expect(outputs(frames, 'call_1')).toEqual([
+      { status: 'unavailable', guidance: expect.stringContaining('Say so plainly') },
+    ])
+  })
+
+  it('runs normally when nothing is withheld', () => {
+    const { dispatch, frames } = harness([immediate('fast', () => ({ status: 'ok' }))])
+    handleCall(dispatch, CALL)
+    expect(outputs(frames, 'call_1')).toEqual([{ status: 'ok' }])
+  })
+})
+
 describe('a transport that has gone away', () => {
   function angryTransport(one: Capability) {
     const noted: string[] = []
@@ -300,6 +394,8 @@ describe('a transport that has gone away', () => {
       send: () => {
         throw new Error('Object has been destroyed')
       },
+      now: () => 1_000,
+      used: () => {},
     })
     const dispatch: Dispatch = {
       capabilities: new Map([[one.manifest.name, one]]),
@@ -308,6 +404,7 @@ describe('a transport that has gone away', () => {
       note: (name, detail) => noted.push(`${name}: ${detail}`),
       log: () => {},
       warn: () => {},
+      withheld: () => null,
     }
     return { dispatch, noted }
   }
@@ -339,6 +436,19 @@ describe('a transport that has gone away', () => {
     expect(noted.join()).toContain('could not be sent')
     // And the work was never started, because nothing would have received it.
     expect(ran).toBe(false)
+  })
+
+  it('does not throw when a name NOBODY answers to cannot be refused either', () => {
+    // `ledger.arrived` sends one frame itself — the refusal for an unknown name
+    // — and that send throws on a destroyed window. Unguarded it came straight
+    // back out of the `ipcMain` listener. The path is not hypothetical: a
+    // capability withdrawn while the model still holds the older tool list is
+    // exactly what revoking a grant produces.
+    const { dispatch, noted } = angryTransport(immediate('fast', () => ({ status: 'ok' })))
+    expect(() =>
+      handleCall(dispatch, { name: 'rm_minus_rf', callId: 'call_9', args: '{}' }),
+    ).not.toThrow()
+    expect(noted.join()).toContain('could not be sent')
   })
 
   it('does not throw when a handler fails AND the refusal cannot be sent', async () => {

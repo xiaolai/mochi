@@ -9,7 +9,7 @@ const RESTING = { asleep: false, hidden: false }
 const KEYS = { rest: 'Control+Shift+L', hide: 'Control+Shift+M' }
 
 const HANDLERS = {
-  onConversations: () => undefined,
+  onShelf: () => undefined,
   onSettings: () => undefined,
   onWear: () => undefined,
   onBubbleSide: () => undefined,
@@ -51,9 +51,7 @@ describe('the only way out', () => {
       HANDLERS,
       'Mochi',
     )
-    expect(labels(template)).toEqual(
-      expect.arrayContaining(['Conversations…', 'Settings…', 'Quit Mochi']),
-    )
+    expect(labels(template)).toEqual(expect.arrayContaining(['Shelf…', 'Settings…', 'Quit Mochi']))
   })
 })
 
@@ -233,6 +231,6 @@ describe('resting and hiding', () => {
 
   it('puts them first, where somebody in a hurry looks', () => {
     const shown = labels({ ...BASE, resting: { asleep: false, hidden: false } })
-    expect(shown.indexOf('Let her rest')).toBeLessThan(shown.indexOf('Conversations…'))
+    expect(shown.indexOf('Let her rest')).toBeLessThan(shown.indexOf('Shelf…'))
   })
 })

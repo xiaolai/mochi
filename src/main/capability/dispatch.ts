@@ -28,7 +28,7 @@
  */
 
 import type { Capability, CapabilityDeps, CapabilityOutput } from '../../capabilities/kind'
-import type { Ledger } from './ledger'
+import type { Arrival, Ledger } from './ledger'
 
 /** What settles a call that could not be run at all. */
 const COULD_NOT = 'That did not work just now. Say so plainly rather than guessing at a result.'
@@ -41,6 +41,19 @@ export interface Dispatch {
   readonly capabilities: ReadonlyMap<string, Capability>
   readonly deps: CapabilityDeps
   readonly ledger: Ledger
+  /**
+   * Why this capability may not run right now, or null when it may.
+   *
+   * 5b's standing grants, asked at CALL time rather than at session open. The
+   * tool list she was handed is a snapshot: a grant taken away mid-conversation
+   * leaves her holding a description of something she may no longer do, and a
+   * model that calls it then must get a sentence rather than an error.
+   *
+   * A string rather than a boolean, because what she is told is the whole
+   * point — a refusal she cannot explain presents as her declining to help,
+   * which is the failure `notBuilt` was deleted from this repository for.
+   */
+  readonly withheld: (name: string) => string | null
   /** Where a problem goes so somebody can be shown it. */
   readonly note: (name: string, detail: string) => void
   readonly log: (line: string) => void
@@ -117,10 +130,28 @@ export function handleCall(
   dispatch: Dispatch,
   call: { readonly name: string; readonly callId: string; readonly args: unknown },
 ): void {
-  const { capabilities, deps, ledger, note, log, warn } = dispatch
+  const { capabilities, deps, ledger, note, log, warn, withheld } = dispatch
   const { name, callId } = call
 
-  const arrival = ledger.arrived(call)
+  /**
+   * GUARDED, because `arrived` can send.
+   *
+   * It emits one frame itself — the refusal for a name no capability answers to
+   * — and that send is `webContents.send` on a window that can be destroyed, so
+   * it throws. Unguarded it came straight back out of an `ipcMain` listener,
+   * where nothing catches it. The path is not hypothetical: a capability
+   * withdrawn while the model still holds the older tool list is exactly what a
+   * revoked grant produces.
+   */
+  let arrival: Arrival
+  try {
+    arrival = ledger.arrived(call)
+  } catch (error: unknown) {
+    // Nothing left to answer to — the window holding the conversation is gone.
+    quietly(() => warn(`[capability] ${name}: the refusal could not be sent:`, error))
+    quietly(() => note(name, `the answer could not be sent: ${String(error)}`))
+    return
+  }
   if (arrival.kind !== 'accepted') {
     // Already settled or already seen. `arrived` emits the refusal for an
     // unknown name itself, so there is nothing left to answer here.
@@ -131,6 +162,33 @@ export function handleCall(
   // renderer, and an unbounded log line is a way to make the main process do
   // work by asking it to write something down.
   quietly(() => log(`[capability] ${name}(${forLog(arrival.args)})`))
+
+  /**
+   * Taken away since she was handed the tool list. Answered, never dropped.
+   *
+   * Checked BEFORE the handler, and before the unreachable no-handler branch
+   * below, because this one is entirely reachable: the switch is in a window
+   * somebody can open mid-conversation.
+   */
+  let refusal: string | null
+  try {
+    refusal = withheld(name)
+  } catch (error: unknown) {
+    // FAIL CLOSED, and answer. This reads a file, so it genuinely can throw —
+    // and unguarded it escaped `handleCall` with the call already accepted,
+    // which hangs the conversation for the rest of the session. A permission
+    // this process could not read is not one it may act on, so the call is
+    // refused rather than run.
+    quietly(() => warn(`[capability] ${name}: could not read what is allowed:`, error))
+    quietly(() => note(name, `could not read what is allowed: ${String(error)}`))
+    settle(name, note, () => ledger.answer(callId, { status: 'unavailable', guidance: COULD_NOT }))
+    return
+  }
+  if (refusal !== null) {
+    quietly(() => log(`[capability] ${name} is not allowed just now`))
+    settle(name, note, () => ledger.answer(callId, { status: 'not-allowed', guidance: refusal }))
+    return
+  }
 
   const capability = capabilities.get(name)
   if (capability === undefined) {

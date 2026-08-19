@@ -2,17 +2,23 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PERSONA } from '@shared/persona'
+import { DEFAULT_PERSONA, PERSONA_LIMITS } from '@shared/persona'
 import { REVEALABLE } from '@shared/ipc'
 import { WEB_SEARCH_MODES } from '@shared/delegation'
 import {
   applyChange,
   applyLookup,
+  applyScreen,
   folderFor,
   listAvatars,
   listCapabilities,
+  listGrants,
+  listKeys,
   listLookup,
+  listScreen,
 } from './settings'
+import { DEFAULT_GRANTS, GRANTS } from '@shared/grants'
+import type { Usage } from './store/usage'
 import { createRegistry } from '@shared/capability/registry'
 import { parseManifest } from '@shared/capability/manifest'
 
@@ -164,6 +170,7 @@ describe('how a lookup runs', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: null,
+      codexFound: true,
     })
     expect(shown.workspaceIsDefault).toBe(true)
     expect(
@@ -173,6 +180,7 @@ describe('how a lookup runs', () => {
         webSearch: 'follow',
         profile: null,
         profilePath: null,
+        codexFound: true,
       }).workspaceIsDefault,
     ).toBe(false)
   })
@@ -187,6 +195,7 @@ describe('how a lookup runs', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: null,
+      codexFound: true,
     })
     expect(shown.webSearchModes).toEqual([...WEB_SEARCH_MODES])
   })
@@ -199,6 +208,7 @@ describe('how a lookup runs', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: '/somewhere/mochi.config.toml',
+      codexFound: true,
     })
     expect(shown.profilePath).toBeNull()
   })
@@ -239,5 +249,164 @@ describe('how a lookup runs', () => {
     expect(asked.ok).toBe(true)
     if (!asked.ok) return
     expect(asked.change).toEqual({ webSearch: 'live' })
+  })
+})
+
+/** A readable record of use, which is not the same as an unreadable one. */
+function readable(entries: readonly (readonly [string, number])[] = []): Usage {
+  return { ok: true, used: new Map(entries) }
+}
+
+describe('the four standing grants, as the window draws them', () => {
+  it('lists all four, in the order they are declared', () => {
+    expect(listGrants(DEFAULT_GRANTS, readable()).map((one) => one.id)).toEqual([...GRANTS])
+  })
+
+  it('carries whether each is allowed', () => {
+    const rows = listGrants({ ...DEFAULT_GRANTS, ask_workspace: false }, readable())
+    expect(rows.find((one) => one.id === 'ask_workspace')?.allowed).toBe(false)
+    expect(rows.find((one) => one.id === 'remember_this')?.allowed).toBe(true)
+  })
+
+  it('says a capability has NEVER been used when nothing has recorded one', () => {
+    const rows = listGrants(DEFAULT_GRANTS, readable())
+    expect(rows.find((one) => one.id === 'ask_workspace')?.lastUsed).toEqual({ kind: 'never' })
+  })
+
+  it('carries the real time when there is one', () => {
+    const rows = listGrants(DEFAULT_GRANTS, readable([['remember_this', 1_700_000_000_000]]))
+    expect(rows.find((one) => one.id === 'remember_this')?.lastUsed).toEqual({
+      kind: 'at',
+      at: 1_700_000_000_000,
+    })
+  })
+
+  it('does NOT claim a last use for the two nothing records', () => {
+    // 5b's acceptance: real, or the row does not claim it. "Never used" about a
+    // microphone somebody has been talking into all morning would be a claim,
+    // and it is a different answer from "nothing writes this down".
+    const rows = listGrants(DEFAULT_GRANTS, readable())
+    expect(rows.find((one) => one.id === 'microphone')?.lastUsed).toEqual({ kind: 'not-recorded' })
+    expect(rows.find((one) => one.id === 'speak_first')?.lastUsed).toEqual({ kind: 'not-recorded' })
+  })
+
+  it('ignores a recorded time for something that is not one of the four', () => {
+    const rows = listGrants(DEFAULT_GRANTS, readable([['recall_conversations', 1_000]]))
+    expect(rows).toHaveLength(GRANTS.length)
+  })
+})
+
+describe('the two global keys, as the window shows them', () => {
+  it('names what each one does rather than our word for it', () => {
+    // "rest" is the internal id. "Let her rest, or wake her" is the thing
+    // somebody scanning this pane is actually looking for.
+    const shown = listKeys([{ id: 'rest', accelerator: 'Control+Shift+L', refused: null }])
+    expect(shown[0]?.what).toContain('rest')
+    expect(shown[0]?.accelerator).toBe('Control+Shift+L')
+    expect(shown[0]?.refused).toBeNull()
+  })
+
+  it('keeps the row for a key another application took', () => {
+    // THE case worth seeing. Hiding it would make it look as though this
+    // application never wanted a key, which is the silent failure the row
+    // exists to end.
+    const shown = listKeys([
+      { id: 'hide', accelerator: 'Control+Shift+M', refused: 'another application already has it' },
+    ])
+    expect(shown).toHaveLength(1)
+    expect(shown[0]?.refused).toBe('another application already has it')
+  })
+
+  it('still shows something for an id it has no wording for', () => {
+    const shown = listKeys([{ id: 'wobble', accelerator: 'F13', refused: null }])
+    expect(shown[0]?.what).toBe('wobble')
+  })
+})
+
+describe('what she looks like on the desktop', () => {
+  it('offers every side that can be CHOSEN, not every side that fits now', () => {
+    // What fits shrinks as she is dragged into a corner, and that is the
+    // renderer's answer. A settings window whose options changed when somebody
+    // moved her would be describing this moment instead of a setting.
+    const shown = listScreen('above', ['auto', 'above', 'below', 'left', 'right'])
+    expect(shown.bubbleSide).toBe('above')
+    expect(shown.sides).toEqual(['auto', 'above', 'below', 'left', 'right'])
+  })
+
+  it('takes a side it knows', () => {
+    expect(applyScreen({ bubbleSide: 'left' }, ['auto', 'left'])).toEqual({
+      ok: true,
+      change: { bubbleSide: 'left' },
+    })
+  })
+
+  it('refuses a side nothing can honour, with a sentence', () => {
+    const refused = applyScreen({ bubbleSide: 'diagonally' }, ['auto', 'left'])
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.why).toContain('diagonally')
+  })
+
+  it('changes nothing when nothing was asked for', () => {
+    expect(applyScreen({}, ['auto'])).toEqual({ ok: true, change: {} })
+  })
+})
+
+describe('whether she can look anything up at all', () => {
+  it('carries the answer, so the group can mark itself', () => {
+    // Without the CLI she cannot look anything up, and the failure otherwise
+    // presents as her declining to help.
+    const shown = listLookup({
+      workspace: '/w',
+      defaultWorkspace: '/w',
+      webSearch: 'follow',
+      profile: null,
+      profilePath: null,
+      codexFound: false,
+    })
+    expect(shown.codexFound).toBe(false)
+  })
+})
+
+describe('a record of use that could not be read', () => {
+  it('does not claim "never" for a capability it cannot answer for', () => {
+    // The distinction the union exists for. A corrupt `usage.json` used to
+    // answer the same empty map as a fresh install, so every row said "Never
+    // used" — a claim, about capabilities she may have called all morning.
+    const rows = listGrants(DEFAULT_GRANTS, { ok: false, why: 'usage.json is not valid JSON' })
+    for (const row of rows) expect(row.lastUsed).toEqual({ kind: 'not-recorded' })
+  })
+
+  it('still says whether each one is allowed', () => {
+    // The switch is on disk in a different file. Losing the record of use must
+    // not lose the permission beside it.
+    const rows = listGrants({ ...DEFAULT_GRANTS, microphone: false }, { ok: false, why: 'gone' })
+    expect(rows.find((one) => one.id === 'microphone')?.allowed).toBe(false)
+  })
+})
+
+describe('a payload that is not the shape the type promises', () => {
+  it('refuses a workspace that is not a string, rather than throwing', () => {
+    // `LookupChange` is the WIRE shape and a page can put anything in it.
+    // `.trim()` on an object throws out of the IPC handler, which reaches the
+    // window as a rejected invoke instead of the refusal this function promises.
+    const refused = applyLookup({ workspace: {} as unknown as string }, () => true)
+    expect(refused.ok).toBe(false)
+  })
+
+  it('refuses a name that is not a string, rather than throwing', () => {
+    const refused = applyChange(DEFAULT_PERSONA, { id: 'mochi', name: 7 as unknown as string }, [])
+    expect(refused.ok).toBe(false)
+  })
+
+  it('refuses a name the persona format would then reject on load', () => {
+    // This writer allowed 64 while `PERSONA_LIMITS.name` is 60, so a name of 61
+    // to 64 characters SAVED and then failed to load — accepted, written, and
+    // gone on the next launch.
+    const tooLong = 'x'.repeat(PERSONA_LIMITS.name + 1)
+    expect(applyChange(DEFAULT_PERSONA, { id: 'mochi', name: tooLong }, []).ok).toBe(false)
+    // And the longest one the format accepts still goes through.
+    const longest = 'x'.repeat(PERSONA_LIMITS.name)
+    expect(applyChange(DEFAULT_PERSONA, { id: 'mochi', name: longest }, []).ok).toBe(true)
   })
 })

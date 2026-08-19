@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   isCompanionChannel,
-  isHistoryChannel,
   isSettingsChannel,
+  isShelfChannel,
   type HistoryConversation,
   type HistoryHit,
   type HistoryExport,
@@ -11,14 +11,17 @@ import {
   type MochiApi,
   type MochiHistoryApi,
   type MochiSettingsApi,
+  type GrantChange,
   type LookupChange,
   type NoteAction,
   type PersonaAction,
   type PersonaChange,
   type Revealable,
+  type ScreenChange,
   type SettingsView,
   type SettingsWrite,
   type SessionConfig,
+  type ShelfView,
   type VoiceReport,
 } from '@shared/ipc'
 
@@ -38,8 +41,8 @@ function guard(channel: string): string {
   return channel
 }
 
-function guardHistory(channel: string): string {
-  if (!isHistoryChannel(channel)) throw new Error(`refusing unknown channel: ${channel}`)
+function guardShelf(channel: string): string {
+  if (!isShelfChannel(channel)) throw new Error(`refusing unknown channel: ${channel}`)
   return channel
 }
 
@@ -52,11 +55,19 @@ function guardSettings(channel: string): string {
  * Which document this is, from `additionalArguments`.
  *
  * ONE preload file for every window is the repository's rule, and the role is
- * how a single file serves two. It is read from the process arguments rather
+ * how a single file serves three. It is read from the process arguments rather
  * than from the URL because a page can change its own URL and cannot change
  * these — the window that main constructed is the window that gets the API.
+ *
+ * **No default.** This used to fall back to `companion`, which is the most
+ * privileged role there is — it mints credentials and exchanges SDP offers —
+ * so a window constructed without the argument received the voice bridge. The
+ * note below already said a default that widens authority is the wrong
+ * direction for a default to fail in; it was true of the unrecognised case and
+ * not of the missing one, which is the same hole with a different shape. Her
+ * own window now passes the argument like the other two.
  */
-const role = process.argv.find((one) => one.startsWith('--mochi-role='))?.slice(13) ?? 'companion'
+const role = process.argv.find((one) => one.startsWith('--mochi-role='))?.slice(13) ?? ''
 
 /**
  * Exactly the roles this application constructs. Anything else gets NOTHING.
@@ -89,7 +100,17 @@ const api: MochiApi = {
     ipcRenderer.send(guard('voice:report'), event)
   },
   onSend(handle: (frame: unknown) => void) {
-    ipcRenderer.on(guard('voice:send'), (_event, frame: unknown) => handle(frame))
+    const channel = guard('voice:send')
+    const listener = (_event: unknown, frame: unknown): void => {
+      handle(frame)
+    }
+    ipcRenderer.on(channel, listener)
+    // The way back off. `ipcRenderer.on` has no lifetime of its own, so without
+    // this every session ever opened stayed subscribed — and each one holds a
+    // peer connection and a data channel in its closure.
+    return () => {
+      ipcRenderer.removeListener(channel, listener)
+    }
   },
   history() {
     ipcRenderer.send(guard('history:open'))
@@ -119,31 +140,40 @@ const api: MochiApi = {
 
 const history: MochiHistoryApi = {
   async list() {
-    return (await ipcRenderer.invoke(guardHistory('history:list'))) as {
+    return (await ipcRenderer.invoke(guardShelf('history:list'))) as {
       persona: string
       conversations: readonly HistoryConversation[]
     }
   },
   async turns(token: string) {
-    return (await ipcRenderer.invoke(
-      guardHistory('history:turns'),
-      token,
-    )) as readonly HistoryTurn[]
+    return (await ipcRenderer.invoke(guardShelf('history:turns'), token)) as readonly HistoryTurn[]
   },
   async problems() {
-    return (await ipcRenderer.invoke(guardHistory('history:problems'))) as readonly HistoryProblem[]
+    return (await ipcRenderer.invoke(guardShelf('history:problems'))) as readonly HistoryProblem[]
   },
   settings() {
-    ipcRenderer.send(guardHistory('history:settings'))
+    ipcRenderer.send(guardShelf('history:settings'))
   },
   async exportAll() {
-    return (await ipcRenderer.invoke(guardHistory('history:export'))) as HistoryExport
+    return (await ipcRenderer.invoke(guardShelf('history:export'))) as HistoryExport
   },
   async search(query: string) {
-    return (await ipcRenderer.invoke(
-      guardHistory('history:search'),
-      query,
-    )) as readonly HistoryHit[]
+    return (await ipcRenderer.invoke(guardShelf('history:search'), query)) as readonly HistoryHit[]
+  },
+  async shelf() {
+    return (await ipcRenderer.invoke(guardShelf('shelf:read'))) as ShelfView
+  },
+  async wear(id: string) {
+    return (await ipcRenderer.invoke(guardShelf('shelf:wear'), id)) as SettingsWrite
+  },
+  async saveCharacter(change: PersonaChange) {
+    return (await ipcRenderer.invoke(guardShelf('shelf:save'), change)) as SettingsWrite
+  },
+  async character(action: PersonaAction) {
+    return (await ipcRenderer.invoke(guardShelf('shelf:persona'), action)) as SettingsWrite
+  },
+  async memory(action: NoteAction) {
+    return (await ipcRenderer.invoke(guardShelf('shelf:memory'), action)) as SettingsWrite
   },
 }
 
@@ -151,23 +181,17 @@ const settings: MochiSettingsApi = {
   async read() {
     return (await ipcRenderer.invoke(guardSettings('settings:read'))) as SettingsView
   },
-  async wear(id: string) {
-    return (await ipcRenderer.invoke(guardSettings('settings:wear'), id)) as SettingsWrite
-  },
-  async save(change: PersonaChange) {
-    return (await ipcRenderer.invoke(guardSettings('settings:save'), change)) as SettingsWrite
-  },
   reveal(what: Revealable) {
     ipcRenderer.send(guardSettings('settings:reveal'), what)
   },
   async lookup(change: LookupChange) {
     return (await ipcRenderer.invoke(guardSettings('settings:lookup'), change)) as SettingsWrite
   },
-  async memory(action: NoteAction) {
-    return (await ipcRenderer.invoke(guardSettings('settings:memory'), action)) as SettingsWrite
+  async screen(change: ScreenChange) {
+    return (await ipcRenderer.invoke(guardSettings('settings:screen'), change)) as SettingsWrite
   },
-  async persona(action: PersonaAction) {
-    return (await ipcRenderer.invoke(guardSettings('settings:persona'), action)) as SettingsWrite
+  async grant(change: GrantChange) {
+    return (await ipcRenderer.invoke(guardSettings('settings:grant'), change)) as SettingsWrite
   },
 }
 
@@ -177,9 +201,13 @@ const settings: MochiSettingsApi = {
 // every document would make all three allowlists decorative.
 if (!ROLES.has(role)) {
   // Loud, and empty. Silence here would present as a page whose API is simply
-  // undefined, which reads as a bug in the page rather than a refusal.
+  // undefined, which reads as a bug in the page rather than a refusal. An empty
+  // string is the ABSENT case, and it lands here rather than on the companion.
   console.error(`[preload] refusing to expose any API: unknown role "${role}"`)
 } else if (role === 'history') {
+  // `history` is the role string the shelf window is constructed with. The name
+  // predates the window growing character cards; renaming it would rename a
+  // string nobody sees in three files, so it stays and this says so.
   contextBridge.exposeInMainWorld('mochiHistory', history)
 } else if (role === 'settings') {
   contextBridge.exposeInMainWorld('mochiSettings', settings)

@@ -97,18 +97,36 @@ export const COMPANION_CHANNELS = [
 export type CompanionChannel = (typeof COMPANION_CHANNELS)[number]
 
 /**
- * What the conversations window may ask for — a SEPARATE list, not an addition.
+ * What the SHELF may ask for — a separate list, not an addition.
  *
  * Two documents, two allowlists, and neither can reach the other's channels.
  * A single list would mean the window showing a transcript could also mint a
  * key and exchange an SDP offer, and the companion could read any conversation
  * — for no better reason than that both are renderers.
  *
- * **Nothing here names a persona.** Every one of these reads whoever is worn,
- * decided in main, which is what keeps "show me the history" from becoming
- * "show me anyone's history" the moment a page is compromised.
+ * ## This window grew, and the rule it kept moved with it
+ *
+ * It used to be read-only, and this note used to say that the window showing a
+ * person's words must never be able to change the persona those words are filed
+ * under. That was the right rule for a transcript viewer and is the wrong one
+ * for the shelf: characters and their conversations are one subject — deleting
+ * a character takes her conversations with her — and splitting them across two
+ * windows would put two ways to change one thing in two places, which is what
+ * `menuHandlers` already exists to avoid.
+ *
+ * So the per-character half MOVED here rather than being copied: `settings:wear`,
+ * `settings:save`, `settings:persona` and `settings:memory` are gone from the
+ * settings allowlist below rather than duplicated into this one.
+ *
+ * ## What did NOT move: no transcript channel names a persona
+ *
+ * `history:list`, `history:turns`, `history:search` and `history:export` still
+ * read whoever is worn, decided in main. That is the property worth keeping —
+ * a compromised page can ask for the worn character's conversations and
+ * nobody else's — and it survives a card being clickable, because clicking a
+ * card WEARS somebody rather than naming them to a query.
  */
-export const HISTORY_CHANNELS = [
+export const SHELF_CHANNELS = [
   /** Her conversations, newest first. */
   'history:list',
   /** What was said in one of them, by its opaque token. */
@@ -135,31 +153,46 @@ export const HISTORY_CHANNELS = [
    * same rule `settings:reveal` follows.
    */
   'history:export',
+  /**
+   * The characters, the open one's four plates, and what she will be told.
+   *
+   * ONE call rather than a channel per plate, for the reason `settings:read`
+   * gives: all of it is main's to know and all of it is read fresh, so a window
+   * assembling it piecemeal would be the second place a character lives.
+   */
+  'shelf:read',
+  /** Wear this character. The id is checked against the catalog in main. */
+  'shelf:wear',
+  /** Change fields on a character. Main decides what may be written and where. */
+  'shelf:save',
+  /** Make one, copy one, remove one, or put the built-in back. */
+  'shelf:persona',
+  /** Undo or clear what she remembers about the person. Per character. */
+  'shelf:memory',
 ] as const
 
-export type HistoryChannel = (typeof HISTORY_CHANNELS)[number]
+export type ShelfChannel = (typeof SHELF_CHANNELS)[number]
 
 /**
  * What the settings window may ask for — a THIRD list, for the same reason
  * there is a second.
  *
- * This is the only window that WRITES, which is exactly why it does not share
- * an allowlist with the two that read. The companion can mint a credential and
- * must never be able to rewrite who she is; the conversations window shows a
- * person's words and must never be able to change the persona those words are
- * filed under.
+ * What is left here once the shelf has taken the per-character half: the
+ * standing grants, how a lookup runs, and where the app's own folders are.
+ * `plan-shell.md` settles the split — a row belongs here when it is true of
+ * this machine whoever is worn.
+ *
+ * The companion can mint a credential and must never be able to rewrite a
+ * permission; this window can rewrite a permission and must never be able to
+ * mint anything.
  *
  * **Nothing here takes a path.** `settings:reveal` names a folder by kind, not
  * by location — a renderer that could hand main an arbitrary path to open would
  * be a file browser with the user's authority, reachable from a page.
  */
 export const SETTINGS_CHANNELS = [
-  /** Everything the window draws: personas, avatars, capabilities, folders. */
+  /** Everything the window draws: what she may do, lookups, folders. */
   'settings:read',
-  /** Wear this persona. The id is checked against the catalog in main. */
-  'settings:wear',
-  /** Change fields on a persona. Main decides what may be written and where. */
-  'settings:save',
   /** Show me where these files are. A KIND, never a path. */
   'settings:reveal',
   /**
@@ -173,29 +206,73 @@ export const SETTINGS_CHANNELS = [
    */
   'settings:lookup',
   /**
-   * Undo or clear what she remembers about the person.
+   * What she looks like on the desktop — today, which side the bubble sits on.
    *
-   * The note is the one thing here that a MODEL writes — `remember_this` when
-   * somebody asks out loud, and the sleep summariser when it lands. That is why
-   * it is the one thing that needs an undo: `remember` keeps the previous
-   * version exactly one deep, and `store/memory.ts` calls that the whole safety
-   * story for letting a model maintain a document about somebody.
+   * The tray offers the same choice, and that is deliberate rather than
+   * duplicated: `tray.ts` carries v1's standing rule that the tray is ACTIONS
+   * and the window is CONFIGURATION. Both go through one handler in main, which
+   * is what stops the two drifting.
    */
-  'settings:memory',
+  'settings:screen',
   /**
-   * Make a persona, copy one, remove one, or put the built-in back.
+   * Allow her something, or take it away — 5b's four standing grants.
    *
-   * A discriminated action on ONE channel rather than four channels. Every one
-   * of these is the same subject — which characters exist — and the contract
-   * grows by a case rather than by a message kind.
+   * ONE grant at a time, carrying which and whether. The window sends the one
+   * switch that moved rather than the whole set, so two windows open at once
+   * cannot write each other's answers back.
    */
-  'settings:persona',
+  'settings:grant',
 ] as const
 
 export type SettingsChannel = (typeof SETTINGS_CHANNELS)[number]
 
 export function isSettingsChannel(value: unknown): value is SettingsChannel {
   return typeof value === 'string' && (SETTINGS_CHANNELS as readonly string[]).includes(value)
+}
+
+/**
+ * What she looks like on the desktop, as the settings window draws it.
+ *
+ * `sides` is every side that can be CHOSEN, which is not the same as every side
+ * the bubble can currently reach — that shrinks as she is dragged into a corner
+ * and is the renderer's answer, not main's. A window offering only what fits
+ * right now would change its own options when somebody moved her.
+ */
+export interface SettingsScreen {
+  readonly bubbleSide: string
+  readonly sides: readonly string[]
+}
+
+/** What may be changed about the screen. Absent means unchanged. */
+export interface ScreenChange {
+  readonly bubbleSide?: string
+}
+
+/**
+ * One global key, and whether this application actually got it.
+ *
+ * Read-only: the keys are two constants (`shared/shortcuts.ts`), and an
+ * editable system is a second feature that `plan-v2.md` records as deliberately
+ * not carried over. What the window adds is the half that was invisible —
+ * `globalShortcut.register` returns false when another application owns the
+ * combination, and until now that failure only reached a log and the problems
+ * strip.
+ */
+export interface SettingsKey {
+  readonly id: string
+  readonly what: string
+  readonly accelerator: string
+  /** Null when this application has it. The reason, when it does not. */
+  readonly refused: string | null
+}
+
+/** What this build is, and where the rest of it went. */
+export interface SettingsAbout {
+  readonly name: string
+  readonly version: string
+  readonly electron: string
+  /** Where userData lives. Shown because every path below is under it. */
+  readonly userData: string
 }
 
 /**
@@ -211,7 +288,7 @@ export function isSettingsChannel(value: unknown): value is SettingsChannel {
 export const REVEALABLE = ['avatars', 'personas'] as const
 export type Revealable = (typeof REVEALABLE)[number]
 
-/** One persona, as the settings window lists it. */
+/** One character, as the shelf lists her. `ShelfCharacter` is this type. */
 export interface SettingsPersona {
   readonly id: string
   readonly name: string
@@ -270,6 +347,15 @@ export interface SettingsLookup {
   readonly profile: string | null
   /** Where that file is, so somebody can go and edit it. Null when none. */
   readonly profilePath: string | null
+  /**
+   * Whether the Codex CLI was found at all.
+   *
+   * Without it she cannot look anything up, and the failure otherwise presents
+   * as her declining to help. It is on this view so the group carrying the
+   * lookup settings can mark itself as needing attention rather than showing
+   * three controls for something that cannot run.
+   */
+  readonly codexFound: boolean
 }
 
 /**
@@ -286,8 +372,19 @@ export interface SettingsNote {
   readonly previous: string | null
 }
 
-/** What may be done to the note. Both are undoable; neither deletes the file. */
-export type NoteAction = { readonly kind: 'restore' } | { readonly kind: 'clear' }
+/**
+ * What may be done to the note. Both are undoable; neither deletes the file.
+ *
+ * It NAMES the character it was shown for, and that is the whole reason the id
+ * is here — it is not used to choose whose note is written. Main writes the
+ * WORN one, as everything else on this bridge does, and refuses when the two
+ * disagree. Without it, clicking "Forget everything" while a character switch
+ * was still in flight cleared the note of whoever had just been worn, while the
+ * page was still showing somebody else's.
+ */
+export type NoteAction =
+  | { readonly kind: 'restore'; readonly id: string }
+  | { readonly kind: 'clear'; readonly id: string }
 
 /**
  * What may be done to the shelf of personas.
@@ -310,15 +407,31 @@ export interface LookupChange {
   readonly webSearch?: string
   readonly profile?: string | null
 }
-/** Everything the settings window draws, answered in one call. */
+/**
+ * Everything the settings window draws, answered in one call.
+ *
+ * Only what is true regardless of character. The personas, the voices, the
+ * avatars and the note went to the shelf with the controls that edit them —
+ * see `ShelfView` and `plan-shell.md`'s split.
+ */
 export interface SettingsView {
-  readonly wornId: string
-  readonly personas: readonly SettingsPersona[]
-  readonly avatars: readonly SettingsAvatar[]
-  readonly voices: readonly string[]
+  /**
+   * The worn face, resolved — so the window can take HER colour.
+   *
+   * The design's second semantic rule: *the accent is her*, derived from
+   * `colBody`, with no second place to set an app colour. The whole spec is
+   * sent rather than five pre-computed variables because `accent.ts` is the one
+   * derivation and it belongs in the renderer beside the sheet it fills in;
+   * main computing them would be a second place the rule lives.
+   */
+  readonly face: FaceSpec
   readonly capabilities: readonly SettingsCapability[]
+  /** The four standing grants, in the order `GRANT_SPECS` declares them. */
+  readonly grants: readonly SettingsGrant[]
   readonly lookup: SettingsLookup
-  readonly note: SettingsNote
+  readonly screen: SettingsScreen
+  readonly keys: readonly SettingsKey[]
+  readonly about: SettingsAbout
   /** Named for display. Opening one goes through `settings:reveal` by kind. */
   readonly folders: Readonly<Record<Revealable, string>>
 }
@@ -332,25 +445,81 @@ export interface PersonaChange {
   readonly avatarId?: string | null
 }
 
+/**
+ * When a grant's capability was last called.
+ *
+ * A union rather than `number | null`, because there are THREE answers and two
+ * of them are not the same: nothing records use for the microphone, and that
+ * has to read differently from a capability that exists and has never been
+ * used. 5b's acceptance is that the column is real or the row does not claim
+ * it, and a `null` doing both jobs is exactly the claim it must not make.
+ */
+export type GrantUse =
+  /** Recorded, and it has never been called. */
+  | { readonly kind: 'never' }
+  /** Recorded, and this is when. Epoch milliseconds. */
+  | { readonly kind: 'at'; readonly at: number }
+  /** Nothing records use for this one, so the row says so instead of "never". */
+  | { readonly kind: 'not-recorded' }
+
+/** One grant, as the settings window draws it. */
+export interface SettingsGrant {
+  /** A `Grant` from `@shared/grants`. */
+  readonly id: string
+  readonly allowed: boolean
+  readonly lastUsed: GrantUse
+}
+
+/** Turning one grant on or off. */
+export interface GrantChange {
+  readonly id: string
+  readonly allowed: boolean
+}
+
 /** Whether a write landed, and what to say when it did not. */
 export type SettingsWrite = { readonly ok: true } | { readonly ok: false; readonly why: string }
 
 export interface MochiSettingsApi {
   read(): Promise<SettingsView>
-  wear(id: string): Promise<SettingsWrite>
-  save(change: PersonaChange): Promise<SettingsWrite>
   lookup(change: LookupChange): Promise<SettingsWrite>
-  memory(action: NoteAction): Promise<SettingsWrite>
-  persona(action: PersonaAction): Promise<SettingsWrite>
+  screen(change: ScreenChange): Promise<SettingsWrite>
+  grant(change: GrantChange): Promise<SettingsWrite>
   reveal(what: Revealable): void
+}
+
+/**
+ * The prefix on every frame main sends the companion that the SERVICE must
+ * never see.
+ *
+ * `voice:send` does two jobs. Most of what crosses it is the ledger's answers,
+ * which belong on the data channel; the rest is main talking to the renderer —
+ * the reconnect, the problem count, asleep, her stance, the bubble's side, the
+ * standing grants. A channel per lifecycle event is the shape v1's 45 message
+ * kinds grew out of, so they share one and are told apart by this.
+ *
+ * It is load-bearing rather than cosmetic. The renderer forwards what arrives
+ * on that channel to the peer, and until this existed it forwarded ALL of it —
+ * so every private frame was also written out to OpenAI, including the one
+ * carrying her whole assembled prompt and her tool list. A stray unknown event
+ * the service shrugs at is a nuisance; that one is a leak.
+ *
+ * Here rather than in either process, because both ends have to agree: main
+ * chooses the names and the renderer decides what reaches the wire.
+ */
+export const PRIVATE_FRAME_PREFIX = '__mochi_'
+
+/** Whether a frame is main talking to the renderer rather than to the service. */
+export function isPrivateFrame(frame: unknown): boolean {
+  const type = (frame as { type?: unknown } | null)?.type
+  return typeof type === 'string' && type.startsWith(PRIVATE_FRAME_PREFIX)
 }
 
 export function isCompanionChannel(value: unknown): value is CompanionChannel {
   return typeof value === 'string' && (COMPANION_CHANNELS as readonly string[]).includes(value)
 }
 
-export function isHistoryChannel(value: unknown): value is HistoryChannel {
-  return typeof value === 'string' && (HISTORY_CHANNELS as readonly string[]).includes(value)
+export function isShelfChannel(value: unknown): value is ShelfChannel {
+  return typeof value === 'string' && (SHELF_CHANNELS as readonly string[]).includes(value)
 }
 
 /**
@@ -421,13 +590,28 @@ export interface SessionConfig {
    */
   readonly bubble: boolean
   /**
-   * What to say on waking, as an instruction rather than as words.
+   * What to say on waking, as an instruction rather than as words — or **null**
+   * when she may not speak first.
    *
    * A separate `response.create` rather than part of the system prompt, because
    * she must speak **without having been spoken to** — there is no user turn to
    * respond to, and a system prompt only shapes an answer to something.
+   *
+   * Null rather than an empty string, because "say nothing" is a decision main
+   * made from a grant and an empty instruction is a prompt that says nothing.
+   * The renderer branches on it, so the turn is never requested at all.
    */
-  readonly greeting: string
+  readonly greeting: string | null
+  /**
+   * Whether the microphone may open at all — 5b's first grant.
+   *
+   * On the config for the same reason `asleep` is: it is read from the same
+   * file at the same moment, and a second message would arrive after she had
+   * already started transmitting. It is NOT the same thing as `asleep`, which
+   * is where she was left; this is what she is permitted, and the microphone
+   * opens only when both agree.
+   */
+  readonly microphone: boolean
   /**
    * How she looks — the whole `FaceSpec`, resolved in main.
    *
@@ -497,8 +681,15 @@ export interface MochiApi {
   drop(): void
   /** Tell main what the session is doing. */
   report(event: VoiceReport): void
-  /** Frames main wants put on the data channel — the ledger's answers. */
-  onSend(handle: (frame: unknown) => void): void
+  /**
+   * Frames main wants put on the data channel — the ledger's answers.
+   *
+   * Returns the way to STOP listening, and that is not decoration: a session is
+   * opened on every wake and again on every reconnect (§53: hourly), and each
+   * one subscribed. Without this, every session ever opened stayed reachable
+   * for the life of the window, holding its peer, its channel and its callbacks.
+   */
+  onSend(handle: (frame: unknown) => void): () => void
 }
 
 /** One conversation, as the window lists it. */
@@ -564,6 +755,72 @@ export type HistoryExport =
   | { readonly ok: false; readonly cancelled: true }
   | { readonly ok: false; readonly cancelled: false; readonly why: string }
 
+/**
+ * One character, as the shelf lists her.
+ *
+ * The same fields `SettingsPersona` carried, because it is the same list — it
+ * moved rather than being copied. The type keeps its name so the settings
+ * module's `listPersonas` did not have to grow a second shape for one caller.
+ */
+export type ShelfCharacter = SettingsPersona
+
+/**
+ * The four plates 1a raises over the open character.
+ *
+ * Three of them are `Persona` fields. The fourth is not, and saying so is the
+ * point: `workspace` is app-level (`plan-shell.md`'s split), so this plate is a
+ * READOUT that points at settings rather than a control pretending to be
+ * per-character. Drawing four plates and quietly making one of them global
+ * would be worse than drawing three.
+ */
+export interface ShelfPlates {
+  /** Which avatar file she wears, and where it actually resolved to. */
+  readonly face: { readonly avatarId: string | null; readonly source: string | null }
+  readonly voice: string
+  /** Her own prompt — `Persona.style`, the character half of what she is told. */
+  readonly prompt: string
+  /** App-level, and the plate says so. See above. */
+  readonly workspace: string
+}
+
+/** Everything the shelf's character half draws, answered in one call. */
+/**
+ * Her state, for the strip across the top of the shelf.
+ *
+ * The handoff is blunt about why this is there and why it is first: *"a
+ * microphone that is open with nothing saying so is the worst thing a desktop
+ * companion can do."* So it is not decoration and it is not a status bar — it
+ * is the one surface that always answers whether she is listening.
+ */
+export interface ShelfState {
+  readonly asleep: boolean
+  /** Whether the microphone grant allows one at all. See `@shared/grants`. */
+  readonly microphone: boolean
+  /** The key that wakes her, or null when another application took it. */
+  readonly restKey: string | null
+}
+
+export interface ShelfView {
+  /** The worn face, resolved. See `SettingsView.face` — same rule, same reason. */
+  readonly face: FaceSpec
+  readonly state: ShelfState
+  readonly wornId: string
+  readonly characters: readonly ShelfCharacter[]
+  readonly avatars: readonly SettingsAvatar[]
+  readonly voices: readonly string[]
+  readonly plates: ShelfPlates
+  /**
+   * Exactly what she will be told on the next wake.
+   *
+   * `instructionsFor`'s output, with the withheld-grants notice on the end —
+   * the real string, not a summary of it. 1b's right-hand card is literally
+   * that function's output, and a card that re-assembled it here would be the
+   * second place her prompt is built.
+   */
+  readonly assembled: string
+  readonly note: SettingsNote
+}
+
 export interface MochiHistoryApi {
   /** Everything that went wrong this launch, newest first. */
   problems(): Promise<readonly HistoryProblem[]>
@@ -578,4 +835,14 @@ export interface MochiHistoryApi {
   }>
   turns(token: string): Promise<readonly HistoryTurn[]>
   search(query: string): Promise<readonly HistoryHit[]>
+  /** The characters, the open one's plates, and what she will be told. */
+  shelf(): Promise<ShelfView>
+  /** Wear somebody. Checked against the catalog in main. */
+  wear(id: string): Promise<SettingsWrite>
+  /** Change a field on a character. Main decides what may be written, and where. */
+  saveCharacter(change: PersonaChange): Promise<SettingsWrite>
+  /** Make one, copy one, remove one, or put the built-in back. */
+  character(action: PersonaAction): Promise<SettingsWrite>
+  /** Undo the last change to her note, or clear it. */
+  memory(action: NoteAction): Promise<SettingsWrite>
 }

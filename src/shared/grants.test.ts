@@ -1,0 +1,194 @@
+import { describe, expect, it } from 'vitest'
+import {
+  allowsCapability,
+  grantsNotice,
+  isGrant,
+  parseGrants,
+  withheldGuidance,
+  DEFAULT_GRANTS,
+  WITHHELD_GRANTS,
+  GRANTS,
+  GRANT_SPECS,
+} from './grants'
+
+describe('the four', () => {
+  it('is the four 5b names, and no more', () => {
+    // The plugin sandbox and the grant broker are struck, so a grant is not a
+    // fence around somebody else's code — it is what this machine lets her do.
+    expect([...GRANTS]).toEqual(['microphone', 'speak_first', 'ask_workspace', 'remember_this'])
+  })
+
+  it('describes every one of them exactly once', () => {
+    expect(GRANT_SPECS.map((one) => one.id)).toEqual([...GRANTS])
+  })
+
+  it('names a real capability, or none at all', () => {
+    // Null is what says the row has no "last used" to show. A name that is not
+    // a capability would be a switch that governs nothing.
+    const named = GRANT_SPECS.map((one) => one.capability).filter((one) => one !== null)
+    expect(named).toEqual(['ask_workspace', 'remember_this'])
+  })
+
+  it('gives every one a sentence she can say out loud', () => {
+    for (const spec of GRANT_SPECS) {
+      expect(spec.withheld.trim().length).toBeGreaterThan(0)
+      expect(spec.label.trim().length).toBeGreaterThan(0)
+      expect(spec.detail.trim().length).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('what an installation that has never been asked gets', () => {
+  it('is everything, because a companion that cannot hear you is broken', () => {
+    // The switch exists so somebody can say no, not so the app can say it for
+    // them.
+    expect(DEFAULT_GRANTS).toEqual({
+      microphone: true,
+      speak_first: true,
+      ask_workspace: true,
+      remember_this: true,
+    })
+  })
+})
+
+describe('reading what was stored', () => {
+  it('takes a full set back', () => {
+    expect(parseGrants({ ...DEFAULT_GRANTS, ask_workspace: false })).toEqual({
+      ...DEFAULT_GRANTS,
+      ask_workspace: false,
+    })
+  })
+
+  it('honours a refusal even when the rest of the object is nonsense', () => {
+    // Field by field rather than whole-or-nothing: refusing the object because
+    // one key is misspelt would restore a capability somebody switched off,
+    // which is the direction that must not happen silently.
+    expect(parseGrants({ ask_workspace: false, wobble: 'yes' })).toEqual({
+      ...DEFAULT_GRANTS,
+      ask_workspace: false,
+    })
+  })
+
+  it('withholds a value that is PRESENT and is not a boolean', () => {
+    // This asserted the opposite until an audit pointed at it, and the old
+    // behaviour was a real widening: `{ microphone: null }` — corruption, a
+    // half-written file, a hand edit — came back ALLOWED. A present value that
+    // cannot be read as permission is not permission.
+    expect(parseGrants({ microphone: 'no' }).microphone).toBe(false)
+    expect(parseGrants({ microphone: 0 }).microphone).toBe(false)
+    expect(parseGrants({ microphone: null }).microphone).toBe(false)
+  })
+
+  it('still allows a grant nobody has said anything about', () => {
+    // The other half, and it has to stay: a key ABSENT is nobody saying no, and
+    // an installation that has never opened the panel must still work.
+    expect(parseGrants({ ask_workspace: false }).microphone).toBe(true)
+    expect(parseGrants({}).microphone).toBe(true)
+  })
+
+  it('takes an explicit true', () => {
+    expect(parseGrants({ microphone: true }).microphone).toBe(true)
+  })
+
+  it('falls back to everything only when the key is genuinely ABSENT', () => {
+    // `undefined` is what a file with no `grants` key produces, and that is
+    // nobody having said no.
+    expect(parseGrants(undefined)).toEqual(DEFAULT_GRANTS)
+  })
+
+  it('withholds everything for a container that is present and unreadable', () => {
+    // `{ "grants": null }` and `{ "grants": [] }` are somebody's answers, in a
+    // shape nothing can read. Returning the defaults for one re-enabled every
+    // permission — the same widening as the per-key case, one level up.
+    for (const value of [null, 'grants', 42, ['ask_workspace']]) {
+      expect(parseGrants(value)).toEqual(WITHHELD_GRANTS)
+    }
+  })
+
+  it('answers for a grant name, and refuses anything else', () => {
+    expect(isGrant('microphone')).toBe(true)
+    expect(isGrant('recall_conversations')).toBe(false)
+    expect(isGrant(7)).toBe(false)
+  })
+})
+
+describe('which capabilities may run', () => {
+  it('withdraws exactly the one whose grant is off', () => {
+    const grants = { ...DEFAULT_GRANTS, ask_workspace: false }
+    expect(allowsCapability(grants, 'ask_workspace')).toBe(false)
+    expect(allowsCapability(grants, 'remember_this')).toBe(true)
+  })
+
+  it('leaves a capability with no grant alone', () => {
+    // `recall_conversations` reads her own archive and is not one of the four.
+    // Governed by nothing here is a different answer from switched off.
+    const nothing = {
+      microphone: false,
+      speak_first: false,
+      ask_workspace: false,
+      remember_this: false,
+    }
+    expect(allowsCapability(nothing, 'recall_conversations')).toBe(true)
+  })
+})
+
+describe('what she is told', () => {
+  it('says nothing at all while she may do everything', () => {
+    // The ordinary session carries no extra prompt.
+    expect(grantsNotice(DEFAULT_GRANTS)).toBe('')
+  })
+
+  it('names every grant that is off', () => {
+    const notice = grantsNotice({ ...DEFAULT_GRANTS, ask_workspace: false, remember_this: false })
+    expect(notice).toContain('look anything up')
+    expect(notice).toContain('long-term notes')
+    // And not the ones that are on.
+    expect(notice).not.toContain('microphone')
+  })
+
+  it('tells her to SAY SO rather than to decline', () => {
+    // The failure `notBuilt` was deleted for: a capability she cannot perform
+    // that presents as her choosing not to help.
+    const notice = grantsNotice({ ...DEFAULT_GRANTS, ask_workspace: false })
+    expect(notice).toContain('say plainly')
+    expect(notice).toContain('switched it off')
+  })
+
+  it('gives a callable-but-withheld capability its own sentence', () => {
+    // Reached when she holds a tool list from before the switch moved.
+    const guidance = withheldGuidance('ask_workspace')
+    expect(guidance).toContain('look anything up')
+    expect(guidance).toContain('turned it off')
+    expect(guidance).toContain('do not guess')
+  })
+
+  it('still says something usable for a name it does not know', () => {
+    expect(withheldGuidance('something_else').trim().length).toBeGreaterThan(0)
+  })
+})
+
+describe('what applies when a stored answer cannot be read', () => {
+  it('withholds everything, which is the opposite of the default', () => {
+    // `@shared/policy` draws the same line for retention. Absent means nobody
+    // said no; unreadable means somebody's answer is there and unavailable, and
+    // resolving THAT as allowed is the one direction that lets her do something
+    // they may have said she may not.
+    expect(WITHHELD_GRANTS).toEqual({
+      microphone: false,
+      speak_first: false,
+      ask_workspace: false,
+      remember_this: false,
+    })
+  })
+
+  it('is not the same object as the default, which is the whole point', () => {
+    expect(WITHHELD_GRANTS).not.toEqual(DEFAULT_GRANTS)
+  })
+
+  it('withdraws every capability that has a grant', () => {
+    expect(allowsCapability(WITHHELD_GRANTS, 'ask_workspace')).toBe(false)
+    expect(allowsCapability(WITHHELD_GRANTS, 'remember_this')).toBe(false)
+    // And still leaves alone the one that has none.
+    expect(allowsCapability(WITHHELD_GRANTS, 'recall_conversations')).toBe(true)
+  })
+})

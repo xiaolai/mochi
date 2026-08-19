@@ -15,12 +15,22 @@ function manifest(name: string): CapabilityManifest {
   }
 }
 
-/** A real registry and a transport that records. Nothing is mocked. */
+/**
+ * A real registry, a transport that records, and a clock that does not move
+ * unless a test moves it. Nothing is mocked.
+ */
 function ledgerWithSpy() {
   const frames: AnswerFrame[] = []
+  const uses: { name: string; at: number }[] = []
   const registry = createRegistry([manifest('ask_workspace')])
-  const ledger = createLedger({ registry, send: (frame) => frames.push(frame) })
-  return { ledger, frames }
+  const clock = { at: 1_000 }
+  const ledger = createLedger({
+    registry,
+    send: (frame) => frames.push(frame),
+    now: () => clock.at,
+    used: (name, at) => uses.push({ name, at }),
+  })
+  return { ledger, frames, uses, clock }
 }
 
 const CALL = { name: 'ask_workspace', callId: 'call_1', args: JSON.stringify({ question: 'what' }) }
@@ -208,6 +218,20 @@ describe('what may never be sent', () => {
     }
   })
 
+  it('emits a STRING even for a value JSON.stringify answers `undefined` for', () => {
+    // Not the same as the cyclic case below, and that is why it was missed:
+    // `JSON.stringify(undefined)` does not throw, it RETURNS undefined. So a
+    // non-string reached `AnswerFrame.output` and the call was booked as
+    // settled — a frame the service cannot read, recorded as an answer.
+    for (const value of [undefined, () => 'hello', Symbol('x')]) {
+      const { ledger, frames } = ledgerWithSpy()
+      ledger.arrived(CALL)
+      ledger.answer('call_1', value)
+      expect(typeof frames[0]?.item.output).toBe('string')
+      expect(frames[0]?.item.output).toContain('could not be serialised')
+    }
+  })
+
   it('still emits a frame when the result cannot be serialised', () => {
     // A call that cannot be answered because of a formatting fault would hang
     // the conversation for the rest of the session. Loud in the payload, not
@@ -238,6 +262,8 @@ describe('a transport that throws', () => {
       send: () => {
         if (angry) throw new Error('Object has been destroyed')
       },
+      now: () => 1_000,
+      used: () => {},
     })
     expect(ledger.arrived(CALL).kind).toBe('accepted')
     expect(() => ledger.answer(CALL.callId, { status: 'ok' })).toThrow()
@@ -258,11 +284,139 @@ describe('a transport that throws', () => {
       send: () => {
         throw new Error('Object has been destroyed')
       },
+      now: () => 1_000,
+      used: () => {},
     })
     ledger.arrived(CALL)
     expect(() => ledger.defer(CALL.callId, { status: 'started' })).toThrow()
     // NOT `undelivered`. Nothing was acknowledged, so nothing is owed.
     expect(ledger.undelivered()).toEqual([])
     expect(ledger.unanswered()).toEqual([CALL.callId])
+  })
+})
+
+describe('the times each call carries', () => {
+  it('stamps arrival from the injected clock, not from the wall', () => {
+    // Injected, like everything else here that reads one, so an assertion about
+    // an elapsed time does not depend on how fast the suite runs.
+    const { ledger, clock } = ledgerWithSpy()
+    clock.at = 5_000
+    ledger.arrived(CALL)
+
+    const [call] = ledger.calls()
+    expect(call?.callId).toBe('call_1')
+    expect(call?.name).toBe('ask_workspace')
+    expect(call?.arrivedAt).toBe(5_000)
+    expect(call?.settledAt).toBe(null)
+  })
+
+  it('stamps the settle when the call is answered outright', () => {
+    const { ledger, clock } = ledgerWithSpy()
+    clock.at = 5_000
+    ledger.arrived(CALL)
+    clock.at = 5_120
+    ledger.answer('call_1', 'done')
+
+    expect(ledger.calls()[0]).toMatchObject({ arrivedAt: 5_000, settledAt: 5_120 })
+  })
+
+  it('leaves a deferral UNSETTLED, because something is still owed on it', () => {
+    // The same line `undelivered()` is drawn along. A deferral is a promise,
+    // and calling it settled would make the panel report a lookup as finished
+    // at the moment she said she would go and look.
+    const { ledger, clock } = ledgerWithSpy()
+    clock.at = 5_000
+    ledger.arrived(CALL)
+    clock.at = 5_010
+    ledger.defer('call_1', { status: 'started' })
+    expect(ledger.calls()[0]?.settledAt).toBe(null)
+
+    clock.at = 26_000
+    ledger.deliver('call_1', { answer: 'ALPHA7' })
+    expect(ledger.calls()[0]).toMatchObject({ state: 'delivered', settledAt: 26_000 })
+  })
+
+  it('records a call nothing answers to, so it is not invisible', () => {
+    const { ledger, clock } = ledgerWithSpy()
+    clock.at = 7_000
+    ledger.arrived({ ...CALL, name: 'rm_minus_rf' })
+
+    expect(ledger.calls()[0]).toMatchObject({
+      name: 'rm_minus_rf',
+      state: 'settled',
+      arrivedAt: 7_000,
+      settledAt: 7_000,
+    })
+  })
+
+  it('keeps them in arrival order', () => {
+    const { ledger, clock } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    clock.at = 2_000
+    ledger.arrived({ ...CALL, callId: 'call_2' })
+    expect(ledger.calls().map((one) => one.callId)).toEqual(['call_1', 'call_2'])
+  })
+})
+
+describe('recording that a capability was used', () => {
+  it('records it on ARRIVAL, before anything has run', () => {
+    // A call that arrived is a use whether or not it worked. Recording it on
+    // the answer would leave a lookup that failed after twenty seconds
+    // invisible to the one column that would have shown it.
+    const { ledger, uses, clock } = ledgerWithSpy()
+    clock.at = 9_000
+    ledger.arrived(CALL)
+    expect(uses).toEqual([{ name: 'ask_workspace', at: 9_000 }])
+  })
+
+  it('does not record a name no capability answers to', () => {
+    // Nothing ran, so there is nothing whose "last used" this would be — and a
+    // row for a capability this build does not have is a row nobody can act on.
+    const { ledger, uses } = ledgerWithSpy()
+    ledger.arrived({ ...CALL, name: 'rm_minus_rf' })
+    expect(uses).toEqual([])
+  })
+
+  it('does not record a duplicate call id twice', () => {
+    const { ledger, uses } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    ledger.arrived(CALL)
+    expect(uses).toHaveLength(1)
+  })
+
+  it('leaves an unknown name visible as unanswered when the refusal cannot be sent', () => {
+    // `arrived` records the entry BEFORE it emits, so a send that throws leaves
+    // the call exactly where it is. The model is waiting for a frame that did
+    // not go out, and that is what `unanswered()` means.
+    const registry = createRegistry([manifest('ask_workspace')])
+    const ledger = createLedger({
+      registry,
+      send: () => {
+        throw new Error('Object has been destroyed')
+      },
+      now: () => 1_000,
+      used: () => {},
+    })
+    expect(() => ledger.arrived({ ...CALL, name: 'rm_minus_rf' })).toThrow()
+    expect(ledger.unanswered()).toEqual([CALL.callId])
+    expect(ledger.calls()[0]).toMatchObject({ name: 'rm_minus_rf', state: 'pending' })
+  })
+
+  it('answers the call even when recording the use throws', () => {
+    // It writes a file, so it genuinely can fail. Losing the record of a use
+    // costs a column that says "never"; letting it escape would hang the
+    // conversation over a bookkeeping write.
+    const frames: AnswerFrame[] = []
+    const ledger = createLedger({
+      registry: createRegistry([manifest('ask_workspace')]),
+      send: (frame) => frames.push(frame),
+      now: () => 1_000,
+      used: () => {
+        throw new Error('ENOSPC')
+      },
+    })
+    expect(() => ledger.arrived(CALL)).not.toThrow()
+    expect(ledger.answer('call_1', 'done')).toEqual({ ok: true })
+    expect(frames).toHaveLength(1)
   })
 })

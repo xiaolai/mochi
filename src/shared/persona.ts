@@ -59,7 +59,7 @@ export type VoiceName = (typeof VOICE_NAMES)[number]
  * `verbatim: null` rather than an optional field. This project compiles with
  * `exactOptionalPropertyTypes`, and more to the point an absent key and an
  * empty string would be two spellings of "no override" -- one of which the
- * settings window would produce by clearing a text box.
+ * shelf would produce by clearing a text box.
  */
 export interface SpokenMoment {
   /** What she should convey. Always present; the fallback when there is no override. */
@@ -650,9 +650,9 @@ export function farewellFor(persona: Persona): string {
  * newline broke the line structure the rest of the prompt is built from. Both
  * are things a person can type by accident.
  *
- * Whitespace-only counts as absent: clearing a text box in the settings window
- * leaves an empty string, not a null, and "say nothing, exactly" is not a
- * greeting anyone means to configure.
+ * Whitespace-only counts as absent: clearing a text box on the shelf leaves an
+ * empty string, not a null, and "say nothing, exactly" is not a greeting anyone
+ * means to configure.
  */
 function verbatimLine(moment: SpokenMoment): string | null {
   const exact = moment.verbatim?.trim() ?? ''
@@ -847,8 +847,8 @@ export type PersonaParse =
  * Why a persona on disk did not become one in the catalog.
  *
  * STRUCTURED, for the usual reason: main does not write sentences. A
- * load failure has to reach the settings window or it is only a console line
- * nobody has open -- and `AvatarProblem.reason` shows what the alternative
+ * load failure has to reach a window somebody can open or it is only a console
+ * line nobody has -- and `AvatarProblem.reason` shows what the alternative
  * looks like, an English string assembled in main that the window can only
  * display verbatim, in one language, outside the table that makes a missing
  * translation a compile error.
@@ -1103,8 +1103,7 @@ function readId(problems: SaveProblem[], source: Record<string, unknown>): strin
  *
  * Absent is the ordinary upgrade case -- a persona written before avatars
  * could be chosen -- and means the built-in. `null` says the same thing
- * explicitly, which is what the settings window sends when somebody clears the
- * choice.
+ * explicitly, which is what the shelf sends when somebody clears the choice.
  */
 function readAvatarId(problems: SaveProblem[], source: Record<string, unknown>): string | null {
   const raw = source['avatarId']

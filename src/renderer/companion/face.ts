@@ -4,6 +4,7 @@ import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createBubble, type BubbleColours } from './bubble'
 import { createUtterance } from './utterance'
 import { createAttending, levelOf, type Attention } from './attending'
+import { createBeat, drawBeat, type Beat } from './beat'
 import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
 import { roomFor, type Room, type SidePreference } from './place'
 import { layoutFor, feetY, BREATHING_UNITS, FEET_FROM_TOP } from '@shared/avatar-layout'
@@ -76,12 +77,31 @@ export interface Face {
    */
   sleeps(asleep: boolean): void
   /**
+   * Whether the microphone is open at all.
+   *
+   * TWO things close it and they are not the same: she is asleep, or the grant
+   * was taken away. Either one means there is no turn to detect, so the beat
+   * must not open — a disabled or ended track still produces frames, and
+   * silence read as "they stopped talking" put her into a held beat behind a
+   * microphone that was not listening.
+   */
+  hears(on: boolean): void
+  /**
    * How far into her window she is standing.
    *
    * Main drives it: dragged against the top of the display the window can rise
    * no further, so she rises inside it instead. See `dragTo`.
    */
   stands(feetFromTop: number): void
+  /**
+   * A new session is up. Nothing the last one was waiting on is owed by it.
+   *
+   * A wake opens a new session and so does every reconnect (§53: hourly), and
+   * this object outlives both — so a beat still held when the hour ran out
+   * carried into the next session and went overdue there, asking somebody to
+   * repeat something they had never said to it.
+   */
+  opened(): void
   /** Turn the bubble on for this persona, with the surface it draws on. */
   showWords(colours: BubbleColours | null): void
   /**
@@ -201,6 +221,8 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   let bubbleSide: SidePreference = 'auto'
   /** Asleep. Held here because it changes what a click on her means. */
   let resting = false
+  /** Whether the microphone is open. See `hears` — sleep is not the only cause. */
+  let hearing = true
   /** How far into the canvas she is standing. See `stands`. */
   let feet = FEET_FROM_TOP
   /** The last answer sent up, so an unchanged one is not sent again. */
@@ -216,6 +238,11 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    */
   const utterance = createUtterance()
   const attending = createAttending()
+  /**
+   * The pause before she answers, held locally. See `beat.ts` for §64's
+   * measurement and for why nothing about it may come from the service.
+   */
+  const beat = createBeat()
 
   /** The microphone's own analyser. Hers drives the mouth; this drives nothing
    *  she says — only whether she looks like she is waiting on somebody. */
@@ -223,6 +250,8 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   let micSamples: Float32Array<ArrayBuffer> | null = null
   /** So the reaction fires on the CHANGE, not on every frame of the state. */
   let attention: Attention = 'idle'
+  /** The same, for the beat. See `beat.ts`. */
+  let waiting: Beat = 'none'
 
   /**
    * ONE envelope, driving both the mouth and the bubble.
@@ -278,6 +307,22 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   let pointer: { x: number; y: number } | null = null
   /** She is waiting on an answer, so her gaze is not the cursor's to move. */
   let thinking = false
+
+  /**
+   * Put her eyes back where the cursor is, or forward if it is not here.
+   *
+   * Called on EVERY exit from the beat, and that is the point. Clearing
+   * `thinking` only stops the render loop ignoring the pointer — it does not
+   * move her — and `lookAt` is driven by `mousemove`, which never arrives while
+   * the cursor is somewhere else on the desktop. Left out of one of the two
+   * exits, she went on staring off at the thinking coordinates through a whole
+   * new session.
+   */
+  function lookAtPointer(): void {
+    const here = pointerOnWindow()
+    if (here === null) return avatar.lookAt(0, 0)
+    avatar.lookAt((here.x / canvas.clientWidth) * 2 - 1, (here.y / canvas.clientHeight) * 2 - 1)
+  }
 
   window.addEventListener('mousemove', (event) => {
     pointer = { x: event.clientX, y: event.clientY }
@@ -449,28 +494,69 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // the window between an utterance's first delta and its first audio, where
     // the analyser very much exists. The rule belongs to the fade, so it lives
     // in `step`.
-    // What the microphone knows, a second before the service says it.
-    if (mic !== null && micSamples !== null) {
+    /**
+     * What the microphone knows, a second before the service says it.
+     *
+     * NOT WHILE SHE IS ASLEEP, and that guard is load-bearing rather than
+     * tidy. A disabled `MediaStreamTrack` still produces frames — zeros — so
+     * without it a nap taken mid-sentence read as the user going quiet: the
+     * silence accumulated past `QUIET_S`, `attending` reported `considering`,
+     * and the beat opened behind her closed eyes and went overdue three
+     * seconds later, asking somebody to repeat themselves to a companion who
+     * had stopped listening. `sleeps()` resets both, and this is what stops
+     * them coming back.
+     */
+    if (mic !== null && micSamples !== null && !resting && hearing) {
       mic.getFloatTimeDomainData(micSamples)
       const now = attending.step(levelOf(micSamples), seconds)
       if (now !== attention) {
         attention = now
-        if (now === 'considering') {
-          /**
-           * She reacts to the silence while the service is still deciding what
-           * it means. Her own body rather than a spinner: a companion that
-           * shows a progress indicator has stopped being a companion, and the
-           * rig already has the vocabulary — a small sway, and her gaze coming
-           * off the cursor the way anybody's does when they start thinking.
-           */
-          avatar.playMotion('sway')
-          avatar.lookAt(0.35, -0.5)
-          thinking = true
-        }
-        if (now === 'hearing') {
-          // Attention back on whoever is talking.
-          thinking = false
-        }
+        // Their turn ended. What she DOES about it is the beat's, including how
+        // long it may go on before it stops being a wait and starts being
+        // silence — see `beat.ts`.
+        if (now === 'considering') beat.turnEnded()
+        // Talking again, so there is nothing outstanding to hold.
+        if (now === 'hearing') beat.reset()
+      }
+    }
+
+    /**
+     * The beat, stepped whether or not there is a microphone yet.
+     *
+     * `envelope.speaking` is the analyser's own adaptive answer about HER
+     * voice, and it is the ONLY thing that closes this. Not
+     * `output_audio_buffer.started`: §64 measured that frame arriving followed
+     * by no audio at all, on the same two utterances in every arm of the sweep.
+     * The started frame is a promise of audio; the envelope is audio.
+     */
+    const phase = beat.step(seconds, envelope.speaking)
+    if (phase !== waiting) {
+      waiting = phase
+      if (phase === 'held') {
+        /**
+         * She reacts to the silence while the service is still deciding what
+         * it means. Her own body rather than a spinner: a companion that
+         * shows a progress indicator has stopped being a companion, and the
+         * rig already has the vocabulary — a small sway, and her gaze coming
+         * off the cursor the way anybody's does when they start thinking.
+         */
+        avatar.playMotion('sway')
+        avatar.lookAt(0.35, -0.5)
+        thinking = true
+      } else {
+        // Back with whoever she is talking to, and that is the same move
+        // whether her voice arrived or whether it is not going to. The second
+        // case is §64's one turn in four, and leaving her staring into the
+        // middle distance for it is the open-ended silence this beat ends.
+        thinking = false
+        // Her gaze, put back on the same frame. See `lookAtPointer`.
+        lookAtPointer()
+        // The sway is a LOOP, so leaving the beat has to stop it. Without this
+        // it played from the first turn to the end of the session and the state
+        // it stands for stopped meaning anything. `nod` replaces it and clears
+        // itself, which is why only the other branch needs the stop.
+        if (phase === 'overdue') avatar.playMotion('nod')
+        else avatar.stopMotion()
       }
     }
 
@@ -540,6 +626,16 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // one deliberate exception to "only painted pixels take the mouse" — a
     // control nobody can click is not a control. It is exactly the size of the
     // control and disappears with it.
+    /**
+     * The beat, drawn after her and after the bubble.
+     *
+     * Deliberately absent from the hit test below. `chip.ts` widens "only
+     * painted pixels of hers take the mouse" because a control nobody can click
+     * is not a control; this is not a control, so her hit region is unchanged
+     * and the desktop under it is still reachable.
+     */
+    drawBeat(ctx, herBox(), CHIP_COLOURS, waiting, beat.opacity(), roomOnScreen())
+
     const onChip = chip > 0 && at !== null && chipHits(at.x, at.y, herBox(), roomOnScreen())
     // Only the bubble's CONTROLS, never its text. The design's rule is that
     // only painted pixels of HERS take the mouse; two small buttons are the
@@ -580,16 +676,29 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // estimate not exist for the default persona.
     saying: (delta: string, itemId: string) => utterance.add(delta, itemId),
     speaks: (itemId: string) => {
-      // She has an answer, so the waiting is over whatever the microphone
-      // thinks — and her gaze returns to whoever she is talking to.
+      // She has an answer, so the microphone's own wait is spent. Her GAZE is
+      // not moved here: that belongs to the beat, which waits for audio rather
+      // than for the frame promising it — §64 measured the two disagreeing.
       attending.answered()
-      thinking = false
       utterance.speaks(itemId)
     },
     finished: (itemId: string, interrupted: boolean) => utterance.finished(itemId, interrupted),
     heard: () => ({ text: utterance.text(), at: utterance.at(), itemId: utterance.itemId() }),
     prefersBubble: (side: SidePreference) => {
       bubbleSide = side
+    },
+    hears: (on: boolean) => {
+      if (hearing === on) return
+      hearing = on
+      // Nothing is outstanding once she cannot hear, and nothing accumulates
+      // either — the loop above stops stepping `attending` while this is false.
+      if (!on) {
+        beat.reset()
+        attending.reset()
+        attention = 'idle'
+        waiting = 'none'
+        thinking = false
+      }
     },
     sleeps: (asleep: boolean) => {
       resting = asleep
@@ -604,6 +713,16 @@ export function showFace(canvas: HTMLCanvasElement): Face {
        * appears.
        */
       if (asleep) bubble.dismiss()
+      // Nothing is outstanding while her eyes are shut, and nothing accumulates
+      // either — the render loop stops stepping `attending` while she rests, so
+      // both of these are cleared once rather than fought every frame. Without
+      // it a beat opened just before she was told to rest would sit there and go
+      // overdue, asking somebody to repeat themselves to a sleeping companion.
+      if (asleep) {
+        beat.reset()
+        attending.reset()
+        attention = 'idle'
+      }
     },
     stands: (feetFromTop: number) => {
       if (!Number.isFinite(feetFromTop) || feetFromTop <= 0) return
@@ -614,6 +733,19 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     },
     troubled: (count: number) => {
       troubles = Math.max(0, count)
+    },
+    opened: () => {
+      beat.reset()
+      attending.reset()
+      attention = 'idle'
+      waiting = 'none'
+      thinking = false
+      avatar.stopMotion()
+      // The OTHER exit from the beat, and it needs the same restore. A session
+      // that ended mid-beat left her eyes at the thinking coordinates, and
+      // clearing the flag above does not move them — so the new session opened
+      // with her already staring off into the corner.
+      lookAtPointer()
     },
     showWords: (next: BubbleColours | null) => {
       colours = next

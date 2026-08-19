@@ -657,3 +657,96 @@ describe('the clock and the cached silhouette', () => {
     expect(avatar.hitTest(WIDTH / 2, HEIGHT * 0.8)).toBe(true)
   })
 })
+
+describe('a motion that loops, and the only thing that ends it', () => {
+  /**
+   * Two rigs, rendered at the same timestamps, compared pixel for pixel.
+   *
+   * Measured this way rather than by her bounding box, which was the first
+   * attempt and reported ZERO for a clip that is plainly moving: `sway` leans,
+   * and a lean SHEARS the apex — the widest point of her body does not move, so
+   * the box does not either. Everything else here is time-driven and both rigs
+   * pin their randomness, so two frames at one timestamp differ only because of
+   * the motion layer.
+   */
+  function differingPixels(a: SKRSContext2D, b: SKRSContext2D): number {
+    const left = a.getImageData(0, 0, WIDTH, HEIGHT).data
+    const right = b.getImageData(0, 0, WIDTH, HEIGHT).data
+    let differ = 0
+    for (let i = 0; i < left.length; i += 4) {
+      if (left[i + 3] !== right[i + 3] || left[i] !== right[i]) differ += 1
+    }
+    return differ
+  }
+
+  /** One playing a clip, one never asked to. */
+  function pair(): { moving: Rig; still: Rig; at: (ms: number) => number } {
+    const moving = rig()
+    const still = rig()
+    return {
+      moving,
+      still,
+      at(ms: number) {
+        moving.avatar.render(ms)
+        still.avatar.render(ms)
+        return differingPixels(moving.ctx, still.ctx)
+      },
+    }
+  }
+
+  /**
+   * A quarter through `sway`'s 3800ms cycle, which is its furthest lean.
+   *
+   * Measured from `LATCH` rather than from zero. `motionStartedAt` is taken on
+   * the first frame AFTER `playMotion` — deliberately, so the first visible
+   * frame is not already part-way in — so a clip measured from the call itself
+   * reads as neutral, which is what the first version of this asserted against
+   * and why it saw no movement at all.
+   */
+  const LATCH = 16
+  const LEANING = LATCH + 950
+
+  it('actually moves her, so the rest of this is measuring something', () => {
+    const { moving, at } = pair()
+    at(0)
+    moving.avatar.playMotion('sway')
+    at(LATCH)
+    expect(at(LEANING)).toBeGreaterThan(0)
+  })
+
+  it('keeps playing for as long as nothing stops it', () => {
+    // `sway` is `loop: true`, and `progress` wraps a looping clip forever
+    // rather than returning null. So it does not end on its own — which is
+    // fine, and is exactly why the caller needs a way to say when.
+    const { moving, at } = pair()
+    at(0)
+    moving.avatar.playMotion('sway')
+    at(LATCH)
+    at(LEANING)
+    expect(at(LEANING + 3800 * 8)).toBeGreaterThan(0)
+  })
+
+  it('settles back to exactly what she would look like having never played it', () => {
+    // THE assertion `stopMotion` exists for. Without it the beat's sway played
+    // from the first turn to the end of the session, and a state whose
+    // animation outlives it has stopped meaning anything.
+    const { moving, at } = pair()
+    at(0)
+    moving.avatar.playMotion('sway')
+    at(LATCH)
+    expect(at(LEANING)).toBeGreaterThan(0)
+
+    moving.avatar.stopMotion()
+    // Springs carry her back rather than snapping, so this is given time.
+    let differ = -1
+    for (let ms = LEANING + 16; ms <= LEANING + 3000; ms += 16) differ = at(ms)
+    expect(differ).toBe(0)
+  })
+
+  it('is safe to stop when nothing is playing', () => {
+    const { avatar } = rig()
+    expect(() => {
+      avatar.stopMotion()
+    }).not.toThrow()
+  })
+})

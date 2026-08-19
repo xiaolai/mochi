@@ -1,4 +1,5 @@
 import { parseServerFrame } from '@shared/realtime/frames'
+import { isPrivateFrame, type SessionConfig } from '@shared/ipc'
 import type { FaceSpec } from '@shared/avatar-spec'
 import { createPending, type Spoken } from './pending'
 
@@ -47,6 +48,44 @@ export interface Session {
   readonly bubbleSide: string
   /** Whether she was left asleep. See `SessionConfig`. */
   readonly asleep: boolean
+  /** Whether the microphone may open at all — 5b's grant, not her state. */
+  readonly microphone: boolean
+  /**
+   * Whether this session HAS one right now, which is a different question.
+   *
+   * A METHOD, not a field: a session opened while the grant was off never asked
+   * for the device, and one whose grant is taken away mid-session gives it back
+   * — so the answer changes while the session lives. Either way there is no
+   * track and no way to add one to an offer that is already answered, so
+   * turning the grant back on needs a NEW session, and this is how the caller
+   * knows to open one.
+   */
+  hasMicrophone(): boolean
+  /**
+   * Give the device back, because the grant went away.
+   *
+   * `listen(false)` mutes the track; this ENDS it. The two are different in the
+   * only way somebody can see from outside the app: a muted track keeps the
+   * microphone open and the indicator lit, and a switch marked "Hear you" that
+   * leaves the light on is a switch nobody believes.
+   *
+   * One-way for this session, on purpose — see `hasMicrophone`.
+   */
+  closeMicrophone(): void
+  /**
+   * A standing grant changed while this session was up.
+   *
+   * Re-sends the WHOLE `session.update`, not a patch of the two fields that
+   * moved. A partial update is a bet on which fields the service treats as
+   * unset, and losing that bet silently would drop her voice or her turn
+   * detection mid-conversation — §21's lock makes the first of those a
+   * reconnect rather than a nuisance.
+   *
+   * No turn is requested. She reads the change when she next answers, which is
+   * what "takes effect on her next turn" means; asking for one while she is
+   * speaking is refused intermittently (§1).
+   */
+  mayDo(change: { readonly instructions: string; readonly tools: readonly unknown[] }): void
   /** Open the microphone. Off until this is called — see point 4 above. */
   listen(on: boolean): void
   /** Idempotent, and the only path that releases anything. */
@@ -112,11 +151,20 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   let media: MediaStream | null = null
   let micTrack: MediaStreamTrack | null = null
   let closed = false
+  /** How to stop listening for main's frames. See `MochiApi.onSend`. */
+  let stopListening: (() => void) | null = null
 
   function shutdown(): void {
     // A turn she began and was cut off in, whose transcript never arrived, is
     // still a fact. Filed as an empty `cut` marker rather than lost.
     for (const spoken of pending.flush()) file(spoken)
+
+    // OFF the channel, and above the guard for the same reason the tracks are:
+    // this runs on every teardown including the failure paths, and a
+    // subscription that outlived its session held that session's peer and data
+    // channel for the life of the window — once an hour, for ever.
+    stopListening?.()
+    stopListening = null
 
     // ABOVE the guard, and that order is the whole point — see point 3.
     for (const track of media?.getTracks() ?? []) track.stop()
@@ -178,6 +226,12 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
 
   peer.addEventListener('connectionstatechange', () => {
     if (peer.connectionState === 'failed') {
+      // RELEASED first. Reporting a failure while the capture is still running
+      // is the worst of both: the window says she is gone and the microphone
+      // light says she is not. `shutdown` announces `closed` on its way out, so
+      // the failure is reported after it and is what stays on screen — the same
+      // order `fail` uses, for the same reason.
+      shutdown()
       callbacks.onState({ failed: 'the peer connection failed' })
     }
   })
@@ -267,12 +321,20 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
          * the greeting out of the transcript she will later be asked to
          * remember. It is the app opening its mouth, not a turn.
          */
+        //
+        // A null greeting means she may not speak first — 5b's second grant —
+        // and then the turn is not requested at all rather than requested with
+        // nothing to say. `greeted` is still set, so restoring the grant does
+        // not make her greet somebody she has been talking to for ten minutes.
         if (frame.type === 'session.updated' && !greeted) {
           greeted = true
-          put({
-            type: 'response.create',
-            response: { conversation: 'none', instructions: config.greeting },
-          })
+          const greeting = config.greeting
+          if (greeting !== null) {
+            put({
+              type: 'response.create',
+              response: { conversation: 'none', instructions: greeting },
+            })
+          }
         }
         // Once per type per session. The service sends well over a dozen kinds
         // and most are noise, but a type nobody here has seen is either
@@ -293,66 +355,153 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     }
   })
 
-  // Main hands back the ledger's answers; the channel is here, so it puts them.
-  window.mochi.onSend((frame) => put(frame))
+  /**
+   * Main hands back the ledger's answers; the channel is here, so it puts them.
+   *
+   * **Only the answers.** `voice:send` is also how main sends this renderer its
+   * PRIVATE control frames — the reconnect, the problem count, asleep, her
+   * stance, the bubble's side, the standing grants — and every one of them was
+   * being written straight out to the service as well. The newest of them
+   * carries her whole assembled prompt and her tool list, so this stopped being
+   * a stray unknown event the service shrugs at and became a leak.
+   *
+   * Filtered HERE rather than by giving the private frames a channel of their
+   * own: `companion/main.ts` reads them off this same subscription, and a
+   * second channel is the shape v1's 45 message kinds grew out of. The prefix
+   * is the contract, and it is one nothing on the wire can collide with.
+   */
+  stopListening = window.mochi.onSend((frame) => {
+    if (isPrivateFrame(frame)) return
+    put(frame)
+  })
+
+  /**
+   * The config FIRST, and it is the only thing that is ordered.
+   *
+   * It used to settle alongside the mint and the microphone, which was right
+   * while nothing depended on it. One thing does now: **whether she is allowed
+   * a microphone at all.** Capturing and then disabling the track is not the
+   * same as not capturing — the device opens, and on macOS the indicator
+   * lights. A switch marked "Hear you" that leaves the microphone light on is a
+   * switch nobody believes, whatever the track is doing.
+   *
+   * The cost is one IPC round trip before the other two start. It reads files
+   * in main and answers in about a millisecond, against `getUserMedia`'s
+   * hundreds and a network mint — so this is ordering, not latency.
+   *
+   * Fetched here rather than when the channel opens for the original reason,
+   * which still holds: `session.created` used to arrive before the round trip
+   * came back, and for that window she was configured with the model's
+   * defaults — no name, no manner.
+   */
+  let config: SessionConfig
+  try {
+    config = await window.mochi.config()
+  } catch (error: unknown) {
+    fail(`could not read the persona: ${String(error)}`)
+  }
 
   // SETTLED, not raced — see point 2.
-  //
-  // The config is fetched HERE rather than when the channel opens, and the
-  // difference is a race the first run showed in its own log: `session.created`
-  // arrived before the IPC round trip came back, so for that window she was
-  // configured with the model's defaults — no name, no manner. It depends on
-  // nothing the channel provides, so there is no reason to wait for it.
-  const [minted, captured, configured] = await Promise.allSettled([
+  const [minted, captured] = await Promise.allSettled([
     window.mochi.open(),
-    navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    }),
-    window.mochi.config(),
+    config.microphone
+      ? navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        })
+      : // Not asked for at all. `null` rather than a rejection: a permission
+        // somebody chose is not a failure to report.
+        Promise.resolve(null),
   ])
-  if (configured.status === 'rejected')
-    fail(`could not read the persona: ${String(configured.reason)}`)
-  const config = configured.value
-
-  // A late stream is stopped wherever this ends, including on the failure paths.
+  /**
+   * The capture is held FIRST, before anything can fail.
+   *
+   * Point 3 above is the rule and this is the line that keeps it: `fail()` runs
+   * `shutdown()`, and `shutdown()` can only stop tracks it has a reference to.
+   * A check that ran before this line left the microphone capturing with
+   * nothing in this process able to reach it, for the life of the window.
+   */
   if (captured.status === 'fulfilled') media = captured.value
   if (captured.status === 'rejected') fail(`the microphone was refused: ${String(captured.reason)}`)
   if (minted.status === 'rejected') fail(`could not open a session: ${String(minted.reason)}`)
   if (minted.status === 'fulfilled' && !minted.value.ok) fail(minted.value.why)
 
   micTrack = media?.getAudioTracks()[0] ?? null
-  if (micTrack === null || media === null) fail('the microphone produced no audio track')
+  // Only when she was ALLOWED one. Without the grant no device was opened, so
+  // there is nothing to have produced a track and that is not a failure.
+  if (config.microphone && (micTrack === null || media === null)) {
+    fail('the microphone produced no audio track')
+  }
 
-  const granted = micTrack.getSettings()
-  // What the device ACTUALLY did, not what was asked for. The two differ, and
-  // echo cancellation silently absent is §17 arriving as "she interrupts herself".
-  window.mochi.report({
-    kind: 'note',
-    text: `mic "${micTrack.label}" aec=${String(granted.echoCancellation)} rate=${String(granted.sampleRate)}`,
-  })
-  // Disabled until `listen(true)` — see point 4.
-  micTrack.enabled = false
-  peer.addTrack(micTrack, media)
-  callbacks.onMicrophone(media)
+  if (micTrack !== null && media !== null) {
+    const granted = micTrack.getSettings()
+    // What the device ACTUALLY did, not what was asked for. The two differ, and
+    // echo cancellation silently absent is §17 arriving as "she interrupts
+    // herself".
+    window.mochi.report({
+      kind: 'note',
+      text: `mic "${micTrack.label}" aec=${String(granted.echoCancellation)} rate=${String(granted.sampleRate)}`,
+    })
+    // Disabled until `listen(true)` — see point 4.
+    micTrack.enabled = false
+    peer.addTrack(micTrack, media)
+    callbacks.onMicrophone(media)
+  } else {
+    /**
+     * No microphone, and she still has to be able to SPEAK.
+     *
+     * Without a transceiver the offer describes no audio at all, so the answer
+     * carries none either and she is mute as well as deaf. `recvonly` says the
+     * true thing: nothing to send, everything to receive.
+     */
+    peer.addTransceiver('audio', { direction: 'recvonly' })
+    window.mochi.report({ kind: 'note', text: 'the microphone is not allowed; none was opened' })
+  }
 
-  await peer.setLocalDescription(await peer.createOffer())
-  const offer = peer.localDescription?.sdp
-  if (offer === undefined) fail('no local description')
+  /**
+   * Negotiation, and every way it can end goes through `fail`.
+   *
+   * Four awaits here can reject — the offer, the local description, the SDP
+   * exchange over IPC, and the remote description — and none of them used to.
+   * A rejection came straight out of `openSession`, so the caller showed the
+   * error and this function's own teardown never ran: the peer stayed open and
+   * the microphone stayed live, which is exactly the case point 3 exists for.
+   */
+  try {
+    await peer.setLocalDescription(await peer.createOffer())
+    const offer = peer.localDescription?.sdp
+    if (offer === undefined) throw new Error('no local description')
 
-  const answered = await window.mochi.sdp(offer)
-  if (!answered.ok) fail(answered.why)
-  if (closed) fail('the session was abandoned while opening')
-  await peer.setRemoteDescription({ type: 'answer', sdp: answered.answer })
+    const answered = await window.mochi.sdp(offer)
+    if (!answered.ok) throw new Error(answered.why)
+    if (closed) throw new Error('the session was abandoned while opening')
+    await peer.setRemoteDescription({ type: 'answer', sdp: answered.answer })
+  } catch (error: unknown) {
+    // `fail` throws, so this does not fall through — and it releases the media
+    // and the peer on the way past, which is the whole point of routing here.
+    fail(error instanceof Error ? error.message : String(error))
+  }
 
-  // Sent the instant the channel opens, with everything already in hand.
-  channel.addEventListener('open', () => {
-    put({
+  /**
+   * What she is, in one frame. ONE builder, because it is sent twice.
+   *
+   * The second send is a standing grant changing mid-conversation (5b), and it
+   * has to carry every field this one does: a `session.update` naming only what
+   * moved is a bet on which fields the service leaves alone, and the one that
+   * must not be lost is the voice — §21 locks it after her first audio, so
+   * getting it back would be a reconnect.
+   */
+  let mayDo: { instructions: string; tools: readonly unknown[] } = {
+    instructions: config.instructions,
+    tools: config.tools,
+  }
+  function sessionUpdate(): unknown {
+    return {
       type: 'session.update',
       session: {
         type: 'realtime',
         // Without this she is whatever the model is by default: no name, no
         // manner, no memory of anybody. Every session before this one ran so.
-        instructions: config.instructions,
+        instructions: mayDo.instructions,
         output_modalities: ['audio'],
         audio: {
           // Locked after her first audio output, so a persona switch is a
@@ -367,10 +516,15 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
             transcription: { model: 'whisper-1' },
           },
         },
-        tools: config.tools,
+        tools: mayDo.tools,
         tool_choice: 'auto',
       },
-    })
+    }
+  }
+
+  // Sent the instant the channel opens, with everything already in hand.
+  channel.addEventListener('open', () => {
+    put(sessionUpdate())
   })
 
   return {
@@ -379,8 +533,29 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     problems: config.problems,
     bubbleSide: config.bubbleSide,
     asleep: config.asleep,
+    microphone: config.microphone,
+    hasMicrophone: () => micTrack !== null,
+    closeMicrophone() {
+      if (micTrack === null) return
+      micTrack.stop()
+      // Cleared as well as stopped, so `hasMicrophone` tells the truth: an
+      // ended track cannot be revived and the caller has to open a new session.
+      micTrack = null
+      window.mochi.report({ kind: 'state', state: 'muted' })
+      window.mochi.report({ kind: 'note', text: 'the microphone was closed; the grant went away' })
+    },
+    mayDo(change) {
+      mayDo = { instructions: change.instructions, tools: change.tools }
+      put(sessionUpdate())
+    },
     listen(on: boolean) {
-      if (micTrack !== null) micTrack.enabled = on
+      // Nothing to enable when she was never allowed one. Reported as muted
+      // rather than not at all, so the log never claims she is listening.
+      if (micTrack === null) {
+        window.mochi.report({ kind: 'state', state: 'muted' })
+        return
+      }
+      micTrack.enabled = on
       window.mochi.report({ kind: 'state', state: on ? 'listening' : 'muted' })
     },
     close: shutdown,

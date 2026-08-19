@@ -2,18 +2,20 @@ import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
-import { BUILT_IN_ID, greetingFor, instructionsFor, VOICE_NAMES } from '@shared/persona'
+import { BUILT_IN_ID, greetingFor, VOICE_NAMES } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
 import { heardPortion } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'
 import {
   REVEALABLE,
+  type GrantChange,
   type HistoryExport,
   type PersonaAction,
   type PersonaChange,
   type Revealable,
   type SettingsView,
   type SettingsWrite,
+  type ShelfView,
   type VoiceReport,
 } from '@shared/ipc'
 import { CAPABILITIES } from '../capabilities'
@@ -52,7 +54,11 @@ import {
   isProfileName,
   WORKSPACE_DIR,
   guardStopAt,
+  BUBBLE_SIDES,
+  readGrants,
+  readGrantsState,
   readWornPersonaId,
+  writeGrant,
   writeBubbleSide,
   writeResting,
   writeWornPersonaId,
@@ -61,6 +67,7 @@ import {
 } from './store/worn'
 import { claimShortcuts, releaseShortcuts, type ShortcutOutcome } from './shortcuts'
 import { SHORTCUTS } from '@shared/shortcuts'
+import { allowsCapability, isGrant, withheldGuidance, GRANT_SPECS } from '@shared/grants'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { createProblems } from './problems'
@@ -76,6 +83,7 @@ import {
 import { createTray, trayMenuTemplate, type TrayHandle, type TrayModel } from './tray'
 import { parseGrip, startDrag, stopDrag } from './drag'
 import { FEET_FROM_TOP, WINDOW_W } from '@shared/avatar-layout'
+import type { FaceSpec } from '@shared/avatar-spec'
 
 /**
  * Her body before the renderer has said where it is — the same nominal one the
@@ -85,8 +93,12 @@ const NOMINAL_BODY = { left: (WINDOW_W - 94) / 2, top: FEET_FROM_TOP - 73, width
 import {
   applyChange,
   applyLookup,
+  applyScreen,
   folderFor,
+  listGrants,
+  listKeys,
   listLookup,
+  listScreen,
   listAvatars,
   listCapabilities,
   listPersonas,
@@ -94,6 +106,8 @@ import {
 } from './settings'
 import { packageFolder } from './store/personas'
 import { createTranscripts, type Transcripts } from './store/transcripts'
+import { noteUsed, readUsage } from './store/usage'
+import { whatSheMayDo } from './what-she-may-do'
 import { createConversation, type Conversation } from './store/conversation'
 import { previousNote, recall, recallState, remember } from './store/memory'
 import { createCompanionWindow, showHistoryWindow, showSettingsWindow } from './window'
@@ -104,6 +118,38 @@ import { createCompanionWindow, showHistoryWindow, showSettingsWindow } from './
 const APP_USER_MODEL_ID = 'com.mochi.companion'
 
 app.setAppUserModelId(APP_USER_MODEL_ID)
+
+/**
+ * ONE of her, and this is what makes several claims in this repository true.
+ *
+ * Every store here is read-change-write with no lock — `preferences.json` says
+ * so in its own header, `usage.json` follows it, and `transcripts.ts` states
+ * flatly that "this one is the only writer". None of those is a property of the
+ * code; they are all properties of there being one process. Two instances and a
+ * permission revoked in one is silently restored by the other's next write.
+ *
+ * Refused BEFORE any window exists, so a second launch costs nothing and
+ * changes nothing. `app.quit()` rather than an error: launching her twice is an
+ * ordinary thing to do by accident, and the answer is the copy already running.
+ */
+if (!app.requestSingleInstanceLock()) {
+  console.log('[main] another mochi is already running; leaving it to her')
+  app.quit()
+}
+
+/**
+ * A second launch asks the first one to show herself.
+ *
+ * Without this the second copy quits and nothing happens, which from the
+ * outside is a launch that did nothing at all — she is a tray application with
+ * a transparent window, so "already running" is not visibly different from
+ * "did not start".
+ */
+app.on('second-instance', () => {
+  if (companion === null || companion.isDestroyed()) return
+  setHidden(false)
+  companion.showInactive()
+})
 
 // `LSUIElement` in `electron-builder.yml` covers the packaged bundle; this covers
 // `pnpm dev`, where there is no plist to read. Both are needed, and they are not
@@ -260,7 +306,7 @@ ipcMain.on('companion:sides', (_event, value: unknown) => {
  * other, and neither is obviously the wrong one when somebody notices.
  */
 const menuHandlers = {
-  onConversations: () => {
+  onShelf: () => {
     showHistoryWindow()
   },
   onSettings: () => {
@@ -280,20 +326,49 @@ const menuHandlers = {
     setHidden(!resting.hidden)
   },
   onBubbleSide: (side: string) => {
-    try {
-      writeBubbleSide(app.getPath('userData'), side as BubbleSide)
-    } catch (error: unknown) {
-      console.error(`[menu] could not set the bubble side: ${String(error)}`)
-      return
-    }
-    // Straight to the renderer as well as to disk: the file is read on the next
-    // session, and somebody who picked a side wants to see it move now.
-    companion?.webContents.send('voice:send', { type: '__mochi_bubble_side__', side })
-    tray?.refresh()
+    const written = setBubbleSide(side)
+    // The menu has already drawn the radio as moved. Saying nothing when the
+    // write failed would leave it lying about what is on disk — the same
+    // reasoning `onWear` above gives.
+    if (!written.ok) console.error(`[menu] could not set the bubble side: ${written.why}`)
   },
   onQuit: () => {
     app.quit()
   },
+}
+
+/**
+ * Which side the bubble sits on. ONE implementation, because two ask.
+ *
+ * The tray offers it as an action and the settings window as a control — v1's
+ * standing rule, carried over. It answers WHETHER IT LANDED rather than
+ * swallowing the failure: the tray only needs to log one, but a settings window
+ * reporting success over a write that did not happen is the exact failure that
+ * window exists to remove.
+ */
+function setBubbleSide(side: string): SettingsWrite {
+  try {
+    writeBubbleSide(app.getPath('userData'), side as BubbleSide)
+  } catch (error: unknown) {
+    problems.note('settings', null, `the bubble side could not be saved: ${String(error)}`)
+    return refuse(String(error))
+  }
+  // Straight to the renderer as well as to disk: the file is read on the next
+  // session, and somebody who picked a side wants to see it move now.
+  //
+  // GUARDED, and separately from the write. `webContents.send` throws on a
+  // destroyed window, and outside the guard that throw came out of the settings
+  // handler as a rejected invoke — reporting a failure for a setting that was
+  // saved. It IS saved; she simply moves her words on the next session.
+  try {
+    if (companion !== null && !companion.isDestroyed()) {
+      companion.webContents.send('voice:send', { type: '__mochi_bubble_side__', side })
+    }
+  } catch (error: unknown) {
+    console.error('[settings] the bubble side was saved but she was not told:', error)
+  }
+  tray?.refresh()
+  return { ok: true }
 }
 
 /**
@@ -390,6 +465,36 @@ ipcMain.on('companion:menu', () => {
 
 const ledger = createLedger({
   registry,
+  now: () => Date.now(),
+  /**
+   * The durable half of "last used", which the autonomy panel draws.
+   *
+   * `app.getPath('userData')` rather than a captured value, for the reason
+   * every dependency in `capabilityDeps` is a function: this module is
+   * evaluated before the app is ready.
+   *
+   * A call the grant WITHHOLDS is not a use, and this is the line that decides
+   * it. The ledger records arrivals — a lookup that failed after twenty seconds
+   * is still a use, which is why it does not wait for the answer — but a call
+   * refused because somebody switched the capability off never ran at all, and
+   * a panel saying "last used two minutes ago" beside a switch that has been
+   * off for a week is exactly the claim 5b's acceptance forbids. Reachable
+   * whenever she holds a tool list from before the switch moved.
+   */
+  used: (name, at) => {
+    const userData = app.getPath('userData')
+    if (!allowsCapability(readGrants(userData), name)) return
+    try {
+      noteUsed(userData, name, at)
+    } catch (error: unknown) {
+      // Where somebody can read it. The ledger guards this call so a failed
+      // bookkeeping write can never cost the answer — but a failure that only
+      // reached the console would leave the panel saying "Never used" about a
+      // capability she had just run, with nothing anywhere to explain it.
+      console.error(`[usage] could not record that ${name} was used:`, error)
+      problems.note('capability', name, `its use could not be recorded: ${String(error)}`)
+    }
+  },
   // `isDestroyed` as well as null. A window that has been closed is still a
   // non-null `BrowserWindow`, and `send` on its `webContents` throws — which
   // used to come back out of the `voice:call` listener. Nothing is lost by
@@ -413,7 +518,22 @@ const ledger = createLedger({
  * shape v1's 45 message kinds grew out of.
  */
 problems.watch((count) => {
-  companion?.webContents.send('voice:send', { type: '__mochi_problems__', count })
+  /**
+   * GUARDED, because this is what reporting a failure runs through.
+   *
+   * `webContents.send` throws on a destroyed window, and `?.` checks null and
+   * nothing else. Every `problems.note` in this file is inside a `catch` that
+   * is trying to report something else going wrong — so a throw from here came
+   * out of that catch and took the handler with it, and an IPC handler that
+   * returns nothing is a settings window told nothing at all. `dispatch.ts`
+   * makes the same argument about its observers, in the same words.
+   */
+  try {
+    if (companion === null || companion.isDestroyed()) return
+    companion.webContents.send('voice:send', { type: '__mochi_problems__', count })
+  } catch (error: unknown) {
+    console.error('[problems] the count could not be sent:', error)
+  }
 })
 
 /**
@@ -441,8 +561,53 @@ function conversation(): Conversation {
   return talk
 }
 
-/** Who is worn right now. Read by the handlers, which search only her archive. */
-let wearing: string | null = null
+/**
+ * Who the LIVE SESSION is, set when it configures itself.
+ *
+ * Deliberately NOT the same question as "who is worn", and the difference is
+ * load-bearing now that the shelf can switch character mid-conversation. A
+ * capability writes to whoever is actually speaking: `remember_this` filing a
+ * note under a character the session was never configured as would put it in a
+ * stranger's memory, and the note would be in the wrong place for ever.
+ *
+ * The archive reads use `wornId()` instead — see there.
+ */
+let sessionPersona: string | null = null
+
+/**
+ * How the worn character looks, resolved from her avatar file.
+ *
+ * ONE reader, because three surfaces ask: her own window, the shelf, and the
+ * settings window — and the last two only want it to take her colour from. Two
+ * derivations of "what does she look like" would be two accents.
+ */
+function wornFace(userData: string): FaceSpec {
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const worn = activePersona(catalog, readWornPersonaId(userData)).persona
+  return resolveFaceFor(
+    avatarsRoot(userData),
+    packageFolder(worn.id, catalog.sources),
+    worn.avatarId,
+  ).face
+}
+
+/**
+ * Who is WORN, read from disk every time.
+ *
+ * Not `sessionPersona`, and not held. The shelf can change who is worn while a
+ * session is up, and its conversations pane has to follow on the same click —
+ * a list scoped to whoever the last session configured itself as would show one
+ * character's card selected beside another character's conversations.
+ *
+ * Always answers somebody: `activePersona` falls back to the built-in, so the
+ * archive is readable before she has ever spoken. That is what lets the window
+ * be opened on a fresh install without an empty pane that means nothing.
+ */
+function wornId(): string {
+  const userData = app.getPath('userData')
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  return activePersona(catalog, readWornPersonaId(userData)).persona.id
+}
 
 /**
  * The archive, opened if it is not already.
@@ -488,7 +653,7 @@ function currentProfile(): string | null {
  */
 const capabilityDeps: CapabilityDeps = {
   userData: () => app.getPath('userData'),
-  wearing: () => wearing,
+  wearing: () => sessionPersona,
   transcripts: () => archive,
   /**
    * Read per call rather than held, because the shelf is files on disk and
@@ -504,7 +669,7 @@ const capabilityDeps: CapabilityDeps = {
     const userData = app.getPath('userData')
     const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
     const ids = new Set(catalog.personas.keys())
-    if (wearing !== null) ids.delete(wearing)
+    if (sessionPersona !== null) ids.delete(sessionPersona)
     return ids
   },
   codexPath: () => codexPath,
@@ -594,7 +759,7 @@ ipcMain.handle('voice:config', () => {
   // covers the reconnect path too, which is the common case: §53 measured a
   // session lasting exactly an hour, so this happens hourly.
   conversation().wear(resolved.persona.id)
-  wearing = resolved.persona.id
+  sessionPersona = resolved.persona.id
 
   /**
    * Her face, from the folder the user can actually edit.
@@ -622,19 +787,44 @@ ipcMain.handle('voice:config', () => {
   console.log(`[avatar] ${avatar.source ?? 'built-in'}`)
 
   const note = recall(userData, resolved.persona.id)
+  /**
+   * What she may do — and whether that answer could be read at all.
+   *
+   * An unreadable `preferences.json` withholds everything, which is the right
+   * direction for a permission and the wrong thing to do in silence: she would
+   * simply stop hearing, and nothing on screen would say why. This is the one
+   * place with a `problems` sink to hand, and it runs on every wake.
+   */
+  const held = readGrantsState(userData)
+  const grants = held.grants
+  if (!held.readable) {
+    console.error('[grants] preferences.json could not be read; everything is withheld')
+    problems.note(
+      'settings',
+      null,
+      'your preferences file could not be read, so every permission is withheld until it can be ' +
+        '— she cannot hear you, greet you, look anything up, or keep a note',
+    )
+  }
+  const mayDo = whatSheMayDo(resolved.persona, note, grants, registry.tools)
   console.log(
     `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars, bubble ${resolved.persona.bubble ? 'on' : 'off'}`,
   )
+  const off = GRANT_SPECS.filter((spec) => !grants[spec.id]).map((spec) => spec.id)
+  console.log(`[grants] withheld: ${off.length === 0 ? 'none' : off.join(', ')}`)
   return {
-    instructions: instructionsFor(resolved.persona, note),
+    instructions: mayDo.instructions,
     voice: resolved.persona.voice,
     bubble: resolved.persona.bubble,
-    greeting: greetingFor(resolved.persona),
+    // Null rather than an empty instruction: the renderer must not ask for the
+    // turn at all, and "say nothing on waking" is a decision made here.
+    greeting: grants.speak_first ? greetingFor(resolved.persona) : null,
+    microphone: grants.microphone,
     face: avatar.face,
     problems: problems.count(),
     bubbleSide: readBubbleSide(userData),
     asleep: resting.asleep,
-    tools: registry.tools,
+    tools: mayDo.tools,
   }
 })
 
@@ -655,6 +845,15 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
       deps: capabilityDeps,
       ledger,
       note: (capability, detail) => problems.note('capability', capability, detail),
+      /**
+       * Read PER CALL, not held. The switch is in a window somebody can open
+       * mid-conversation, and a snapshot taken when this listener was
+       * registered would honour a grant that has since been taken away.
+       */
+      withheld: (capability) =>
+        allowsCapability(readGrants(app.getPath('userData')), capability)
+          ? null
+          : withheldGuidance(capability),
       log: (line) => console.log(line),
       warn: (line, error) => {
         if (error === undefined) console.error(line)
@@ -724,16 +923,18 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
 })
 
 /**
- * The conversations window: open it, and answer what it asks.
+ * The shelf: open it, and answer what it asks.
  *
- * **Every handler here reads `wearing`, and none of them takes a persona.**
- * That is the whole security property: the window holds opaque tokens that
- * authorise nothing, so a compromised page can ask for hers and only hers. It
- * is the same rule `voice:config` follows — who she is, is main's to know.
+ * **Every transcript handler here reads `wornId()`, and none of them takes a
+ * persona.** That is the whole security property, and it survived the window
+ * growing character cards: the page holds opaque tokens that authorise nothing,
+ * so a compromised one can ask for the worn character's conversations and
+ * nobody else's. Clicking a card WEARS somebody, which is a write main checks,
+ * rather than naming somebody to a query.
  *
- * `wearing` is null until the first session configures itself. Answering empty
- * then is right and is not an error state: nothing is being worn, so there is
- * no "her" whose conversations these would be.
+ * `wornId()` reads from disk rather than from the live session, so the list
+ * follows a character switch on the same click — and answers before she has
+ * ever spoken, which is when this window is most likely to be opened first.
  */
 ipcMain.on('clipboard:write', (_event, text: unknown) => {
   // Checked, not trusted: this comes from a renderer, and `writeText` will take
@@ -749,8 +950,7 @@ ipcMain.on('history:open', () => {
 })
 
 ipcMain.handle('history:list', () => {
-  const persona = wearing
-  if (persona === null) return { persona: '', conversations: [] }
+  const persona = wornId()
   return {
     persona,
     conversations: transcripts()
@@ -765,11 +965,11 @@ ipcMain.handle('history:list', () => {
 })
 
 ipcMain.handle('history:turns', (_event, token: unknown) => {
-  const persona = wearing
+  const persona = wornId()
   // Checked here, not trusted from the page. A token is a string; anything else
   // is a caller that built the wrong object, and passing it through would reach
   // the query layer with a shape it never agreed to take.
-  if (persona === null || typeof token !== 'string') return []
+  if (typeof token !== 'string') return []
   return transcripts()
     .turns(persona, token)
     .map((one) => ({ at: one.at, who: one.who, text: one.text, cut: one.cut }))
@@ -791,11 +991,7 @@ ipcMain.handle('history:problems', () => problems.all())
  * follows for reading.
  */
 ipcMain.handle('history:export', async (): Promise<HistoryExport> => {
-  const persona = wearing
-  // Nobody is worn until the first session configures itself. There is no "her"
-  // whose conversations these would be, which is not an error to report.
-  if (persona === null) return { ok: false, cancelled: false, why: 'Nobody is being worn yet.' }
-
+  const persona = wornId()
   const archive = transcripts().exportFor(persona)
   const suggested = `mochi-${persona}-${new Date().toISOString().slice(0, 10)}.json`
   const chosen = await dialog.showSaveDialog({
@@ -834,18 +1030,13 @@ ipcMain.on('history:settings', () => {
  */
 ipcMain.handle('settings:read', (): SettingsView => {
   const userData = app.getPath('userData')
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
-  const worn = activePersona(catalog, readWornPersonaId(userData))
   return {
-    wornId: worn.persona.id,
-    personas: listPersonas(catalog),
-    avatars: listAvatars(avatarsRoot(userData)),
-    voices: [...VOICE_NAMES],
+    // Her colour, for the window to derive its accent from. Resolved the same
+    // way `voice:config` does, so the settings window and her own window are
+    // never two answers to what she looks like.
+    face: wornFace(userData),
     capabilities: listCapabilities(registry),
-    note: {
-      text: recall(userData, worn.persona.id),
-      previous: previousNote(userData, worn.persona.id),
-    },
+    grants: listGrants(readGrants(userData), readUsage(userData)),
     lookup: listLookup({
       workspace: readWorkspace(userData),
       defaultWorkspace: join(userData, WORKSPACE_DIR),
@@ -855,7 +1046,19 @@ ipcMain.handle('settings:read', (): SettingsView => {
         const name = currentProfile()
         return name === null ? null : profileFile(codexHome(process.env, app.getPath('home')), name)
       })(),
+      // Null means genuinely absent, and without it she cannot look anything up
+      // — so the group carrying these controls can mark itself rather than
+      // showing three settings for something that cannot run.
+      codexFound: codexPath !== null,
     }),
+    screen: listScreen(readBubbleSide(userData), BUBBLE_SIDES),
+    keys: listKeys(claimed),
+    about: {
+      name: app.getName(),
+      version: app.getVersion(),
+      electron: process.versions.electron,
+      userData,
+    },
     folders: {
       avatars: folderFor(userData, 'avatars'),
       personas: folderFor(userData, 'personas'),
@@ -896,7 +1099,60 @@ function wearPersona(id: unknown): SettingsWrite {
   return { ok: true }
 }
 
-ipcMain.handle('settings:wear', (_event, id: unknown): SettingsWrite => wearPersona(id))
+ipcMain.handle('shelf:wear', (_event, id: unknown): SettingsWrite => wearPersona(id))
+
+/**
+ * Everything the shelf's character half draws, answered in one call.
+ *
+ * Read fresh, like `settings:read` and `voice:config` and for the same reason:
+ * the files under `Application Support` are the truth and somebody may have
+ * edited one by hand. `assembled` is `whatSheMayDo`'s output rather than a
+ * second rendering of the prompt — 1b's card is literally that string, and a
+ * card that re-assembled it would be the place the two quietly diverge.
+ */
+ipcMain.handle('shelf:read', (): ShelfView => {
+  const userData = app.getPath('userData')
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const worn = activePersona(catalog, readWornPersonaId(userData)).persona
+  const note = recall(userData, worn.id)
+  return {
+    face: resolveFaceFor(
+      avatarsRoot(userData),
+      packageFolder(worn.id, catalog.sources),
+      worn.avatarId,
+    ).face,
+    // Her state, for the strip across the top. `resting` is held in this
+    // process because three things change it; the grant is read from disk
+    // because one window changes it and this is another.
+    state: {
+      asleep: resting.asleep,
+      microphone: readGrants(userData).microphone,
+      restKey: claimed.find((one) => one.id === 'rest')?.refused === null ? SHORTCUTS.rest : null,
+    },
+    wornId: worn.id,
+    characters: listPersonas(catalog),
+    avatars: listAvatars(avatarsRoot(userData)),
+    voices: [...VOICE_NAMES],
+    plates: {
+      face: {
+        avatarId: worn.avatarId,
+        // Where it actually RESOLVED to, not where it was asked to look. A
+        // plate showing the requested name for a file that fell back to the
+        // built-in is the "the app ignored my file" failure with a label on it.
+        source: resolveFaceFor(
+          avatarsRoot(userData),
+          packageFolder(worn.id, catalog.sources),
+          worn.avatarId,
+        ).source,
+      },
+      voice: worn.voice,
+      prompt: worn.style,
+      workspace: readWorkspace(userData),
+    },
+    assembled: whatSheMayDo(worn, note, readGrants(userData), registry.tools).instructions,
+    note: { text: note, previous: previousNote(userData, worn.id) },
+  }
+})
 
 /**
  * Change a persona, field by field, and write her back where she came from.
@@ -906,7 +1162,7 @@ ipcMain.handle('settings:wear', (_event, id: unknown): SettingsWrite => wearPers
  * an overlay for the built-in, the package itself for everyone else. Neither
  * decision is the renderer's, and neither is made twice.
  */
-ipcMain.handle('settings:save', (_event, change: unknown): SettingsWrite => {
+ipcMain.handle('shelf:save', (_event, change: unknown): SettingsWrite => {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
   const asked = change as PersonaChange
   if (typeof asked.id !== 'string') return refuse('That change does not name a persona.')
@@ -984,7 +1240,7 @@ ipcMain.handle('settings:lookup', (_event, change: unknown): SettingsWrite => {
  * `remember` THROWS rather than overwrite a note it could not read, so a corrupt
  * file is reported here instead of being silently replaced by an empty one.
  */
-ipcMain.handle('settings:memory', (_event, action: unknown): SettingsWrite => {
+ipcMain.handle('shelf:memory', (_event, action: unknown): SettingsWrite => {
   if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
   const kind = (action as { kind?: unknown }).kind
   if (kind !== 'restore' && kind !== 'clear') return refuse('That is not something to do.')
@@ -992,6 +1248,21 @@ ipcMain.handle('settings:memory', (_event, action: unknown): SettingsWrite => {
   const userData = app.getPath('userData')
   const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
   const worn = activePersona(catalog, readWornPersonaId(userData)).persona.id
+  /**
+   * The character the page was SHOWING when the button was pressed.
+   *
+   * Not used to choose whose note is written — that is the worn one, decided
+   * here, like everything else on this bridge. It is used to REFUSE when the
+   * two disagree, which they do for one window: a character switch is a write
+   * and a re-read, and the old sheet stays on screen and clickable while that
+   * is in flight. Forgetting a note somebody was not looking at is the one
+   * mistake here that cannot be undone by pressing undo.
+   */
+  const shown = (action as { id?: unknown }).id
+  if (typeof shown !== 'string') return refuse('That does not name a character.')
+  if (shown !== worn) {
+    return refuse('That was for a different character — she has changed since. Have another look.')
+  }
 
   if (kind === 'restore') {
     const previous = previousNote(userData, worn)
@@ -1035,7 +1306,7 @@ ipcMain.handle('settings:memory', (_event, action: unknown): SettingsWrite => {
  * renderer choosing whose memory and whose conversations a new character
  * inherits, which is the whole reason `deriveId` is told about tombstones.
  */
-ipcMain.handle('settings:persona', (_event, action: unknown): SettingsWrite => {
+ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
   if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
   const asked = action as PersonaAction
   const userData = app.getPath('userData')
@@ -1079,6 +1350,22 @@ ipcMain.handle('settings:persona', (_event, action: unknown): SettingsWrite => {
       } catch (error: unknown) {
         problems.note('persona', BUILT_IN_ID, `could not be worn after a delete: ${String(error)}`)
       }
+    }
+    /**
+     * She was deleted while her own session was still up.
+     *
+     * `sessionPersona` is what a capability writes under, so leaving it
+     * pointing at a deleted id let `remember_this` recreate her memory file and
+     * the archive recreate her conversations — under an id `deriveId` has
+     * already released, so the next character named the same thing inherits a
+     * stranger's notes. That is the exact fault `deletePersona`'s ordering and
+     * `forgetPolicy`'s tombstones exist to prevent, arriving from the one
+     * direction they do not cover.
+     */
+    if (sessionPersona === asked.id) {
+      conversation().end()
+      sessionPersona = null
+      console.log(`[persona] ${asked.id} was live; the session is no longer filed under her`)
     }
     console.log(`[persona] ${asked.id} deleted`)
     tray?.refresh()
@@ -1126,6 +1413,126 @@ ipcMain.handle('settings:persona', (_event, action: unknown): SettingsWrite => {
   return { ok: true }
 })
 
+/**
+ * Allow her something, or take it away.
+ *
+ * ## It takes effect on her NEXT TURN, not on her next wake
+ *
+ * A standing switch that only applied at the next session would be a switch
+ * that does nothing while somebody is looking at it — and the moment somebody
+ * reaches for it is usually the middle of a conversation. So the live session
+ * is re-configured here: the same `session.update` the renderer sends at the
+ * door, with the new tool list and the new instructions, which is the one
+ * mechanism this app already relies on rather than a new one.
+ *
+ * **No turn is requested.** `ledger.ts` records why at length: `response.create`
+ * while she is speaking is refused, and refused intermittently. She reads the
+ * change when she next answers, which is exactly what "on her next turn" means.
+ *
+ * The microphone travels separately because it is not a tool — it is the track,
+ * and only the renderer holds it.
+ */
+ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
+  if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
+  const asked = change as GrantChange
+  if (!isGrant(asked.id)) return refuse('There is no such permission.')
+  if (typeof asked.allowed !== 'boolean') return refuse('That is not a yes or a no.')
+
+  const userData = app.getPath('userData')
+  try {
+    writeGrant(userData, asked.id, asked.allowed)
+  } catch (error: unknown) {
+    // Loud, and where somebody will see it. A permission that silently did not
+    // change is the worst failure this window can have: the switch says one
+    // thing and she goes on doing the other.
+    console.error(`[grants] could not change ${asked.id}:`, error)
+    problems.note('settings', asked.id, `a permission could not be saved: ${String(error)}`)
+    return refuse(String(error))
+  }
+  console.log(`[grants] ${asked.id} ${asked.allowed ? 'allowed' : 'withheld'}`)
+  /**
+   * Told, or said so. The permission is on disk either way.
+   *
+   * A window reporting "in force now" over a frame that never went out would be
+   * lying about the one thing this panel promises — and for the microphone it
+   * would be lying while the device stayed open. So the answer carries what
+   * actually happened: saved, and whether she knows yet.
+   */
+  let told: boolean
+  try {
+    told = tellTheSession()
+  } catch (error: unknown) {
+    console.error('[grants] saved, but the live session could not be told:', error)
+    problems.note('settings', asked.id, `saved, but she was not told: ${String(error)}`)
+    told = false
+  }
+  // There may simply be no session — she is asleep, or has never woken. That is
+  // not a failure, and the next wake reads this from disk.
+  if (!told && sessionPersona !== null) {
+    return refuse('Saved, but she could not be told just now — it applies from her next wake.')
+  }
+  return { ok: true }
+})
+
+/**
+ * Tell the live session what changed, if there is one.
+ *
+ * Best effort by construction: there may be no window, no session, or she may
+ * be asleep — and in every one of those cases the next `voice:config` reads the
+ * grants fresh, so nothing is lost. What must not happen is a change that
+ * reaches disk and never reaches her, and the private frame is what covers the
+ * one case where that could occur.
+ */
+function tellTheSession(): boolean {
+  if (companion === null || companion.isDestroyed()) return false
+  const userData = app.getPath('userData')
+  /**
+   * The persona the LIVE SESSION was configured as — not whoever is worn.
+   *
+   * They are different the moment somebody switches character on the shelf,
+   * because a switch takes effect on the next wake. Rebuilding from the worn
+   * one installed the NEW character's prompt and the new character's private
+   * note into the OLD character's live session, which is a leak rather than a
+   * mismatch: her notes are per character on purpose.
+   */
+  const live = sessionPersona
+  if (live === null) return false
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const persona = catalog.personas.get(live)
+  // She was deleted while her own session was up. There is nothing to re-tell,
+  // and the next wake resolves somebody who exists.
+  if (persona === undefined) return false
+  const grants = readGrants(userData)
+  const mayDo = whatSheMayDo(persona, recall(userData, live), grants, registry.tools)
+  companion.webContents.send('voice:send', {
+    type: '__mochi_grants__',
+    microphone: grants.microphone,
+    instructions: mayDo.instructions,
+    tools: mayDo.tools,
+  })
+  return true
+}
+
+/**
+ * What she looks like on the desktop — which side the bubble sits on.
+ *
+ * Straight through `setBubbleSide`, which is the SAME function the tray's menu
+ * calls. `tray.ts` carries v1's rule that the tray is actions and the window is
+ * configuration, and its own note says a setting with two entry points is how a
+ * project ends up with two refresh paths that drift. One function is what makes
+ * two entry points safe — and it ANSWERS, so this window is never told a write
+ * landed when it did not.
+ */
+ipcMain.handle('settings:screen', (_event, change: unknown): SettingsWrite => {
+  if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
+  const asked = applyScreen(change, BUBBLE_SIDES)
+  if (!asked.ok) return refuse(asked.why)
+  if (asked.change.bubbleSide === undefined) return { ok: true }
+  const written = setBubbleSide(asked.change.bubbleSide)
+  if (!written.ok) console.error(`[settings] could not set the bubble side: ${written.why}`)
+  return written
+})
+
 ipcMain.on('settings:reveal', (_event, what: unknown) => {
   if (!(REVEALABLE as readonly unknown[]).includes(what)) {
     console.error(`[settings] refusing to reveal an unknown folder: ${String(what)}`)
@@ -1139,8 +1546,8 @@ ipcMain.on('settings:reveal', (_event, what: unknown) => {
 })
 
 ipcMain.handle('history:search', (_event, query: unknown) => {
-  const persona = wearing
-  if (persona === null || typeof query !== 'string') return []
+  const persona = wornId()
+  if (typeof query !== 'string') return []
   return transcripts()
     .search(persona, query)
     .map((one) => ({ token: one.token, at: one.at, who: one.who, text: one.text }))

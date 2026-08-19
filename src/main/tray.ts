@@ -53,7 +53,7 @@ export interface TrayModel {
 }
 
 export interface TrayHandlers {
-  readonly onConversations: () => void
+  readonly onShelf: () => void
   readonly onSettings: () => void
   readonly onWear: (id: string) => void
   readonly onBubbleSide: (side: string) => void
@@ -105,7 +105,7 @@ export function trayMenuTemplate(
       click: handlers.onHide,
     },
     { type: 'separator' },
-    { label: 'Conversations…', click: handlers.onConversations },
+    { label: 'Shelf…', click: handlers.onShelf },
     { label: 'Settings…', click: handlers.onSettings },
     { type: 'separator' },
     ...(model.personas.length > 1

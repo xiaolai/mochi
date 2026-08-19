@@ -98,6 +98,12 @@ export function createCompanionWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // NAMED, like the other two. The preload used to default to `companion`
+      // when no role was passed, which meant the most privileged API in this
+      // application was what a window got for saying nothing — so the bridge
+      // failed open in exactly the direction it argues against. It refuses an
+      // absent role now, and this is what keeps her own window working.
+      additionalArguments: ['--mochi-role=companion'],
     },
   })
 
@@ -146,7 +152,12 @@ export function createCompanionWindow(): BrowserWindow {
 }
 
 /**
- * The conversations she remembers, in a window you can actually read.
+ * The shelf: her characters, and everything belonging to one.
+ *
+ * Named for what it holds. It was the conversations window and it still holds
+ * them — the character half grew into it rather than into a fourth window,
+ * because it already had the list-and-pane layout the shelf needs. The role
+ * string is still `history`, which nobody sees; the title is what people read.
  *
  * An ordinary window, and every way it differs from hers is deliberate. It has
  * a frame, because it is a document and a document needs somewhere to grab. It
@@ -247,15 +258,26 @@ export function showHistoryWindow(): BrowserWindow {
     return history
   }
 
+  /**
+   * 1440 x 900, from the handoff — clamped to whatever display this is.
+   *
+   * The design assumes a large always-open window and the layout needs the
+   * width: a 1fr/380px body with a row of 236px cards above it. But 1440 is
+   * wider than the work area on a 13" laptop, and macOS answers a too-large
+   * window by SHRINKING it at creation — the same behaviour her own window
+   * works around — which would silently produce a size nobody chose. Asking for
+   * what fits is the honest version of the same outcome.
+   */
+  const work = screen.getPrimaryDisplay().workArea
   const window = new BrowserWindow({
-    width: 760,
-    height: 620,
-    minWidth: 480,
-    minHeight: 360,
+    width: Math.min(1440, work.width),
+    height: Math.min(900, work.height),
+    minWidth: 900,
+    minHeight: 560,
     // Shown from the start — see `bringForward` for why waiting for the first
     // paint never returns here. The colour is what `ready-to-show` was for.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1d1a' : '#f7f6f1',
-    title: 'Conversations',
+    title: 'Shelf',
     // Her window hides from this; this one belongs in it.
     skipTaskbar: false,
     webPreferences: {
@@ -300,9 +322,11 @@ export function showSettingsWindow(): BrowserWindow {
   }
 
   const window = new BrowserWindow({
-    width: 720,
-    height: 640,
-    minWidth: 520,
+    // 780 x 620, from the handoff. The nav column is 196 and the pane's
+    // reading measure is 62ch, which is what that width is for.
+    width: 780,
+    height: 620,
+    minWidth: 620,
     minHeight: 420,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1d1a' : '#f7f6f1',
     title: 'Settings',

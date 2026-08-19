@@ -267,6 +267,25 @@ export class MochiAvatar implements AvatarBackend {
     this.motionStartedAt = null
   }
 
+  /**
+   * Stop whatever is playing, and let the springs settle her back.
+   *
+   * The missing half of `playMotion`, and it is only missing for one-shots. A
+   * clip with `loop: true` never ends by itself — `progress` wraps it forever
+   * rather than returning null — so `sway` was started on the first turn and
+   * played for the rest of the session. Nobody reported it because a slow lean
+   * looks like idle motion, which is exactly why it is worth a method: a state
+   * whose animation outlives it is a state that has stopped meaning anything.
+   *
+   * Clearing the clip is enough. The pose layer simply stops contributing, and
+   * `spring.ts` carries her back rather than snapping — the same path a
+   * finished one-shot already takes.
+   */
+  stopMotion(): void {
+    this.motion = null
+    this.motionStartedAt = null
+  }
+
   lookAt(nx: number, ny: number): void {
     // Non-finite leaves the previous target alone. Coercing to 0 would snap her
     // gaze to a corner on one bad sample.

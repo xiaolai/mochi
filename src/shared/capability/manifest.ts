@@ -104,6 +104,19 @@ export type ManifestResult =
  */
 const NAME = /^[a-z][a-z0-9_]{0,63}$/
 
+/**
+ * Whether a string is a capability name, for anything that reads one back.
+ *
+ * `usage.ts` keys a stored file by capability name, so it has to check the keys
+ * it reads rather than trust them — the same rule `isPersonaId` and
+ * `isProfileName` follow at the line where a stored string becomes a lookup.
+ * Exported rather than duplicated: two spellings of this grammar is how one of
+ * them quietly accepts something the other refuses.
+ */
+export function isCapabilityName(value: unknown): value is string {
+  return typeof value === 'string' && NAME.test(value)
+}
+
 /** The description enters the model's context on every session. */
 const MAX_DESCRIPTION = 4096
 const MAX_PROPERTY_DESCRIPTION = 1024

@@ -1,6 +1,14 @@
 import { join } from 'node:path'
 import { isPersonaId } from '@shared/persona'
 import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
+import {
+  DEFAULT_GRANTS,
+  WITHHELD_GRANTS,
+  isGrant,
+  parseGrants,
+  type Grant,
+  type Grants,
+} from '@shared/grants'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { writeJsonAtomically } from './json-file'
 
@@ -16,9 +24,9 @@ import { writeJsonAtomically } from './json-file'
  * "who is she today".
  *
  * So this reads **one key** out of that file, and now writes that one key back.
- * It was a read for as long as nothing in v2 could switch personas; the
- * settings window can, and the note left here said plainly that when a switcher
- * existed it should own this file rather than grow a second one beside it.
+ * It was a read for as long as nothing in v2 could switch personas; the shelf
+ * can, and the note left here said plainly that when a switcher existed it
+ * should own this file rather than grow a second one beside it.
  *
  * Owning it means **read, change one key, write the whole object back**. v1's
  * file has window geometry, shortcuts and a model choice in it, and this
@@ -120,7 +128,13 @@ function writeMerged(userData: string, changes: Record<string, unknown>): void {
  */
 export type BubbleSide = 'auto' | 'above' | 'below' | 'left' | 'right'
 
-const SIDES: readonly string[] = ['auto', 'above', 'below', 'left', 'right']
+/**
+ * Every side that can be CHOSEN, exported because two surfaces offer the
+ * choice — the tray menu and the settings window. A second list would be a
+ * second answer to what may be picked, and only one of them would be checked.
+ */
+export const BUBBLE_SIDES: readonly string[] = ['auto', 'above', 'below', 'left', 'right']
+const SIDES = BUBBLE_SIDES
 
 export function readBubbleSide(userData: string): BubbleSide {
   const read = readBounded(join(userData, PREFERENCES))
@@ -180,6 +194,86 @@ export function readResting(userData: string): Resting {
 
 export function writeResting(userData: string, changes: Partial<Resting>): void {
   writeMerged(userData, { ...changes })
+}
+
+/**
+ * What she may do while nobody is watching — 5b's four standing grants.
+ *
+ * In `preferences.json` with everything else that is app-level rather than in a
+ * file of its own, for the reason this module's header gives: a second writer
+ * beside it would silently drop the first one's keys. `@shared/grants` owns
+ * what a grant IS and what turning one off means; this owns where it lives.
+ */
+/**
+ * What is stored, and whether it could be read at all.
+ *
+ * ONE reader for two questions, because the second decides what the first
+ * means. `readGrants` needs it to answer safely; `writeGrant` needs it to
+ * refuse — writing over a file it could not read would turn one transient
+ * failure into four permanent refusals nobody made. Two separate checks would
+ * be two chances to get "was this readable" subtly differently.
+ */
+export function readGrantsState(userData: string): {
+  readonly readable: boolean
+  readonly grants: Grants
+} {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) {
+    // ABSENT is the only answer that means "nobody has chosen". A file that is
+    // there but oversized, symlinked away, or unreadable for permissions is a
+    // stored answer this process cannot see — and every other reader in this
+    // file falls back permissively because none of them is a PERMISSION. These
+    // are. `hasPolicy` draws the same line for retention, and for the same
+    // reason: resolving an unreadable answer as "allowed" is the one direction
+    // that lets her do something somebody may have said she may not.
+    if (read.reason.kind === 'absent') return { readable: true, grants: DEFAULT_GRANTS }
+    console.warn(`[grants] ${logBoundedRead(read.reason)}; withholding everything`)
+    return { readable: false, grants: WITHHELD_GRANTS }
+  }
+  try {
+    const value: unknown = JSON.parse(read.text)
+    // The ROOT, checked as well as the key. `null`, `[]` and `"broken"` are all
+    // valid JSON whose `.grants` reads as `undefined` — which `parseGrants`
+    // rightly calls absent, and absent means allowed. So a preferences file
+    // replaced by any of those re-enabled every permission, through the one
+    // path that had been made to fail closed twice already.
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      console.warn('[grants] preferences.json does not hold an object; withholding everything')
+      return { readable: false, grants: WITHHELD_GRANTS }
+    }
+    return { readable: true, grants: parseGrants((value as { grants?: unknown }).grants) }
+  } catch {
+    // A file that exists and cannot be PARSED is the same case: somebody's
+    // answers are in there and nothing here can read them.
+    console.warn('[grants] preferences.json is not valid JSON; withholding everything')
+    return { readable: false, grants: WITHHELD_GRANTS }
+  }
+}
+
+export function readGrants(userData: string): Grants {
+  return readGrantsState(userData).grants
+}
+
+/**
+ * Allow one, or take it away. One at a time, like every other control here.
+ *
+ * The WHOLE set is written back rather than the single key, so a file holding a
+ * misspelt or half-written `grants` object is replaced by one that says exactly
+ * what is in force.
+ *
+ * REFUSED outright when the file could not be read. `readGrants` answers "all
+ * withheld" for one of those, and writing that back would put four refusals
+ * nobody made on disk — permanently, over a failure that may have been a
+ * moment's. The caller reports it and the file is left for somebody to look at,
+ * which is `remember_this`'s rule for an unreadable note arriving here.
+ */
+export function writeGrant(userData: string, grant: Grant, allowed: boolean): void {
+  if (!isGrant(grant)) throw new Error(`not a grant: ${JSON.stringify(grant)}`)
+  const held = readGrantsState(userData)
+  if (!held.readable) {
+    throw new Error('refusing to rewrite permissions over a preferences file that cannot be read')
+  }
+  writeMerged(userData, { grants: { ...held.grants, [grant]: allowed } })
 }
 
 /**
