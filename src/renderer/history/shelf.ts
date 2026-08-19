@@ -157,7 +157,7 @@ function detail(list: HTMLElement, label: string, value: string): void {
  * pose the icon test measures, and a shelf of blinking faces would be motion
  * competing with the one thing on screen that is actually alive.
  */
-function faceTile(face: FaceSpec | undefined, px: number): HTMLCanvasElement {
+export function faceTile(face: FaceSpec | undefined, px: number): HTMLCanvasElement {
   const canvas = element('canvas', 'tile')
   /*
     A missing face is REFUSED, not quietly replaced.

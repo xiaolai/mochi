@@ -11,7 +11,13 @@ import { DEFAULT_PRONOUN, forPronoun, type ByPronoun, type Pronoun } from '@shar
 import { applyAccent } from '../design/apply-accent'
 import { MochiAvatar } from '../companion/rig/mochi'
 import { highlight, lengthLabel, whenLabel } from './format'
-import { assembledPanel, characterCards, characterSheet, type ShelfHandlers } from './shelf'
+import {
+  assembledPanel,
+  characterCards,
+  characterSheet,
+  faceTile,
+  type ShelfHandlers,
+} from './shelf'
 
 declare global {
   interface Window {
@@ -196,6 +202,17 @@ function drawMark(face: ShelfView['face']): void {
   avatar.resize(px, px, ratio)
   avatar.setIdle(false)
   avatar.render(0)
+}
+
+/**
+ * The worn character's face, for the avatar beside her runs.
+ *
+ * `undefined` rather than a substitute when there is no shelf yet or the
+ * character has gone: `faceTile` refuses a missing face and draws the dashed
+ * hole, which is the same answer the cards give and for the same reason.
+ */
+function wornFaceSpec(): ShelfView['face'] | undefined {
+  return shelf?.characters.find((one) => one.id === shelf?.wornId)?.face
 }
 
 /**
@@ -482,28 +499,67 @@ async function show(token: string, term: string): Promise<void> {
     empty(paneEl, 'Nothing was kept from this conversation.')
     return
   }
+  /*
+    A conversation, drawn the way a conversation is drawn.
+
+    Turns are GROUPED into runs by speaker, because that is what makes this read
+    as a chat rather than as a log: nobody repeats the name above every line
+    somebody says in a row. The name and her face appear once per run, and a run
+    of six replies is six bubbles under one heading.
+
+    Her face is the same rig that draws her on the desktop and on her card -- the
+    third place it is used and still the only drawing of her, which is the whole
+    argument `shipped-icons.test.ts` was written to defend.
+  */
   const transcript = document.createElement('div')
   transcript.className = 'transcript'
+
+  let run: HTMLElement | null = null
+  let said: HTMLElement | null = null
+  let speaking: HistoryTurn['who'] | null = null
+
   for (const turn of turns) {
-    const block = document.createElement('div')
-    block.className = `turn ${turn.who}`
-    const who = document.createElement('div')
-    who.className = 'who'
-    who.textContent = turn.who === 'her' ? speaker() : 'you'
-    const said = document.createElement('p')
-    said.append(marked(turn.text, term))
-    block.append(who, said)
+    if (turn.who !== speaking) {
+      speaking = turn.who
+      run = document.createElement('div')
+      run.className = `run ${turn.who}`
+      said = document.createElement('div')
+      said.className = 'said'
+      const who = document.createElement('div')
+      who.className = 'who'
+      who.textContent = turn.who === 'her' ? speaker() : 'you'
+      said.append(who)
+      // Her face on the left of her own run. Yours is not drawn: the side of the
+      // column a bubble is on is already unambiguous, and inventing an avatar
+      // for a person this app has never seen would be a lie about knowing them.
+      if (turn.who === 'her' && shelf !== null) {
+        const face = wornFaceSpec()
+        run.append(faceTile(face, 28))
+        // The same admission the cards make: a missing face is a dashed hole
+        // rather than the built-in mochi standing in for somebody else.
+        if (face === undefined) run.classList.add('faceless')
+      }
+      run.append(said)
+      transcript.append(run)
+    }
+
+    const bubble = document.createElement('div')
+    bubble.className = 'bubble'
+    bubble.append(marked(turn.text, term))
+    said?.append(bubble)
+
     if (turn.cut) {
       // Said out loud rather than implied by a short line. The boundary is an
-      // ESTIMATE (§60: −3% to −22%, always short), so a reader who can see that
-      // it was cut can also discount the last few words.
+      // ESTIMATE (§60: -3% to -22%, always short), so a reader who can see that
+      // it was cut can also discount the last few words. It follows the bubble
+      // it belongs to rather than the run, because only one turn was cut.
       const note = document.createElement('div')
       note.className = 'cut'
       note.textContent = turn.text === '' ? forPronoun(SAYS.cutEarly, saying()) : 'interrupted'
-      block.append(note)
+      said?.append(note)
     }
-    transcript.append(block)
   }
+
   paneEl.replaceChildren(transcript)
   paneEl.scrollTop = 0
 }
@@ -616,7 +672,7 @@ function renderProblems(problems: readonly HistoryProblem[]): void {
   troublesEl.setAttribute('aria-current', 'true')
 
   const page = document.createElement('div')
-  page.className = 'transcript'
+  page.className = 'report'
   const lead = document.createElement('p')
   lead.className = 'lead'
   // Says what it is AND what it is not. Everything here already fell back to

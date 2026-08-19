@@ -557,62 +557,127 @@
         overflow: hidden;
       }
 
-      /* ---- a transcript, at reading width ---------------------------------- */
+      /* ---- a conversation, as a conversation ------------------------------ */
       /*
-        The left column has three states and only one of them had a surface.
+        Bubbles carry the surfaces, so the field they sit on does not.
 
-        The character sheet is a stack of plates on `--paper-2`; a transcript and
-        the problem list were bare text hanging in the void at the top-left of an
-        otherwise empty column, with the window edge 20px away and nothing
-        containing them. Photographed side by side that is not a different view
-        of the same window, it is an unfinished one — and it took photographing
-        every state to see, because only the sheet had ever been looked at.
+        The container had a card of its own one commit ago, which was the right
+        answer while a transcript was bare paragraphs hanging in an empty column
+        and the wrong one now: a bubble inside a card is two surfaces deep and
+        reads as a panel of panels. The problem list still gets a card -- it is a
+        report, not a conversation -- which is why it has its own class now
+        rather than borrowing this one.
+      */
+      /*
+        Full width of the column, and the measure moves to the BUBBLE.
 
-        The same surface, so all three read as the same window. The TEXT keeps
-        its reading measure; the surface does not, because a card that stopped at
-        82ch would leave a second empty column beside the first.
+        With `max-width: var(--reading)` here the right-aligned side hugged the
+        edge of an invisible 82ch box rather than the edge of the pane, so your
+        replies floated in the middle of a wide column and read as broken
+        alignment. In a conversation the thing that needs a reading measure is
+        the bubble; the field it sits on needs both edges, because which edge a
+        bubble is on is what says who is speaking.
       */
       .transcript {
-        background: var(--paper-2);
-        border: 1px solid var(--rule);
-        border-radius: var(--r3);
-        padding: var(--s6);
+        display: flex;
+        flex-direction: column;
+        gap: var(--s5);
       }
-      .turn p,
-      .problem p,
-      .lead {
-        max-width: var(--reading);
+      /* One speaker's unbroken stretch. Her face sits with the last bubble. */
+      .run {
+        display: flex;
+        align-items: flex-end;
+        gap: var(--s3);
       }
-      /* The last one carries no gap: the surface's own padding closes it. */
-      .turn {
-        margin: 0 0 var(--s6);
+      .run.you {
+        flex-direction: row-reverse;
       }
-      .turn:last-child,
-      .problem:last-child {
-        margin-bottom: 0;
+      .run .tile {
+        flex: none;
+        display: block;
+        margin-bottom: 2px;
       }
-      .turn .who {
+      .run.faceless .tile {
+        width: 28px;
+        height: 28px;
+        border: 1px dashed var(--warn-line);
+        border-radius: var(--r-pill);
+      }
+      .said {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s1);
+        /*
+          Two limits, and the smaller wins. The percentage keeps a bubble from
+          reaching both edges -- one that does is a paragraph with rounded
+          corners and the shape stops saying anything. The `ch` keeps a wide
+          window from producing a 700px line, which is past comfortable reading
+          whatever shape it is in.
+        */
+        max-width: min(72%, 54ch);
+        min-width: 0;
+      }
+      .run.you .said {
+        align-items: flex-end;
+      }
+      .who {
         font-family: var(--narrow);
         font-size: var(--t-label);
         font-weight: 600;
         letter-spacing: var(--track);
         text-transform: uppercase;
         color: var(--ink-3);
+        margin-bottom: var(--s0);
       }
-      .turn.her .who {
+      .run.her .who {
         color: var(--ink-brand);
       }
-      .turn p {
-        margin: var(--s1) 0 0;
+      /*
+        Her side is HER colour, which is the design's second semantic rule doing
+        real work rather than decorating. `--ink-brand` on `--her-wash` is the
+        pairing `contrastFailures` already sweeps for every persona and
+        `accent.test.ts` sweeps for all eight built-in themes -- so a character
+        somebody else wrote cannot make her own words unreadable here.
+      */
+      .bubble {
+        padding: var(--s3) var(--s4);
+        border: 1px solid var(--rule);
+        border-radius: var(--r4);
+        background: var(--paper-2);
         font-size: var(--t-body);
         white-space: pre-wrap;
+        overflow-wrap: anywhere;
         user-select: text;
       }
+      .run.her .bubble {
+        background: var(--her-wash);
+        border-color: transparent;
+        color: var(--ink-brand);
+      }
+      /* The corner nearest the speaker is tightened. That is the whole tail. */
+      .run.her .said > .bubble:last-of-type {
+        border-bottom-left-radius: var(--r1);
+      }
+      .run.you .said > .bubble:last-of-type {
+        border-bottom-right-radius: var(--r1);
+      }
       .cut {
-        margin-top: var(--s2);
+        margin-top: var(--s0);
         font-family: var(--narrow);
         font-size: var(--t-label);
         color: var(--warn-ink);
+      }
+
+      /* ---- the problem list, which is a report rather than a conversation --- */
+      .report {
+        background: var(--paper-2);
+        border: 1px solid var(--rule);
+        border-radius: var(--r3);
+        padding: var(--s6);
+      }
+      .problem p,
+      .lead {
+        max-width: var(--reading);
       }
       .problem {
         margin: 0 0 var(--s5);
