@@ -97,7 +97,7 @@ export const capability: Capability = {
     const result = await ask(question, {
       codexPath,
       workspace,
-      settings: { webSearch: deps.webSearch(), model: null },
+      settings: { webSearch: deps.webSearch(), model: null, profile: deps.codexProfile() },
       run: spawnCodex,
     })
     if (!result.ok) {

@@ -27,6 +27,7 @@ export function stubDeps(overrides: Partial<CapabilityDeps> = {}): CapabilityDep
     workspace: () => '/nowhere',
     guardStopAt: () => '/nowhere',
     webSearch: () => 'disabled',
+    codexProfile: () => null,
     now: () => TEST_NOW,
     ...overrides,
   }

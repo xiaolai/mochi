@@ -30,6 +30,7 @@ import {
   readResting,
   readWebSearch,
   readWorkspace,
+  readProfile,
   guardStopAt,
   readWornPersonaId,
   writeBubbleSide,
@@ -46,6 +47,7 @@ import { createProblems } from './problems'
 import { leftoverCapabilities, legacyCapabilitiesRoot } from './capability/legacy'
 import type { CapabilityDeps } from '../capabilities/kind'
 import { isLocated, locateCodex } from '../capabilities/ask-workspace/locate'
+import { codexHome, profileFor, seedProfile } from '../capabilities/ask-workspace/profile'
 import { createTray, trayMenuTemplate, type TrayHandle, type TrayModel } from './tray'
 import { parseGrip, startDrag, stopDrag } from './drag'
 import { FEET_FROM_TOP, WINDOW_W } from '@shared/avatar-layout'
@@ -469,6 +471,12 @@ const capabilityDeps: CapabilityDeps = {
     return guardStopAt(userData, readWorkspace(userData))
   },
   webSearch: () => readWebSearch(app.getPath('userData')),
+  codexProfile: () =>
+    profileFor(
+      codexHome(process.env, app.getPath('home')),
+      readProfile(app.getPath('userData')),
+      (path) => existsSync(path),
+    ),
   now: () => Date.now(),
 }
 
@@ -959,6 +967,29 @@ void app.whenReady().then(
      * be a network mount — the reason its `exists` is async at all. She simply
      * cannot look things up for the first second, which nobody will meet.
      */
+    /**
+     * The Codex profile file, put there once so somebody can find it.
+     *
+     * Seeded rather than documented-only, for the reason `seedAvatars` exists:
+     * a plugin format nobody can see the shape of is not one. It sets nothing,
+     * so it changes nothing until it is edited — and it is never overwritten,
+     * because once it is on disk it is the user's.
+     *
+     * `$CODEX_HOME` is Codex's directory. If it is not there, the CLI has never
+     * run and there is nothing to configure; creating a half-populated home for
+     * another application is not ours to do.
+     */
+    const seeded = seedProfile(codexHome(process.env, app.getPath('home')), (path) =>
+      existsSync(path),
+    )
+    if (seeded.kind === 'written') console.log(`[codex] profile seeded at ${seeded.path}`)
+    if (seeded.kind === 'failed') {
+      // Reported, not fatal. She can still look things up — the profile is how
+      // somebody CONFIGURES a lookup, not what makes one possible.
+      console.error(`[codex] could not seed ${seeded.path}: ${seeded.why}`)
+      problems.note('codex', seeded.path, `the settings file could not be written: ${seeded.why}`)
+    }
+
     void locateCodex({
       platform: process.platform,
       env: process.env,

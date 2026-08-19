@@ -9,6 +9,9 @@ import {
   writeBubbleSide,
   writeResting,
   writeWornPersonaId,
+  isProfileName,
+  readProfile,
+  writeProfile,
 } from './worn'
 
 let userData = ''
@@ -163,5 +166,40 @@ describe('how she was left', () => {
     writeResting(userData, { asleep: true })
     expect(readWornPersonaId(userData)).toBe('loki')
     expect(readBubbleSide(userData)).toBe('left')
+  })
+})
+
+describe('the Codex profile', () => {
+  it('is nothing until somebody chooses one', () => {
+    // Absent leaves the user's own `config.toml` alone, which is the same
+    // first-class choice `follow` is for web search.
+    expect(readProfile(userData)).toBeNull()
+  })
+
+  it('round-trips a name, and clears it again', () => {
+    writeProfile(userData, 'mochi')
+    expect(readProfile(userData)).toBe('mochi')
+    writeProfile(userData, null)
+    expect(readProfile(userData)).toBeNull()
+  })
+
+  it('REFUSES a name that would reach out of Codex home', () => {
+    // The name becomes a filename inside `$CODEX_HOME` — `<name>.config.toml` —
+    // so a slash or a `..` in it is a path rather than a profile. Same reason
+    // `memoryPath` refuses an id that has not passed the persona grammar.
+    for (const bad of ['../escape', 'a/b', '/absolute', '.', '..', 'Mochi', 'has space', '']) {
+      expect(isProfileName(bad), bad).toBe(false)
+      expect(() => writeProfile(userData, bad), bad).toThrow()
+    }
+  })
+
+  it('refuses a bad name on the way OUT as well, since the file is hand-edited', () => {
+    // Written past the setter, the way somebody editing preferences.json by
+    // hand would. A name that failed the grammar must not become an argument.
+    writeFileSync(
+      join(userData, 'preferences.json'),
+      JSON.stringify({ codexProfile: '../../etc/passwd' }),
+    )
+    expect(readProfile(userData)).toBeNull()
   })
 })

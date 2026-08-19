@@ -255,3 +255,46 @@ export function writeWebSearch(userData: string, mode: WebSearchMode): void {
   if (!isWebSearchMode(mode)) throw new Error(`not a web search mode: ${String(mode)}`)
   writeMerged(userData, { webSearch: mode })
 }
+
+/**
+ * The Codex profile a lookup runs under, or null for none.
+ *
+ * `codex exec -p <name>` layers `$CODEX_HOME/<name>.config.toml` on top of the
+ * user's base config, which is how somebody configures a lookup without us
+ * re-exposing Codex's flags one at a time. The file is theirs to edit; see
+ * `ask-workspace/profile.ts` for the one we seed.
+ *
+ * ## The name becomes a FILENAME, so it is checked like one
+ *
+ * Codex resolves it inside `$CODEX_HOME`, and a name with a slash or a `..` in
+ * it would reach out of that directory — the same reason `memoryPath` refuses
+ * an id that has not passed the persona grammar. The character set here is the
+ * intersection of "what makes a sensible profile name" and "what cannot be
+ * confused with a path".
+ */
+const PROFILE = /^[a-z][a-z0-9-]{0,63}$/
+
+export function isProfileName(value: unknown): value is string {
+  return typeof value === 'string' && PROFILE.test(value)
+}
+
+export function readProfile(userData: string): string | null {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return null
+  try {
+    const value: unknown = JSON.parse(read.text)
+    const found = (value as { codexProfile?: unknown } | null)?.codexProfile
+    // Checked on the way OUT as well as in. This file is hand-editable, and a
+    // name that failed the grammar would otherwise become an argument.
+    return isProfileName(found) ? found : null
+  } catch {
+    return null
+  }
+}
+
+export function writeProfile(userData: string, name: string | null): void {
+  if (name !== null && !isProfileName(name)) {
+    throw new Error(`not a usable profile name: ${JSON.stringify(name)}`)
+  }
+  writeMerged(userData, { codexProfile: name })
+}

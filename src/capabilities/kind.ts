@@ -100,6 +100,14 @@ export interface CapabilityDeps {
   readonly guardStopAt: () => string
   /** Whether a lookup may search the web. */
   readonly webSearch: () => WebSearchMode
+  /**
+   * The Codex profile a lookup layers, or null for none.
+   *
+   * How somebody configures a lookup — their model, their reasoning effort —
+   * without this project re-exposing Codex's flags one at a time. The name has
+   * passed `isProfileName`; it becomes a filename inside `$CODEX_HOME`.
+   */
+  readonly codexProfile: () => string | null
   /** The clock, injected so a test does not depend on how fast it runs. */
   readonly now: () => number
 }

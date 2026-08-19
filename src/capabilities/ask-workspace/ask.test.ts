@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { argsFor, ask, framed, readAnswer, type AskSettings } from './ask'
 import type { RunHandle } from './spawn'
 
-const SETTINGS: AskSettings = { webSearch: 'live', model: null }
+const SETTINGS: AskSettings = { webSearch: 'live', model: null, profile: null }
 
 function argAfter(args: readonly string[], flag: string): string | undefined {
   const at = args.indexOf(flag)
@@ -48,7 +48,7 @@ describe('the invocation', () => {
       schemaPath: '/s',
       outPath: '/o',
       question: 'q',
-      settings: { webSearch: 'disabled', model: null },
+      settings: { webSearch: 'disabled', model: null, profile: null },
     })
     expect(off).toContain('web_search="disabled"')
   })
@@ -61,7 +61,7 @@ describe('the invocation', () => {
       schemaPath: '/s',
       outPath: '/o',
       question: 'q',
-      settings: { webSearch: 'follow', model: null },
+      settings: { webSearch: 'follow', model: null, profile: null },
     })
     expect(follow.join(' ')).not.toContain('web_search')
   })
@@ -73,9 +73,41 @@ describe('the invocation', () => {
       schemaPath: '/s',
       outPath: '/o',
       question: 'q',
-      settings: { webSearch: 'live', model: 'gpt-5.6-sol' },
+      settings: { webSearch: 'live', model: 'gpt-5.6-sol', profile: null },
     })
     expect(argAfter(pinned, '-m')).toBe('gpt-5.6-sol')
+  })
+
+  it('leaves the profile alone unless one was chosen', () => {
+    expect(args).not.toContain('-p')
+    const layered = argsFor({
+      workspace: '/work',
+      schemaPath: '/s',
+      outPath: '/o',
+      question: 'q',
+      settings: { webSearch: 'live', model: null, profile: 'mochi' },
+    })
+    expect(argAfter(layered, '-p')).toBe('mochi')
+  })
+
+  it('keeps the guard override even when a profile is layered', () => {
+    // THE property, and the reason a profile is safe to hand somebody at all.
+    // `-p` layers a file the user edits; `-c` here empties the list of files
+    // Codex would read as instructions, which is what lets `guardWorkspace`
+    // refuse a workspace containing one. Measured against codex-cli 0.148.0:
+    // `-c` REPLACES a profile's value rather than merging with it, so a profile
+    // cannot put the list back. `scripts/verify-codex-precedence.sh` is that
+    // measurement; this is the half that stops the flag being dropped here.
+    const layered = argsFor({
+      workspace: '/work',
+      schemaPath: '/s',
+      outPath: '/o',
+      question: 'q',
+      settings: { webSearch: 'live', model: null, profile: 'mochi' },
+    })
+    expect(layered).toContain('project_doc_fallback_filenames=[]')
+    expect(layered).toContain('read-only')
+    expect(layered).toContain('--ephemeral')
   })
 
   it('puts the question last, framed', () => {

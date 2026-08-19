@@ -21,6 +21,7 @@
     "dist": "pnpm verify && pnpm build && electron-builder",
     "dist:mac": "pnpm verify && pnpm build && electron-builder --mac",
     "verify:signing": "bash scripts/verify-signing.sh",
+    "verify:codex": "bash scripts/verify-codex-precedence.sh",
     "preview": "electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

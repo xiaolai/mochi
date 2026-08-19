@@ -83,6 +83,19 @@ export interface AskSettings {
   readonly webSearch: WebSearchMode
   /** Null leaves the model to the user's `config.toml`, which is a real choice. */
   readonly model: string | null
+  /**
+   * A Codex profile to layer, or null for none.
+   *
+   * `-p <name>` layers `$CODEX_HOME/<name>.config.toml` over the user's base
+   * config. This is how somebody configures a lookup — their model, their
+   * reasoning effort, their MCP servers — WITHOUT this project re-exposing
+   * Codex's flags one at a time, and without a config file inside the workspace
+   * where dropping a file could change how the tool behaves.
+   *
+   * The name has already passed `isProfileName`; it becomes a filename inside
+   * `$CODEX_HOME`.
+   */
+  readonly profile: string | null
 }
 
 /**
@@ -125,13 +138,33 @@ export function argsFor(options: {
     options.workspace,
     '--skip-git-repo-check',
     '--ephemeral',
-    // See the header: the guard can only check names it knows.
+    /**
+     * See the header: the guard can only check names it KNOWS.
+     *
+     * This is the one key a user's profile must not be able to take back, and
+     * `-p` below cannot. MEASURED against `codex-cli 0.148.0` on 2026-08-19,
+     * three ways, because a scalar result would not have settled an array key:
+     *
+     * - a profile carrying a wrong-typed value for it fails config load, so the
+     *   profile's value really is read and validated;
+     * - the same profile WITH this override loads cleanly, so the override
+     *   REPLACES rather than merges, and the profile's value never materialises;
+     * - a valid profile value with a wrong-typed override fails, which is what
+     *   rules out "the override was quietly ignored" as the reason for the
+     *   second result.
+     *
+     * `scripts/verify-codex-precedence.sh` is that measurement, runnable. It is
+     * a behaviour of the CLI rather than a documented contract, and this project
+     * has already been bitten once by exactly that — `agents.override.md` was
+     * blocklist rot that arrived immediately rather than in some future release.
+     */
     '-c',
     'project_doc_fallback_filenames=[]',
     '--output-schema',
     options.schemaPath,
     '-o',
     options.outPath,
+    ...(settings.profile === null ? [] : ['-p', settings.profile]),
     ...(settings.model === null ? [] : ['-m', settings.model]),
     ...(settings.webSearch === 'follow' ? [] : ['-c', `web_search="${settings.webSearch}"`]),
     framed(options.question),
