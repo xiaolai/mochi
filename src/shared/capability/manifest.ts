@@ -1,10 +1,18 @@
 /**
  * A capability, as data.
  *
- * This is the plugin format for things she can *do*, and it deliberately copies
- * the reasoning `avatar-spec.ts` already established for things she *looks*
- * like: a capability a user installs is a JSON file, and the executable half is
- * reached through it rather than shipped inside it. Data cannot escalate.
+ * The half of a capability that goes on the wire: what she is told she can do
+ * and what arguments it takes. It lives in `@shared` because the renderer
+ * typechecks against it; the handler half is `src/capabilities/kind.ts`, and
+ * `src/capabilities/<name>/capability.ts` holds both as one value so a manifest
+ * cannot exist without an implementation.
+ *
+ * This was written as a format for something a user would INSTALL — a JSON file
+ * in a folder, with the executable half reached through it rather than shipped
+ * inside it. Nobody installs one now: a capability is a folder in the source
+ * that whoever runs this compiled. The bounds below survived that change
+ * unaltered, and the reason is in the next section — they were never really
+ * about the file being a stranger's.
  *
  * ## Why this exists at all
  *
@@ -18,12 +26,18 @@
  *
  * ## Every field is bounded, not merely typed
  *
- * These values arrive from a file somebody else wrote. Type-checking alone
- * accepts a 40 KB description, a name with a slash in it, or a `required` entry
- * naming a property that does not exist — none of which throw. They produce a
- * session that configures cleanly and then behaves wrongly, with nothing in any
- * log saying which field did it. So every field declares a range and the range
- * is checked here, at the boundary, rather than defended against downstream.
+ * Type-checking alone accepts a 40 KB description, a name with a slash in it, or
+ * a `required` entry naming a property that does not exist — none of which
+ * throw. They produce a session that configures cleanly and then behaves
+ * wrongly, with nothing in any log saying which field did it.
+ *
+ * That is true of a manifest somebody wrote in TypeScript this morning as much
+ * as of one downloaded from a stranger. The description enters the model's
+ * context on every session and is billed for the life of it; the name is the
+ * dispatch key and goes on the wire. Neither cares who typed it. So every field
+ * declares a range, the range is checked here, and `src/capabilities` asserts
+ * the whole collected set passes — which makes a bad one fail the build rather
+ * than the launch.
  *
  * ## String arguments only, and it is a refusal rather than a silence
  *
@@ -58,9 +72,8 @@ export interface CapabilityManifest {
  * Why a manifest was rejected.
  *
  * A discriminated union rather than a boolean or a string, because the caller
- * has to tell the user which file is wrong and what about it — "one of your
- * capabilities failed to load" is the message that makes people delete the
- * folder and start again.
+ * has to say which field is wrong and what about it. "A capability failed to
+ * load" is the message that sends somebody through every folder guessing.
  */
 export type ManifestProblem =
   | { readonly kind: 'not-an-object' }

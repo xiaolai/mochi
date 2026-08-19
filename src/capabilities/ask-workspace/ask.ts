@@ -1,11 +1,13 @@
 /**
  * Asking Codex a question about the workspace, and getting a sourced answer.
  *
- * This is what `ask_workspace` actually does. The manifest for it has been
- * shipping since the rewrite and the handler behind it was `notBuilt` — she was
- * told she could look things up, tried, and was told she could not. That is the
- * exact failure the capability refusal in `registry.ts` is written to prevent,
- * being committed against the built-ins.
+ * This is what `ask_workspace` actually does. Its manifest shipped from the
+ * rewrite until 2026-08-19 with `notBuilt` behind it — she was told she could
+ * look things up, tried, and was told she could not. That is the exact failure
+ * `registry.ts` used to refuse third-party capabilities to prevent, committed
+ * against the built-ins. It is unrepresentable now: `capability.ts` in this
+ * folder holds the manifest and the handler as one value, so a manifest with
+ * nothing behind it does not typecheck.
  *
  * ## The invocation, and why each piece is there
  *

@@ -6,7 +6,7 @@
  * the failure that keeping memory inside `Persona` would have made possible.
  */
 
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -145,5 +145,32 @@ describe('the version a write replaces', () => {
       JSON.stringify({ notes: 'x', previous: 'y'.repeat(PERSONA_LIMITS.memory * 2) }),
     )
     expect(previousNote(dir, 'ada')?.length).toBe(PERSONA_LIMITS.memory)
+  })
+})
+
+describe('refusing to overwrite what it could not read', () => {
+  it('throws rather than replacing a note that will not parse', () => {
+    const userData = workspace()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // The rollback value this stores is the previous note. Read through
+    // `recall`, a file that exists and cannot be parsed yields "" — so the
+    // write would replace something possibly recoverable by hand and record
+    // "nothing" as the version to go back to.
+    mkdirSync(memoryRoot(userData), { recursive: true })
+    const path = join(memoryRoot(userData), 'loki.json')
+    const corrupt = '{"notes": "everything she knew" TRUNCATED'
+    writeFileSync(path, corrupt)
+
+    expect(() => remember(userData, 'loki', 'something new')).toThrow(/refusing/)
+    expect(readFileSync(path, 'utf8')).toBe(corrupt)
+    warn.mockRestore()
+  })
+
+  it('writes normally when there is simply nothing there yet', () => {
+    // Absent is not unreadable, and a persona nobody has talked to is the
+    // ordinary case rather than a problem.
+    const userData = workspace()
+    expect(() => remember(userData, 'loki', 'the first thing')).not.toThrow()
+    expect(recall(userData, 'loki')).toBe('the first thing')
   })
 })

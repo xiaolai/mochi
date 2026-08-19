@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, ipcMain, Menu, shell } from 'electron'
 import { existsSync, mkdirSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
@@ -14,9 +13,9 @@ import {
   type SettingsWrite,
   type VoiceReport,
 } from '@shared/ipc'
-import { loadCapabilities } from './capability/load'
+import { CAPABILITIES } from '../capabilities'
 import { createLedger, type AnswerFrame } from './capability/ledger'
-import { builtinHandlers, handlerFor } from './capability/handlers'
+import { handleCall } from './capability/dispatch'
 import {
   describeProblem,
   exchangeSdp,
@@ -44,8 +43,9 @@ import { SHORTCUTS } from '@shared/shortcuts'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { createProblems } from './problems'
-import { slowHandlers } from './capability/slow'
-import { isLocated, locateCodex } from './codex/locate'
+import { leftoverCapabilities, legacyCapabilitiesRoot } from './capability/legacy'
+import type { CapabilityDeps } from '../capabilities/kind'
+import { isLocated, locateCodex } from '../capabilities/ask-workspace/locate'
 import { createTray, trayMenuTemplate, type TrayHandle, type TrayModel } from './tray'
 import { parseGrip, startDrag, stopDrag } from './drag'
 import { FEET_FROM_TOP, WINDOW_W } from '@shared/avatar-layout'
@@ -55,7 +55,6 @@ import { FEET_FROM_TOP, WINDOW_W } from '@shared/avatar-layout'
  * window was first positioned against.
  */
 const NOMINAL_BODY = { left: (WINDOW_W - 94) / 2, top: FEET_FROM_TOP - 73, width: 94, height: 73 }
-import { discoverInstalled, type Installed } from './capability/installed'
 import {
   applyChange,
   folderFor,
@@ -86,19 +85,6 @@ if (process.platform === 'darwin') {
 }
 
 /**
- * Where the shipped capabilities live.
- *
- * `extraResources` in `electron-builder.yml` puts them beside the bundle rather
- * than inside the asar, because they are read through `process.resourcesPath`
- * and that path cannot reach into an archive.
- */
-function builtinCapabilities(): string {
-  return app.isPackaged
-    ? join(process.resourcesPath, 'capabilities')
-    : join(app.getAppPath(), 'resources', 'capabilities')
-}
-
-/**
  * Everything that went wrong, kept where somebody can be shown it.
  *
  * Each `console.error` below has a companion line here. The console is for
@@ -108,34 +94,26 @@ function builtinCapabilities(): string {
  */
 const problems = createProblems()
 
-const loaded = loadCapabilities(builtinCapabilities())
-for (const problem of loaded.problems) {
-  // Loud. A capability that failed to load is a thing she can no longer do, and
-  // silence here presents as her declining to do it.
-  console.error(`[capability] ${problem.folder}: ${problem.kind}`)
-  problems.note('capability', problem.folder, problem.kind)
-}
-const registry = createRegistry(loaded.manifests, [])
+/**
+ * What she can do, decided at build time.
+ *
+ * No directory is read and nothing is merged: `src/capabilities/index.ts` globs
+ * the folders into a static map, so a manifest that reaches this line has a
+ * handler beside it by construction. See that file for why the plugin system in
+ * a fork-and-build project is the build system.
+ */
+const registry = createRegistry(CAPABILITIES.manifests)
 
 /**
  * Where the Codex CLI is, found once and remembered.
  *
- * Resolved rather than shelled out to — see `codex/locate.ts` for why, and for
- * the machine on the fleet where every shell-based lookup reports it missing.
- * Null means genuinely absent, which she says out loud rather than answering
- * from memory.
+ * Resolved rather than shelled out to — see `ask-workspace/locate.ts` for why, and for the
+ * machine on the fleet where every shell-based lookup reports it missing. Null
+ * means genuinely absent, which she says out loud rather than answering from
+ * memory.
  */
 let codexPath: string | null = null
 
-const slowly = slowHandlers({
-  codexPath: () => codexPath,
-  workspace: () => readWorkspace(app.getPath('userData')),
-  stopAt: () => {
-    const userData = app.getPath('userData')
-    return guardStopAt(userData, readWorkspace(userData))
-  },
-  settings: () => ({ webSearch: readWebSearch(app.getPath('userData')), model: null }),
-})
 console.log(
   `[capability] ${registry.tools.length} available: ${registry.tools.map((t) => t.name).join(', ')}`,
 )
@@ -381,19 +359,16 @@ ipcMain.on('companion:menu', () => {
   })
 })
 
-/**
- * What is in the user's capabilities folder, read once at startup.
- *
- * Once rather than per session: unlike the persona and the note, nothing here
- * can take effect until a sandbox exists, so re-reading it mid-run would only
- * change what is REPORTED — and a report that changes without the app
- * restarting is a report nobody can act on.
- */
-let installed: Installed = { root: '', manifests: [], problems: [] }
-
 const ledger = createLedger({
   registry,
-  send: (frame: AnswerFrame) => companion?.webContents.send('voice:send', frame),
+  // `isDestroyed` as well as null. A window that has been closed is still a
+  // non-null `BrowserWindow`, and `send` on its `webContents` throws — which
+  // used to come back out of the `voice:call` listener. Nothing is lost by
+  // skipping it: there is no conversation left on the other side.
+  send: (frame: AnswerFrame) => {
+    if (companion === null || companion.isDestroyed()) return
+    companion.webContents.send('voice:send', frame)
+  },
 })
 
 /**
@@ -454,13 +429,48 @@ function transcripts(): Transcripts {
   return archive
 }
 
-const handlers = builtinHandlers({
-  // Functions, not values: the store opens lazily and the persona changes on
-  // every session, so a handler asking at call time gets the current answer
-  // rather than whatever was true when this file was evaluated.
-  transcripts: () => archive,
+/**
+ * Everything a capability may ask main for.
+ *
+ * FUNCTIONS, not values, and every one of them: the store opens lazily, the
+ * persona changes on every session and the workspace is a setting somebody can
+ * edit while she is running — so a handler asking at call time gets the current
+ * answer rather than whatever was true when this file was evaluated.
+ *
+ * This object is also the reason nothing under `src/capabilities/` imports this
+ * file. A capability reaching back into main is how a bundle ends up with a
+ * module that is undefined at load.
+ */
+const capabilityDeps: CapabilityDeps = {
+  userData: () => app.getPath('userData'),
   wearing: () => wearing,
-})
+  transcripts: () => archive,
+  /**
+   * Read per call rather than held, because the shelf is files on disk and
+   * somebody may add a persona while this is running. `remember_this` is called
+   * a handful of times in a conversation at most, so the read is not on any
+   * path that matters.
+   *
+   * The WORN one is removed: `entryProblem` refuses a note naming another
+   * character's storage, and including her own id refused ordinary sentences
+   * about her own name.
+   */
+  otherPersonaIds: () => {
+    const userData = app.getPath('userData')
+    const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+    const ids = new Set(catalog.personas.keys())
+    if (wearing !== null) ids.delete(wearing)
+    return ids
+  },
+  codexPath: () => codexPath,
+  workspace: () => readWorkspace(app.getPath('userData')),
+  guardStopAt: () => {
+    const userData = app.getPath('userData')
+    return guardStopAt(userData, readWorkspace(userData))
+  },
+  webSearch: () => readWebSearch(app.getPath('userData')),
+  now: () => Date.now(),
+}
 
 /** Held so a second open replaces the first rather than racing it. */
 let minted: Minted | null = null
@@ -583,70 +593,30 @@ ipcMain.handle('voice:config', () => {
 })
 
 /**
- * She called something. This is the only place that decides what runs.
+ * She called something.
  *
- * Nothing implements the three shipped capabilities yet, so every call is
- * ANSWERED with that fact rather than left hanging — an unanswered call leaves
- * the conversation waiting for a frame that is not coming, for the rest of the
- * session, and she has no way to say so.
+ * The listener is the boundary check and nothing else; `handleCall` decides
+ * what runs and guarantees a frame on every path. That guarantee lives in its
+ * own module because it is the one an inline listener cannot be tested for —
+ * see the note there, and `ledger.ts` on why a dropped call is the failure
+ * that passes every at-most-once test ever written.
  */
 ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown) => {
   if (typeof name !== 'string' || typeof callId !== 'string') return
-  const arrival = ledger.arrived({ name, callId, args })
-  if (arrival.kind !== 'accepted') {
-    console.log(`[capability] ${name}: ${arrival.kind}`)
-    return
-  }
-  console.log(`[capability] ${name}(${JSON.stringify(arrival.args)})`)
-
-  /**
-   * The slow ones are DEFERRED, not awaited (§1).
-   *
-   * `codex exec` has a twenty-second floor (§8). Settling that call
-   * synchronously would leave her silent for twenty seconds in the middle of a
-   * conversation, which reads as a crash. Deferring lets her say she is going to
-   * look, carry on talking, and complete the sentence when the answer lands.
-   */
-  const slow = slowly.get(name)
-  if (slow !== undefined) {
-    ledger.defer(callId, { status: 'started' })
-    void slow(arrival.args).then(
-      (output) => {
-        ledger.deliver(callId, output)
-        console.log(`[capability] ${name} delivered ${JSON.stringify(output).slice(0, 120)}`)
+  handleCall(
+    {
+      capabilities: CAPABILITIES.byName,
+      deps: capabilityDeps,
+      ledger,
+      note: (capability, detail) => problems.note('capability', capability, detail),
+      log: (line) => console.log(line),
+      warn: (line, error) => {
+        if (error === undefined) console.error(line)
+        else console.error(line, error)
       },
-      (error: unknown) => {
-        // Delivered anyway. A deferred call that never arrives is worse than a
-        // refusal — she said she would look and simply never comes back, and
-        // `undelivered()` is the only thing that would ever notice.
-        console.error(`[capability] ${name} threw:`, error)
-        problems.note('capability', name, String(error))
-        ledger.deliver(callId, {
-          status: 'unavailable',
-          guidance: 'The lookup did not finish. Say so plainly rather than guessing at a result.',
-        })
-      },
-    )
-    return
-  }
-
-  // Every path answers. A handler that throws is still a call that must be
-  // settled — an unanswered one sits in the conversation for the rest of the
-  // session and she has no way to mention it.
-  void (async () => {
-    try {
-      const output = await handlerFor(handlers, name)(arrival.args)
-      ledger.answer(callId, output)
-      console.log(`[capability] ${name} -> ${JSON.stringify(output).slice(0, 120)}`)
-    } catch (error: unknown) {
-      console.error(`[capability] ${name} threw:`, error)
-      problems.note('capability', name, String(error))
-      ledger.answer(callId, {
-        status: 'unavailable',
-        guidance: 'That did not work just now. Say so plainly rather than guessing at a result.',
-      })
-    }
-  })()
+    },
+    { name, callId, args },
+  )
 })
 
 ipcMain.on('voice:report', (_event, report: unknown) => {
@@ -782,11 +752,10 @@ ipcMain.handle('settings:read', (): SettingsView => {
     personas: listPersonas(catalog),
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],
-    capabilities: listCapabilities(registry, installed),
+    capabilities: listCapabilities(registry),
     folders: {
       avatars: folderFor(userData, 'avatars'),
       personas: folderFor(userData, 'personas'),
-      capabilities: folderFor(userData, 'capabilities'),
     },
   }
 })
@@ -908,29 +877,37 @@ void app.whenReady().then(
     }
 
     /**
-     * What somebody installed: found, named, and not run.
+     * The old capabilities folder, if somebody filled one.
      *
-     * W2's first step. The registry is the thing that refuses — see
-     * `execution-unavailable` — so this cannot become "we forgot to pass them
-     * along and it worked by accident". What happens here is only the telling.
-     *
-     * Reported through `problems` because that is the surface for "something
-     * you put in a folder did not take effect", which is exactly this. A folder
-     * nobody has created produces nothing, because a person with no
-     * capabilities installed has not made a mistake.
+     * Said ONCE, and only when there is something in it. Until 2026-08-19 a
+     * capability could be dropped into `<userData>/capabilities/` — never run,
+     * but read, listed and reported. Capabilities are compiled in now, and
+     * deleting the feature without a word would be exactly the "the app ignored
+     * my files" failure this surface exists for.
      */
-    installed = discoverInstalled(app.getPath('userData'))
-    for (const problem of installed.problems) {
-      console.error(`[capability] installed/${problem.folder}: ${problem.kind}`)
-      problems.note('capability', problem.folder, problem.kind)
-    }
-    for (const manifest of installed.manifests) {
-      console.log(`[capability] installed/${manifest.name}: found, NOT run`)
+    const legacyRoot = legacyCapabilitiesRoot(app.getPath('userData'))
+    const leftover = leftoverCapabilities(app.getPath('userData'))
+    if (!leftover.ok) {
+      // Reported rather than treated as empty. A folder that cannot be listed
+      // is the case where somebody's work is most likely to be sitting there
+      // unreachable, and calling that "nothing there" would suppress the one
+      // message this check exists to send.
+      console.error(`[capability] could not look in ${legacyRoot}: ${leftover.why}`)
+      problems.note('capability', legacyRoot, `could not be read: ${leftover.why}`)
+    } else if (leftover.count > 0) {
+      console.error(
+        `[capability] ${leftover.count} left in ${legacyRoot}, which nothing loads from now`,
+      )
+      // `folders` is bounded and `count` is not, so a folder with hundreds in
+      // it says how many there are without listing them all at somebody.
+      const listed = leftover.folders.join(', ')
+      const rest = leftover.count - leftover.folders.length
       problems.note(
         'capability',
-        manifest.name,
-        'found in your capabilities folder, and not run — this build has no sandbox for ' +
-          'third-party capability code, so she is not told it exists either',
+        legacyRoot,
+        `nothing is loaded from this folder any more — capabilities now live in the source, ` +
+          `under src/capabilities/, and are compiled in. Still there: ${listed}` +
+          (rest > 0 ? `, and ${rest} more` : ''),
       )
     }
 

@@ -3,9 +3,15 @@
  *
  * There are eleven `console.error` sites in main and **a packaged app has no
  * console**. So a persona that failed to parse, an avatar rejected for a
- * missing field, a capability folder that is malformed — all of it happens,
- * falls back to a default, and looks from the outside exactly like the app
- * ignoring the file somebody just wrote.
+ * missing field, a key another application already owns — all of it happens,
+ * falls back to something that works, and looks from the outside exactly like
+ * the app ignoring the file somebody just wrote.
+ *
+ * Capabilities are NOT in that list any more. They are compiled in, and a
+ * malformed one fails at module evaluation rather than falling back — there is
+ * no running app for it to be reported to. What capabilities still use this for
+ * is a handler that threw mid-conversation, and the old user-installed folder
+ * if somebody still has one.
  *
  * That cost real time twice in one session, and both times the only reason it
  * was found is that the app happened to be running from a terminal. The people

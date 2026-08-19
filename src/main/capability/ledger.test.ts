@@ -18,7 +18,7 @@ function manifest(name: string): CapabilityManifest {
 /** A real registry and a transport that records. Nothing is mocked. */
 function ledgerWithSpy() {
   const frames: AnswerFrame[] = []
-  const registry = createRegistry([manifest('ask_workspace')], [])
+  const registry = createRegistry([manifest('ask_workspace')])
   const ledger = createLedger({ registry, send: (frame) => frames.push(frame) })
   return { ledger, frames }
 }
@@ -221,5 +221,48 @@ describe('what may never be sent', () => {
     expect(ledger.emitted()).toBe(1)
     expect(frames[0]?.item.output).toContain('could not be serialised')
     expect(ledger.unanswered()).toEqual([])
+  })
+})
+
+describe('a transport that throws', () => {
+  it('leaves the call exactly where it was, so it still shows as unanswered', () => {
+    // `webContents.send` on a destroyed window throws. Recording the state
+    // first booked a frame that never went out: the call sat as `settled` with
+    // nothing emitted, or as `deferred` with `deliver` refusing to move it for
+    // the life of the process — and `unanswered()`, the thing whose whole job
+    // is to make a missed answer visible, reported nothing wrong.
+    let angry = true
+    const registry = createRegistry([manifest('ask_workspace')])
+    const ledger = createLedger({
+      registry,
+      send: () => {
+        if (angry) throw new Error('Object has been destroyed')
+      },
+    })
+    expect(ledger.arrived(CALL).kind).toBe('accepted')
+    expect(() => ledger.answer(CALL.callId, { status: 'ok' })).toThrow()
+    expect(ledger.unanswered()).toEqual([CALL.callId])
+    expect(ledger.emitted()).toBe(0)
+
+    // And it can still be answered once there is somewhere to answer to.
+    angry = false
+    expect(ledger.answer(CALL.callId, { status: 'ok' })).toEqual({ ok: true })
+    expect(ledger.unanswered()).toEqual([])
+    expect(ledger.emitted()).toBe(1)
+  })
+
+  it('leaves a deferral unacknowledged rather than stuck awaiting delivery', () => {
+    const registry = createRegistry([manifest('ask_workspace')])
+    const ledger = createLedger({
+      registry,
+      send: () => {
+        throw new Error('Object has been destroyed')
+      },
+    })
+    ledger.arrived(CALL)
+    expect(() => ledger.defer(CALL.callId, { status: 'started' })).toThrow()
+    // NOT `undelivered`. Nothing was acknowledged, so nothing is owed.
+    expect(ledger.undelivered()).toEqual([])
+    expect(ledger.unanswered()).toEqual([CALL.callId])
   })
 })

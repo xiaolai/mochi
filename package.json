@@ -18,8 +18,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "dist": "pnpm build && electron-builder",
-    "dist:mac": "pnpm build && electron-builder --mac",
+    "dist": "pnpm verify && pnpm build && electron-builder",
+    "dist:mac": "pnpm verify && pnpm build && electron-builder --mac",
     "verify:signing": "bash scripts/verify-signing.sh",
     "preview": "electron-vite preview",
     "test": "vitest run",

@@ -20,12 +20,16 @@
  * out as well as in: a file edited by hand is exactly as capable of holding a
  * novel as a bug is, and the cost lands on the user either way.
  *
- * ## Nothing writes it yet
+ * ## Who writes it
  *
- * `remember` exists and is tested; no caller invokes it, because deciding WHAT
- * is worth remembering is a product question this milestone does not answer.
- * What matters now is that the read path is real, so `instructionsFor` stops
- * being handed a hardcoded empty string.
+ * The `remember_this` capability, when somebody asks her out loud to remember
+ * something — one line, appended under its own heading. The sleep-time
+ * summariser in `memory/summarise.ts` is the other intended writer and has no
+ * caller yet.
+ *
+ * A writer must read through `recallState` rather than `recall`. See its note:
+ * `recall` answers "" for a note that could not be read, which is right for the
+ * read path and destroys the file for anything that appends and saves.
  */
 
 import { unlinkSync } from 'node:fs'
@@ -68,6 +72,33 @@ function memoryPath(userData: string, id: string): string {
  * somebody wondering why she has forgotten them.
  */
 export function recall(userData: string, id: string): string {
+  const read = recallState(userData, id)
+  return read.ok ? read.notes : ''
+}
+
+/**
+ * What she remembers, AND whether the answer is trustworthy.
+ *
+ * `recall` collapses "there is no note" and "there is a note and it could not
+ * be read" into the same empty string, which is right for the read path: both
+ * mean she starts the conversation without one, and refusing to launch over a
+ * corrupt file would be worse than launching without it.
+ *
+ * It is wrong for anything that then WRITES. A caller that appends to `''` and
+ * saves has replaced an unreadable note with a one-line one and filed `''` as
+ * the version to undo to — so the file that could not be parsed, and might
+ * still have been recoverable by hand, is gone. `remember_this` is the caller
+ * that made this reachable; the distinction is computed here already and was
+ * simply being thrown away.
+ *
+ * `ok: false` means there IS something at that path and it could not be
+ * understood. Absent is `ok: true` with no notes, because a persona nobody has
+ * talked to has not got a problem.
+ */
+export type Recalled =
+  { readonly ok: true; readonly notes: string } | { readonly ok: false; readonly why: string }
+
+export function recallState(userData: string, id: string): Recalled {
   // OUTSIDE the try, and that placement is the whole point. Inside it, the
   // refusal in `memoryPath` was caught by the handler below, which reads
   // `error.code`, finds no `ENOENT`, logs a warning and returns "" -- so an id
@@ -80,27 +111,30 @@ export function recall(userData: string, id: string): string {
   // it points at to a model. See `read-bounded.ts`.
   const read = readBounded(path)
   if (!read.ok) {
-    if (read.reason.kind !== 'absent') {
-      console.warn(`[memory] ${id} ${logBoundedRead(read.reason)}`)
-    }
-    return ''
+    if (read.reason.kind === 'absent') return { ok: true, notes: '' }
+    const why = logBoundedRead(read.reason)
+    console.warn(`[memory] ${id} ${why}`)
+    return { ok: false, why }
   }
   let value: unknown
   try {
     value = JSON.parse(read.text)
   } catch (error: unknown) {
     console.warn(`[memory] ${id} is not valid JSON:`, error)
-    return ''
+    return { ok: false, why: 'is not valid JSON' }
   }
   const notes = (value as { notes?: unknown } | null)?.notes
   if (typeof notes !== 'string') {
     console.warn(`[memory] ${id} has no notes to read`)
-    return ''
+    return { ok: false, why: 'has no notes to read' }
   }
   // TRUNCATED rather than refused. The bound exists to stop an unbounded
   // request going out on every wake; dropping her whole memory because it grew
   // past the ceiling would be a worse answer to that than keeping what fits.
-  return notes.length > PERSONA_LIMITS.memory ? notes.slice(0, PERSONA_LIMITS.memory) : notes
+  return {
+    ok: true,
+    notes: notes.length > PERSONA_LIMITS.memory ? notes.slice(0, PERSONA_LIMITS.memory) : notes,
+  }
 }
 
 /**
@@ -110,6 +144,15 @@ export function recall(userData: string, id: string): string {
  * that is the argument for keeping it an explicit string rather than an
  * implicit accumulation in somebody's context window -- and an append-only log
  * quietly becomes the second thing.
+ *
+ * THROWS rather than overwriting a note it could not read. The rollback value
+ * this stores is the previous note, and reading that through `recall` would
+ * yield "" for a file that exists and could not be parsed -- so the write would
+ * replace something possibly recoverable and record "nothing" as the version to
+ * go back to. That rule was a sentence in this header telling callers to
+ * pre-check, which is the kind of rule that holds until the second caller; it
+ * is enforced here instead. `remember_this` still checks first, because it has
+ * a sentence for her to say and an exception does not.
  */
 export function remember(userData: string, id: string, notes: string): void {
   const kept = notes.length > PERSONA_LIMITS.memory ? notes.slice(0, PERSONA_LIMITS.memory) : notes
@@ -126,10 +169,14 @@ export function remember(userData: string, id: string, notes: string): void {
   // button, sitting beside one that has both -- which is the shape this project
   // refuses everywhere else.
   //
-  // Read BEFORE the write and from `recall`, so the previous value is the one
-  // that was actually in force: reading the raw file would keep a version that
-  // `recall` may have been truncating all along.
-  const previous = recall(userData, id)
+  // Read BEFORE the write and through the store, so the previous value is the
+  // one that was actually in force: reading the raw file would keep a version
+  // that `recall` may have been truncating all along.
+  const held = recallState(userData, id)
+  if (!held.ok) {
+    throw new Error(`refusing to overwrite ${id}'s notes, which ${held.why}`)
+  }
+  const previous = held.notes
   // AN UNCHANGED WRITE ROTATES NOTHING. Without this, saving the same text
   // twice makes `previous` equal `notes` and the one useful rollback version is
   // gone -- and the settings window would still offer an undo that now does

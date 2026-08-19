@@ -137,12 +137,22 @@ export function createLedger(input: {
   let sent = 0
 
   function emit(callId: string, state: State, output: unknown): void {
-    calls.set(callId, state)
-    sent += 1
+    // SENT FIRST, then recorded. The transport is `webContents.send` on a
+    // window that can be destroyed, so it throws — and recording the state
+    // first meant a frame that never went out was booked as one that had. The
+    // call would sit as `deferred` for the life of the process with `deliver`
+    // refusing to move it, or as `settled` with nothing ever emitted.
+    //
+    // Ordered this way, a failed send leaves the call exactly where it was:
+    // `unanswered()` still reports it, and the caller may try again. It does
+    // not weaken "acknowledged exactly once" — a send that threw did not
+    // acknowledge anything.
     send({
       type: 'conversation.item.create',
       item: { type: 'function_call_output', call_id: callId, output: payload(output) },
     })
+    calls.set(callId, state)
+    sent += 1
   }
 
   function idsIn(state: State): readonly string[] {

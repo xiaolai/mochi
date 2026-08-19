@@ -28,9 +28,8 @@ import type {
   SettingsWrite,
 } from '@shared/ipc'
 import type { Registry } from '@shared/capability/registry'
-import type { PersonaCatalog } from './store/personas'
+import { PERSONAS_DIR, type PersonaCatalog } from './store/personas'
 import { AVATARS_DIR } from './store/avatars'
-import type { Installed } from './capability/installed'
 
 /**
  * Every avatar somebody could wear: the shipped one, plus every `.json` beside
@@ -77,31 +76,18 @@ export function listPersonas(catalog: PersonaCatalog): readonly SettingsPersona[
 }
 
 /**
- * What she can do, and what was found and refused.
+ * What she can do.
  *
- * The refused ones are listed with their descriptions because **this window is
- * the only place that text is safe to show**. It is attacker-controlled — it
- * came out of a folder anybody can write to — and the reason it is kept out of
- * `session.tools` is that it would otherwise enter the model's context. A
- * person reading it in a settings window is not a model acting on it.
+ * One list now, and every entry on it is on the wire. This used to have a
+ * second half — capabilities found in the user's folder, listed with their
+ * descriptions and marked refused, because the settings window was the one
+ * place that attacker-controlled text was safe to show. Nothing loads from that
+ * folder any more: a capability is a folder in the source that whoever built
+ * this compiled, so every description here came from the same place the code
+ * did.
  */
-export function listCapabilities(
-  registry: Registry,
-  installed: Installed,
-): readonly SettingsCapability[] {
-  const refused = installed.manifests.map((manifest) => ({
-    name: manifest.name,
-    description: manifest.description,
-    state: 'refused' as const,
-    why: 'This build has no sandbox for third-party capability code, so it is not run — and she is not told it exists.',
-  }))
-  const available = registry.tools.map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    state: 'available' as const,
-    why: null,
-  }))
-  return [...available, ...refused]
+export function listCapabilities(registry: Registry): readonly SettingsCapability[] {
+  return registry.tools.map((tool) => ({ name: tool.name, description: tool.description }))
 }
 
 function isVoice(value: unknown): value is VoiceName {
@@ -161,9 +147,7 @@ export function applyChange(
 
 /** Turn a named folder into a location. The ONLY place that mapping is made. */
 export function folderFor(userData: string, what: Revealable): string {
-  if (what === 'avatars') return join(userData, AVATARS_DIR)
-  if (what === 'personas') return join(userData, 'personas')
-  return join(userData, 'capabilities')
+  return what === 'avatars' ? join(userData, AVATARS_DIR) : join(userData, PERSONAS_DIR)
 }
 
 /** A refusal shaped like every other answer, so callers have one path. */

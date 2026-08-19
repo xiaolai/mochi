@@ -61,15 +61,12 @@ extraResources:
     to: tray
   - from: resources/icons
     to: icons
-  # The built-in capabilities, as manifests rather than as code. They sit here
-  # and not in `files` for the same reason as the icons -- they are read through
-  # `process.resourcesPath`, which cannot reach inside the asar -- and they are
-  # loose JSON on purpose: `loadCapabilities` reads this directory with exactly
-  # the same function that reads the user's, so the built-ins are the test for
-  # the path a downloaded capability travels. Compile them in and the first
-  # person to exercise that path would be a user.
-  - from: resources/capabilities
-    to: capabilities
+  # Capabilities are NOT here. They were loose JSON beside the bundle, read at
+  # runtime through `process.resourcesPath`, on the argument that the built-ins
+  # should travel the same path a downloaded capability would. There is no
+  # downloaded capability: this project is forked and built, so a capability is
+  # a folder under `src/capabilities/` and the compiler collects it. Nothing to
+  # ship beside the bundle, and nothing to reach.
 
 mac:
   category: public.app-category.productivity

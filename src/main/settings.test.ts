@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERSONA } from '@shared/persona'
+import { REVEALABLE } from '@shared/ipc'
 import { applyChange, folderFor, listAvatars, listCapabilities } from './settings'
 import { createRegistry } from '@shared/capability/registry'
 import { parseManifest } from '@shared/capability/manifest'
@@ -100,7 +101,7 @@ describe('changing a persona', () => {
   })
 })
 
-describe('what she can do, and what was refused', () => {
+describe('what she can do', () => {
   const parsed = parseManifest({
     name: 'weather',
     description: 'Look outside.',
@@ -112,29 +113,17 @@ describe('what she can do, and what was refused', () => {
   })
   if (!parsed.ok) throw new Error('the fixture itself is invalid')
 
-  it('shows a refused capability WITH its description, which nothing else may', () => {
-    // This text is attacker-controlled — it came out of a folder anybody can
-    // write to — and keeping it out of `session.tools` is the whole point of
-    // the refusal. A person reading it in a settings window is not a model
-    // acting on it, so this is the one place it is safe.
-    const listed = listCapabilities(createRegistry([], []), {
-      root: '/somewhere',
-      manifests: [parsed.manifest],
-      problems: [],
-    })
-    const refused = listed.find((c) => c.name === 'weather')
-    expect(refused?.state).toBe('refused')
-    expect(refused?.description).toBe('Look outside.')
-    expect(refused?.why).toContain('sandbox')
+  it('lists what is on the wire, with the description she was given', () => {
+    // One list, and everything on it is something she can actually call. The
+    // second half of this — capabilities found in a user's folder, shown with
+    // their descriptions and marked refused — went with the folder that fed it,
+    // and the `state`/`why` fields that carried the distinction went with it.
+    const listed = listCapabilities(createRegistry([parsed.manifest]))
+    expect(listed).toEqual([{ name: 'weather', description: 'Look outside.' }])
   })
 
-  it('marks a built-in available', () => {
-    const listed = listCapabilities(createRegistry([parsed.manifest], []), {
-      root: '/somewhere',
-      manifests: [],
-      problems: [],
-    })
-    expect(listed.map((c) => [c.name, c.state])).toEqual([['weather', 'available']])
+  it('says nothing at all when a build has none', () => {
+    expect(listCapabilities(createRegistry([]))).toEqual([])
   })
 })
 
@@ -144,6 +133,12 @@ describe('naming a folder', () => {
     // arbitrary one would be a file browser with the user's authority.
     expect(folderFor('/u', 'avatars')).toBe(join('/u', 'avatars'))
     expect(folderFor('/u', 'personas')).toBe(join('/u', 'personas'))
-    expect(folderFor('/u', 'capabilities')).toBe(join('/u', 'capabilities'))
+  })
+
+  it('has no capabilities folder to offer, because nothing loads from one', () => {
+    // `capabilities` was revealable while a person could put one there. Showing
+    // it now would offer a "Show" button that CREATES the folder — pointing
+    // somebody at a place to put work that this build would then ignore.
+    expect(REVEALABLE).toEqual(['avatars', 'personas'])
   })
 })

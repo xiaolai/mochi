@@ -161,8 +161,17 @@ export function isSettingsChannel(value: unknown): value is SettingsChannel {
   return typeof value === 'string' && (SETTINGS_CHANNELS as readonly string[]).includes(value)
 }
 
-/** The folders a person may be shown. Named, so no path crosses the bridge. */
-export const REVEALABLE = ['avatars', 'personas', 'capabilities'] as const
+/**
+ * The folders a person may be shown. Named, so no path crosses the bridge.
+ *
+ * `capabilities` was here until capabilities moved into the source. Revealing
+ * it would have offered a "Show" button that CREATES a folder this build no
+ * longer loads anything from — pointing somebody at a place to put work that
+ * would then be ignored, which is the failure `capability/legacy.ts` exists to
+ * warn about rather than to cause. (That module still LOOKS in the folder, once
+ * at startup, precisely so it can say so.)
+ */
+export const REVEALABLE = ['avatars', 'personas'] as const
 export type Revealable = (typeof REVEALABLE)[number]
 
 /** One persona, as the settings window lists it. */
@@ -189,18 +198,19 @@ export interface SettingsAvatar {
   readonly builtIn: boolean
 }
 
-/** One capability, and whether she is actually offered it. */
+/**
+ * One capability, as the settings window lists it.
+ *
+ * A name and a description, and nothing else. This carried `state` and `why`
+ * for something found in the user's capabilities folder that the build would
+ * not run and would not describe to her — two fields whose only other value has
+ * been deleted along with the folder that produced it. Everything listed here
+ * is something she can actually call, so the fields said nothing and the
+ * window had a branch that could not be reached.
+ */
 export interface SettingsCapability {
   readonly name: string
   readonly description: string
-  /**
-   * `available` is a built-in she can call. `refused` is something found in the
-   * user's folder that this build will not run — and does not describe to her
-   * either, because a capability she offers and cannot perform is worse than
-   * one she has never heard of.
-   */
-  readonly state: 'available' | 'refused'
-  readonly why: string | null
 }
 
 /** Everything the settings window draws, answered in one call. */

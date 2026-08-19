@@ -9,10 +9,10 @@ declare global {
 /**
  * The window that means nobody has to open a text editor.
  *
- * `document.createElement` and `textContent`, never `innerHTML`. Half of what
- * is drawn here came out of a folder anybody can write to — a persona's name, a
- * refused capability's description — and this is the one surface that shows
- * that text at all. Showing it to a person is safe; evaluating it is not.
+ * `document.createElement` and `textContent`, never `innerHTML`. Some of what
+ * is drawn here came out of a folder anybody can write to — a persona's name,
+ * an avatar's — and showing that text to a person is safe where evaluating it
+ * is not.
  *
  * Every change is sent one at a time and the view is re-read from main
  * afterwards. Nothing is kept in a local model that could disagree with the
@@ -176,7 +176,7 @@ function renderCapabilities(view: SettingsView): void {
   capsEl.replaceChildren(
     ...view.capabilities.map((capability) => {
       const block = document.createElement('div')
-      block.className = `cap ${capability.state}`
+      block.className = 'cap'
       const name = document.createElement('div')
       name.className = 'name'
       name.textContent = capability.name
@@ -184,12 +184,6 @@ function renderCapabilities(view: SettingsView): void {
       desc.className = 'desc'
       desc.textContent = capability.description
       block.append(name, desc)
-      if (capability.why !== null) {
-        const why = document.createElement('p')
-        why.className = 'why'
-        why.textContent = capability.why
-        block.append(why)
-      }
       return block
     }),
   )
