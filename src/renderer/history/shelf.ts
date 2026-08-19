@@ -157,8 +157,18 @@ function detail(list: HTMLElement, label: string, value: string): void {
  * pose the icon test measures, and a shelf of blinking faces would be motion
  * competing with the one thing on screen that is actually alive.
  */
-function faceTile(face: FaceSpec, px: number): HTMLCanvasElement {
+function faceTile(face: FaceSpec | undefined, px: number): HTMLCanvasElement {
   const canvas = element('canvas', 'tile')
+  /*
+    A missing face is REFUSED, not quietly replaced.
+
+    `MochiAvatar` falls back to the built-in when `face` is undefined, which is
+    right for the companion — she must be drawn — and wrong here: every card
+    then shows the same green mochi and the shelf silently stops doing the one
+    job it has. That is exactly what a stale main process looked like, and it
+    looked like a design decision. Empty is honest; the caller reports it.
+  */
+  if (face === undefined) return canvas
   const ratio = Math.min(window.devicePixelRatio || 1, 3)
   canvas.width = Math.round(px * ratio)
   canvas.height = Math.round(px * ratio)
@@ -190,13 +200,25 @@ export function characterCards(
     // recognisable across the room rather than only readable up close.
     const head = element('div', 'head')
     head.append(faceTile(one.face, 52))
+    // Said out loud rather than shown as an identical row of built-in mochis.
+    if (one.face === undefined) card.classList.add('faceless')
     const titles = element('div', 'titles')
     titles.append(element('div', 'name', one.name))
     // One caps line, two facts: whether she is the one being worn, and which
     // words she takes. The ring already says which card is OPEN; this says who
     // she is, which is a different question and the one the artifact answers.
-    const state = [one.id === view.wornId ? 'worn' : null, forPronoun(PRONOUN_CAPS, one.pronoun)]
-      .filter((part) => part !== null)
+    /*
+      Joined from what is actually THERE, never from what should be.
+      
+      This read `[worn, forPronoun(CAPS, one.pronoun)].filter(p => p !== null)`,
+      and `forPronoun` on a pronoun that is not one of the three returns
+      `undefined` — which is not `null`, so it survived the filter and the join
+      produced "WORN · " with a dangling separator and nothing after it. A
+      character that was not worn produced an empty line instead. Filtering on
+      truthiness rather than on `null` is what makes the separator impossible.
+    */
+    const state = [one.id === view.wornId ? 'worn' : '', PRONOUN_CAPS[one.pronoun] ?? '']
+      .filter((part) => part !== '')
       .join(' · ')
     titles.append(element('div', 'worn', state))
     head.append(titles)

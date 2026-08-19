@@ -186,6 +186,17 @@
         flex: none;
         display: block;
       }
+      /*
+        Her face could not be resolved, so the card says so instead of showing
+        the built-in and letting a shelf of identical mochis pass for a design.
+        A dashed hole is the smallest honest thing that fits where she goes.
+      */
+      .card.faceless .tile {
+        width: 52px;
+        height: 52px;
+        border: 1px dashed var(--warn-line);
+        border-radius: var(--r2);
+      }
       .card .titles {
         min-width: 0;
       }
@@ -547,11 +558,38 @@
       }
 
       /* ---- a transcript, at reading width ---------------------------------- */
+      /*
+        The left column has three states and only one of them had a surface.
+
+        The character sheet is a stack of plates on `--paper-2`; a transcript and
+        the problem list were bare text hanging in the void at the top-left of an
+        otherwise empty column, with the window edge 20px away and nothing
+        containing them. Photographed side by side that is not a different view
+        of the same window, it is an unfinished one — and it took photographing
+        every state to see, because only the sheet had ever been looked at.
+
+        The same surface, so all three read as the same window. The TEXT keeps
+        its reading measure; the surface does not, because a card that stopped at
+        82ch would leave a second empty column beside the first.
+      */
       .transcript {
+        background: var(--paper-2);
+        border: 1px solid var(--rule);
+        border-radius: var(--r3);
+        padding: var(--s6);
+      }
+      .turn p,
+      .problem p,
+      .lead {
         max-width: var(--reading);
       }
+      /* The last one carries no gap: the surface's own padding closes it. */
       .turn {
-        margin: 0 0 var(--s5);
+        margin: 0 0 var(--s6);
+      }
+      .turn:last-child,
+      .problem:last-child {
+        margin-bottom: 0;
       }
       .turn .who {
         font-family: var(--narrow);
@@ -565,13 +603,13 @@
         color: var(--ink-brand);
       }
       .turn p {
-        margin: var(--s0) 0 0;
+        margin: var(--s1) 0 0;
         font-size: var(--t-body);
         white-space: pre-wrap;
         user-select: text;
       }
       .cut {
-        margin-top: var(--s0);
+        margin-top: var(--s2);
         font-family: var(--narrow);
         font-size: var(--t-label);
         color: var(--warn-ink);
@@ -598,9 +636,13 @@
         color: var(--ink-3);
       }
       .lead {
-        margin: 0 0 var(--s5);
+        margin: 0 0 var(--s6);
         font-size: var(--t-sm);
         color: var(--ink-2);
+      }
+      /* Alone on the surface, it is the whole answer rather than an intro. */
+      .lead:only-child {
+        margin: 0;
       }
       /* Every empty surface says WHICH kind of empty it is. */
       .empty {

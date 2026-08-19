@@ -198,6 +198,17 @@ function drawMark(face: ShelfView['face']): void {
   avatar.render(0)
 }
 
+/**
+ * What to call her at the top of a turn.
+ *
+ * The conversations listed are the worn character's, so the worn character is
+ * who "her" turns belong to.
+ */
+function speaker(): string {
+  const worn = shelf?.characters.find((one) => one.id === shelf?.wornId)
+  return worn?.name ?? forPronoun(SAYS.spoke, saying())
+}
+
 /** Draw the open character in the main column. */
 function openCharacter(): void {
   if (shelf === null) return
@@ -284,7 +295,16 @@ const SAYS = {
     he: 'Made, and worn. He will be this character from his next wake.',
     it: 'Made, and worn. It will be this character from its next wake.',
   },
-  /** The speaker's name on a transcript turn. The other one is always "you". */
+  /**
+   * The fallback speaker label, when the character whose conversation this is
+   * has gone from the shelf.
+   *
+   * Her NAME is what a transcript uses, and what this build shipped instead was
+   * the object pronoun: a paragraph headed "HIM" above a paragraph headed "YOU",
+   * which is not how anybody writes down a conversation. The name is only
+   * missing if the persona was deleted while a transcript of hers was open, and
+   * then this is better than a blank.
+   */
   spoke: { she: 'her', he: 'him', it: 'it' },
   cutEarly: {
     she: 'interrupted before she got a word out',
@@ -295,6 +315,11 @@ const SAYS = {
     she: 'Nothing has been kept yet. Conversations appear here once she has been awake and retention is on.',
     he: 'Nothing has been kept yet. Conversations appear here once he has been awake and retention is on.',
     it: 'Nothing has been kept yet. Conversations appear here once it has been awake and retention is on.',
+  },
+  noTroubles: {
+    she: 'Nothing has gone wrong since she woke up.',
+    he: 'Nothing has gone wrong since he woke up.',
+    it: 'Nothing has gone wrong since it woke up.',
   },
   troubles: {
     she: 'Things she could not load since she woke up. Each one fell back to a working default, so nothing here stopped her — but a file you edited may not be the one she is using.',
@@ -464,7 +489,7 @@ async function show(token: string, term: string): Promise<void> {
     block.className = `turn ${turn.who}`
     const who = document.createElement('div')
     who.className = 'who'
-    who.textContent = turn.who === 'her' ? forPronoun(SAYS.spoke, saying()) : 'you'
+    who.textContent = turn.who === 'her' ? speaker() : 'you'
     const said = document.createElement('p')
     said.append(marked(turn.text, term))
     block.append(who, said)
@@ -597,6 +622,19 @@ function renderProblems(problems: readonly HistoryProblem[]): void {
   // Says what it is AND what it is not. Everything here already fell back to
   // something working, so the reader is being told about a file that was
   // ignored, not about a broken app.
+  if (problems.length === 0) {
+    /*
+      Its own sentence, because the lead below is about failures and a lead
+      about failures with nothing under it reads as a list that failed to load.
+      This is the state somebody reaches by clicking a chip that says 0.
+    */
+    lead.textContent = forPronoun(SAYS.noTroubles, saying())
+    page.append(lead)
+    paneEl.replaceChildren(page)
+    paneEl.scrollTop = 0
+    return
+  }
+
   lead.textContent = forPronoun(SAYS.troubles, saying())
   page.append(lead)
 
