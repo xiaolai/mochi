@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { isPersonaId } from '@shared/persona'
+import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { writeJsonAtomically } from './json-file'
 
@@ -179,4 +180,78 @@ export function readResting(userData: string): Resting {
 
 export function writeResting(userData: string, changes: Partial<Resting>): void {
   writeMerged(userData, { ...changes })
+}
+
+/**
+ * The one directory she may read, and the boundary the guard walks up to.
+ *
+ * Default: a folder this application owns, inside its own data directory. It
+ * exists to be dropped into — that is the whole interaction — and it is the
+ * only default that is safe without asking, because nothing is in it that
+ * somebody did not put there on purpose.
+ *
+ * Pointing her at a real project is a deliberate act and is allowed. The guard
+ * then walks only that directory rather than up to the home folder: refusing to
+ * work because somebody keeps an `AGENTS.md` two levels up in their own
+ * checkout would be punishing them for a file that is none of our business, and
+ * `guardWorkspace` throws if `stopAt` is not an ancestor.
+ */
+export const WORKSPACE_DIR = 'workspace'
+
+export function readWorkspace(userData: string): string {
+  const fallback = join(userData, WORKSPACE_DIR)
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return fallback
+  try {
+    const value: unknown = JSON.parse(read.text)
+    const found = (value as { workspace?: unknown } | null)?.workspace
+    // Absolute only. A relative path would be resolved against whatever the
+    // process happens to consider its working directory, which for a packaged
+    // app is `/`.
+    return typeof found === 'string' && found.startsWith('/') ? found : fallback
+  } catch {
+    return fallback
+  }
+}
+
+export function writeWorkspace(userData: string, path: string): void {
+  if (!path.startsWith('/')) throw new Error(`a workspace must be an absolute path: ${path}`)
+  writeMerged(userData, { workspace: path })
+}
+
+/**
+ * Where the guard stops walking up.
+ *
+ * Our own data directory when the workspace is inside it — that is the boundary
+ * v1 chose and the reasoning holds: above it is somebody's home. For a
+ * workspace anywhere else, the directory itself, because there is no ancestor
+ * we have any business scanning.
+ */
+export function guardStopAt(userData: string, workspace: string): string {
+  return workspace.startsWith(join(userData, WORKSPACE_DIR)) ? userData : workspace
+}
+
+/**
+ * Whether she may search the web when a question needs current information.
+ *
+ * The values are Codex's own — see `WEB_SEARCH_MODES`. The default is `follow`,
+ * which sends nothing and leaves whatever the user configured machine-wide in
+ * charge. Overriding somebody's own setting because we did not think to ask is
+ * a decision made out of not having looked.
+ */
+export function readWebSearch(userData: string): WebSearchMode {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return 'follow'
+  try {
+    const value: unknown = JSON.parse(read.text)
+    const found = (value as { webSearch?: unknown } | null)?.webSearch
+    return isWebSearchMode(found) ? found : 'follow'
+  } catch {
+    return 'follow'
+  }
+}
+
+export function writeWebSearch(userData: string, mode: WebSearchMode): void {
+  if (!isWebSearchMode(mode)) throw new Error(`not a web search mode: ${String(mode)}`)
+  writeMerged(userData, { webSearch: mode })
 }

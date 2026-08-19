@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, ipcMain, Menu, shell } from 'electron'
 import { existsSync, mkdirSync } from 'node:fs'
+import { readdir, stat } from 'node:fs/promises'
 import { greetingFor, instructionsFor, VOICE_NAMES } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
 import { heardPortion } from './heard'
@@ -28,6 +29,9 @@ import { readPolicy } from './store/policy'
 import {
   readBubbleSide,
   readResting,
+  readWebSearch,
+  readWorkspace,
+  guardStopAt,
   readWornPersonaId,
   writeBubbleSide,
   writeResting,
@@ -40,6 +44,8 @@ import { SHORTCUTS } from '@shared/shortcuts'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { createProblems } from './problems'
+import { slowHandlers } from './capability/slow'
+import { isLocated, locateCodex } from './codex/locate'
 import { createTray, trayMenuTemplate, type TrayHandle, type TrayModel } from './tray'
 import { parseGrip, startDrag, stopDrag } from './drag'
 import { FEET_FROM_TOP, WINDOW_W } from '@shared/avatar-layout'
@@ -110,6 +116,26 @@ for (const problem of loaded.problems) {
   problems.note('capability', problem.folder, problem.kind)
 }
 const registry = createRegistry(loaded.manifests, [])
+
+/**
+ * Where the Codex CLI is, found once and remembered.
+ *
+ * Resolved rather than shelled out to — see `codex/locate.ts` for why, and for
+ * the machine on the fleet where every shell-based lookup reports it missing.
+ * Null means genuinely absent, which she says out loud rather than answering
+ * from memory.
+ */
+let codexPath: string | null = null
+
+const slowly = slowHandlers({
+  codexPath: () => codexPath,
+  workspace: () => readWorkspace(app.getPath('userData')),
+  stopAt: () => {
+    const userData = app.getPath('userData')
+    return guardStopAt(userData, readWorkspace(userData))
+  },
+  settings: () => ({ webSearch: readWebSearch(app.getPath('userData')), model: null }),
+})
 console.log(
   `[capability] ${registry.tools.length} available: ${registry.tools.map((t) => t.name).join(', ')}`,
 )
@@ -573,6 +599,37 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
   }
   console.log(`[capability] ${name}(${JSON.stringify(arrival.args)})`)
 
+  /**
+   * The slow ones are DEFERRED, not awaited (§1).
+   *
+   * `codex exec` has a twenty-second floor (§8). Settling that call
+   * synchronously would leave her silent for twenty seconds in the middle of a
+   * conversation, which reads as a crash. Deferring lets her say she is going to
+   * look, carry on talking, and complete the sentence when the answer lands.
+   */
+  const slow = slowly.get(name)
+  if (slow !== undefined) {
+    ledger.defer(callId, { status: 'started' })
+    void slow(arrival.args).then(
+      (output) => {
+        ledger.deliver(callId, output)
+        console.log(`[capability] ${name} delivered ${JSON.stringify(output).slice(0, 120)}`)
+      },
+      (error: unknown) => {
+        // Delivered anyway. A deferred call that never arrives is worse than a
+        // refusal — she said she would look and simply never comes back, and
+        // `undelivered()` is the only thing that would ever notice.
+        console.error(`[capability] ${name} threw:`, error)
+        problems.note('capability', name, String(error))
+        ledger.deliver(callId, {
+          status: 'unavailable',
+          guidance: 'The lookup did not finish. Say so plainly rather than guessing at a result.',
+        })
+      },
+    )
+    return
+  }
+
   // Every path answers. A handler that throws is still a call that must be
   // settled — an unanswered one sits in the conversation for the rest of the
   // session and she has no way to mention it.
@@ -917,6 +974,48 @@ void app.whenReady().then(
       console.error(`[keys] ${outcome.accelerator} refused: ${outcome.refused}`)
       problems.note('keys', outcome.accelerator, `${outcome.refused} — ${outcome.id} has no key`)
     }
+
+    /**
+     * Where the Codex CLI is, looked for once and not awaited.
+     *
+     * Not on the critical path: `locate` stats directories, and one of them can
+     * be a network mount — the reason its `exists` is async at all. She simply
+     * cannot look things up for the first second, which nobody will meet.
+     */
+    void locateCodex({
+      platform: process.platform,
+      env: process.env,
+      home: app.getPath('home'),
+      exists: async (path) => {
+        try {
+          const info = await stat(path)
+          return info.isFile()
+        } catch {
+          return false
+        }
+      },
+      list: async (directory) => {
+        try {
+          return await readdir(directory)
+        } catch {
+          return []
+        }
+      },
+    }).then((found) => {
+      if (isLocated(found)) {
+        codexPath = found.path
+        console.log(`[codex] ${found.path}`)
+        return
+      }
+      // Loud, and reported. Without the CLI she cannot look anything up, and
+      // the failure otherwise presents as her declining to help.
+      console.error(`[codex] not found; looked in ${String(found.searched.length)} places`)
+      problems.note(
+        'codex',
+        null,
+        'the Codex CLI could not be found, so she cannot look anything up',
+      )
+    }, undefined)
 
     tray = createTray(menuModel, menuHandlers)
 
