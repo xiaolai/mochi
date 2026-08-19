@@ -31,6 +31,8 @@ import {
   deletePersona,
   discardWrite,
   loadPersonas,
+  migrateLegacyPersona,
+  migrateLooseFiles,
   personasRoot,
   restoreBuiltIn,
   savePersonaTo,
@@ -1224,6 +1226,45 @@ void app.whenReady().then(
      * `transcripts()` rather than `archive`, because opening it is the point:
      * the half-done part is usually the transcripts.
      */
+    /**
+     * v1's persona, and the shape before packages. Once, at startup.
+     *
+     * Both of these were written, tested, and called by nothing — and
+     * `inherited.ts` quarantines `persona.json.migrated` as "the tombstone of a
+     * migration that has already happened", which could never be true while
+     * nothing performed one. So an upgrading user's `persona.json` sat in
+     * userData untouched and unread: they got the built-in, their own character
+     * was not lost but was not found either, and nothing anywhere said so.
+     *
+     * Loose files FIRST. It turns `<name>.json` into `<name>/persona.json`, and
+     * the legacy import wants a catalog that already reflects that — otherwise
+     * a name taken by a loose file looks free and the import derives an id that
+     * collides on the next launch.
+     */
+    for (const problem of migrateLooseFiles(app.getPath('userData'))) {
+      console.error(`[persona] loose file: ${problem.kind}`)
+      problems.note('persona', null, `a persona file could not be moved: ${problem.kind}`)
+    }
+    {
+      const userData = app.getPath('userData')
+      const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+      const migration = migrateLegacyPersona(userData, catalog)
+      if (migration.kind === 'imported') {
+        console.log(`[persona] v1's persona imported as ${migration.id}`)
+      }
+      if (migration.kind === 'failed') {
+        // The file is never deleted, so this is actionable: it is the persona
+        // they wrote, and saying nothing would lose a character while leaving
+        // its only copy on disk.
+        console.error(`[persona] v1's persona could not be imported: ${migration.problem.kind}`)
+        problems.note(
+          'persona',
+          null,
+          `the persona from the previous version could not be imported: ${migration.problem.kind}`,
+        )
+      }
+    }
+
     try {
       sweepDeletions(app.getPath('userData'), transcripts())
     } catch (error: unknown) {
