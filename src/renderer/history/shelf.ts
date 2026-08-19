@@ -311,7 +311,7 @@ function memoryPlate(view: ShelfView, handlers: ShelfHandlers): HTMLElement {
   const block = element('div', 'plate prompt')
   const head = element('div', 'head')
 
-  const undo = element('button', 'plain', 'Undo the last change')
+  const undo = element('button', 'btn', 'Undo the last change')
   undo.type = 'button'
   // Null means nothing has ever been rewritten. That is NOT the same as going
   // back to an empty note, which is a real version somebody may want.
@@ -325,7 +325,7 @@ function memoryPlate(view: ShelfView, handlers: ShelfHandlers): HTMLElement {
   // TWO STEPS rather than a dialog. This throws away something a person may
   // have spent months accumulating, and a button that does it on one click is a
   // button somebody hits by accident. It is undoable, and it should still ask.
-  const forget = element('button', 'plain', 'Forget everything')
+  const forget = element('button', 'btn', 'Forget everything')
   forget.type = 'button'
   forget.disabled = view.note.text === ''
   let armed = false
@@ -383,7 +383,7 @@ function actions(worn: ShelfView['characters'][number], handlers: ShelfHandlers)
     act()
   }
 
-  const make = element('button', 'plain primary', 'New')
+  const make = element('button', 'btn primary', 'New')
   make.type = 'button'
   make.addEventListener('click', () => {
     if (named() === '') return handlers.say('A new character needs a name.', true)
@@ -392,7 +392,7 @@ function actions(worn: ShelfView['characters'][number], handlers: ShelfHandlers)
     })
   })
 
-  const copy = element('button', 'plain', `Duplicate ${worn.name}`)
+  const copy = element('button', 'btn', `Duplicate ${worn.name}`)
   copy.type = 'button'
   copy.addEventListener('click', () => {
     if (named() === '') return handlers.say('Give the copy a name first.', true)
@@ -408,7 +408,7 @@ function actions(worn: ShelfView['characters'][number], handlers: ShelfHandlers)
     // The built-in has no file to delete. What somebody actually wants here is
     // her original prompt back, which lives in the source and not in this
     // window — so without this, editing her is a one-way door.
-    const restore = element('button', 'plain', 'Put the built-in back as she ships')
+    const restore = element('button', 'btn', 'Put the built-in back as she ships')
     restore.type = 'button'
     restore.addEventListener('click', () => {
       once(() => {
@@ -422,7 +422,7 @@ function actions(worn: ShelfView['characters'][number], handlers: ShelfHandlers)
 
   // TWO STEPS. This takes her notes and her conversations with her, and unlike
   // the note there is no one-step undo waiting behind it.
-  const remove = element('button', 'plain', `Delete ${worn.name}`)
+  const remove = element('button', 'btn', `Delete ${worn.name}`)
   remove.type = 'button'
   let armed = false
   remove.addEventListener('click', () => {

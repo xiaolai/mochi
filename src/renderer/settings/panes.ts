@@ -341,7 +341,7 @@ const WHERE: Pane = {
       const row = element('div', 'folder')
       const left = element('div')
       left.append(element('div', undefined, kind), element('code', undefined, view.folders[kind]))
-      const open = element('button', undefined, 'Show')
+      const open = element('button', 'btn', 'Show')
       open.type = 'button'
       // A KIND, never the path beside it. The string on screen is for reading.
       open.addEventListener('click', () => {

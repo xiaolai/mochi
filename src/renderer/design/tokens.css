@@ -291,6 +291,70 @@
 }
 
 /*
+ * ---- one component, and why it is in a file of values ---------------------
+ *
+ * `button-treatments.html` set four ways to draw a button against the same rows
+ * in both locales and asked one narrow question: which stops you noticing that
+ * the labels are different lengths? "Save / Revert" beside "真的删掉？" beside
+ * "Put the built-in back as she ships" is a row of ragged rectangles, and the
+ * widest label in the real message tables is 13.0ch against a narrowest of
+ * 2.7ch.
+ *
+ * Its answer, and the reason:
+ *
+ *   > A hard 1px edge at a near-square corner is what makes the eye line
+ *   > rectangles up and read the difference between them.
+ *
+ * Two treatments survive that — an underline and a pill — and the underline
+ * buys something the pill does not: **boxed means "type in me or choose from
+ * me", underlined means "I does something"**, which these windows did not
+ * previously distinguish. Every button in them was a bordered box with the same
+ * radius as the `<select>` beside it.
+ *
+ * So the inputs keep their box and the buttons lose theirs, and the width floor
+ * is what makes the rules equal length under unequal words.
+ *
+ * It lives HERE rather than in each document because both draw it identically,
+ * and two copies of a careful thing is one careful thing and one liability —
+ * `json-file.ts` makes the same argument about eight lines of rename. It is the
+ * only component in this file, and it is here on that test rather than as the
+ * start of a component layer.
+ */
+button.btn {
+  min-height: 32px;
+  /* The floor. Under it, "Wear" and "Put the built-in back" are two lengths of
+     rule and the row reads as ragged again. */
+  min-width: calc(9ch + 28px);
+  padding: var(--s1) var(--s3) var(--s2);
+  border: 0;
+  border-bottom: 2px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-sm);
+  cursor: default;
+}
+button.btn:hover:not(:disabled) {
+  border-bottom-color: var(--gold);
+}
+button.btn:disabled {
+  color: var(--ink-3);
+}
+/* The one that commits something. Gold, and still not a box. */
+button.btn.primary {
+  border-bottom-color: var(--gold);
+  color: var(--gold);
+  font-weight: 600;
+}
+/* Armed to destroy. The second press is the one that does it. */
+button.btn.arming {
+  border-bottom-color: var(--red);
+  color: var(--red);
+  font-weight: 600;
+}
+
+/*
  * Honoured, not ignored -- the same rule the handoff states for duration. The
  * shelf has little motion of its own; when it gets some, it belongs here.
  */

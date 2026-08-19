@@ -528,36 +528,8 @@
         flex: none;
       }
 
-      button.plain {
-        padding: var(--s1) var(--s4);
-        border: 1px solid var(--rule);
-        border-radius: var(--r2);
-        background: var(--paper);
-        color: inherit;
-        font: inherit;
-        font-size: var(--t-sm);
-        cursor: default;
-      }
-      button.plain:hover:not(:disabled) {
-        border-color: var(--gold);
-      }
-      button.plain:disabled {
-        color: var(--ink-3);
-      }
-      /*
-        The one control that commits something. Gold rather than her colour: a
-        primary button is chrome, and `--gold-ink` flips by scheme because gold
-        is mid-luminance — see `tokens.css` for why that is not a mistake.
-      */
-      button.primary {
-        background: var(--gold);
-        border-color: var(--gold);
-        color: var(--gold-ink);
-      }
-      button.arming {
-        color: var(--red);
-        border-color: var(--red);
-      }
+      /* The button treatment is `button.btn` in tokens.css — an underline
+         rather than a box, so it cannot be mistaken for the select beside it. */
       :focus-visible {
         outline: 2px solid var(--gold);
         outline-offset: 1px;
@@ -666,8 +638,8 @@
           <span class="dot"></span><span id="troubles-label"></span>
         </button>
         <span class="grow"></span>
-        <button class="plain" id="export" type="button">Export…</button>
-        <button class="plain" id="settings" type="button">Settings…</button>
+        <button class="btn" id="export" type="button">Export…</button>
+        <button class="btn" id="settings" type="button">Settings…</button>
       </div>
     </div>
     <p id="said" role="status" aria-live="polite"></p>

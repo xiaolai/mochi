@@ -165,22 +165,8 @@
         outline: 2px solid var(--gold);
         outline-offset: 1px;
       }
-      button {
-        padding: var(--s1) var(--s4);
-        border: 1px solid var(--rule);
-        border-radius: var(--r2);
-        background: var(--paper-2);
-        color: inherit;
-        font: inherit;
-        font-size: var(--t-sm);
-        cursor: default;
-      }
-      button:hover:not(:disabled) {
-        border-color: var(--gold);
-      }
-      button:disabled {
-        color: var(--ink-3);
-      }
+      /* The button treatment is `button.btn` in tokens.css — an underline
+         rather than a box, so it cannot be mistaken for the select beside it. */
       .switch {
         display: flex;
         align-items: center;
