@@ -168,10 +168,52 @@ export function accentVariables(face: FaceSpec): Readonly<Record<string, string>
     // Her fill and its label do NOT vary by scheme: she is one colour whatever
     // the OS is set to, and the label is measured against HER rather than
     // against the page, so there is nothing for a scheme to change.
-    // HER colour, under her own names. It used to be written as `--accent`,
-    // which made every button, focus ring and selected row take the persona's
-    // colour. The new system gives the chrome a fixed gold and leaves her two
-    // jobs: the worn persona and the chosen swatch. See `--gold` in tokens.css.
+    /**
+     * HER colour, under her own names. It used to be written as `--accent`,
+     * which made every button, focus ring and selected row take the persona's
+     * colour.
+     *
+     * ## What this comment used to claim, and did not do
+     *
+     * It said: *"The new system gives the chrome a fixed gold and leaves her
+     * two jobs: the worn persona and the chosen swatch. See `--gold` in
+     * tokens.css."* There is no `--gold` in `tokens.css` and there never has
+     * been. The sentence recorded an intention as though it were a state, which
+     * is the one thing a comment must not do — it is why nobody finished the
+     * migration and why nobody noticed for months.
+     *
+     * **What is actually true today.** Her colour drives the chrome in all
+     * three windows: the settings nav's open group, the shelf's card ring, the
+     * inspector's open tab, a selected row, a search hit. `tokens-additive.css`
+     * — the handoff of 2026-08-19 — specifies exactly that, and
+     * `Mochi Extended.dc.html` renders it, with 70 uses of `--green-deep` and
+     * 60 of `--green` and no gold anywhere.
+     *
+     * ## The gold is real, and it does not clear the floor
+     *
+     * It exists in `site/index.html`: `#b68235` light, `#e1ad66` dark. Measured
+     * with the `contrast()` below, against the surfaces in `tokens.css`:
+     *
+     * | | on `--paper` | on `--gold-wash` |
+     * | --- | --- | --- |
+     * | light `#b68235` | **2.99:1** | **3.08:1** |
+     * | dark `#e1ad66` | 8.57:1 | 7.03:1 |
+     *
+     * The dark half is comfortable. The light half is below `AA_BODY`, and so
+     * is white on a filled gold button (3.37:1). The site has the same problem
+     * with its own surfaces — `.status` sets gold text at 0.78rem on the wash —
+     * so this is a colour that was never measured rather than one that was
+     * measured against a different page.
+     *
+     * Adopting it as TEXT needs a darker light value. `shade(gold, -0.22)` —
+     * `#8e6529` — is the nearest one that clears: 4.59:1 on `--paper`, 4.73:1
+     * on the wash, 4.92:1 on `--paper-2`. As a ring or a border only, the bar
+     * is 3:1 and the shipped value misses even that, at 2.99:1.
+     *
+     * That is a decision about a brand colour, so it is not made here. What is
+     * recorded here is the arithmetic, so whoever makes it does not have to
+     * rediscover it.
+     */
     '--her': toHex(base),
     '--her-hover': toHex(shade(base, -0.12)),
     '--her-ink': toHex(readableInk(base)),
