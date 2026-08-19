@@ -12,6 +12,7 @@ import {
   type MochiSettingsApi,
   type LookupChange,
   type NoteAction,
+  type PersonaAction,
   type PersonaChange,
   type Revealable,
   type SettingsView,
@@ -160,6 +161,9 @@ const settings: MochiSettingsApi = {
   },
   async memory(action: NoteAction) {
     return (await ipcRenderer.invoke(guardSettings('settings:memory'), action)) as SettingsWrite
+  },
+  async persona(action: PersonaAction) {
+    return (await ipcRenderer.invoke(guardSettings('settings:persona'), action)) as SettingsWrite
   },
 }
 

@@ -159,6 +159,97 @@ function renderWho(view: SettingsView): void {
     note.textContent = `Saved to ${worn.source}`
     whoEl.append(note)
   }
+
+  whoEl.append(personaActions(worn))
+}
+
+/**
+ * Making, copying and removing characters.
+ *
+ * The whole shelf was read-only from here: you could wear somebody and edit
+ * whoever was worn, and every way of getting a second persona onto the shelf —
+ * or a first one off it — was a function with no caller.
+ *
+ * A NAME, never an id. The id is derived in main against what is already taken
+ * AND what a pending deletion still reserves, because an id is what her memory
+ * and her conversations are filed under: choosing one from here would be
+ * choosing whose leftovers a new character inherits.
+ */
+function personaActions(worn: SettingsView['personas'][number]): HTMLElement {
+  const wrap = document.createElement('div')
+  wrap.className = 'actions'
+
+  const name = document.createElement('input')
+  name.type = 'text'
+  name.placeholder = 'name'
+  const named = (): string => name.value.trim()
+
+  const make = document.createElement('button')
+  make.type = 'button'
+  make.textContent = 'New'
+  make.addEventListener('click', () => {
+    if (named() === '') return say('A new persona needs a name.', true)
+    void doPersona({ kind: 'create', name: named() })
+  })
+
+  const copy = document.createElement('button')
+  copy.type = 'button'
+  copy.textContent = `Duplicate ${worn.name}`
+  copy.addEventListener('click', () => {
+    if (named() === '') return say('Give the copy a name first.', true)
+    void doPersona({ kind: 'duplicate', name: named() })
+  })
+
+  wrap.append(name, make, copy)
+
+  if (worn.source === null) {
+    // The built-in has no file to delete. What somebody actually wants here is
+    // her original prompt back, which lives in the source and not in this
+    // window — so without this, editing her is a one-way door.
+    const restore = document.createElement('button')
+    restore.type = 'button'
+    restore.textContent = 'Put the built-in back as she ships'
+    restore.addEventListener('click', () => {
+      void doPersona({ kind: 'restore-built-in' })
+    })
+    wrap.append(restore)
+    return wrap
+  }
+
+  // TWO STEPS. This takes her notes and her conversations with her, and unlike
+  // the note there is no one-step undo waiting behind it.
+  const remove = document.createElement('button')
+  remove.type = 'button'
+  remove.textContent = `Delete ${worn.name}`
+  let armed = false
+  remove.addEventListener('click', () => {
+    if (!armed) {
+      armed = true
+      remove.textContent = `Delete ${worn.name}, her notes and her conversations?`
+      remove.classList.add('arming')
+      return
+    }
+    void doPersona({ kind: 'delete', id: worn.id })
+  })
+  wrap.append(remove)
+  return wrap
+}
+
+async function doPersona(action: Parameters<MochiSettingsApi['persona']>[0]): Promise<void> {
+  const result = await window.mochiSettings.persona(action)
+  if (!result.ok) {
+    say(result.why, true)
+    await load()
+    return
+  }
+  say(
+    action.kind === 'delete'
+      ? 'Deleted. She is wearing the built-in now.'
+      : action.kind === 'restore-built-in'
+        ? 'The built-in is back as she ships.'
+        : 'Made, and worn. She will be this persona from her next session.',
+  )
+  await load()
 }
 
 async function change(what: Parameters<MochiSettingsApi['save']>[0]): Promise<void> {

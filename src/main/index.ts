@@ -2,12 +2,13 @@ import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, ipcMain, Menu, shell } from 'electron'
 import { existsSync, mkdirSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
-import { greetingFor, instructionsFor, VOICE_NAMES } from '@shared/persona'
+import { BUILT_IN_ID, greetingFor, instructionsFor, VOICE_NAMES } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
 import { heardPortion } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'
 import {
   REVEALABLE,
+  type PersonaAction,
   type PersonaChange,
   type Revealable,
   type SettingsView,
@@ -24,7 +25,17 @@ import {
   readBearer,
   type Minted,
 } from './voice/credential'
-import { activePersona, loadPersonas, personasRoot, savePersonaTo } from './store/personas'
+import {
+  activePersona,
+  copyPersonaTo,
+  deletePersona,
+  discardWrite,
+  loadPersonas,
+  personasRoot,
+  restoreBuiltIn,
+  savePersonaTo,
+  sweepDeletions,
+} from './store/personas'
 import { readPolicy } from './store/policy'
 import {
   readBubbleSide,
@@ -969,6 +980,106 @@ ipcMain.handle('settings:memory', (_event, action: unknown): SettingsWrite => {
   return { ok: true }
 })
 
+/**
+ * Make a persona, copy one, remove one, or put the built-in back.
+ *
+ * The id is DERIVED here from the name, never taken from the page —
+ * `copyPersonaTo` derives it against the ids already taken and the ones a
+ * pending deletion still reserves. An id chosen by a renderer would be a
+ * renderer choosing whose memory and whose conversations a new character
+ * inherits, which is the whole reason `deriveId` is told about tombstones.
+ */
+ipcMain.handle('settings:persona', (_event, action: unknown): SettingsWrite => {
+  if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
+  const asked = action as PersonaAction
+  const userData = app.getPath('userData')
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+
+  if (asked.kind === 'restore-built-in') {
+    try {
+      restoreBuiltIn(userData)
+    } catch (error: unknown) {
+      console.error('[persona] could not restore the built-in:', error)
+      problems.note('persona', BUILT_IN_ID, `could not be restored: ${String(error)}`)
+      return refuse(String(error))
+    }
+    console.log('[persona] the built-in is back as she ships')
+    tray?.refresh()
+    return { ok: true }
+  }
+
+  if (asked.kind === 'delete') {
+    if (typeof asked.id !== 'string') return refuse('That does not name a persona.')
+    const persona = catalog.personas.get(asked.id)
+    if (persona === undefined) return refuse(`There is no persona called ${asked.id}.`)
+    // The built-in has no file to remove. Refused with a sentence rather than
+    // left to throw one, and pointed at the thing somebody actually wants.
+    if (catalog.sources.get(asked.id) === undefined) {
+      return refuse('The built-in cannot be deleted. Put her back as she ships instead.')
+    }
+    try {
+      deletePersona(userData, catalog, asked.id, transcripts())
+    } catch (error: unknown) {
+      console.error(`[persona] could not delete ${asked.id}:`, error)
+      problems.note('persona', asked.id, `could not be deleted: ${String(error)}`)
+      return refuse(String(error))
+    }
+    // Wearing somebody who has just been deleted resolves to the built-in with
+    // a problem attached. Saying so explicitly is better than falling back and
+    // reporting it as a fault.
+    if (readWornPersonaId(userData) === asked.id) {
+      try {
+        writeWornPersonaId(userData, BUILT_IN_ID)
+      } catch (error: unknown) {
+        problems.note('persona', BUILT_IN_ID, `could not be worn after a delete: ${String(error)}`)
+      }
+    }
+    console.log(`[persona] ${asked.id} deleted`)
+    tray?.refresh()
+    return { ok: true }
+  }
+
+  if (asked.kind !== 'create' && asked.kind !== 'duplicate') {
+    return refuse('That is not something to do.')
+  }
+  if (typeof asked.name !== 'string' || asked.name.trim() === '') {
+    return refuse('A new persona needs a name.')
+  }
+  // `create` starts from the built-in, `duplicate` from whoever is worn. Both
+  // are the same operation on a different source, which is why there is one
+  // function rather than two.
+  const from =
+    asked.kind === 'duplicate'
+      ? activePersona(catalog, readWornPersonaId(userData)).persona
+      : catalog.personas.get(BUILT_IN_ID)
+  if (from === undefined) return refuse('There is nothing to copy from.')
+
+  let written
+  try {
+    written = copyPersonaTo(userData, catalog, from, asked.name)
+  } catch (error: unknown) {
+    console.error(`[persona] could not create ${asked.name}:`, error)
+    problems.note('persona', asked.name, `could not be created: ${String(error)}`)
+    return refuse(String(error))
+  }
+
+  // Wear her, because that is why somebody made her. If THAT fails the fork is
+  // rolled back — `discardWrite` exists for exactly this and says so: the file
+  // did not exist a moment ago, so removing it restores what was there rather
+  // than destroying anything. Leaving it would put a persona nobody asked for
+  // on the shelf and report failure at the same time.
+  try {
+    writeWornPersonaId(userData, written.id)
+  } catch (error: unknown) {
+    discardWrite(userData, written.source)
+    console.error(`[persona] could not wear the new ${written.id}, rolled back:`, error)
+    return refuse(String(error))
+  }
+  console.log(`[persona] ${written.id} created from ${from.id}, and worn`)
+  tray?.refresh()
+  return { ok: true }
+})
+
 ipcMain.on('settings:reveal', (_event, what: unknown) => {
   if (!(REVEALABLE as readonly unknown[]).includes(what)) {
     console.error(`[settings] refusing to reveal an unknown folder: ${String(what)}`)
@@ -1101,6 +1212,31 @@ void app.whenReady().then(
      * run and there is nothing to configure; creating a half-populated home for
      * another application is not ours to do.
      */
+    /**
+     * Finish any deletion a previous run left half-done.
+     *
+     * `sweepDeletions`'s own comment has always said "called at startup, once
+     * the transcript store is open", and nothing called it. A tombstone
+     * outlives the process that wrote it, so a crash partway through a deletion
+     * left a persona whose memory was gone and whose conversations were not —
+     * permanently, because the only thing that finishes the job is this.
+     *
+     * `transcripts()` rather than `archive`, because opening it is the point:
+     * the half-done part is usually the transcripts.
+     */
+    try {
+      sweepDeletions(app.getPath('userData'), transcripts())
+    } catch (error: unknown) {
+      // Never a reason not to start. A deletion that cannot be finished this
+      // launch is finished the next one, and the tombstone is what remembers.
+      console.error('[persona] could not finish an interrupted deletion:', error)
+      problems.note(
+        'persona',
+        null,
+        `an interrupted deletion could not be finished: ${String(error)}`,
+      )
+    }
+
     const seeded = seedProfile(codexHome(process.env, app.getPath('home')), (path) =>
       existsSync(path),
     )

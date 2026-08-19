@@ -173,6 +173,14 @@ export const SETTINGS_CHANNELS = [
    * story for letting a model maintain a document about somebody.
    */
   'settings:memory',
+  /**
+   * Make a persona, copy one, remove one, or put the built-in back.
+   *
+   * A discriminated action on ONE channel rather than four channels. Every one
+   * of these is the same subject — which characters exist — and the contract
+   * grows by a case rather than by a message kind.
+   */
+  'settings:persona',
 ] as const
 
 export type SettingsChannel = (typeof SETTINGS_CHANNELS)[number]
@@ -272,6 +280,21 @@ export interface SettingsNote {
 /** What may be done to the note. Both are undoable; neither deletes the file. */
 export type NoteAction = { readonly kind: 'restore' } | { readonly kind: 'clear' }
 
+/**
+ * What may be done to the shelf of personas.
+ *
+ * `create` and `duplicate` both take a NAME rather than an id: the id is derived
+ * from the name in main, against the ids already taken and the ones a pending
+ * deletion still reserves. A page choosing an id would be a page able to choose
+ * whose memory and whose conversations a new character inherits.
+ */
+export type PersonaAction =
+  | { readonly kind: 'create'; readonly name: string }
+  | { readonly kind: 'duplicate'; readonly name: string }
+  | { readonly kind: 'delete'; readonly id: string }
+  /** Undo every edit to the built-in. Her original prompt is in the source. */
+  | { readonly kind: 'restore-built-in' }
+
 /** What may be changed about a lookup. Absent means unchanged. */
 export interface LookupChange {
   readonly workspace?: string
@@ -309,6 +332,7 @@ export interface MochiSettingsApi {
   save(change: PersonaChange): Promise<SettingsWrite>
   lookup(change: LookupChange): Promise<SettingsWrite>
   memory(action: NoteAction): Promise<SettingsWrite>
+  persona(action: PersonaAction): Promise<SettingsWrite>
   reveal(what: Revealable): void
 }
 
