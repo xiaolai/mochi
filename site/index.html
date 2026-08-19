@@ -95,22 +95,51 @@
         re-chosen. Two colour systems for one product is how a website comes to
         look like somebody else's.
 
-        That source file went to the archive with the rewrite, so this is now the
-        surviving copy. When v2 defines its tokens, point this back at them
-        instead of letting the two drift apart independently.
+        That source file went to the archive with the rewrite, and this note
+        asked for one thing: *when v2 defines its tokens, point this back at
+        them instead of letting the two drift apart independently.* **Done,
+        2026-08-19.** Every value below is now `src/renderer/design/tokens.css`
+        verbatim — the same paper, the same ink ramp, the same gold, the same
+        green. There is no build step here, so it is a copy rather than an
+        import; the file it copies is named so the next drift is findable.
+
+        ## What the drift had already cost
+
+        The gold was the one role the two never agreed on, and this page's
+        version of it did not clear the floor the app enforces in code:
+        `#b68235` measures **3.02:1** on this paper and **3.08:1** on its own
+        wash, and `.status` below sets it at 0.78rem. That is body text under
+        4.5:1 on a public page. The app refuses a persona's colour for exactly
+        that, so it could not adopt this one either.
+
+        `#7f5b25` is the same hue darkened by the least that clears every
+        pairing — 5.42:1 on paper, 4.80:1 on the wash — and the full table is in
+        the app's token file rather than restated here, so there is one place to
+        check it.
+
+        ## What deliberately did NOT converge
+
+        The type. This page is Cormorant Garamond and Lora; the app is Archivo
+        and Archivo Narrow. That is a difference of medium rather than drift —
+        an editorial page and a dense application want different faces — and it
+        is written down here so the next person finds a decision instead of an
+        accident. `IBM Plex Mono` is shared, and the two woff2 files are
+        byte-identical duplicates because this directory is served as-is while
+        the app's are bundled. That is the cost of having no build step, and it
+        is the right trade at 19 KB.
       */
       :root {
         color-scheme: light dark;
 
-        --paper: light-dark(#f3f2f2, #2d2b2b);
-        --paper-2: light-dark(#eae9e9, #383635);
-        --rule: light-dark(#d0cccc, #4a4746);
-        --ink: light-dark(#201f1d, #ece9e4);
-        --ink-2: light-dark(#444141, #a9a5a1);
-        --ink-3: light-dark(#605d5d, #a4a19d);
-        --gold: light-dark(#b68235, #e1ad66);
-        --gold-wash: light-dark(#fff3e4, #3a270d);
-        --brand: light-dark(#24463a, #aad6be);
+        --paper: light-dark(#f4f1ea, #1a1b14);
+        --paper-2: light-dark(#fbf9f4, #22231a);
+        --rule: light-dark(#dbd5c6, #3c3e30);
+        --ink: light-dark(#16170f, #ece9dd);
+        --ink-2: light-dark(#4a4c40, #b3b2a1);
+        --ink-3: light-dark(#5e5f50, #aead9c);
+        --gold: light-dark(#7f5b25, #e1ad66);
+        --gold-wash: light-dark(#eee2d1, #4f3d24);
+        --brand: light-dark(#24463a, #a9d8bd);
 
         --display: 'Cormorant Garamond', 'Songti SC', 'Source Han Serif SC', Georgia, serif;
         --body: 'Lora', 'Songti SC', 'Source Han Serif SC', Georgia, serif;
