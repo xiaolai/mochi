@@ -139,11 +139,18 @@
         text-transform: uppercase;
         color: var(--ink-3);
       }
+      /*
+        The band the characters sit in, and it has to BE a band. The cards were
+        floating in the same undifferentiated field as the document below them,
+        20px from it, so the row had no bottom and the scrolling content below
+        began wherever it happened to begin. The hairline closes it.
+      */
       .cards {
         flex: none;
         display: flex;
-        gap: var(--s5);
-        padding: var(--s4) var(--s6) var(--s6);
+        gap: var(--s6);
+        padding: var(--s5) var(--s6) var(--s7);
+        border-bottom: 1px solid var(--rule);
         overflow-x: auto;
       }
       .card {
@@ -192,7 +199,8 @@
       .card dl {
         display: grid;
         grid-template-columns: auto 1fr;
-        gap: var(--s1) var(--s4);
+        /* 4px between rows read as a dense list rather than three facts. */
+        gap: var(--s2) var(--s4);
         margin: 0;
         font-size: var(--t-sm);
       }
@@ -216,8 +224,9 @@
         min-height: 0;
         display: grid;
         grid-template-columns: minmax(0, 1fr) 380px;
-        gap: var(--s6);
-        padding: 0 var(--s6) var(--s6);
+        /* 8px + the column's own 12px of scrollbar lane = the 20px it was. */
+        gap: var(--s3);
+        padding: var(--s5) var(--s6) var(--s6);
       }
       /*
         The open character's column, by id rather than by class.
@@ -235,6 +244,33 @@
         display: flex;
         flex-direction: column;
         gap: var(--s4);
+        /*
+          The 12px on the right of that padding is a lane for the scrollbar.
+          macOS draws an overlay bar that reserves no width -- `scrollbar-gutter`
+          cannot help, the gutter is already zero -- so without it the bar is
+          painted ON the plates' right border. `.body` gives the same 12px back
+          out of its column gap, so the inspector has not moved.
+        */
+        /*
+          Content stops existing at the top of this box, and it used to do so
+          against nothing: a plate was sliced through its middle by an invisible
+          line 16px below a real one, which reads as a rendering fault rather
+          than as "there is more above".
+
+          The fix is where the air is, not what is drawn. The box now runs edge
+          to edge between the cards' hairline and the drawer's, and carries the
+          spacing as its OWN padding — so at rest there is 16px of room under
+          the line, and scrolled, the content travels up through that padding
+          and disappears exactly AT the line. A hairline is already this
+          window's word for an edge; the topbar and the drawer both use one.
+
+          A gradient stood here first and was worth deleting rather than
+          keeping: the covers-and-shadows trick needs a scroll box whose content
+          is transparent, and every plate paints `--paper-2` over the parent's
+          background. It could not have worked, and it looked like it did.
+        */
+        margin: calc(var(--s5) * -1) 0 calc(var(--s6) * -1);
+        padding: var(--s5) var(--s4) var(--s6) 0;
       }
       /*
         A plate: a labelled row with its value, what it resolved to, and the one
@@ -314,10 +350,16 @@
         line-height: 1.6;
         user-select: text;
       }
-      pre {
-        max-height: 34vh;
-        overflow-y: auto;
-      }
+      /*
+        A `pre` does NOT scroll on its own inside `#pane`.
+
+        It used to: `max-height: 34vh; overflow-y: auto`, which put a second
+        scrollbar a dozen pixels from the column's own, cut across the plate's
+        8px corner, and made reading her notes a question of which of two bars
+        the pointer happened to be over. One column, one axis, one bar. The
+        inspector keeps its own, and should — `.panel` is a box of fixed height,
+        not a document.
+      */
       pre.empty-note {
         color: var(--ink-3);
       }
