@@ -144,3 +144,61 @@ describe('a class the renderer toggles is never a bare selector', () => {
     }
   })
 })
+
+/**
+ * Every class the renderer puts on an element is a class something styles.
+ *
+ * The third rule in this build that looked correct and governed nothing, after
+ * the two above. `characterSheet` wraps its plates in `element('div', 'sheet')`
+ * and `.sheet` had no rule anywhere — so the column layout lived on `#pane`,
+ * whose children are that single wrapper, and the six boundaries between the
+ * plates measured 0.0px. Adjacent 1px borders read as a table rather than as an
+ * obvious fault, which is how it survived a rebuild and two rounds of
+ * photographs.
+ *
+ * This does not catch every rule that governs nothing — `#pane`'s `gap` is real
+ * CSS on a real element and only the STRUCTURE made it inert, which no textual
+ * check can see. It catches the half that is mechanical: a class name that
+ * exists in one file and nowhere else. That is the half that failed here.
+ */
+describe('a class the renderer creates is a class something styles', () => {
+  /** `element(tag, 'a b')`, `className = 'a b'`, and the runtime toggles. */
+  function classesCreatedBy(window: string): readonly string[] {
+    const dir = fileURLToPath(new URL(`./${window}/`, import.meta.url))
+    const made = new Set<string>()
+    for (const entry of readdirSync(dir)) {
+      if (!entry.endsWith('.ts') || entry.endsWith('.test.ts')) continue
+      const source = readFileSync(`${dir}${entry}`, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+      const found = [
+        ...source.matchAll(/element\(\s*'[\w-]+'\s*,\s*'([^']+)'/g),
+        ...source.matchAll(/\.className\s*=\s*'([^']+)'/g),
+        ...source.matchAll(/classList\.(?:add|remove|toggle)\('([\w-]+)'/g),
+      ]
+      for (const one of found) for (const name of (one[1] ?? '').split(/\s+/)) made.add(name)
+    }
+    made.delete('')
+    return [...made]
+  }
+
+  function classesStyledIn(window: string): ReadonlySet<string> {
+    const css = stylesheetOf(window).replace(/\/\*[\s\S]*?\*\//g, '')
+    return new Set([...css.matchAll(/\.([\w-]+)/g)].map((one) => one[1] ?? ''))
+  }
+
+  it('has something to check', () => {
+    // The companion draws to a canvas and creates no classes at all, so a
+    // per-window guard would be a false one. The corpus is where emptiness
+    // means the extraction has silently stopped matching.
+    const all = WINDOWS.flatMap((window) => classesCreatedBy(window))
+    expect(all.length).toBeGreaterThan(0)
+    expect(all).toContain('sheet')
+  })
+
+  it.each(WINDOWS)('%s', (window) => {
+    const styled = classesStyledIn(window)
+    const orphans = classesCreatedBy(window).filter((one) => !styled.has(one))
+    expect(orphans).toEqual([])
+  })
+})

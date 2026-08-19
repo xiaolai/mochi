@@ -304,6 +304,25 @@
         padding: var(--s5) var(--s4) var(--s6) 0;
       }
       /*
+        The stack of plates, and the reason it needs a rule of its own.
+
+        `#pane` is `flex-direction: column` with a `gap`, and that gap governs
+        `#pane`'s CHILDREN -- of which there is exactly one, this element.
+        `characterSheet` wraps the plates in it, so the gap has been styling a
+        single wrapper and the plates inside had nothing between them at all:
+        measured 0.0px on all six boundaries. Adjacent 1px borders read as a
+        table rather than as an obvious fault, which is why it survived.
+
+        `#pane` keeps its gap; a transcript and the problem list ARE direct
+        children of it, so it is not vestigial. This is the second stack.
+      */
+      .sheet {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s4);
+      }
+
+      /*
         A plate: a labelled row with its value, what it resolved to, and the one
         thing you can do to it. Three of the four are real fields; the fourth
         says out loud that it is not.
