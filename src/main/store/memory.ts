@@ -162,8 +162,10 @@ export function remember(userData: string, id: string, notes: string): void {
   // and it is the whole safety story for letting a model maintain a document
   // about somebody. Without it, a summary that quietly drops half the note is
   // discovered when she says something wrong out loud, which is the worst
-  // possible discovery channel. With it, the settings window can show what
-  // changed and the user can put it back.
+  // possible discovery channel. With it, the settings window shows the note and
+  // offers one step back — `settings:memory`, which reaches this same function
+  // with `previousNote`'s answer. That sentence described a window that did not
+  // exist until 2026-08-19; it describes one that does now.
   //
   // Deeper would be a second archive with no retention policy and no delete
   // button, sitting beside one that has both -- which is the shape this project

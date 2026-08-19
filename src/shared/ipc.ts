@@ -163,6 +163,16 @@ export const SETTINGS_CHANNELS = [
    * is the same shape with a different subject.
    */
   'settings:lookup',
+  /**
+   * Undo or clear what she remembers about the person.
+   *
+   * The note is the one thing here that a MODEL writes — `remember_this` when
+   * somebody asks out loud, and the sleep summariser when it lands. That is why
+   * it is the one thing that needs an undo: `remember` keeps the previous
+   * version exactly one deep, and `store/memory.ts` calls that the whole safety
+   * story for letting a model maintain a document about somebody.
+   */
+  'settings:memory',
 ] as const
 
 export type SettingsChannel = (typeof SETTINGS_CHANNELS)[number]
@@ -245,6 +255,23 @@ export interface SettingsLookup {
   readonly profilePath: string | null
 }
 
+/**
+ * What she remembers, and whether there is a version to go back to.
+ *
+ * `previous` is `null` when nothing has ever been rewritten, and that is NOT the
+ * same as an empty string: a persona whose memory was blank when the first
+ * rewrite ran has a previous note, and it is `''`. Collapsing the two would make
+ * that first rewrite the one that cannot be undone — which is exactly the
+ * rewrite somebody most wants back.
+ */
+export interface SettingsNote {
+  readonly text: string
+  readonly previous: string | null
+}
+
+/** What may be done to the note. Both are undoable; neither deletes the file. */
+export type NoteAction = { readonly kind: 'restore' } | { readonly kind: 'clear' }
+
 /** What may be changed about a lookup. Absent means unchanged. */
 export interface LookupChange {
   readonly workspace?: string
@@ -259,6 +286,7 @@ export interface SettingsView {
   readonly voices: readonly string[]
   readonly capabilities: readonly SettingsCapability[]
   readonly lookup: SettingsLookup
+  readonly note: SettingsNote
   /** Named for display. Opening one goes through `settings:reveal` by kind. */
   readonly folders: Readonly<Record<Revealable, string>>
 }
@@ -280,6 +308,7 @@ export interface MochiSettingsApi {
   wear(id: string): Promise<SettingsWrite>
   save(change: PersonaChange): Promise<SettingsWrite>
   lookup(change: LookupChange): Promise<SettingsWrite>
+  memory(action: NoteAction): Promise<SettingsWrite>
   reveal(what: Revealable): void
 }
 

@@ -174,3 +174,37 @@ describe('refusing to overwrite what it could not read', () => {
     expect(recall(userData, 'loki')).toBe('the first thing')
   })
 })
+
+describe('one step back', () => {
+  it('is null until something has actually been rewritten', () => {
+    // Null and "it used to be empty" are different answers, and the window
+    // disables its undo on the first. Collapsing them would make the very first
+    // rewrite the one that cannot be undone.
+    const userData = workspace()
+    expect(previousNote(userData, 'loki')).toBeNull()
+    remember(userData, 'loki', 'the first thing')
+    expect(previousNote(userData, 'loki')).toBe('')
+  })
+
+  it('round-trips: what the window puts back is what was there before', () => {
+    // The whole undo, stated end to end rather than as two half-assertions.
+    const userData = workspace()
+    remember(userData, 'loki', 'they take their coffee black')
+    remember(userData, 'loki', 'something a model decided instead')
+    const back = previousNote(userData, 'loki')
+    expect(back).toBe('they take their coffee black')
+    if (back === null) return
+    remember(userData, 'loki', back)
+    expect(recall(userData, 'loki')).toBe('they take their coffee black')
+    // And the undo is itself undoable, which is what makes pressing it safe.
+    expect(previousNote(userData, 'loki')).toBe('something a model decided instead')
+  })
+
+  it('survives clearing, so forgetting everything is not final', () => {
+    const userData = workspace()
+    remember(userData, 'loki', 'months of accumulated notes')
+    remember(userData, 'loki', '')
+    expect(recall(userData, 'loki')).toBe('')
+    expect(previousNote(userData, 'loki')).toBe('months of accumulated notes')
+  })
+})

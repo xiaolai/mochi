@@ -22,6 +22,7 @@ declare global {
 
 const who = document.querySelector('#who')
 const lookup = document.querySelector('#lookup')
+const note = document.querySelector('#note')
 const capabilities = document.querySelector('#capabilities')
 const folders = document.querySelector('#folders')
 const said = document.querySelector('#said')
@@ -29,6 +30,7 @@ if (
   !(who instanceof HTMLElement) ||
   !(capabilities instanceof HTMLElement) ||
   !(lookup instanceof HTMLElement) ||
+  !(note instanceof HTMLElement) ||
   !(folders instanceof HTMLElement) ||
   !(said instanceof HTMLElement)
 ) {
@@ -37,6 +39,7 @@ if (
 const whoEl: HTMLElement = who
 const capsEl: HTMLElement = capabilities
 const lookupEl: HTMLElement = lookup
+const noteEl: HTMLElement = note
 const foldersEl: HTMLElement = folders
 const saidEl: HTMLElement = said
 
@@ -252,6 +255,71 @@ function renderLookup(view: SettingsView): void {
   }
 }
 
+/**
+ * What she remembers, shown, with the one step back.
+ *
+ * `store/memory.ts` has said since it was written that "the settings window can
+ * show what changed and the user can put it back". Until now it could not, and
+ * a comment describing a window that does not exist is worse than no comment.
+ *
+ * The note is the one thing here a MODEL writes — `remember_this` when somebody
+ * asks out loud — so it is the one thing that needs an undo at all.
+ */
+function renderNote(view: SettingsView): void {
+  const body = document.createElement('pre')
+  body.className = 'note-body'
+  // `textContent`, like everywhere else here. This text came from a model and
+  // from a file anybody can edit; showing it to a person is safe, evaluating it
+  // is not.
+  body.textContent =
+    view.note.text === '' ? 'She has not written anything down about you yet.' : view.note.text
+  if (view.note.text === '') body.classList.add('empty')
+
+  const undo = document.createElement('button')
+  undo.type = 'button'
+  undo.textContent = 'Undo the last change'
+  // Null means nothing has ever been rewritten. That is NOT the same as going
+  // back to an empty note, which is a real version somebody may want.
+  undo.disabled = view.note.previous === null
+  undo.addEventListener('click', () => {
+    void act({ kind: 'restore' })
+  })
+
+  // TWO STEPS rather than a dialog. This throws away something a person may
+  // have spent months accumulating, and a button that does it on one click is a
+  // button somebody hits by accident. It is undoable, and it should still ask.
+  const forget = document.createElement('button')
+  forget.type = 'button'
+  forget.textContent = 'Forget everything'
+  forget.disabled = view.note.text === ''
+  let armed = false
+  forget.addEventListener('click', () => {
+    if (!armed) {
+      armed = true
+      forget.textContent = 'Really forget it all?'
+      forget.classList.add('arming')
+      return
+    }
+    void act({ kind: 'clear' })
+  })
+
+  const buttons = document.createElement('div')
+  buttons.className = 'row'
+  buttons.append(undo, forget)
+  noteEl.replaceChildren(body, buttons)
+}
+
+async function act(action: Parameters<MochiSettingsApi['memory']>[0]): Promise<void> {
+  const result = await window.mochiSettings.memory(action)
+  if (!result.ok) {
+    say(result.why, true)
+    await load()
+    return
+  }
+  say(action.kind === 'restore' ? 'Put back as it was.' : 'Forgotten.')
+  await load()
+}
+
 function renderCapabilities(view: SettingsView): void {
   if (view.capabilities.length === 0) {
     capsEl.textContent = 'None.'
@@ -301,6 +369,7 @@ async function load(): Promise<void> {
   renderWho(view)
   renderCapabilities(view)
   renderLookup(view)
+  renderNote(view)
   renderFolders(view)
 }
 

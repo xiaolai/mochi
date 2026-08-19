@@ -81,7 +81,7 @@ import {
 import { packageFolder } from './store/personas'
 import { createTranscripts, type Transcripts } from './store/transcripts'
 import { createConversation, type Conversation } from './store/conversation'
-import { recall } from './store/memory'
+import { previousNote, recall, recallState, remember } from './store/memory'
 import { createCompanionWindow, showHistoryWindow, showSettingsWindow } from './window'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
@@ -785,6 +785,10 @@ ipcMain.handle('settings:read', (): SettingsView => {
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],
     capabilities: listCapabilities(registry),
+    note: {
+      text: recall(userData, worn.persona.id),
+      previous: previousNote(userData, worn.persona.id),
+    },
     lookup: listLookup({
       workspace: readWorkspace(userData),
       defaultWorkspace: join(userData, WORKSPACE_DIR),
@@ -909,6 +913,59 @@ ipcMain.handle('settings:lookup', (_event, change: unknown): SettingsWrite => {
     return refuse(String(error))
   }
   console.log(`[settings] lookup changed: ${Object.keys(asked.change).join(', ')}`)
+  return { ok: true }
+})
+
+/**
+ * Undo the last change to her note, or clear it.
+ *
+ * BOTH go through `remember`, which keeps the version being replaced one deep —
+ * so clearing is itself undoable, and restoring can be undone by restoring
+ * again. Neither deletes the file: `forgetMemory` exists for when a persona is
+ * deleted, and using it here would take away the undo along with the note.
+ *
+ * `remember` THROWS rather than overwrite a note it could not read, so a corrupt
+ * file is reported here instead of being silently replaced by an empty one.
+ */
+ipcMain.handle('settings:memory', (_event, action: unknown): SettingsWrite => {
+  if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
+  const kind = (action as { kind?: unknown }).kind
+  if (kind !== 'restore' && kind !== 'clear') return refuse('That is not something to do.')
+
+  const userData = app.getPath('userData')
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const worn = activePersona(catalog, readWornPersonaId(userData)).persona.id
+
+  if (kind === 'restore') {
+    const previous = previousNote(userData, worn)
+    // Null means nothing has ever been rewritten — there is no version to go
+    // back to, which is different from going back to an empty one.
+    if (previous === null) return refuse('There is no earlier version of her notes to go back to.')
+    try {
+      remember(userData, worn, previous)
+    } catch (error: unknown) {
+      console.error(`[memory] could not restore ${worn}:`, error)
+      problems.note('memory', worn, `the earlier notes could not be put back: ${String(error)}`)
+      return refuse(String(error))
+    }
+    console.log(`[memory] ${worn} restored to the previous version`)
+    return { ok: true }
+  }
+
+  // Clearing an already-empty note would rotate the one useful undo away, since
+  // `remember` treats an unchanged write as nothing to do — but a note that is
+  // already empty and readable has nothing to clear either, so say so.
+  const held = recallState(userData, worn)
+  if (!held.ok) return refuse(`Her notes could not be read, so they were left alone: ${held.why}`)
+  if (held.notes === '') return refuse('There is nothing in her notes to forget.')
+  try {
+    remember(userData, worn, '')
+  } catch (error: unknown) {
+    console.error(`[memory] could not clear ${worn}:`, error)
+    problems.note('memory', worn, `the notes could not be cleared: ${String(error)}`)
+    return refuse(String(error))
+  }
+  console.log(`[memory] ${worn} cleared`)
   return { ok: true }
 })
 

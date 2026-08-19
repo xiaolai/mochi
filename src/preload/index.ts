@@ -11,6 +11,7 @@ import {
   type MochiHistoryApi,
   type MochiSettingsApi,
   type LookupChange,
+  type NoteAction,
   type PersonaChange,
   type Revealable,
   type SettingsView,
@@ -156,6 +157,9 @@ const settings: MochiSettingsApi = {
   },
   async lookup(change: LookupChange) {
     return (await ipcRenderer.invoke(guardSettings('settings:lookup'), change)) as SettingsWrite
+  },
+  async memory(action: NoteAction) {
+    return (await ipcRenderer.invoke(guardSettings('settings:memory'), action)) as SettingsWrite
   },
 }
 
