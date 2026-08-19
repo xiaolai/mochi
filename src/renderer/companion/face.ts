@@ -69,6 +69,13 @@ export interface Face {
   /** Which side of her the bubble should sit on, or `auto`. */
   prefersBubble(side: SidePreference): void
   /**
+   * Eyes shut and not listening.
+   *
+   * Only what is drawn and what is clickable. Closing the microphone belongs to
+   * whoever holds the session.
+   */
+  sleeps(asleep: boolean): void
+  /**
    * How far into her window she is standing.
    *
    * Main drives it: dragged against the top of the display the window can rise
@@ -192,6 +199,8 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * it means when nobody has chosen.
    */
   let bubbleSide: SidePreference = 'auto'
+  /** Asleep. Held here because it changes what a click on her means. */
+  let resting = false
   /** How far into the canvas she is standing. See `stands`. */
   let feet = FEET_FROM_TOP
   /** The last answer sent up, so an unchanged one is not sent again. */
@@ -390,6 +399,18 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   })
 
   window.addEventListener('click', (event) => {
+    /**
+     * Asleep, a click on her wakes her — and nothing else here runs.
+     *
+     * Waking has to be a gesture she cannot miss, and the obvious one, saying
+     * so, is exactly what she cannot hear. It is guarded on her silhouette like
+     * everything else, so clicking the empty part of her window still belongs
+     * to the desktop.
+     */
+    if (resting) {
+      if (avatar.hitTest(event.clientX, event.clientY)) window.mochi.wake()
+      return
+    }
     const control = hitsControls(event.clientX, event.clientY)
     if (control === 'close') {
       bubble.dismiss()
@@ -569,6 +590,20 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     heard: () => ({ text: utterance.text(), at: utterance.at(), itemId: utterance.itemId() }),
     prefersBubble: (side: SidePreference) => {
       bubbleSide = side
+    },
+    sleeps: (asleep: boolean) => {
+      resting = asleep
+      avatar.setAsleep(asleep)
+      /**
+       * Nothing to say while her eyes are shut, so the bubble closes.
+       *
+       * `dismiss`, not `clear`. Clearing only zeroes the opacity, and the very
+       * next frame fades it straight back in — `step` knows nothing about
+       * sleep. `dismiss` is the same path the × takes: it remembers WHICH text
+       * was closed, so it stays closed and the next thing she says still
+       * appears.
+       */
+      if (asleep) bubble.dismiss()
     },
     stands: (feetFromTop: number) => {
       if (!Number.isFinite(feetFromTop) || feetFromTop <= 0) return

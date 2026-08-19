@@ -139,3 +139,44 @@ export function writeBubbleSide(userData: string, side: BubbleSide): void {
   if (!SIDES.includes(side)) throw new Error(`not a side the bubble can sit on: ${side}`)
   writeMerged(userData, { bubbleSide: side })
 }
+
+/**
+ * Whether she is asleep, and whether she is hidden — two independent things.
+ *
+ * Asleep is about her ATTENTION: the microphone is off and she is not
+ * listening. Hidden is about the SCREEN: she is not drawn, and she is still
+ * listening. They are separate because the reasons are separate — somebody
+ * walked in, versus you need that corner of the display — and collapsing them
+ * would mean one of the two answers is always wrong.
+ *
+ * Both are remembered, like everything else in this file. "As you left her" is
+ * the rule the worn persona and the bubble's side already follow, and a state
+ * that quietly reset on relaunch would make quitting a way to change it.
+ */
+export interface Resting {
+  readonly asleep: boolean
+  readonly hidden: boolean
+}
+
+export function readResting(userData: string): Resting {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return { asleep: false, hidden: false }
+  try {
+    const value: unknown = JSON.parse(read.text)
+    const found = value as { asleep?: unknown; hidden?: unknown } | null
+    return {
+      // Anything that is not literally `true` means awake and visible. That is
+      // the direction a wrong guess should fail in: a companion that is present
+      // and listening can be told to stop, and one that is neither cannot be
+      // told anything.
+      asleep: found?.asleep === true,
+      hidden: found?.hidden === true,
+    }
+  } catch {
+    return { asleep: false, hidden: false }
+  }
+}
+
+export function writeResting(userData: string, changes: Partial<Resting>): void {
+  writeMerged(userData, { ...changes })
+}

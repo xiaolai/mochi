@@ -537,3 +537,30 @@ describe('the reader can go back through what she said', () => {
     expect(later).not.toBe(next)
   })
 })
+
+describe('going to sleep closes it', () => {
+  it('stays closed, rather than fading straight back in', () => {
+    // `clear` was tried first and did not hold: it zeroes the opacity, and the
+    // very next frame fades it back, because `step` knows nothing about sleep.
+    // `dismiss` remembers WHICH text was closed.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    const said = 'Something she said before nodding off.'
+    expect(paint(bubble, said, 10).painted).toBe(true)
+
+    bubble.dismiss()
+    seconds(bubble, 2, 0)
+    expect(paint(bubble, said, 10).painted).toBe(false)
+  })
+
+  it('and the next thing she says still appears', () => {
+    // The reason it remembers the text rather than setting a flag: a flag would
+    // have to be cleared by somebody, and whoever forgot would leave her mute.
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    paint(bubble, 'Before.', 5)
+    bubble.dismiss()
+    expect(paint(bubble, 'Before.', 5).painted).toBe(false)
+    expect(paint(bubble, 'After she woke up.', 5).painted).toBe(true)
+  })
+})

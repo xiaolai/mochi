@@ -83,9 +83,13 @@ async function open(): Promise<void> {
     // none; when there are any, the shoulder control says so on its own.
     face.troubled(session.problems)
     face.prefersBubble(session.bubbleSide as Parameters<typeof face.prefersBubble>[0])
+    // How she was left. Applied before the microphone opens, so a session that
+    // resumes asleep never opens it at all.
+    face.sleeps(session.asleep)
     // The microphone opens only once the session is up, so she is never
-    // transmitting into a peer that is still being negotiated.
-    session.listen(true)
+    // transmitting into a peer that is still being negotiated — and not at all
+    // if she was left asleep.
+    session.listen(!session.asleep)
   } catch (error: unknown) {
     show(String(error))
   }
@@ -111,6 +115,16 @@ window.mochi.onSend((frame) => {
   // own window to get there. See `dragTo`.
   if (type === '__mochi_stance__') {
     face.stands(Number((frame as { feetFromTop?: unknown }).feetFromTop))
+  }
+  /**
+   * Asleep, or awake. BOTH halves happen here, and they belong together: the
+   * microphone is what makes it true, and her eyes are what makes it legible.
+   * Either one alone is a bug somebody would report as the other.
+   */
+  if (type === '__mochi_asleep__') {
+    const asleep = (frame as { asleep?: unknown }).asleep === true
+    face.sleeps(asleep)
+    session?.listen(!asleep)
   }
   if (type === '__mochi_bubble_side__') {
     face.prefersBubble(

@@ -4,11 +4,17 @@ import { trayMenuTemplate, WINDOWS_SCALES } from './tray'
 /** Nothing wrong, nothing chosen, and only the side there is always room for. */
 const BUBBLE = { available: ['above'], asked: 'auto', using: 'above' }
 
+/** Awake, visible, and both keys claimed — the ordinary state. */
+const RESTING = { asleep: false, hidden: false }
+const KEYS = { rest: 'Control+Shift+L', hide: 'Control+Shift+M' }
+
 const HANDLERS = {
   onConversations: () => undefined,
   onSettings: () => undefined,
   onWear: () => undefined,
   onBubbleSide: () => undefined,
+  onRest: () => undefined,
+  onHide: () => undefined,
   onQuit: () => undefined,
 }
 
@@ -22,7 +28,7 @@ describe('the only way out', () => {
     // of the Dock, and `window-all-closed` does not quit on macOS — so without
     // this the only exit is Activity Monitor.
     const bare = trayMenuTemplate(
-      { personas: [], wornId: 'mochi', bubble: BUBBLE },
+      { personas: [], wornId: 'mochi', bubble: BUBBLE, resting: RESTING, keys: KEYS },
       HANDLERS,
       'Mochi',
     )
@@ -31,7 +37,7 @@ describe('the only way out', () => {
 
   it('spells the shortcut out, because there is no application menu to carry it', () => {
     const template = trayMenuTemplate(
-      { personas: [], wornId: 'mochi', bubble: BUBBLE },
+      { personas: [], wornId: 'mochi', bubble: BUBBLE, resting: RESTING, keys: KEYS },
       HANDLERS,
       'Mochi',
     )
@@ -41,7 +47,7 @@ describe('the only way out', () => {
 
   it('offers both windows, which are otherwise reached only by hovering her', () => {
     const template = trayMenuTemplate(
-      { personas: [], wornId: 'mochi', bubble: BUBBLE },
+      { personas: [], wornId: 'mochi', bubble: BUBBLE, resting: RESTING, keys: KEYS },
       HANDLERS,
       'Mochi',
     )
@@ -59,6 +65,8 @@ describe('who she is, and who she could be', () => {
     ],
     wornId: 'loki',
     bubble: BUBBLE,
+    resting: RESTING,
+    keys: KEYS,
   }
 
   it('says who is worn, as a readout rather than a control', () => {
@@ -80,7 +88,13 @@ describe('who she is, and who she could be', () => {
   it('leaves the switcher out entirely when there is nobody to switch to', () => {
     // A radio list of one is not a choice, and a "Wearing" heading over a
     // single unclickable name is furniture.
-    const alone = { personas: [{ id: 'mochi', name: 'Mochi' }], wornId: 'mochi', bubble: BUBBLE }
+    const alone = {
+      personas: [{ id: 'mochi', name: 'Mochi' }],
+      wornId: 'mochi',
+      bubble: BUBBLE,
+      resting: RESTING,
+      keys: KEYS,
+    }
     const template = trayMenuTemplate(alone, HANDLERS, 'Mochi')
     expect(template.some((i) => i.type === 'radio')).toBe(false)
     expect(labels(template)).not.toContain('Wearing')
@@ -89,7 +103,13 @@ describe('who she is, and who she could be', () => {
   it('falls back to the app name when the worn id names nobody', () => {
     // Reachable: the preferences file is written by hand as easily as by us,
     // and a header reading "Mochi — undefined" is worse than no name.
-    const stray = { personas: [{ id: 'mochi', name: 'Mochi' }], wornId: 'nobody', bubble: BUBBLE }
+    const stray = {
+      personas: [{ id: 'mochi', name: 'Mochi' }],
+      wornId: 'nobody',
+      bubble: BUBBLE,
+      resting: RESTING,
+      keys: KEYS,
+    }
     expect(trayMenuTemplate(stray, HANDLERS, 'Mochi')[0]?.label).toBe('Mochi')
   })
 })
@@ -108,6 +128,8 @@ describe('choosing where she speaks from', () => {
     personas: [{ id: 'mochi', name: 'Mochi' }],
     wornId: 'mochi',
     bubble: { available: ['above', 'left'], asked: 'auto', using: 'above' },
+    resting: RESTING,
+    keys: KEYS,
   }
 
   function sides(model: typeof AT_CORNER): string[] {
@@ -158,5 +180,59 @@ describe('choosing where she speaks from', () => {
     const menu = item?.submenu
     if (!Array.isArray(menu)) throw new Error('expected a submenu')
     expect(menu.filter((one) => one.checked).map((one) => one.label)).toEqual(['Wherever it fits'])
+  })
+})
+
+describe('resting and hiding', () => {
+  function labels(model: Parameters<typeof trayMenuTemplate>[0]): string[] {
+    return trayMenuTemplate(model, HANDLERS, 'Mochi').map((one) =>
+      one.type === 'separator' ? '—' : String(one.label),
+    )
+  }
+  const BASE = { personas: [], wornId: 'mochi', bubble: BUBBLE, keys: KEYS }
+
+  it('says what pressing it DOES, not what she currently is', () => {
+    // Read at a glance by somebody who wants her quiet NOW. A checkbox marked
+    // "Asleep" makes them stop and work out which way it points.
+    expect(labels({ ...BASE, resting: { asleep: false, hidden: false } })).toEqual(
+      expect.arrayContaining(['Let her rest', 'Hide her']),
+    )
+    expect(labels({ ...BASE, resting: { asleep: true, hidden: true } })).toEqual(
+      expect.arrayContaining(['Wake her', 'Show her']),
+    )
+  })
+
+  it('keeps the two independent, because the reasons are', () => {
+    // Somebody walked in, versus you need that corner of the screen. Collapsing
+    // them would make one of the two answers always wrong.
+    expect(labels({ ...BASE, resting: { asleep: true, hidden: false } })).toEqual(
+      expect.arrayContaining(['Wake her', 'Hide her']),
+    )
+  })
+
+  it('shows the key beside the item', () => {
+    const rest = trayMenuTemplate(
+      { ...BASE, resting: { asleep: false, hidden: false } },
+      HANDLERS,
+      'Mochi',
+    ).find((one) => one.label === 'Let her rest')
+    expect(rest?.accelerator).toBe('Control+Shift+L')
+  })
+
+  it('leaves the key OFF when another application took it', () => {
+    // A label promising a key that does nothing is worse than no label, and
+    // there would be no way to tell the two apart.
+    const item = trayMenuTemplate(
+      { ...BASE, resting: { asleep: false, hidden: false }, keys: { rest: null, hide: null } },
+      HANDLERS,
+      'Mochi',
+    ).find((one) => one.label === 'Let her rest')
+    expect(item?.accelerator).toBeUndefined()
+    expect('accelerator' in (item ?? {})).toBe(false)
+  })
+
+  it('puts them first, where somebody in a hurry looks', () => {
+    const shown = labels({ ...BASE, resting: { asleep: false, hidden: false } })
+    expect(shown.indexOf('Let her rest')).toBeLessThan(shown.indexOf('Conversations…'))
   })
 })

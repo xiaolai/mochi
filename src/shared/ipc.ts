@@ -39,6 +39,14 @@ export const COMPANION_CHANNELS = [
   /** She was asked for her conversations. Main owns the window; this opens it. */
   'history:open',
   /**
+   * Somebody clicked her while she was asleep.
+   *
+   * Waking has to be a gesture she cannot miss, and the obvious one — saying
+   * "wake up" — is exactly what she cannot hear while the microphone is off.
+   * So it is a click on her, the menu bar, or the key.
+   */
+  'companion:wake',
+  /**
    * Which sides the bubble could go on right now, and which it is using.
    *
    * Sent when the answer CHANGES, not every frame. The menu is built from it,
@@ -334,6 +342,14 @@ export interface SessionConfig {
    * arrives after the first frame has already been drawn on the wrong side.
    */
   readonly bubbleSide: string
+  /**
+   * Whether she is asleep — the microphone closed and her eyes shut.
+   *
+   * On the config for the same reason as the bubble's side: it is read from the
+   * same file at the same moment, and a second message would arrive after she
+   * had already opened the microphone.
+   */
+  readonly asleep: boolean
 }
 
 /**
@@ -358,6 +374,8 @@ export interface MochiApi {
   copy(text: string): void
   /** Ask for the context menu, at the cursor. */
   menu(): void
+  /** She was clicked while asleep. Main decides whether that wakes her. */
+  wake(): void
   /** Where she is inside her window, so main can keep HER on the display. */
   body(box: { left: number; top: number; width: number; height: number }): void
   /** Which sides the bubble can go on, and which it is on. For the menu. */

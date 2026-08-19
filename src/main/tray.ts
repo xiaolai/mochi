@@ -46,6 +46,10 @@ export interface TrayModel {
     readonly asked: string
     readonly using: string
   }
+  /** Whether she is asleep, and whether she is hidden. Two separate things. */
+  readonly resting: { readonly asleep: boolean; readonly hidden: boolean }
+  /** The keys, as claimed. A binding another application took is not shown. */
+  readonly keys: { readonly rest: string | null; readonly hide: string | null }
 }
 
 export interface TrayHandlers {
@@ -53,6 +57,8 @@ export interface TrayHandlers {
   readonly onSettings: () => void
   readonly onWear: (id: string) => void
   readonly onBubbleSide: (side: string) => void
+  readonly onRest: () => void
+  readonly onHide: () => void
   readonly onQuit: () => void
 }
 
@@ -72,6 +78,32 @@ export function trayMenuTemplate(
     // Who she is right now, as a readout. Disabled because it is not a control
     // — the list below is.
     { label: worn === undefined ? appName : `${appName} — ${worn.name}`, enabled: false },
+    { type: 'separator' },
+    /**
+     * The two states, at the top, because they are what somebody opens this
+     * menu for in a hurry.
+     *
+     * Labelled by what pressing them DOES, not by what she currently is: "Wake
+     * her" is unambiguous in a way that a checkbox marked "Asleep" is not, and
+     * this menu is read at a glance by somebody who wants her quiet NOW.
+     *
+     * A binding another application already owns is left off rather than shown
+     * greyed: a label promising a key that does nothing is worse than no label,
+     * and there would be no way to tell the two apart.
+     */
+    {
+      label: model.resting.asleep ? 'Wake her' : 'Let her rest',
+      // Spread rather than `?? undefined`: with `exactOptionalPropertyTypes` an
+      // explicit `undefined` is not the same as an absent key, and an absent
+      // key is what "no accelerator" means.
+      ...(model.keys.rest === null ? {} : { accelerator: model.keys.rest }),
+      click: handlers.onRest,
+    },
+    {
+      label: model.resting.hidden ? 'Show her' : 'Hide her',
+      ...(model.keys.hide === null ? {} : { accelerator: model.keys.hide }),
+      click: handlers.onHide,
+    },
     { type: 'separator' },
     { label: 'Conversations…', click: handlers.onConversations },
     { label: 'Settings…', click: handlers.onSettings },

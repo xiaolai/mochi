@@ -27,11 +27,16 @@ import { activePersona, loadPersonas, personasRoot, savePersonaTo } from './stor
 import { readPolicy } from './store/policy'
 import {
   readBubbleSide,
+  readResting,
   readWornPersonaId,
   writeBubbleSide,
+  writeResting,
   writeWornPersonaId,
   type BubbleSide,
+  type Resting,
 } from './store/worn'
+import { claimShortcuts, releaseShortcuts, type ShortcutOutcome } from './shortcuts'
+import { SHORTCUTS } from '@shared/shortcuts'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { createProblems } from './problems'
@@ -132,7 +137,60 @@ function menuModel(): TrayModel {
     personas: [...catalog.personas.values()].map((one) => ({ id: one.id, name: one.name })),
     wornId: activePersona(catalog, readWornPersonaId(userData)).persona.id,
     bubble: { ...bubbleSides, asked: readBubbleSide(userData) },
+    resting,
+    keys: {
+      rest: claimed.find((one) => one.id === 'rest')?.refused === null ? SHORTCUTS.rest : null,
+      hide: claimed.find((one) => one.id === 'hide')?.refused === null ? SHORTCUTS.hide : null,
+    },
   }
+}
+
+/**
+ * Whether she is asleep, and whether she is hidden.
+ *
+ * Held rather than read per menu build: these change from three places — the
+ * key, the menu and a click on her — and every one of them has to be reflected
+ * in the other two on the same tick.
+ */
+let resting: Resting = { asleep: false, hidden: false }
+
+/** What the two global keys actually got. See `shortcuts.ts`. */
+let claimed: readonly ShortcutOutcome[] = []
+
+/**
+ * Send her to sleep, or wake her. One implementation, three ways to ask.
+ *
+ * Asleep is about her ATTENTION — the microphone closes and her eyes shut — and
+ * is deliberately not the same thing as hidden, which is about the screen.
+ */
+function setAsleep(asleep: boolean): void {
+  if (asleep === resting.asleep) return
+  resting = { ...resting, asleep }
+  writeResting(app.getPath('userData'), { asleep })
+  companion?.webContents.send('voice:send', { type: '__mochi_asleep__', asleep })
+  console.log(`[rest] ${asleep ? 'asleep' : 'awake'}`)
+  tray?.refresh()
+}
+
+/**
+ * Take her off the screen, or bring her back.
+ *
+ * The session stays up and she keeps listening: this is about the corner of the
+ * display, not about her attention. Hiding a window she is not in would be a
+ * different feature and a worse one — you would lose her mid-sentence.
+ */
+function setHidden(hidden: boolean): void {
+  if (hidden === resting.hidden) return
+  resting = { ...resting, hidden }
+  writeResting(app.getPath('userData'), { hidden })
+  if (companion === null) return
+  if (hidden) companion.hide()
+  // `showInactive`, not `show`: bringing her back should not take focus from
+  // whatever somebody is typing into. She is furniture appearing, not an app
+  // demanding attention.
+  else companion.showInactive()
+  console.log(`[rest] ${hidden ? 'hidden' : 'shown'}`)
+  tray?.refresh()
 }
 
 /**
@@ -181,6 +239,12 @@ const menuHandlers = {
     // write failed would leave it lying about what is on disk.
     if (!written.ok) console.error(`[menu] could not wear ${id}: ${written.why}`)
     tray?.refresh()
+  },
+  onRest: () => {
+    setAsleep(!resting.asleep)
+  },
+  onHide: () => {
+    setHidden(!resting.hidden)
   },
   onBubbleSide: (side: string) => {
     try {
@@ -278,6 +342,10 @@ ipcMain.on('companion:grab', (_event, value: unknown) => {
 
 ipcMain.on('companion:drop', () => {
   stopDrag()
+})
+
+ipcMain.on('companion:wake', () => {
+  setAsleep(false)
 })
 
 ipcMain.on('companion:menu', () => {
@@ -483,6 +551,7 @@ ipcMain.handle('voice:config', () => {
     face: avatar.face,
     problems: problems.count(),
     bubbleSide: readBubbleSide(userData),
+    asleep: resting.asleep,
     tools: registry.tools,
   }
 })
@@ -817,6 +886,38 @@ void app.whenReady().then(
      * Its model is read fresh on every rebuild rather than held: the persona
      * shelf is files on disk, and somebody may add one while this is running.
      */
+    /**
+     * How she was left. Restored before the tray is built, so the menu's first
+     * labels are true rather than corrected a tick later.
+     */
+    resting = readResting(app.getPath('userData'))
+    if (resting.hidden) companion.hide()
+
+    /**
+     * The two global keys.
+     *
+     * Claimed AFTER `resting` is read, because the handlers toggle it — and
+     * every refusal is reported where somebody can see it. A key another
+     * application owns is an ordinary outcome; a key that silently does nothing
+     * is the bug.
+     */
+    claimed = claimShortcuts({
+      rest: () => {
+        setAsleep(!resting.asleep)
+      },
+      hide: () => {
+        setHidden(!resting.hidden)
+      },
+    })
+    for (const outcome of claimed) {
+      if (outcome.refused === null) {
+        console.log(`[keys] ${outcome.accelerator} -> ${outcome.id}`)
+        continue
+      }
+      console.error(`[keys] ${outcome.accelerator} refused: ${outcome.refused}`)
+      problems.note('keys', outcome.accelerator, `${outcome.refused} — ${outcome.id} has no key`)
+    }
+
     tray = createTray(menuModel, menuHandlers)
 
     app.on('activate', () => {
@@ -838,3 +939,12 @@ app.on('window-all-closed', () => {
 // The last chance to close the conversation cleanly. `before-quit` rather than
 // `will-quit`, because the database has to still be usable when it runs.
 app.on('before-quit', () => conversation().end())
+
+/**
+ * Give the keys back.
+ *
+ * A global shortcut outlives the window that wanted it. Without this a relaunch
+ * during development finds its own keys already taken — by itself, from the
+ * previous run — and reports them as refused.
+ */
+app.on('will-quit', releaseShortcuts)

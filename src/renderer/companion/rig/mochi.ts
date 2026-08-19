@@ -109,6 +109,8 @@ export class MochiAvatar implements AvatarBackend {
   private cssHeight = 0
   /** How far into the canvas she stands. See `setFeet`. */
   private feetFromTop = FEET_FROM_TOP
+  /** Eyes shut and not listening. See `setAsleep`. */
+  private asleep = false
   private pixelRatio = 1
   private disposed = false
 
@@ -272,6 +274,22 @@ export class MochiAvatar implements AvatarBackend {
     this.gazeTarget = { x: (clamp01(nx) - 0.5) * 2, y: (clamp01(ny) - 0.5) * 2 }
   }
 
+  /**
+   * Asleep, or awake.
+   *
+   * Only the drawing. The microphone is the renderer's to close and main's to
+   * decide about — this makes her LOOK asleep, which is the half that has to be
+   * true on screen for the other half to be believable.
+   */
+  setAsleep(on: boolean): void {
+    if (on === this.asleep) return
+    this.asleep = on
+    // Her gaze goes back to centre rather than staying wherever it was left
+    // following a cursor. Eyes shut and still tracking is uncanny in a way it
+    // takes a while to name.
+    if (on) this.gazeTarget = { x: 0, y: 0 }
+  }
+
   setIdle(on: boolean): void {
     if (on === this.idle) return
     this.idle = on
@@ -342,7 +360,23 @@ export class MochiAvatar implements AvatarBackend {
     }
 
     const look = blendLook(this.emotion.emotion, this.emotion.intensity)
-    const pose = this.idle ? this.idleLayer.pose(now) : { blink: 0, breath: 0 }
+    /**
+     * Asleep: eyes shut, and the breath left running.
+     *
+     * `blink: 1` is a held blink, which `paintEyes` floors at a hairline rather
+     * than closing entirely — an eye that vanishes reads as a dropped frame,
+     * and the hairline is what makes it read as shut instead.
+     *
+     * The BREATH is deliberately kept. She is asleep, not switched off, and a
+     * companion who stops moving altogether reads as a crash — which is the one
+     * thing this state must not look like, since the whole point of it is that
+     * she is fine and simply not listening.
+     */
+    const pose = this.asleep
+      ? { blink: 1, breath: this.idleLayer.pose(now).breath }
+      : this.idle
+        ? this.idleLayer.pose(now)
+        : { blink: 0, breath: 0 }
 
     // Layer 2, motion. The layer order is the ORDER OF THESE LINES:
     // idle feeds the squash target below, motion adds to it, the expression

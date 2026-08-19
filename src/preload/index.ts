@@ -96,6 +96,9 @@ const api: MochiApi = {
   menu() {
     ipcRenderer.send(guard('companion:menu'))
   },
+  wake() {
+    ipcRenderer.send(guard('companion:wake'))
+  },
   body(box: { left: number; top: number; width: number; height: number }) {
     ipcRenderer.send(guard('companion:body'), box)
   },

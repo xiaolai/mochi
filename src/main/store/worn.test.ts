@@ -2,7 +2,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { readBubbleSide, readWornPersonaId, writeBubbleSide, writeWornPersonaId } from './worn'
+import {
+  readBubbleSide,
+  readResting,
+  readWornPersonaId,
+  writeBubbleSide,
+  writeResting,
+  writeWornPersonaId,
+} from './worn'
 
 let userData = ''
 beforeEach(() => {
@@ -124,5 +131,37 @@ describe('which side the bubble sits on', () => {
   it('refuses a side that is not one', () => {
     expect(() => writeBubbleSide(userData, 'diagonally' as never)).toThrow()
     expect(readBubbleSide(userData)).toBe('auto')
+  })
+})
+
+describe('how she was left', () => {
+  it('is awake and visible until told otherwise', () => {
+    // The direction a wrong guess should fail in: a companion that is present
+    // and listening can be told to stop, and one that is neither cannot be told
+    // anything at all.
+    expect(readResting(userData)).toEqual({ asleep: false, hidden: false })
+    writeFileSync(join(userData, 'preferences.json'), '{ not json')
+    expect(readResting(userData)).toEqual({ asleep: false, hidden: false })
+    writeFileSync(join(userData, 'preferences.json'), JSON.stringify({ asleep: 'yes' }))
+    expect(readResting(userData).asleep).toBe(false)
+  })
+
+  it('remembers each independently', () => {
+    // Asleep is about her attention; hidden is about the screen. Two reasons,
+    // two answers.
+    writeResting(userData, { asleep: true })
+    expect(readResting(userData)).toEqual({ asleep: true, hidden: false })
+    writeResting(userData, { hidden: true })
+    expect(readResting(userData)).toEqual({ asleep: true, hidden: true })
+    writeResting(userData, { asleep: false })
+    expect(readResting(userData)).toEqual({ asleep: false, hidden: true })
+  })
+
+  it('keeps the worn persona and the bubble side while doing it', () => {
+    writeWornPersonaId(userData, 'loki')
+    writeBubbleSide(userData, 'left')
+    writeResting(userData, { asleep: true })
+    expect(readWornPersonaId(userData)).toBe('loki')
+    expect(readBubbleSide(userData)).toBe('left')
   })
 })
