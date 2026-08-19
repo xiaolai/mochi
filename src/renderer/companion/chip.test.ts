@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { chipRect, drawChip, hits, visible } from './chip'
 
-/** Where she stands on a 320 canvas at size 100 — her right edge and her top. */
-const HER = { right: 207, top: 239 }
+/** Where she stands on her 980x560 canvas at size 100. */
+const HER = { left: 443, top: 267, width: 94, height: 73 }
+
+/** The whole canvas on screen, which is the ordinary case. */
+const OPEN = { left: 0, top: 0, right: 980, bottom: 560 }
 
 describe('where it is', () => {
   it('sits beside her shoulder, not in the window’s corner', () => {
@@ -12,23 +15,21 @@ describe('where it is', () => {
     // Outside her box, and touching it. Both extremes were tried by eye and
     // rejected: centred on the corner overlapped her, and nine pixels clear
     // read as unrelated to her.
-    expect(rect.x).toBeGreaterThanOrEqual(HER.right)
-    expect(rect.y + rect.h).toBeLessThanOrEqual(HER.top)
-    expect(rect.x - HER.right).toBeLessThan(rect.w / 2)
-    expect(HER.top - (rect.y + rect.h)).toBeLessThan(rect.h / 2)
+    expect(rect.x).toBe(HER.left + HER.width)
+    expect(rect.y + rect.h).toBe(HER.top)
   })
 
   it('does not overlap her, which is the whole complaint about where it was', () => {
     // It used to be centred ON her corner, so a quarter of the button sat
     // inside her outline and the two ran into each other.
     const rect = chipRect(HER)
-    expect(rect.x).toBeGreaterThanOrEqual(HER.right)
+    expect(rect.x).toBeGreaterThanOrEqual(HER.left + HER.width)
     expect(rect.y + rect.h).toBeLessThanOrEqual(HER.top)
   })
 
   it('follows her when she moves', () => {
-    const a = chipRect({ right: 207, top: 239 })
-    const b = chipRect({ right: 260, top: 100 })
+    const a = chipRect(HER)
+    const b = chipRect({ ...HER, left: HER.left + 53, top: HER.top - 139 })
     expect(b.x - a.x).toBe(53)
     expect(b.y - a.y).toBe(-139)
   })
@@ -41,7 +42,7 @@ describe('where it is', () => {
     expect(hits(x - 4, y + h / 2, HER)).toBe(false)
     expect(hits(x + w / 2, y + h + 4, HER)).toBe(false)
     // The middle of her body is her, not it.
-    expect(hits(160, 290, HER)).toBe(false)
+    expect(hits(HER.left + HER.width / 2, HER.top + HER.height / 2, HER)).toBe(false)
   })
 })
 
@@ -51,7 +52,7 @@ describe('when it shows', () => {
   })
 
   it('shows while the pointer is on her', () => {
-    expect(visible({ x: 160, y: 280 }, true, HER)).toBe(true)
+    expect(visible({ x: HER.left + 40, y: HER.top + 40 }, true, HER)).toBe(true)
   })
 
   it('stays up while the pointer is on IT, though that is not on her', () => {
@@ -73,6 +74,15 @@ describe('when it shows', () => {
 
   it('hides when the pointer is on neither', () => {
     expect(visible({ x: 4, y: 20 }, false, HER)).toBe(false)
+  })
+
+  it('shows on the corner it actually chose, not the one it prefers', () => {
+    // The rule that makes it clickable at all, now that the corner moves.
+    const cramped = { left: 0, top: 0, right: HER.left + HER.width + 4, bottom: 560 }
+    const rect = chipRect(HER, cramped)
+    expect(visible({ x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 }, false, HER, cramped)).toBe(
+      true,
+    )
   })
 })
 
@@ -155,5 +165,50 @@ describe('when something needs reading', () => {
     const { ctx, calls } = recorder()
     drawChip(ctx, HER, COLOURS, 0, 3)
     expect(calls).toEqual([])
+  })
+})
+
+describe('which corner of her it takes', () => {
+  it('her top right, when the screen allows', () => {
+    // The corner a badge belongs on, and the one furthest from where the
+    // bubble's tail comes down.
+    const rect = chipRect(HER, OPEN)
+    expect(rect.x).toBe(HER.left + HER.width)
+    expect(rect.y + rect.h).toBe(HER.top)
+  })
+
+  it('her top LEFT when she is against the right edge of the display', () => {
+    // A 26-pixel button pinned outside her top right is half off the screen the
+    // moment she is against that edge — which the drag lets her be, by design.
+    const atRight = { left: 0, top: 0, right: HER.left + HER.width + 10, bottom: 560 }
+    const rect = chipRect(HER, atRight)
+    expect(rect.x + rect.w).toBeLessThanOrEqual(HER.left)
+  })
+
+  it('BELOW her when she is against the top of the display', () => {
+    const atTop = { left: 0, top: HER.top, right: 980, bottom: 560 }
+    const rect = chipRect(HER, atTop)
+    expect(rect.y).toBeGreaterThanOrEqual(HER.top + HER.height)
+  })
+
+  it('takes the far corner when she is in a corner of the display', () => {
+    // Top right of the screen: no room to her right, none above her. It goes
+    // to her bottom left, which is the only corner left.
+    const corner = { left: 0, top: HER.top, right: HER.left + HER.width + 10, bottom: 560 }
+    const rect = chipRect(HER, corner)
+    expect(rect.x + rect.w).toBeLessThanOrEqual(HER.left)
+    expect(rect.y).toBeGreaterThanOrEqual(HER.top + HER.height)
+  })
+
+  it('stays on screen even when neither side has room', () => {
+    const none = {
+      left: HER.left,
+      top: HER.top,
+      right: HER.left + HER.width,
+      bottom: HER.top + HER.height,
+    }
+    const rect = chipRect(HER, none)
+    expect(rect.x).toBeGreaterThanOrEqual(none.left)
+    expect(rect.y + rect.h).toBeLessThanOrEqual(none.bottom)
   })
 })

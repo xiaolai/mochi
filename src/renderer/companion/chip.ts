@@ -26,6 +26,8 @@
  * the pointer is always on one or the other along any path between them.
  */
 
+import type { Body, Room } from './place'
+
 /** Its size, in CSS pixels. Small: it is a handle, not a button bar. */
 const SIZE = 26
 
@@ -79,26 +81,39 @@ export interface Rect {
   readonly h: number
 }
 
-/** Top right of her window, inset. Returned rather than drawn so it is testable. */
-
 /**
- * At HER shoulder, not the window's corner.
+ * Which corner of her it sits on — the one with room for it ON SCREEN.
  *
- * The window is deliberately much larger than she is — the bubble draws above
- * her head and needs the width — so "top right of the window" put the control a
- * long way from the thing it belongs to. It followed the window because that is
- * what it was given; now it is given her.
+ * Her top right by preference: it is the corner a badge belongs on, and the one
+ * furthest from where the bubble's tail comes down. But she can be dragged into
+ * any corner of the display, and a 26-pixel button pinned outside her top right
+ * is half off the screen the moment she is against the right edge, and entirely
+ * off it when she is against the top.
  *
- * Clear of her corner rather than centred on it. Centred put a quarter of the
- * button inside her outline, so the two ran into each other.
+ * The same question the bubble answers, at a twentieth of the size — so it is
+ * asked the same way, against the `Room` rather than against the window.
  */
-export function chipRect(her: { right: number; top: number }): Rect {
-  return { x: her.right + CLEAR, y: her.top - SIZE - CLEAR, w: SIZE, h: SIZE }
+export function chipRect(her: Body, room?: Room): Rect {
+  const rightOfHer = her.left + her.width + CLEAR
+  const leftOfHer = her.left - CLEAR - SIZE
+  const aboveHer = her.top - CLEAR - SIZE
+  const belowHer = her.top + her.height + CLEAR
+
+  // No room means the whole canvas, which is what every caller that does not
+  // care about the screen — the tests, and anything drawing her in isolation —
+  // should get.
+  const x =
+    room === undefined || rightOfHer + SIZE <= room.right
+      ? rightOfHer
+      : Math.max(room.left, leftOfHer)
+  const y =
+    room === undefined || aboveHer >= room.top ? aboveHer : Math.min(belowHer, room.bottom - SIZE)
+  return { x, y, w: SIZE, h: SIZE }
 }
 
 /** Whether a point in CSS pixels is on it. */
-export function hits(x: number, y: number, her: { right: number; top: number }): boolean {
-  const rect = chipRect(her)
+export function hits(x: number, y: number, her: Body, room?: Room): boolean {
+  const rect = chipRect(her, room)
   return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h
 }
 
@@ -111,7 +126,8 @@ export function hits(x: number, y: number, her: { right: number; top: number }):
 export function visible(
   pointer: { x: number; y: number } | null,
   onHer: boolean,
-  her: { right: number; top: number },
+  her: Body,
+  room?: Room,
 ): boolean {
   /**
    * Hover, and nothing else — including when something has gone wrong.
@@ -129,7 +145,7 @@ export function visible(
   if (pointer === null) return false
   if (onHer) return true
   // The button, plus the gap it now sits across. See `GRACE`.
-  const rect = chipRect(her)
+  const rect = chipRect(her, room)
   return (
     pointer.x >= rect.x - GRACE &&
     pointer.x <= rect.x + rect.w + GRACE &&
@@ -148,13 +164,14 @@ export function visible(
  */
 export function drawChip(
   ctx: CanvasRenderingContext2D,
-  her: { right: number; top: number },
+  her: Body,
   colours: ChipColours,
   opacity: number,
   problems = 0,
+  room?: Room,
 ): void {
   if (opacity <= 0) return
-  const { x, y, w, h } = chipRect(her)
+  const { x, y, w, h } = chipRect(her, room)
 
   ctx.save()
   ctx.globalAlpha = opacity

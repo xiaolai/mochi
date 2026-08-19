@@ -139,14 +139,6 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * resize rather than cached at construction, because `fit()` changes the
    * canvas and a stale corner would leave the chip behind.
    */
-  function herCorner(): { right: number; top: number } {
-    const layout = layoutFor(worn, worn.size)
-    return {
-      right: canvas.clientWidth / 2 + layout.bodyWidth / 2,
-      top: feetY(canvas.clientHeight, BREATHING_UNITS * layout.scale, feet) - layout.bodyHeight,
-    }
-  }
-
   /**
    * Her whole body in the canvas, which is what the bubble is placed AROUND.
    *
@@ -416,7 +408,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       return
     }
     if (chip <= 0) return
-    if (!chipHits(event.clientX, event.clientY, herCorner())) return
+    if (!chipHits(event.clientX, event.clientY, herBox(), roomOnScreen())) return
     window.mochi.history()
   })
 
@@ -512,12 +504,12 @@ export function showFace(canvas: HTMLCanvasElement): Face {
      * turned off, or one the reader has dismissed.
      */
     const inBubble = bubble.controls() !== null
-    const wanted = !inBubble && chipVisible(at, onHer, herCorner()) ? 1 : 0
+    const wanted = !inBubble && chipVisible(at, onHer, herBox(), roomOnScreen()) ? 1 : 0
     chip =
       wanted > chip
         ? Math.min(1, chip + seconds / CHIP_FADE_S)
         : Math.max(0, chip - seconds / CHIP_FADE_S)
-    drawChip(ctx, herCorner(), CHIP_COLOURS, chip, troubles)
+    drawChip(ctx, herBox(), CHIP_COLOURS, chip, troubles, roomOnScreen())
 
     // Only when it CHANGES. Asking main to toggle the window flag sixty times a
     // second would be sixty IPC messages a second for an answer that changes
@@ -527,7 +519,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // one deliberate exception to "only painted pixels take the mouse" — a
     // control nobody can click is not a control. It is exactly the size of the
     // control and disappears with it.
-    const onChip = chip > 0 && at !== null && chipHits(at.x, at.y, herCorner())
+    const onChip = chip > 0 && at !== null && chipHits(at.x, at.y, herBox(), roomOnScreen())
     // Only the bubble's CONTROLS, never its text. The design's rule is that
     // only painted pixels of HERS take the mouse; two small buttons are the
     // same deliberate exception the chip already makes, and the paragraph
