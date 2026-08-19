@@ -61,7 +61,7 @@ function recorder() {
   }
 }
 
-const COLOURS = { paper: '#f4f2ea', ink: '#2b2c25' }
+const COLOURS = { paper: '#f4f1ea', ink: '#16170f', alarm: '#d1495b' }
 
 /** `howMany` seconds of 60fps frames, with `quietFor` held. `begun` is the
  *  utterance's answer to "has THIS response's audio started", not a clock's. */

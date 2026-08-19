@@ -221,6 +221,30 @@
   --warn-line: light-dark(#9a6f14, #a9821f);
   --warn-bg: light-dark(#fdf6e6, #2c2517);
 
+  /*
+   * The alarm dot, and the ONE colour here that does not flip by scheme.
+   *
+   * `bubble.ts` and `chip.ts` each argued for this and each kept their own copy
+   * of the hex, which is how the argument survived and the value did not reach
+   * the design system: "it is not decoration -- it means read me -- and a red
+   * that politely adapts to its surroundings can lose that argument". That is
+   * right, so the token is a single value rather than a `light-dark()` pair.
+   *
+   * It is allowed to be one value because it MEASURES as one. A dot is a
+   * non-text mark, so the floor is 3.00 (WCAG 1.4.11) rather than 4.50, and
+   * this red is mid-luminance enough to clear it on all four surfaces:
+   *
+   * | on            | light | dark |
+   * | ---           | ---   | ---  |
+   * | `--paper`     | 3.87  | 3.98 |
+   * | `--paper-2`   | 4.14  | 3.64 |
+   *
+   * `--red` cannot do this job: `#b3261e` is 5.79 on light paper and 2.65 on
+   * dark, so a scheme-fixed alarm drawn in it fails outright at night. That is
+   * the whole reason there are two reds rather than one.
+   */
+  --alarm: #d1495b;
+
   /* ---- type: three roles. Display+body, labels, data --------------------- */
   --sans:
     'Archivo', -apple-system, system-ui, 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK SC',

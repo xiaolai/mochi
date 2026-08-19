@@ -46,12 +46,27 @@ const TOKENS = read('./design/tokens.css')
 
 const WINDOWS = ['companion', 'history', 'settings'] as const
 
-/** Everything between `<style>` and `</style>`, which is all a window has. */
-function stylesheetOf(window: string): string {
+/** Everything between `<style>` and `</style>`. */
+function inlineStyleOf(window: string): string {
   const html = read(`./${window}/index.html`)
   const style = /<style>([\s\S]*?)<\/style>/.exec(html)?.[1]
   expect(style, `${window} has a <style> block`).toBeDefined()
   return style ?? ''
+}
+
+/** Whether the document actually pulls the shared sheet in. */
+function linksTokens(window: string): boolean {
+  return /<link[^>]+href="[^"]*design\/tokens\.css"/.test(read(`./${window}/index.html`))
+}
+
+/**
+ * Everything that applies to this window: its own block, plus the shared sheet
+ * IF it loads it. Appending `tokens.css` unconditionally is how the first draft
+ * of this file reported a guarantee the companion did not have.
+ */
+function stylesheetOf(window: string): string {
+  const own = inlineStyleOf(window)
+  return linksTokens(window) ? `${own}\n${TOKENS}` : own
 }
 
 /** Every class this window's modules add, remove or toggle while running. */
@@ -86,16 +101,24 @@ function selectorsOf(css: string): readonly string[] {
 }
 
 describe('`hidden` means hidden', () => {
-  it('is settled once, for every window, in tokens.css', () => {
+  it('is declared once, in tokens.css', () => {
     // `!important` is the point rather than a shortcut: the whole failure is
     // that the ordinary cascade lets an author `display` win.
     expect(TOKENS).toMatch(/\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/)
   })
 
+  it.each(WINDOWS)('reaches %s, which has to LOAD the sheet to be covered', (window) => {
+    // The half this file claimed and did not check. A rule in `tokens.css` is a
+    // rule about the windows that link `tokens.css`, and saying "for every
+    // window" while grepping one file is the same species of mistake as the bug
+    // it guards: it reads as covered.
+    expect(linksTokens(window)).toBe(true)
+  })
+
   it.each(WINDOWS)('%s does not patch it per element', (window) => {
     // A patch here is not merely redundant — it is the habit that left the
     // "0 problems" chip on screen three lines from the fix for the same bug.
-    const patches = selectorsOf(stylesheetOf(window)).filter((one) => one.includes('[hidden]'))
+    const patches = selectorsOf(inlineStyleOf(window)).filter((one) => one.includes('[hidden]'))
     expect(patches).toEqual([])
   })
 })
@@ -113,9 +136,7 @@ describe('a class the renderer toggles is never a bare selector', () => {
 
   it.each(WINDOWS)('%s', (window) => {
     const toggled = toggledClassesOf(window)
-    const bare = new Set(
-      selectorsOf(`${stylesheetOf(window)}\n${TOKENS}`).filter((one) => /^\.[\w-]+$/.test(one)),
-    )
+    const bare = new Set(selectorsOf(stylesheetOf(window)).filter((one) => /^\.[\w-]+$/.test(one)))
     for (const name of toggled) {
       expect(bare, `.${name} is toggled at runtime, so it must always be compounded`).not.toContain(
         `.${name}`,

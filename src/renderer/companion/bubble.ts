@@ -76,6 +76,16 @@ export interface BubbleColours {
   /** The opaque surface. See rule 2. */
   readonly paper: string
   readonly ink: string
+  /**
+   * The unread-problems dot. Not themed, unlike everything else here.
+   *
+   * The rest of the colour is handed in so she can sit on a light desktop or a
+   * dark one. This one is not decoration -- it means "read me" -- and a red that
+   * politely adapts to its surroundings can lose that argument. It is `--alarm`
+   * rather than a literal now, and `tokens.css` carries the four measurements
+   * that let one value serve both schemes.
+   */
+  readonly alarm: string
 }
 
 export interface Bubble {
@@ -248,14 +258,6 @@ const RAIL_MIN = 14
 
 /** The problem badge on the history control. A dot: a digit at this size is mush. */
 const DOT = 3.5
-/**
- * Not themed, unlike everything else here.
- *
- * The rest of the bubble's colour is handed in so she can sit on a light
- * desktop or a dark one. This one is not decoration — it means "read me" — and
- * a red that politely adapts to its surroundings can lose that argument.
- */
-const ALARM = '#d1495b'
 
 export function createBubble(): Bubble {
   let opacity = 0
@@ -610,7 +612,7 @@ export function createBubble(): Bubble {
         ctx.beginPath()
         ctx.arc(history.x + history.w - 2, history.y + 2, DOT + 1.5, 0, Math.PI * 2)
         ctx.fill()
-        ctx.fillStyle = ALARM
+        ctx.fillStyle = colours.alarm
         ctx.beginPath()
         ctx.arc(history.x + history.w - 2, history.y + 2, DOT, 0, Math.PI * 2)
         ctx.fill()

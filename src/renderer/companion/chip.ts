@@ -58,20 +58,20 @@ const GRACE = 12
 /** The badge, in CSS pixels. A dot, not a number: at this size a digit is mush. */
 const DOT = 5
 
-/**
- * The badge's colour, fixed rather than themed.
- *
- * Every other colour here is handed in so she can sit on a light desktop or a
- * dark one. This one is not a decoration — it means "read me" — and a red that
- * politely adapts to its surroundings is a red that can lose the argument with
- * them.
- */
-const ALARM = '#d1495b'
-
 export interface ChipColours {
   /** Its own opaque surface. She may be sitting on a photograph. */
   readonly paper: string
   readonly ink: string
+  /**
+   * The unread-problems dot. Not themed, unlike everything else here.
+   *
+   * The rest of the colour is handed in so she can sit on a light desktop or a
+   * dark one. This one is not decoration -- it means "read me" -- and a red that
+   * politely adapts to its surroundings can lose that argument. It is `--alarm`
+   * rather than a literal now, and `tokens.css` carries the four measurements
+   * that let one value serve both schemes.
+   */
+  readonly alarm: string
 }
 
 export interface Rect {
@@ -221,7 +221,7 @@ export function drawChip(
     ctx.beginPath()
     ctx.arc(x + w - DOT, y + DOT, DOT + 1.5, 0, Math.PI * 2)
     ctx.fill()
-    ctx.fillStyle = ALARM
+    ctx.fillStyle = colours.alarm
     ctx.beginPath()
     ctx.arc(x + w - DOT, y + DOT, DOT, 0, Math.PI * 2)
     ctx.fill()

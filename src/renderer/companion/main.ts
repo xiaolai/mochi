@@ -1,5 +1,6 @@
 import type { MochiApi } from '@shared/ipc'
 import { showFace, type Face } from './face'
+import { applyAccent } from '../design/apply-accent'
 import { openSession, type Session, type SessionState } from './audio/session'
 
 declare global {
@@ -162,7 +163,25 @@ async function open(): Promise<void> {
   // speaking rate, and doing it before she can speak means the first utterance
   // is paced against the right voice rather than the last one's.
   face.wear(next.face)
-  face.showWords(next.bubble ? { paper: '#f4f2ea', ink: '#2b2c25' } : null)
+  /*
+    The load-time contrast guard, in the window she actually lives in.
+
+    `contrastFailures` is the reason a persona cannot ship an unreadable
+    interface, and it was running in the two windows somebody opens on purpose
+    and not in the one that is on screen all day. It runs here for the same
+    reason it runs there — this is the moment a stranger's hue first exists —
+    and it is SAID rather than swallowed, because falling back silently leaves
+    somebody looking at a green companion wondering why the character they chose
+    had no effect.
+  */
+  const unreadable = applyAccent(document.documentElement, next.face)
+  if (unreadable.length > 0) {
+    window.mochi.report({
+      kind: 'note',
+      text: `her colour was refused and the built-in used instead — ${unreadable.join('; ')}`,
+    })
+  }
+  face.showWords(next.bubble)
   // Whatever main could not do while assembling all of the above. Usually none;
   // when there are any, the shoulder control says so on its own.
   face.troubled(next.problems)

@@ -1,7 +1,8 @@
 import { MochiAvatar } from './rig/mochi'
 import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
-import { createBubble, type BubbleColours } from './bubble'
+import { createBubble } from './bubble'
+import { resolvePalette, whenSchemeChanges, type Palette } from '../design/resolve'
 import { createUtterance } from './utterance'
 import { createAttending, levelOf, type Attention } from './attending'
 import { createBeat, drawBeat, type Beat } from './beat'
@@ -103,7 +104,15 @@ export interface Face {
    */
   opened(): void
   /** Turn the bubble on for this persona, with the surface it draws on. */
-  showWords(colours: BubbleColours | null): void
+  /**
+   * Whether her words appear above her head.
+   *
+   * A boolean rather than a palette, because the colours are the design
+   * system's and never main's: this side already reads them from the sheet for
+   * the chip, and a caller handing in `#f4f2ea` is a caller that can hand in the
+   * wrong `#f4f2ea` — which is exactly what happened.
+   */
+  showWords(shown: boolean): void
   /**
    * How many things main could not do, so the shoulder control can say so.
    *
@@ -125,11 +134,22 @@ const CHIP_FADE_S = 0.12
 /**
  * Its own surface, like the bubble's and for the same reason: she may be sitting
  * on anything, so a control tinted by the desktop behind it has no contrast
- * guarantee at all. Fixed rather than themed for now — it is one control, and a
- * per-persona palette for it is a decision the appearance loader should make
- * once, not something to guess at here.
+ * guarantee at all.
+ *
+ * It used to be a literal pair here — `#f4f2ea` / `#2b2c25` — which was one
+ * digit off `--paper` and a different colour from `--ink`, and had no dark half
+ * at all. Read from the sheet now, so it cannot drift, and re-read when the
+ * scheme flips rather than only at startup: somebody switching macOS to dark at
+ * dusk should not leave her painted for daylight.
+ *
+ * Still not themed per persona, which was the original note's real point and is
+ * unchanged: her colour says who she is, and a control is something you operate.
  */
-const CHIP_COLOURS = { paper: '#f4f2ea', ink: '#2b2c25' }
+let palette: Palette = resolvePalette(document.documentElement)
+whenSchemeChanges(document.documentElement, (next) => {
+  palette = next
+  // The render loop reads this every frame, so nothing else has to happen.
+})
 
 export function showFace(canvas: HTMLCanvasElement): Face {
   const found = canvas.getContext('2d')
@@ -275,7 +295,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   /** What main was last told, so the IPC is not a per-frame message. */
   let solid: boolean | null = null
   /** Null until a persona with `bubble: true` is worn. Off is the default. */
-  let colours: BubbleColours | null = null
+  let showingWords = false
   /**
    * How far the hover control has faded in. Not a boolean, so it does not
    * snap into existence under a cursor that was only passing over her.
@@ -366,7 +386,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   /** Which control a point is on, if any. */
   function hitsControls(x: number, y: number): 'copy' | 'close' | 'history' | null {
     const found = bubble.controls()
-    if (found === null || colours === null) return null
+    if (found === null || !showingWords) return null
     const inside = (r: { x: number; y: number; w: number; h: number }): boolean =>
       x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h
     if (inside(found.copy)) return 'copy'
@@ -428,7 +448,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   window.addEventListener(
     'wheel',
     (event) => {
-      if (colours === null) return
+      if (!showingWords) return
       if (!bubble.covers(event.clientX, event.clientY)) return
       event.preventDefault()
       // A line per notch, in the direction the content moves under the eye.
@@ -568,7 +588,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // AFTER her, so it sits above rather than behind. It is asked nothing about
     // the mouse: `hitTest` below is the avatar's alone, which is what keeps the
     // design's promise that a bubble cannot enlarge her hit region.
-    if (colours !== null) {
+    if (showingWords) {
       // Hover is read BEFORE drawing, so the controls appear on the same frame
       // the pointer arrives rather than one behind it.
       const here = pointerOnWindow()
@@ -576,7 +596,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       bubble.draw(
         ctx,
         canvas.clientWidth,
-        colours,
+        palette,
         utterance.text(),
         utterance.at(),
         herBox(),
@@ -616,7 +636,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       wanted > chip
         ? Math.min(1, chip + seconds / CHIP_FADE_S)
         : Math.max(0, chip - seconds / CHIP_FADE_S)
-    drawChip(ctx, herBox(), CHIP_COLOURS, chip, troubles, roomOnScreen())
+    drawChip(ctx, herBox(), palette, chip, troubles, roomOnScreen())
 
     // Only when it CHANGES. Asking main to toggle the window flag sixty times a
     // second would be sixty IPC messages a second for an answer that changes
@@ -634,7 +654,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
      * is not a control; this is not a control, so her hit region is unchanged
      * and the desktop under it is still reachable.
      */
-    drawBeat(ctx, herBox(), CHIP_COLOURS, waiting, beat.opacity(), roomOnScreen())
+    drawBeat(ctx, herBox(), palette, waiting, beat.opacity(), roomOnScreen())
 
     const onChip = chip > 0 && at !== null && chipHits(at.x, at.y, herBox(), roomOnScreen())
     // Only the bubble's CONTROLS, never its text. The design's rule is that
@@ -747,9 +767,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       // with her already staring off into the corner.
       lookAtPointer()
     },
-    showWords: (next: BubbleColours | null) => {
-      colours = next
-      if (next === null) bubble.clear()
+    showWords: (shown: boolean) => {
+      showingWords = shown
+      if (!shown) bubble.clear()
     },
     wear: (face: FaceSpec) => {
       worn = face

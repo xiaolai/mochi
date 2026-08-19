@@ -1,0 +1,116 @@
+/**
+ * The design tokens, as colours a canvas can actually use.
+ *
+ * ## Why this exists at all
+ *
+ * `tokens.css` is the one place colour is decided, and the two DOM windows get
+ * that for free — they write `var(--paper)` and the cascade does the rest. The
+ * companion cannot: she is drawn into a `<canvas>`, and `ctx.fillStyle` takes a
+ * colour, not a custom property. So her colours were hard-coded, and they drifted
+ * exactly as far as you would expect — `#f4f2ea` against `--paper`'s `#f4f1ea`,
+ * one digit out, and `#2b2c25` against `--ink`'s `#16170f`, which is not a near
+ * miss but a different colour. She also had no dark half at all, in the one
+ * window that sits on the desktop where the scheme is most obvious.
+ *
+ * Reading the values back out of the cascade is what makes drift impossible
+ * rather than merely discouraged. A second table of hexes in TypeScript, however
+ * carefully checked in, is a second table.
+ *
+ * ## Why a probe element
+ *
+ * Custom properties are substitution-only: `getPropertyValue('--paper')` hands
+ * back the token stream — the literal text `light-dark(#f4f1ea, #1a1b14)` — not
+ * a colour. `light-dark()` is resolved against `color-scheme`, and only a real
+ * property on a real element in the tree has one. So each token is assigned to a
+ * colour-valued property on a throwaway span, and the computed style is read
+ * back. It is the only arrangement that returns the value the user is seeing.
+ *
+ * Three different properties rather than three probes, because one element is one
+ * style recalculation.
+ *
+ * ## A missing token THROWS
+ *
+ * `color: var(--nope)` is invalid at computed-value time, which makes `color`
+ * fall back to inherited — a perfectly real colour, and the drawing would look
+ * plausible and be wrong. So every token is read as `var(--x, magenta)` and a
+ * magenta answer is treated as proof the sheet is not loaded. The companion
+ * shipped for months with no stylesheet linked at all; this is the assertion
+ * that would have said so on the first frame.
+ */
+
+/** What the companion draws with. Every one of these is a token, not a choice. */
+export interface Palette {
+  /** The opaque surface anything carrying words gets. */
+  readonly paper: string
+  readonly ink: string
+  /**
+   * The unread-problems dot, and the one colour here that does NOT flip by
+   * scheme — see `--alarm` in `tokens.css` for the argument and the four
+   * measurements that let it stay one value.
+   */
+  readonly alarm: string
+}
+
+/**
+ * Which property carries which token on the probe.
+ *
+ * They only have to be colour-valued and distinct; nothing is ever painted with
+ * them. `border-top-color` needs no border to compute.
+ */
+const READ = [
+  { key: 'paper', token: '--paper', property: 'color' },
+  { key: 'ink', token: '--ink', property: 'background-color' },
+  { key: 'alarm', token: '--alarm', property: 'border-top-color' },
+] as const satisfies readonly { key: keyof Palette; token: string; property: string }[]
+
+/** What a token that does not exist resolves to, and therefore what to refuse. */
+const MISSING = 'rgb(255, 0, 255)'
+
+export function resolvePalette(root: HTMLElement): Palette {
+  const document = root.ownerDocument
+  const probe = document.createElement('span')
+  probe.setAttribute('aria-hidden', 'true')
+  // Out of flow and unpaintable: this must not disturb a window whose whole job
+  // is being transparent.
+  probe.style.position = 'absolute'
+  probe.style.opacity = '0'
+  probe.style.pointerEvents = 'none'
+  for (const one of READ) probe.style.setProperty(one.property, `var(${one.token}, magenta)`)
+
+  root.append(probe)
+  const computed = getComputedStyle(probe)
+  const read = READ.map((one) => [one, computed.getPropertyValue(one.property)] as const)
+  probe.remove()
+
+  const missing = read.filter(([, value]) => value === MISSING).map(([one]) => one.token)
+  if (missing.length > 0) {
+    throw new Error(
+      `design: ${missing.join(', ')} did not resolve — this document does not load tokens.css`,
+    )
+  }
+  return Object.fromEntries(read.map(([one, value]) => [one.key, value])) as unknown as Palette
+}
+
+/**
+ * Re-read when the scheme flips.
+ *
+ * Resolving once at startup is what every hard-coded palette effectively did,
+ * and it is wrong for the same reason: somebody switches macOS to dark at dusk
+ * and she is still painted for daylight. Cheap — one recalculation per flip, not
+ * per frame, which is why this is a subscription and not a call in the render
+ * loop.
+ *
+ * Returns the unsubscribe, so a window that closes does not leave a listener
+ * holding a reference to its document.
+ */
+export function whenSchemeChanges(root: HTMLElement, run: (palette: Palette) => void): () => void {
+  const dark = root.ownerDocument.defaultView?.matchMedia('(prefers-color-scheme: dark)')
+  if (dark === undefined) return () => {}
+  const onChange = (): void => {
+    run(resolvePalette(root))
+  }
+  dark.addEventListener('change', onChange)
+  return () => {
+    dark.removeEventListener('change', onChange)
+  }
+}

@@ -229,7 +229,7 @@ function recorder() {
   return { ctx: ctx as unknown as CanvasRenderingContext2D, calls, raw: ctx }
 }
 
-const COLOURS = { paper: '#f4f2ea', ink: '#2b2c25' }
+const COLOURS = { paper: '#f4f1ea', ink: '#16170f', alarm: '#d1495b' }
 
 describe('what it draws', () => {
   it('draws nothing at all when there is no beat', () => {

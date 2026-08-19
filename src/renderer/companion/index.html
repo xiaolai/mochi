@@ -3,6 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <title>Mochi</title>
+    <!--
+      The same sheet the other two windows load. She went without one for the
+      whole of this build, which is how her canvas colours drifted a digit off
+      `--paper` and a whole colour off `--ink`, and how she ended up with no dark
+      half in the window where the desktop's scheme is most visible. `resolve.ts`
+      reads the used values back out of it, because a canvas cannot take a
+      custom property.
+    -->
+    <link rel="stylesheet" href="../design/tokens.css" />
     <style>
       /*
         Transparent all the way down. `background: transparent` on the window is
@@ -26,17 +35,42 @@
         width: 100%;
         height: 100%;
       }
-      /* The one line of text, for the states before she can be drawn. */
+      /*
+        The one line of text, for the states before she can be drawn -- and the
+        only words this window ever ships.
+
+        It gets its own opaque surface, which is the rule the bubble and the chip
+        already follow and this line did not: she may be sitting on anything, a
+        photograph included, so 45%-black text with a white shadow painted
+        straight onto the wallpaper has no contrast guarantee whatsoever. It was
+        also the state every cold start and every failure to draw shows.
+
+        `fit-content` and an auto margin, so the surface is the width of the
+        words rather than the width of the window.
+      */
       #app {
         position: absolute;
         inset: auto 0 6px 0;
-        font:
-          11px/1.4 -apple-system,
-          system-ui,
-          sans-serif;
-        color: rgb(0 0 0 / 0.45);
+        width: fit-content;
+        max-width: calc(100% - var(--s3));
+        margin-inline: auto;
+        padding: var(--s0) var(--s3);
+        border-radius: var(--r-pill);
+        background: var(--paper);
+        box-shadow: var(--lift-1);
+        color: var(--ink-2);
+        font: var(--t-micro) / 1.4 var(--sans);
         text-align: center;
-        text-shadow: 0 1px 0 rgb(255 255 255 / 0.6);
+      }
+      /*
+        Required, not tidiness. `describe('listening')` returns the empty string
+        on purpose -- there is no label worth writing under a face that is
+        plainly listening -- and before this line had a surface, empty simply
+        drew nothing. A pill that stayed under her for the whole session would be
+        a regression introduced by fixing the contrast.
+      */
+      #app:empty {
+        display: none;
       }
     </style>
     <!--
