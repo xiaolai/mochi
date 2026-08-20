@@ -147,6 +147,15 @@ const SCREEN_INSET = 8
 const CHIP_FADE_S = 0.12
 
 /**
+ * How long a smaller window has to stay the right answer before it is taken.
+ *
+ * Past the 0.12s bubble fade and past the gap between two sentences of the same
+ * reply, so an ordinary conversation resizes her window twice — once up when she
+ * starts speaking, once down when she has finished — rather than on every pause.
+ */
+const SHRINK_SETTLE_MS = 400
+
+/**
  * Its own surface, like the bubble's and for the same reason: she may be sitting
  * on anything, so a control tinted by the desktop behind it has no contrast
  * guarantee at all.
@@ -304,14 +313,39 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    */
   function fitToContent(): void {
     const wanted = padNeeded()
-    if (
+    const same =
       pad.left === wanted.left &&
       pad.top === wanted.top &&
       pad.right === wanted.right &&
       pad.bottom === wanted.bottom
-    ) {
+    if (same) {
+      shrinkWantedSince = null
       return
     }
+
+    /*
+      Grow at once, shrink only after it has stayed wanted.
+
+      A bubble appearing and going is two resizes, and back-to-back utterances
+      would be four in a couple of seconds — a window changing size that often is
+      the flicker this whole arrangement was supposed to avoid. Growing late
+      clips what is being drawn, so growth is immediate and only shrinking waits.
+
+      The timer is a wall clock rather than a frame count because the render loop
+      runs at whatever rate the compositor gives it, and "a quarter of a second"
+      should not mean something different when she is occluded.
+    */
+    const grows =
+      wanted.left > pad.left ||
+      wanted.top > pad.top ||
+      wanted.right > pad.right ||
+      wanted.bottom > pad.bottom
+    if (!grows) {
+      const now = performance.now()
+      shrinkWantedSince ??= now
+      if (now - shrinkWantedSince < SHRINK_SETTLE_MS) return
+    }
+    shrinkWantedSince = null
     pad = wanted
     roomy = showingWords && bubble.opacity() > 0
     window.mochi.fit({ pad: wanted, body: herBox() })
@@ -377,6 +411,8 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   let pad: Pad = fullPad(bodyOf(layoutFor(MOCHI, MOCHI.size)))
   /** Whether the window is currently the big one. See `herBox`. */
   let roomy = true
+  /** When a smaller window first became the right answer. See `fitToContent`. */
+  let shrinkWantedSince: number | null = null
   /** The last answer sent up, so an unchanged one is not sent again. */
   let lastOffered = ''
 

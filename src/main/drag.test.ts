@@ -149,3 +149,40 @@ describe('the window origin is whole pixels', () => {
     expect(to.y).toBe(Math.round(top + FRACTIONAL.height - to.feetFromTop))
   })
 })
+
+describe('the stance follows the window she is actually in', () => {
+  /**
+   * `defaultFeet` is where her feet sit inside her own window, and her window
+   * is no longer a fixed size — it fits what is drawn, so it is ~140 tall while
+   * she is idle and 560 while a bubble is up.
+   *
+   * Passing the old constant put the origin 241px too high on every drag, so she
+   * appeared well above the cursor and nowhere near the corner being dragged
+   * into. The caller derives it from her body now, which is right in both.
+   */
+  const WORK = { x: 0, y: 30, width: 2560, height: 1410 }
+  const BODY = { left: 0, width: 94, height: 73.32 }
+
+  it.each([
+    ['fitted window, she stands 26px in', 26],
+    ['big window with a bubble up, she stands 267px in', 267],
+  ])('puts her under the cursor: %s', (_case, padTop) => {
+    const feetInWindow = padTop + BODY.height
+    const cursor = { x: 2400, y: 1300 }
+    const grip = { x: 47, y: 36 }
+    const to = dragTo(cursor, grip, BODY, WORK, 4, feetInWindow, BODY.height + 10)
+    // Where she is DRAWN is the window origin plus her offset inside it.
+    const drawnTop = to.y + padTop
+    const wantedTop = cursor.y - grip.y
+    expect(Math.abs(drawnTop - wantedTop)).toBeLessThanOrEqual(1)
+  })
+
+  it('was 241px out with the old constant, which is what this pins', () => {
+    // The regression itself, so the number cannot quietly come back.
+    const cursor = { x: 2400, y: 1300 }
+    const grip = { x: 47, y: 36 }
+    const stale = dragTo(cursor, grip, BODY, WORK, 4, 340, BODY.height + 10)
+    const drawnTop = stale.y + 26
+    expect(Math.round(cursor.y - grip.y - drawnTop)).toBe(241)
+  })
+})

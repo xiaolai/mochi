@@ -528,7 +528,19 @@ ipcMain.on('companion:grab', (_event, value: unknown) => {
       // stance that arrived a frame late would show as her jumping.
       companion?.webContents.send('voice:send', { type: '__mochi_stance__', feetFromTop: feet })
     },
-    FEET_FROM_TOP,
+    /*
+      Where her feet ARE, not where they were when the window was a fixed size.
+
+      This passed `FEET_FROM_TOP` — 340 — which was her stance in a 980x560
+      window and is nonsense in one that fits her: she stands 99px into a 140px
+      window, so every drag put the origin 241px too high and she appeared that
+      far up and away from the corner she was being dragged into.
+
+      Derived from `herBody`, so it is right in BOTH windows without a branch:
+      267 + 73.32 is 340 while a bubble is up and the window is the big one, and
+      26 + 73.32 is 99 while it is not.
+    */
+    herBody.top + herBody.height,
   )
 })
 
