@@ -80,8 +80,10 @@ const DOCUMENTS: readonly {
       'tab-cast',
       'tab-archive',
       'tab-machine',
-      'nav',
+      'nav-groups',
       'machine-pane',
+      'machine-tools',
+      'topbar-context',
     ],
   },
 ]
