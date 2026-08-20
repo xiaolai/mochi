@@ -21,6 +21,46 @@ describe('when it happened', () => {
     expect(dayLabel(lateLastNight, new Date(2026, 7, 18, 0, 10).getTime())).toBe('Yesterday')
   })
 
+  it('does not call a future instant Today', () => {
+    /*
+      `at >= midnight` with no upper bound labelled every later date "Today",
+      so a clock-skewed row was filed under today and `byDay` merged it into
+      today's group.
+    */
+    const tomorrow = new Date(2026, 7, 19, 9, 0).getTime()
+    expect(dayLabel(tomorrow, NOW)).not.toBe('Today')
+    expect(dayLabel(new Date(2026, 7, 18, 23, 59).getTime(), NOW)).toBe('Today')
+  })
+
+  it('crosses a daylight-saving boundary on calendar days, not on 24 hours', () => {
+    /*
+      Run in a zone that HAS daylight saving, because the machine this was
+      written on does not (Asia/Shanghai) and the first version of this test
+      passed against the broken code — which is no test at all.
+
+      The case, measured rather than guessed: London, Monday 30 March 2026, the
+      day after the 23-hour spring-forward day. `midnight(30th) − 86_400_000` is
+      23:00 on the 28th, not midnight on the 29th, so the last hour of SATURDAY
+      the 28th — two days back — was labelled "Yesterday". The first example I
+      reached for (early on the 29th) was wrong and agreed under both rules;
+      this one is the hour that actually moves.
+
+      `process.env.TZ` is honoured by `Date` on the next construction in Node,
+      and it is restored in `finally` so the rest of the file keeps the machine's
+      own zone.
+    */
+    const was = process.env.TZ
+    process.env.TZ = 'Europe/London'
+    try {
+      const monday = new Date(2026, 2, 30, 12, 0).getTime()
+      const twoDaysBack = new Date(2026, 2, 28, 23, 30).getTime()
+      expect(dayLabel(twoDaysBack, monday)).not.toBe('Yesterday')
+      expect(dayLabel(new Date(2026, 2, 29, 23, 30).getTime(), monday)).toBe('Yesterday')
+    } finally {
+      process.env.TZ = was
+    }
+  })
+
   it('falls back to a date once a week has passed', () => {
     const old = dayLabel(NOW - 30 * DAY, NOW)
     expect(old).not.toMatch(/Today|Yesterday/)
@@ -46,6 +86,25 @@ describe('how long it ran', () => {
     expect(lengthLabel(NOW, NOW + 4 * 60_000 + 37_000)).toBe('5 min')
     expect(lengthLabel(NOW, NOW + 2 * 3_600_000)).toBe('2 h')
     expect(lengthLabel(NOW, NOW + 3_600_000 + 20 * 60_000)).toBe('1 h 20 min')
+  })
+
+  it('never says sixty of anything', () => {
+    /*
+      Rounding the hour and the remainder independently gave `1 h 60 min` for
+      1h59m30s and `60 min` for 59m30s — numbers nobody writes. One rounding to
+      whole minutes, then division, cannot produce either.
+    */
+    expect(lengthLabel(NOW, NOW + 59 * 60_000 + 30_000)).toBe('1 h')
+    expect(lengthLabel(NOW, NOW + 3_600_000 + 59 * 60_000 + 30_000)).toBe('2 h')
+    expect(lengthLabel(NOW, NOW + 3_600_000 + 58 * 60_000 + 40_000)).toBe('1 h 59 min')
+  })
+
+  it('refuses a span that ran backwards', () => {
+    // It said "under a minute" — a plausible sentence about a real
+    // conversation, which is the worst answer available. Two writes and a clock
+    // change are enough to reach this without anything being corrupt.
+    expect(lengthLabel(NOW, NOW - 5_000)).toBeNull()
+    expect(lengthLabel(NOW, Number.NaN)).toBeNull()
   })
 })
 

@@ -28,7 +28,6 @@ import { letDevToolsInspect } from './inspect'
  * somebody is most likely to be working.
  */
 
-/** Big enough for the widest frame she can reach, in CSS pixels. */
 /**
  * How far she rests from the corner she starts in.
  *
@@ -57,6 +56,40 @@ const MARGIN = KEEP_ON_SCREEN
  * will notice and which one drag corrects for good.
  */
 const NOMINAL = { width: 94, height: 73 }
+
+/**
+ * Load a renderer, from the dev server or from disk, and SAY SO if it fails.
+ *
+ * ## `app.isPackaged` is the boundary, not the variable
+ *
+ * This was `ELECTRON_RENDERER_URL === undefined ? loadFile : loadURL` at each of
+ * two call sites. An environment variable is INHERITED, so a packaged build
+ * launched from a shell that still had it set would load an arbitrary URL into
+ * a renderer carrying the privileged preload bridge. The variable is only
+ * consulted now once the build is already known to be unpackaged.
+ *
+ * ## The promise is not thrown away
+ *
+ * Both call sites were `void window.loadFile(...)`. A missing renderer artifact
+ * or a dev server that is not up rejects, and the rejection went nowhere: the
+ * companion stayed an invisible transparent rectangle and the shelf an empty
+ * frame, with nothing in the log. It is the same failure `store/avatars.ts`
+ * calls the least debuggable outcome this application can produce.
+ */
+function loadRenderer(window: BrowserWindow, page: 'companion' | 'history'): void {
+  // Checked against `undefined` rather than for truthiness, so an empty value
+  // fails loudly instead of silently loading the packaged document while
+  // claiming to be in development.
+  const devServerUrl = app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL
+  const where =
+    devServerUrl === undefined
+      ? join(__dirname, `../renderer/${page}/index.html`)
+      : `${devServerUrl}/${page}/index.html`
+  const load = devServerUrl === undefined ? window.loadFile(where) : window.loadURL(where)
+  load.catch((error: unknown) => {
+    console.error(`[window] ${page} could not load ${where}:`, error)
+  })
+}
 
 export function createCompanionWindow(): BrowserWindow {
   const display = screen.getPrimaryDisplay().workArea
@@ -170,16 +203,7 @@ export function createCompanionWindow(): BrowserWindow {
   // nothing else, because the rest of this window is click-through.
   letDevToolsInspect(window.webContents)
 
-  // `ELECTRON_RENDERER_URL` is set by `electron-vite dev` and absent in a build,
-  // which is what distinguishes the two. Checked against `undefined` rather than
-  // for truthiness so an empty value fails loudly here instead of silently
-  // loading the packaged document while claiming to be in development.
-  const devServerUrl = process.env.ELECTRON_RENDERER_URL
-  if (devServerUrl === undefined) {
-    void window.loadFile(join(__dirname, '../renderer/companion/index.html'))
-  } else {
-    void window.loadURL(`${devServerUrl}/companion/index.html`)
-  }
+  loadRenderer(window, 'companion')
 
   return window
 }
@@ -328,12 +352,7 @@ export function showHistoryWindow(): BrowserWindow {
   letDevToolsInspect(window.webContents)
   bringForward(window)
 
-  const devServerUrl = process.env.ELECTRON_RENDERER_URL
-  if (devServerUrl === undefined) {
-    void window.loadFile(join(__dirname, '../renderer/history/index.html'))
-  } else {
-    void window.loadURL(`${devServerUrl}/history/index.html`)
-  }
+  loadRenderer(window, 'history')
   return window
 }
 

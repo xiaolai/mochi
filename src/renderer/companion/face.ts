@@ -908,7 +908,6 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       haloFor(hearing, resting),
       resting ? 0.45 : 1,
       beat.state() === 'none' ? null : beat.heldFor(),
-      roomOnScreen(),
     )
 
     drawChip(ctx, herBox(), palette, chip, troubles, roomOnScreen())
@@ -988,6 +987,19 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     sleeps: (asleep: boolean) => {
       resting = asleep
       avatar.setAsleep(asleep)
+      /*
+        The FACE she chose ends here, because `set_expression` says it does.
+
+        Its manifest promises "the expression stays until you change it or until
+        you are asked to rest", and nothing cleared it — so a character told to
+        look `angry`, then asked to rest, woke up angry into a new session that
+        had never heard of it. A tool that describes a lifetime it does not have
+        is a rule she keeps and the app breaks.
+
+        Only on the way DOWN. Waking must not stamp neutral over an expression
+        set in the same breath as the greeting.
+      */
+      if (asleep) avatar.setEmotion({ emotion: 'neutral', intensity: 0 })
       /**
        * Nothing to say while her eyes are shut, so the bubble closes.
        *

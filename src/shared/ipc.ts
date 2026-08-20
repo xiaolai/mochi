@@ -146,15 +146,6 @@ export const SHELF_CHANNELS = [
   /** Everything that went wrong, for the window that can show it. */
   'history:problems',
   /**
-   * Open the settings window.
-   *
-   * The way in lives HERE rather than on her bubble, which has exactly three
-   * controls and a person asked for exactly those three. Opening a window is
-   * also the only thing this channel does — the conversations window gets no
-   * ability to read or write a setting by having it.
-   */
-  'history:settings',
-  /**
    * Main → the shell: show this place.
    *
    * The menu bar still offers "Settings…", because that is what somebody looks
@@ -832,15 +823,6 @@ export interface HistoryHit {
   readonly text: string
 }
 
-/**
- * What the conversations window gets on `window.mochiHistory`.
- *
- * A different global from `window.mochi` rather than more methods on it: the
- * two documents load the same preload file, and a single object would mean the
- * companion page could call `turns()` because the bridge had already built it.
- * The role decides which one is installed, so the other is not merely
- * unreachable — it was never constructed.
- */
 /** One thing that went wrong, as the window lists it. */
 export interface HistoryProblem {
   readonly area: string
@@ -871,7 +853,6 @@ export type HistoryExport =
  */
 export type ShelfCharacter = SettingsPersona
 
-/** Everything the shelf's character half draws, answered in one call. */
 /**
  * Her state, for the strip across the top of the shelf.
  *
@@ -888,6 +869,7 @@ export interface ShelfState {
   readonly restKey: string | null
 }
 
+/** Everything the shelf's character half draws, answered in one call. */
 export interface ShelfView {
   /** The worn face, resolved. See `SettingsView.face` — same rule, same reason. */
   readonly face: FaceSpec
@@ -934,13 +916,20 @@ export interface ShelfView {
   readonly note: SettingsNote
 }
 
+/**
+ * What the conversations window gets on `window.mochiHistory`.
+ *
+ * A different global from `window.mochi` rather than more methods on it: the
+ * two documents load the same preload file, and a single object would mean the
+ * companion page could call `turns()` because the bridge had already built it.
+ * The role decides which one is installed, so the other is not merely
+ * unreachable — it was never constructed.
+ */
 export interface MochiHistoryApi {
   /** Everything that went wrong this launch, newest first. */
   problems(): Promise<readonly HistoryProblem[]>
   /** Save everything to a file. Answers what happened, for a status line. */
   exportAll(): Promise<HistoryExport>
-  /** Open the settings window. Opening it is all this can do. */
-  settings(): void
   /** Main asking for a place to be shown. See `shell:show`. */
   onShow(run: (place: string) => void): void
   /** Whoever is worn. The window never gets to name a persona. */

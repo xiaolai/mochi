@@ -1,4 +1,4 @@
-import type { Body, Room } from './place'
+import type { Body } from './place'
 
 /**
  * The halo over her head: the microphone, drawn on HER.
@@ -148,7 +148,6 @@ export function drawHalo(
   state: Halo,
   opacity: number,
   heldFor: number | null,
-  _room?: Room,
 ): void {
   if (state === 'off' || opacity <= 0) return
   const ring = haloRect(her)

@@ -10,7 +10,7 @@ import { EMOTIONS, type Emotion } from '@shared/avatar'
 import type { FaceSpec } from '@shared/avatar-spec'
 import { applyTheme, THEME_IDS } from '@shared/theme'
 import { MochiAvatar } from '../companion/rig/mochi'
-import { centreOffset, paintedBounds } from './centre'
+import { drawCentred } from './centre'
 
 /**
  * Every sentence on this pane that is ABOUT her, one phrasing per pronoun.
@@ -79,6 +79,16 @@ const SAYS = {
     she: 'Put the built-in back as she ships',
     he: 'Put the built-in back as he ships',
     it: 'Put the built-in back as it ships',
+  },
+  ownHue: {
+    she: 'She wears a hue of her own; none of the eight is stored.',
+    he: 'He wears a hue of his own; none of the eight is stored.',
+    it: 'It wears a hue of its own; none of the eight is stored.',
+  },
+  deleting: {
+    she: 'her notes and her conversations',
+    he: 'his notes and his conversations',
+    it: 'its notes and its conversations',
   },
   assembled: {
     she: 'The exact string she is handed, assembled on her next wake. Nothing here is sent until then.',
@@ -220,9 +230,6 @@ export function faceTile(
   canvas.height = Math.round(px * ratio)
   canvas.style.width = `${String(px)}px`
   canvas.style.height = `${String(px)}px`
-  const ctx = canvas.getContext('2d')
-  if (ctx === null) return canvas
-
   /*
     Drawn OFFSCREEN, then blitted into place centred on her own pixels.
 
@@ -233,27 +240,23 @@ export function faceTile(
     wrong in a tile that has neither. See `centre.ts` for why this is measured
     rather than computed and why the canvas itself cannot simply be moved.
   */
-  const off = document.createElement('canvas')
-  off.width = canvas.width
-  off.height = canvas.height
-  const offCtx = off.getContext('2d')
-  if (offCtx === null) return canvas
-
-  const avatar = new MochiAvatar(offCtx, { face, size: 'fit-canvas', random: () => 0.5 })
-  avatar.resize(px, px, ratio)
-  avatar.setIdle(false)
-  if (emotion !== undefined) avatar.setEmotion({ emotion, intensity: 1 })
-  // A quarter of a second of clock, at sixty a second. Long enough for the
-  // squash spring to arrive at rest with `stiffness`/`damping` as shipped.
-  for (let at = 0; at <= 256; at += 16) avatar.render(at)
-
-  const pixels = offCtx.getImageData(0, 0, off.width, off.height).data
-  const at = centreOffset(
-    paintedBounds((x, y) => pixels[(y * off.width + x) * 4 + 3] ?? 0, off.width, off.height),
-    off.width,
-    off.height,
-  )
-  ctx.drawImage(off, at.dx, at.dy)
+  drawCentred(canvas, (offCtx) => {
+    const avatar = new MochiAvatar(offCtx, { face, size: 'fit-canvas', random: () => 0.5 })
+    avatar.resize(px, px, ratio)
+    avatar.setIdle(false)
+    if (emotion === undefined) {
+      // ONE frame. There is nothing to settle: the squash spring starts at rest
+      // and only an expression moves it, so seventeen renders of a neutral tile
+      // was seventeen times the cost of the same picture — multiplied by every
+      // character in a list of unbounded length.
+      avatar.render(0)
+      return
+    }
+    avatar.setEmotion({ emotion, intensity: 1 })
+    // A quarter of a second of clock, at sixty a second. Long enough for the
+    // squash spring to arrive at rest with `stiffness`/`damping` as shipped.
+    for (let at = 0; at <= 256; at += 16) avatar.render(at)
+  })
   return canvas
 }
 
@@ -500,7 +503,7 @@ function colourSection(
   */
   const body: HTMLElement[] = [grid]
   if (worn.theme === null) {
-    body.push(element('p', 'note', 'She wears a hue of her own; none of the eight is stored.'))
+    body.push(element('p', 'note', forPronoun(SAYS.ownHue, view.pronoun)))
   }
   return section('Colour', forPronoun(SAYS.colour, view.pronoun), ...body)
 }
@@ -580,12 +583,24 @@ function moodSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHandl
     box.checked = allowed
     box.id = `mood-${emotion}`
     box.addEventListener('change', () => {
-      const next = new Set(on)
-      if (box.checked) next.add(emotion)
-      else next.delete(emotion)
+      /*
+        `on` is MUTATED, not copied.
+
+        Each toggle sent the whole list, rebuilt from the set as it was at
+        RENDER time. Two toggles before the reload lands therefore both start
+        from the same snapshot, and the second one's payload has no idea the
+        first happened — turning `happy` on and then `sad` on wrote a list with
+        `sad` and without `happy`, silently undoing a change the tile still
+        showed as made.
+
+        Mutating the live set makes the second payload include the first, which
+        is what somebody clicking two tiles in a row asked for.
+      */
+      if (box.checked) on.add(emotion)
+      else on.delete(emotion)
       // The whole list, every time. `applyChange` sorts it back into `EMOTIONS`
       // order, so what is stored does not depend on the order they were clicked.
-      handlers.save({ id: worn.id, faces: EMOTIONS.filter((one) => next.has(one)) })
+      handlers.save({ id: worn.id, faces: EMOTIONS.filter((one) => on.has(one)) })
     })
     const label = element('label', undefined, 'allowed')
     label.htmlFor = box.id
@@ -761,6 +776,15 @@ function memorySection(view: ShelfView, handlers: ShelfHandlers): HTMLElement {
   // back to an empty note, which is a real version somebody may want.
   undo.disabled = view.note.previous === null
   undo.addEventListener('click', () => {
+    /*
+      DISABLED on dispatch, not on the reload that follows it.
+
+      `remember` keeps one step of history, so two restores in flight swap the
+      note back to where it started — a double-click on "Undo the last change"
+      undid the undo, and the pane looked like the button had done nothing.
+    */
+    undo.disabled = true
+    forget.disabled = true
     // NAMED. The pane stays clickable while a character switch is in flight,
     // and main refuses an action for anybody but whoever is worn now.
     handlers.memory({ kind: 'restore', id: view.wornId })
@@ -874,13 +898,26 @@ function castSection(worn: ShelfCharacter, pronoun: Pronoun, handlers: ShelfHand
     remove.addEventListener('click', () => {
       if (!armed) {
         armed = true
-        remove.textContent = `Delete ${worn.name}, her notes and her conversations?`
+        // The pronoun, not "her". A he/him character was told his own deletion
+        // would take "her notes and her conversations".
+        remove.textContent = `Delete ${worn.name}, ${forPronoun(SAYS.deleting, pronoun)}?`
         remove.classList.add('arming')
         return
       }
-      handlers.persona({ kind: 'delete', id: worn.id })
+      /*
+        Through the SAME guard the other three actions use.
+
+        Delete went straight out. The arming step means two clicks are needed,
+        and the second and third land before the reload replaces the pane — so a
+        double-click on the confirm sent two deletions, and the second answered
+        "there is no character called …" over a deletion that had just worked.
+      */
+      once(() => {
+        handlers.persona({ kind: 'delete', id: worn.id })
+      })
     })
     row.append(remove)
+    guarded.push(remove)
   }
 
   return section('Cast', 'a character is a folder · deleting one takes its memory', row)

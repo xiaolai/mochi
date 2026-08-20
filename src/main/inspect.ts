@@ -1,4 +1,10 @@
-import { BrowserWindow, Menu, type MenuItemConstructorOptions, type WebContents } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  type MenuItemConstructorOptions,
+  type WebContents,
+} from 'electron'
 
 /**
  * Right-click to inspect an element, in development only.
@@ -41,8 +47,21 @@ import { BrowserWindow, Menu, type MenuItemConstructorOptions, type WebContents 
  * click in that window follows.
  */
 
-/** Whether this process was started by the dev server. See above. */
-export function inDevelopment(env: NodeJS.ProcessEnv): boolean {
+/**
+ * Whether this process was started by the dev server. See above.
+ *
+ * TWO conditions, and the second is the one that matters. An environment
+ * variable is inherited: a packaged app launched from a shell that still had
+ * `ELECTRON_RENDERER_URL` set would have opened the inspector on somebody's
+ * desktop. `app.isPackaged` is a property of the build and cannot be inherited,
+ * so it is the boundary; the variable stays as the narrower "and the dev server
+ * is actually behind this" half.
+ *
+ * `packaged` is a parameter rather than a read of `app` inside, so this stays a
+ * pure function the test can drive through all four combinations.
+ */
+export function inDevelopment(env: NodeJS.ProcessEnv, packaged: boolean): boolean {
+  if (packaged) return false
   // Against `undefined` rather than for truthiness, exactly as `window.ts`
   // checks it: an empty value is a broken dev run and should not read as a
   // packaged one.
@@ -70,8 +89,12 @@ export function inspectMenuTemplate(
  * Returns whether it was attached, so a caller can say so in the log rather
  * than wondering why a right-click does nothing.
  */
-export function letDevToolsInspect(contents: WebContents, env = process.env): boolean {
-  if (!inDevelopment(env)) return false
+export function letDevToolsInspect(
+  contents: WebContents,
+  env = process.env,
+  packaged = app.isPackaged,
+): boolean {
+  if (!inDevelopment(env, packaged)) return false
   contents.on('context-menu', (_event, params) => {
     const template = inspectMenuTemplate(params, (x, y) => {
       // Detached BEFORE the inspect call, because `inspectElement` opens them

@@ -33,6 +33,41 @@
  * result into place is the one arrangement that leaves the rig untouched.
  */
 
+/**
+ * Paint into a canvas, then blit the result centred on its own painted pixels.
+ *
+ * Both callers had this inline — `faceTile` in `shelf.ts` and `drawMark` in
+ * `main.ts` — as the same twenty lines: an offscreen canvas, an alpha read, an
+ * offset, a blit. Two copies of one measurement is two places for it to drift.
+ *
+ * `paint` owns the drawing, including how many frames it runs, because that is
+ * the one thing the two callers legitimately disagree about: a mark has no
+ * expression and needs a single frame, while a mood tile needs a quarter-second
+ * of clock for the squash spring its expression asks for to arrive at rest.
+ */
+export function drawCentred(
+  canvas: HTMLCanvasElement,
+  paint: (ctx: CanvasRenderingContext2D) => void,
+): void {
+  const ctx = canvas.getContext('2d')
+  if (ctx === null) return
+  const off = canvas.ownerDocument.createElement('canvas')
+  off.width = canvas.width
+  off.height = canvas.height
+  const offCtx = off.getContext('2d')
+  if (offCtx === null) return
+
+  paint(offCtx)
+
+  const pixels = offCtx.getImageData(0, 0, off.width, off.height).data
+  const at = centreOffset(
+    paintedBounds((x, y) => pixels[(y * off.width + x) * 4 + 3] ?? 0, off.width, off.height),
+    off.width,
+    off.height,
+  )
+  ctx.drawImage(off, at.dx, at.dy)
+}
+
 export interface Bounds {
   readonly top: number
   readonly bottom: number

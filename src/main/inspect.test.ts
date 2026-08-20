@@ -2,9 +2,23 @@ import { describe, expect, it, vi } from 'vitest'
 import { inDevelopment, inspectMenuTemplate } from './inspect'
 
 describe('whether this is a development run', () => {
+  const DEV = { ELECTRON_RENDERER_URL: 'http://localhost:5173' }
+
   it('is the dev server URL, and nothing else', () => {
-    expect(inDevelopment({ ELECTRON_RENDERER_URL: 'http://localhost:5173' })).toBe(true)
-    expect(inDevelopment({})).toBe(false)
+    expect(inDevelopment(DEV, false)).toBe(true)
+    expect(inDevelopment({}, false)).toBe(false)
+  })
+
+  it('is FALSE in a packaged build however the environment looks', () => {
+    /*
+      An environment variable is inherited. A packaged app launched from a shell
+      that still had `ELECTRON_RENDERER_URL` set would have opened the inspector
+      on somebody's desktop — the variable alone was never a build boundary.
+      `app.isPackaged` is a property of the build and cannot be inherited.
+    */
+    expect(inDevelopment(DEV, true)).toBe(false)
+    expect(inDevelopment({ ELECTRON_RENDERER_URL: '' }, true)).toBe(false)
+    expect(inDevelopment({}, true)).toBe(false)
   })
 
   it('treats an EMPTY value as development, not as a build', () => {
@@ -14,11 +28,11 @@ describe('whether this is a development run', () => {
       would silently take the menu away exactly when somebody is debugging why
       the dev server did not come up.
     */
-    expect(inDevelopment({ ELECTRON_RENDERER_URL: '' })).toBe(true)
+    expect(inDevelopment({ ELECTRON_RENDERER_URL: '' }, false)).toBe(true)
   })
 
   it('is not fooled by a similarly named variable', () => {
-    expect(inDevelopment({ ELECTRON_RENDERER_URL_OLD: 'http://localhost:5173' })).toBe(false)
+    expect(inDevelopment({ ELECTRON_RENDERER_URL_OLD: 'http://localhost:5173' }, false)).toBe(false)
   })
 })
 

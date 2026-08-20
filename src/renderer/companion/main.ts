@@ -2,6 +2,7 @@ import type { MochiApi } from '@shared/ipc'
 import { showFace, type Face } from './face'
 import { applyAccent } from '../design/apply-accent'
 import { EMOTIONS, type Emotion } from '@shared/avatar'
+import { STATUS_UNDER } from '@shared/avatar-layout'
 import { keepsNewer } from './negotiating'
 import { openSession, type Session, type SessionState } from './audio/session'
 
@@ -34,20 +35,6 @@ speaker.autoplay = true
 
 const face: Face = showFace(canvas)
 
-/**
- * How far under her the status line sits, as a fraction of her own height.
- *
- * A fraction rather than a pixel count, because `size` is a persona field: a
- * fixed 8px touches her at 150% and floats at 50%, which is the same class of
- * mistake as anchoring to the window.
- *
- * 0.22 rather than something smaller because `box()` returns her SILHOUETTE —
- * that is what main uses for click-through, so it must not grow — and her drop
- * shadow is drawn below it. At 8px the pill sat under her feet and over her
- * shadow, which reads as touching her.
- */
-const UNDER_HER = 0.22
-
 function show(text: string): void {
   status.textContent = text
   placeStatus()
@@ -70,17 +57,20 @@ function placeStatus(): void {
   const her = face.box()
   // Under her, and under whatever the canvas has already drawn under her. The
   // beat sits there too, and these two used to be painted on top of each other.
-  const under = Math.round(her.top + her.height * (1 + UNDER_HER))
+  const under = Math.round(her.top + her.height * (1 + STATUS_UNDER))
   status.setAttribute('style', `top: ${String(under)}px`)
 }
 
 /*
   Placed once at startup, BELOW the declarations it reads.
 
-  The first version of this call sat immediately after `showFace`, which is above
-  `UNDER_HER` — a `const` in its temporal dead zone, so the module threw on the
-  first line it ran and the window rendered with no script at all. It looked
-  exactly like the bug it was fixing: a status line at the bottom of the window.
+  The first version of this call sat immediately after `showFace`, which was
+  above the local fraction it read — a `const` in its temporal dead zone, so the
+  module threw on the first line it ran and the window rendered with no script at
+  all. It looked exactly like the bug it was fixing: a status line at the bottom
+  of the window. The fraction is `STATUS_UNDER` from `avatar-layout` now, which
+  is imported and therefore hoisted, but the ordering is kept: `face` above it
+  is still a `const`.
 */
 placeStatus()
 // She is resized by main repositioning her window, which is a resize here.

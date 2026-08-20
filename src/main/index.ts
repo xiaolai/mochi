@@ -1189,12 +1189,6 @@ ipcMain.handle('history:export', async (): Promise<HistoryExport> => {
   return { ok: true, path: chosen.filePath, conversations: archive.sessions.length }
 })
 
-ipcMain.on('history:settings', () => {
-  // Kept, because the channel is in `SHELF_CHANNELS` and removing it would be a
-  // second change in the same commit for no gain. It now shows the tab.
-  showHistoryWindow().webContents.send('shell:show', 'machine')
-})
-
 /**
  * Everything the settings window draws, answered in one call.
  *
@@ -1768,7 +1762,15 @@ ipcMain.handle('history:search', (_event, query: unknown) => {
     .map((one) => ({ token: one.token, at: one.at, who: one.who, text: one.text }))
 })
 
-void app.whenReady().then(
+/**
+ * Everything that has to happen once, in order, after Electron is ready.
+ *
+ * Held in a `const` rather than chained straight off `whenReady()` so the
+ * terminal `catch` below can be a separate statement: chaining it re-indents
+ * two hundred lines of startup and turns a nine-line fix into a four-hundred-
+ * line diff nobody can review.
+ */
+const startup = app.whenReady().then(
   () => {
     /**
      * v1's leftovers, moved aside before anything reads this directory.
@@ -2003,6 +2005,20 @@ void app.whenReady().then(
     app.exit(1)
   },
 )
+
+/*
+  The SECOND callback above catches `whenReady()` REJECTING. It does not catch a
+  throw inside the first one — that rejects the promise `then` returns, and the
+  `void` in front of it threw the result away, so two hundred lines of startup
+  could fail as an unhandled rejection with the app left half-built, no message
+  and no exit code.
+
+  Terminal, so nothing after it can swallow this again.
+*/
+void startup.catch((error: unknown) => {
+  console.error('[main] startup threw', error)
+  app.exit(1)
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

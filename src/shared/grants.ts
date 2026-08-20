@@ -6,11 +6,11 @@
  * 1c's receipt asked for every permission at the moment of installing a
  * package, which is the worst moment to ask: nobody has used the thing yet, so
  * every answer is a guess, and the guess is then permanent. 5b replaces it with
- * four switches that are always there and always answerable — and each carries
+ * five switches that are always there and always answerable — and each carries
  * **when it was last used**, which is what turns "should she be allowed to?"
  * into a decision somebody can actually make.
  *
- * There are four because there are four real ones. The plugin sandbox and the
+ * There are five because there are five real ones. The plugin sandbox and the
  * grant broker are struck (`plan-capabilities.md` W-F): capabilities are
  * compiled in now, so a grant is not a fence around somebody else's code. It is
  * a statement about what this machine lets HER do.
@@ -35,7 +35,7 @@
  *    the dispatch answers with a sentence rather than an error.
  */
 
-/** The four. The order is the order they are drawn in. */
+/** The five. The order is the order they are drawn in. */
 import type { ByPronoun } from './pronoun'
 
 export const GRANTS = [
@@ -59,7 +59,7 @@ export interface GrantSpec {
    * pronoun.
    *
    * The label above is NOT a table and should not become one: "Hear you" is
-   * "Hear you" whoever is worn, and four identical strings is a choice that is
+   * "Hear you" whoever is worn, and five identical strings is a choice that is
    * not one. This sentence is about her, so it has to vary -- `label()` in
    * `pronoun.ts` is what reads either kind.
    */
@@ -230,7 +230,7 @@ export function parseGrants(value: unknown): Grants {
 export function allowsCapability(grants: Grants, name: string): boolean {
   const spec = GRANT_SPECS.find((one) => one.capability === name)
   // Not every capability has a grant — `recall_conversations` reads her own
-  // archive and is not one of the four. A capability with no switch is governed
+  // archive and is not one of the five. A capability with no switch is governed
   // by nothing here, which is a different answer from being switched off.
   return spec === undefined || grants[spec.id]
 }

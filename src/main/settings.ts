@@ -419,7 +419,15 @@ export function applyChange(
     // would write a manifest this build cannot load — the failure that presents
     // as "the app ate my character" one launch later.
     if (line.length === 0) return { ok: false, why: 'That cannot be empty.' }
-    if (line.length > PERSONA_LIMITS.name * 4) return { ok: false, why: 'That is too long.' }
+    /*
+      `instruction`, not `name * 4`.
+
+      240 against the format's own 300, arrived at by multiplying an unrelated
+      limit by four. A 250-character instruction is valid in a manifest, loads
+      fine, and could not be typed here — the control was stricter than the
+      thing it writes to, which is the same class of mistake as being looser.
+    */
+    if (line.length > PERSONA_LIMITS.instruction) return { ok: false, why: 'That is too long.' }
     // `verbatim` is left alone. It is the other half of a `SpokenMoment` and no
     // control offers it; overwriting it from a field that cannot express it
     // would silently discard something a manifest author wrote.

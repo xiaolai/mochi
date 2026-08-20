@@ -78,8 +78,16 @@ const role = process.argv.find((one) => one.startsWith('--mochi-role='))?.slice(
  * to fail in, and it becomes load-bearing the moment a third window exists:
  * a capability runner whose role string is misspelt would receive the voice
  * bridge rather than nothing at all.
+ *
+ * `settings` is GONE from this set, and it had to be. The settings window was
+ * folded into the shell, so nothing constructs that role any more — but the set
+ * still ADMITTED it while the dispatch below had no branch for it, so a window
+ * carrying `--mochi-role=settings` would pass the guard and fall through to the
+ * `else`, which is the voice bridge. The exact hole this comment describes,
+ * left behind by deleting the window that made the name legitimate. A role in
+ * this set must have a branch; there are two of each now.
  */
-const ROLES = new Set(['companion', 'history', 'settings'])
+const ROLES = new Set(['companion', 'history'])
 
 const api: MochiApi = {
   async open() {
@@ -157,9 +165,6 @@ const history: MochiHistoryApi = {
   },
   async problems() {
     return (await ipcRenderer.invoke(guardShelf('history:problems'))) as readonly HistoryProblem[]
-  },
-  settings() {
-    ipcRenderer.send(guardShelf('history:settings'))
   },
   onShow(run: (place: string) => void) {
     // The value is passed through as a plain string and checked by the shell,

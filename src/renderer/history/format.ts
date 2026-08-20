@@ -7,9 +7,9 @@
  * that says "Yesterday" for something eleven days old still looks plausible.
  */
 
+import { startOfDay } from './month'
+
 const MINUTE = 60_000
-const HOUR = 60 * MINUTE
-const DAY = 24 * HOUR
 
 /**
  * How long it ran. Null while she is still awake in it.
@@ -21,11 +21,28 @@ const DAY = 24 * HOUR
 export function lengthLabel(startedAt: number, endedAt: number | null): string | null {
   if (endedAt === null) return null
   const span = endedAt - startedAt
+  /*
+    A NEGATIVE span is not a short conversation.
+
+    It said "under a minute", which is a plausible sentence about a real
+    conversation and therefore the worst possible answer. The timestamps come
+    from two writes that a clock change can reorder, so this is reachable
+    without anything being corrupt.
+  */
+  if (!Number.isFinite(span) || span < 0) return null
   if (span < MINUTE) return 'under a minute'
-  if (span < HOUR) return `${String(Math.round(span / MINUTE))} min`
-  const hours = Math.floor(span / HOUR)
-  const minutes = Math.round((span - hours * HOUR) / MINUTE)
-  return minutes === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(minutes)} min`
+  /*
+    Rounded to whole MINUTES first, then split into hours and a remainder.
+
+    Rounding the remainder independently produced `1 h 60 min` for 1h59m30s,
+    and `60 min` for 59m30s — both of which are a number nobody writes. One
+    rounding, then division, cannot say sixty of anything.
+  */
+  const minutes = Math.round(span / MINUTE)
+  if (minutes < 60) return `${String(minutes)} min`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(rest)} min`
 }
 
 export interface Segment {
@@ -79,11 +96,29 @@ export function highlight(text: string, query: string): readonly Segment[] {
 export function dayLabel(at: number, now: number): string {
   const then = new Date(at)
   const today = new Date(now)
-  const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+  /*
+    Calendar arithmetic, not milliseconds — and `startOfDay` rather than a
+    fourth hand-rolled midnight.
 
-  if (at >= midnight) return 'Today'
-  if (at >= midnight - DAY) return 'Yesterday'
-  if (at >= midnight - 6 * DAY) return then.toLocaleDateString(undefined, { weekday: 'long' })
+    `midnight - DAY` is a day only when no clock changed. On the two nights a
+    year the offset moves, it lands 23 or 25 hours back, so a conversation gets
+    "Yesterday" for something two days old or a weekday name for yesterday.
+    `month.ts` says exactly this in its own header and then this function did
+    the thing the header warns against — which is also why the local midnight is
+    now taken from `startOfDay` instead of being built a second time here.
+  */
+  const midnight = startOfDay(now)
+  const back = (days: number): number =>
+    new Date(today.getFullYear(), today.getMonth(), today.getDate() - days).getTime()
+
+  /*
+    BOUNDED above, too. `at >= midnight` called every future instant "Today",
+    so a conversation with a clock-skewed timestamp — or any date beyond today —
+    was filed under today and merged into today's group by `byDay`.
+  */
+  if (at >= midnight && at < back(-1)) return 'Today'
+  if (at >= back(1) && at < midnight) return 'Yesterday'
+  if (at >= back(6) && at < midnight) return then.toLocaleDateString(undefined, { weekday: 'long' })
   const sameYear = then.getFullYear() === today.getFullYear()
   return then.toLocaleDateString(undefined, {
     weekday: 'short',

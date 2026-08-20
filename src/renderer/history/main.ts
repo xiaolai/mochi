@@ -20,7 +20,7 @@ import { applyAccent } from '../design/apply-accent'
 import { PANES, type PaneHandlers } from '../settings/panes'
 import { MochiAvatar } from '../companion/rig/mochi'
 import { byDay, clockLabel, dayLabel, highlight, interruptions, lengthLabel } from './format'
-import { centreOffset, paintedBounds } from './centre'
+import { drawCentred } from './centre'
 import {
   dayHeadingLabel,
   dayKey,
@@ -283,29 +283,15 @@ function drawMark(face: ShelfView['face']): void {
   markEl.height = Math.round(px * ratio)
   markEl.style.width = `${String(px)}px`
   markEl.style.height = `${String(px)}px`
-  const ctx = markEl.getContext('2d')
-  if (ctx === null) return
-
-  // Offscreen and blitted centred, exactly as `faceTile` does it and for the
-  // same reason: the rig reserves headroom for a worst-case pose, so drawn
+  // Offscreen and blitted centred, exactly as `faceTile` does it and through the
+  // same function: the rig reserves headroom for a worst-case pose, so drawn
   // straight in she sits low and the lockup looks out of line. See `centre.ts`.
-  const off = document.createElement('canvas')
-  off.width = markEl.width
-  off.height = markEl.height
-  const offCtx = off.getContext('2d')
-  if (offCtx === null) return
-  const avatar = new MochiAvatar(offCtx, { face, size: 'fit-canvas', random: () => 0.5 })
-  avatar.resize(px, px, ratio)
-  avatar.setIdle(false)
-  avatar.render(0)
-
-  const pixels = offCtx.getImageData(0, 0, off.width, off.height).data
-  const at = centreOffset(
-    paintedBounds((x, y) => pixels[(y * off.width + x) * 4 + 3] ?? 0, off.width, off.height),
-    off.width,
-    off.height,
-  )
-  ctx.drawImage(off, at.dx, at.dy)
+  drawCentred(markEl, (offCtx) => {
+    const avatar = new MochiAvatar(offCtx, { face, size: 'fit-canvas', random: () => 0.5 })
+    avatar.resize(px, px, ratio)
+    avatar.setIdle(false)
+    avatar.render(0)
+  })
 }
 
 /**
@@ -372,6 +358,16 @@ function showPlace(next: Place): void {
   // emptied, so what is typed in it survives a trip to Cast and back.
   contextEl.hidden = place !== 'archive'
   /*
+    Cast repaints the open character on arrival.
+
+    `showingCharacter` is turned OFF when a transcript or a problem report is
+    opened, and nothing turned it back on: coming back to Cast left the pane
+    holding whatever was last drawn there with no card marked current, and the
+    next write's reload skipped repainting it because `openCharacter` is only
+    reached through a card click.
+  */
+  if (place === 'cast' && shelf !== null && !showingCharacter) openCharacter()
+  /*
     The transcript column says what it is FOR when nothing is open in it.
 
     Half a window of blank paper beside a list is indistinguishable from a
@@ -389,21 +385,34 @@ function showPlace(next: Place): void {
   if (place === 'machine') void loadMachine()
 }
 
+/**
+ * The three tabs, built ONCE and thereafter only marked.
+ *
+ * They used to be recreated on every `showPlace`, which is a re-render fired
+ * from inside a tab's own click handler: the element being clicked is detached
+ * mid-event and replaced by a new one, so keyboard focus lands on `<body>` and
+ * the next Tab starts over from the top of the window. A strip of three buttons
+ * that cannot be operated twice from the keyboard is a strip that only works
+ * with a mouse.
+ */
+const tabs = new Map<Place, HTMLButtonElement>()
+
 function renderPlaces(): void {
-  shellTabsEl.replaceChildren(
-    ...PLACES.map((one) => {
+  if (tabs.size === 0) {
+    for (const one of PLACES) {
       const button = document.createElement('button')
       button.className = 'shell-tab'
       button.type = 'button'
       button.setAttribute('role', 'tab')
       button.textContent = one.label
-      button.setAttribute('aria-current', String(one.id === place))
       button.addEventListener('click', () => {
         showPlace(one.id)
       })
-      return button
-    }),
-  )
+      tabs.set(one.id, button)
+      shellTabsEl.append(button)
+    }
+  }
+  for (const [id, button] of tabs) button.setAttribute('aria-current', String(id === place))
 }
 
 function renderWake(): void {
@@ -655,25 +664,51 @@ function row(
  * as well as on `:hover`, so tabbing through a transcript surfaces it rather
  * than moving focus to a control nobody can see.
  */
-function copyButton(text: string): HTMLButtonElement {
+/**
+ * A small square button whose whole content is an SVG path or two.
+ *
+ * `copyButton` and `arrow` each rebuilt the namespace, the viewBox, the sizing,
+ * the `aria-hidden` on the graphic and the accessible name on the button — the
+ * same eight lines twice, and the accessibility half is exactly the part that
+ * is quietly dropped when somebody adds a third by copying one of them.
+ *
+ * The LABEL is on the button and the graphic is hidden, always. A path with no
+ * name announces as "button", and a name on both announces twice.
+ */
+function iconButton(
+  className: string,
+  label: string,
+  paths: readonly string[],
+  px: number,
+): HTMLButtonElement {
   const NS = 'http://www.w3.org/2000/svg'
   const button = document.createElement('button')
-  button.className = 'copy'
+  button.className = className
   button.type = 'button'
-  button.title = 'Copy'
-  button.setAttribute('aria-label', 'Copy this turn')
+  button.title = label
+  button.setAttribute('aria-label', label)
 
   const svg = document.createElementNS(NS, 'svg')
   svg.setAttribute('viewBox', '0 0 16 16')
-  svg.setAttribute('width', '13')
-  svg.setAttribute('height', '13')
+  svg.setAttribute('width', String(px))
+  svg.setAttribute('height', String(px))
   svg.setAttribute('aria-hidden', 'true')
-  for (const d of ['M5.5 5.5h7v7h-7z', 'M10.5 5.5v-2h-7v7h2']) {
+  for (const d of paths) {
     const path = document.createElementNS(NS, 'path')
     path.setAttribute('d', d)
     svg.append(path)
   }
   button.append(svg)
+  return button
+}
+
+function copyButton(text: string): HTMLButtonElement {
+  const button = iconButton(
+    'copy',
+    'Copy this turn',
+    ['M5.5 5.5h7v7h-7z', 'M10.5 5.5v-2h-7v7h2'],
+    13,
+  )
 
   button.addEventListener('click', () => {
     /*
@@ -872,21 +907,12 @@ function openingDay(now: number): number | null {
 }
 
 function arrow(direction: 'back' | 'on', label: string, go: () => void): HTMLButtonElement {
-  const NS = 'http://www.w3.org/2000/svg'
-  const button = document.createElement('button')
-  button.className = 'step'
-  button.type = 'button'
-  button.title = label
-  button.setAttribute('aria-label', label)
-  const svg = document.createElementNS(NS, 'svg')
-  svg.setAttribute('viewBox', '0 0 16 16')
-  svg.setAttribute('width', '13')
-  svg.setAttribute('height', '13')
-  svg.setAttribute('aria-hidden', 'true')
-  const path = document.createElementNS(NS, 'path')
-  path.setAttribute('d', direction === 'back' ? 'M10 3 5 8l5 5' : 'M6 3l5 5-5 5')
-  svg.append(path)
-  button.append(svg)
+  const button = iconButton(
+    'step',
+    label,
+    [direction === 'back' ? 'M10 3 5 8l5 5' : 'M6 3l5 5-5 5'],
+    13,
+  )
   button.addEventListener('click', go)
   return button
 }
@@ -1091,10 +1117,27 @@ function group(hits: readonly HistoryHit[]): readonly HitGroup[] {
  * scoped per character, so a list left over from the previous one would be one
  * character's card ringed beside another character's words.
  */
+/**
+ * Whose conversations the calendar is currently describing.
+ *
+ * `picked` and `onMonth` are chosen once and then kept, which is right while
+ * one character is worn and wrong the moment another is. Wearing somebody else
+ * re-reads the list; without this the Archive stayed on the previous
+ * character's day and rendered "Nothing was said on this day" for a date the
+ * new character had never been awake on, with her own conversations one click
+ * away and no sign of it.
+ */
+let listed: string | null = null
+
 async function readConversations(): Promise<void> {
   try {
     const answer = await window.mochiHistory.list()
     conversations = answer.conversations
+    if (answer.persona !== listed) {
+      listed = answer.persona
+      picked = null
+      onMonth = null
+    }
     // Her NAME, from the shelf, falling back to the id `history:list` answers
     // with. The cards say "Loki"; a title bar saying `loki` beside them would
     // be two names for one character in one window.
@@ -1102,11 +1145,34 @@ async function readConversations(): Promise<void> {
     document.title = `Shelf · ${name ?? answer.persona}`
     const many = conversations.length
     countEl.textContent = `${String(many)} ${many === 1 ? 'conversation' : 'conversations'}`
-    renderList(Date.now())
+    /*
+      A live query WINS over the calendar.
+
+      Every reload rendered the day list, so a reload triggered while something
+      was typed in the search field — wearing a character, saving a field —
+      replaced the results with a day's conversations under a populated search
+      box. The field said one thing and the column showed another, with nothing
+      to say which was in force.
+    */
+    if (queryEl.value.trim() === '') renderList(Date.now())
+    else runSearch()
   } catch (error: unknown) {
-    // Loud, and it SAYS what went wrong. A window that silently shows "no
-    // conversations" when the store failed to open is indistinguishable from
-    // one with nothing in it.
+    /*
+      Loud, and it SAYS what went wrong. A window that silently shows "no
+      conversations" when the store failed to open is indistinguishable from one
+      with nothing in it.
+
+      The cached list goes with it. It used to survive, so the calendar kept its
+      dots, a date stayed clickable, and clicking one served the PREVIOUS
+      character's conversations under the new character's name — a failure that
+      presents as the archive working.
+    */
+    conversations = []
+    listed = null
+    picked = null
+    onMonth = null
+    calEl.replaceChildren()
+    calEl.hidden = true
     empty(listEl, 'Could not read the archive.')
     countEl.textContent = ''
     say(`Could not read the archive: ${String(error)}`, true)
@@ -1193,9 +1259,13 @@ function readProblemCount(): void {
       troublesEl.hidden = problems.length === 0
       troublesLabelEl.textContent = `${String(problems.length)} ${problems.length === 1 ? 'problem' : 'problems'}`
     })
-    .catch(() => {
-      // Nothing to say. The strip is itself where failures are reported, and a
-      // failure to read it has nowhere better to go than the console.
+    .catch((error: unknown) => {
+      // The console, as the comment always claimed. It said the console was
+      // where this goes and then wrote nothing to it, so a strip stuck on a
+      // stale count had no trace anywhere. Not `say()`: the strip is itself
+      // where failures are reported, and a toast about failing to count them
+      // would be noise on every launch that cannot reach the store.
+      console.error('[shell] could not count problems', error)
     })
 }
 
@@ -1246,6 +1316,19 @@ async function loadMachine(): Promise<void> {
   try {
     machine = await window.mochiSettings.read()
   } catch (error: unknown) {
+    /*
+      The OLD view goes with the error, and so do the controls beside it.
+
+      `machine`, the group navigation and the tool column all survived a failed
+      read: the error appeared in the middle column while the nav kept its six
+      buttons, and clicking one called `renderMachine`, which returns early only
+      on `null` — so it repainted the previous read's settings over the error.
+      A stale switch that looks live is worse than no switch, because it is one
+      somebody will operate.
+    */
+    machine = null
+    navEl.replaceChildren()
+    toolsEl.replaceChildren()
     empty(machineEl, `Could not read the settings: ${String(error)}`)
     return
   }
@@ -1334,14 +1417,32 @@ function renderMachine(): void {
 /* ---- wiring -------------------------------------------------------------- */
 
 troublesEl.addEventListener('click', () => {
+  /*
+    ARCHIVE first, because that is the pane the report is drawn into.
+
+    `renderProblems` writes to `talkEl`, which lives inside `#tab-archive`. From
+    Cast or Machine that pane is `hidden`, so the button read the problems,
+    painted them into a hidden element, and looked like it did nothing — on two
+    of the three tabs. The button is in the strip along the bottom, visible from
+    all three, so it was unreachable more often than not.
+  */
+  showPlace('archive')
   // Asked again on every click rather than kept: more can arrive while the
   // window is open — a capability that throws mid-conversation is exactly the
   // kind that does.
+  generation += 1
+  const mine = generation
   void window.mochiHistory
     .problems()
-    .then(renderProblems)
+    .then((found) => {
+      // The same staleness rule every other read here follows. Without it a
+      // slow problems read lands on top of a conversation opened after the
+      // click, and the transcript is replaced by a report nobody asked for now.
+      if (mine !== generation) return
+      renderProblems(found)
+    })
     .catch((error: unknown) => {
-      empty(talkEl, `Could not read what went wrong: ${String(error)}`)
+      if (mine === generation) empty(talkEl, `Could not read what went wrong: ${String(error)}`)
     })
 })
 
@@ -1381,33 +1482,45 @@ exportEl.addEventListener('click', () => {
     })
 })
 
+/**
+ * Run whatever is in the field, or fall back to the day list when it is empty.
+ *
+ * A function rather than the body of the input handler, because a RELOAD has to
+ * be able to run it too: the archive column is either showing a search or
+ * showing a day, and every reload used to assume the second even while the
+ * field held a term.
+ *
+ * A declaration, so `readConversations` above can call it.
+ */
+function runSearch(): void {
+  const term = queryEl.value.trim()
+  if (term === '') {
+    renderList(Date.now())
+    return
+  }
+  const mine = generation
+  void window.mochiHistory
+    .search(term)
+    .then((hits) => {
+      // The debounce stops QUEUED queries; it does nothing about one already
+      // running, and FTS5 answers a short term far more slowly than a long
+      // one — so the results for `a` used to land after `apple` and replace
+      // them.
+      if (mine !== generation) return
+      renderHits(group(hits), term)
+    })
+    .catch((error: unknown) => {
+      if (mine === generation) empty(listEl, `Could not search: ${String(error)}`)
+    })
+}
+
 let searching: number | null = null
 queryEl.addEventListener('input', () => {
   // Debounced. Every keystroke is an FTS5 query and an IPC round trip, and a
   // fast typist would queue a dozen of them to throw away eleven.
   if (searching !== null) clearTimeout(searching)
   generation += 1
-  searching = window.setTimeout(() => {
-    const term = queryEl.value.trim()
-    if (term === '') {
-      renderList(Date.now())
-      return
-    }
-    const mine = generation
-    void window.mochiHistory
-      .search(term)
-      .then((hits) => {
-        // The debounce stops QUEUED queries; it does nothing about one already
-        // running, and FTS5 answers a short term far more slowly than a long
-        // one — so the results for `a` used to land after `apple` and replace
-        // them.
-        if (mine !== generation) return
-        renderHits(group(hits), term)
-      })
-      .catch((error: unknown) => {
-        if (mine === generation) empty(listEl, `Could not search: ${String(error)}`)
-      })
-  }, 140)
+  searching = window.setTimeout(runSearch, 140)
 })
 
 window.addEventListener('focus', readProblemCount)

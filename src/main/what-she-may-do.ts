@@ -45,9 +45,26 @@ export interface WhatSheMayDo {
  * manifests" hook, which would let a downloaded character rewrite what any tool
  * claims to do.
  */
-function narrowFaces(persona: Persona): (tool: WireTool) => WireTool {
+function narrowFaces(persona: Persona): (tool: WireTool) => WireTool | null {
   return (tool) => {
     if (tool.name !== 'set_expression') return tool
+    /*
+      NO FACES MEANS NO TOOL, and this is the same rule as the line below.
+
+      Narrowing an empty `faces` produced `enum: []` — a schema that no argument
+      can satisfy, offered to her anyway. She would see a tool in her list,
+      have no legal value for its one required field, and either fail the call
+      or have the session configuration refused outright.
+
+      `whatSheMayDo` already says the principle in the comment under this one:
+      not offered, rather than offered and refused. The narrowing had a case it
+      did not apply the principle to.
+
+      The capability's own empty-first branch stays. It is unreachable through
+      the wire now and is the answer if a caller ever reaches the handler
+      another way — see `set-expression/capability.ts`.
+    */
+    if (persona.faces.length === 0) return null
     const face = tool.parameters.properties['face']
     if (face === undefined) return tool
     return {
@@ -73,6 +90,9 @@ export function whatSheMayDo(
     // NOT OFFERED, rather than offered and refused. A description she cannot
     // act on is worse than one she never had — `registry.ts`'s deleted
     // `execution-unavailable` reasoning, arriving in a form that is still true.
-    tools: tools.filter((tool) => allowsCapability(grants, tool.name)).map(narrowFaces(persona)),
+    tools: tools
+      .filter((tool) => allowsCapability(grants, tool.name))
+      .map(narrowFaces(persona))
+      .filter((tool): tool is WireTool => tool !== null),
   }
 }

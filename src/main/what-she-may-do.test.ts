@@ -181,9 +181,20 @@ describe('which faces she is offered', () => {
     expect(facesOffered(three)).toEqual(['neutral', 'happy', 'thinking'])
   })
 
-  it('offers none when a character wears one face', () => {
+  it('does not offer the TOOL at all when a character wears one face', () => {
+    /*
+      It used to offer it with `enum: []`, which this test asserted and which
+      was wrong: a required field whose enum is empty is a schema no argument
+      can satisfy. She would see the tool, have no legal value for it, and
+      either fail the call or have the whole session configuration refused.
+
+      Not offered, rather than offered and unusable — the same rule the grant
+      filter one level up already follows.
+    */
     const still: Persona = { ...DEFAULT_PERSONA, faces: [] }
-    expect(facesOffered(still)).toEqual([])
+    const may = whatSheMayDo(still, '', DEFAULT_GRANTS, withFaces())
+    expect(may.tools.map((one) => one.name)).toEqual([])
+    expect(facesOffered(still)).toBeUndefined()
   })
 
   it('leaves every other tool alone', () => {
