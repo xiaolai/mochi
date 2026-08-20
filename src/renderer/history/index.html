@@ -55,6 +55,22 @@
         font: inherit;
         font-size: var(--t-sm);
       }
+      /*
+        The resting edge goes when the focus ring arrives.
+
+        Two rings, one inside the other: the gold `:focus-visible` outline sits
+        a pixel outside the field's own grey hairline, and the pair read as a
+        doubled border rather than as a field being focused. TRANSPARENT rather
+        than `border: 0`, so the box keeps its 1px and nothing shifts.
+
+        `:focus` rather than `:focus-visible` — the outline is drawn by the
+        latter, but a text field matches it however focus arrived, and matching
+        the wider rule here means the hairline cannot survive a case the outline
+        does not.
+      */
+      .topbar-context input[type='search']:focus {
+        border-color: transparent;
+      }
       .topbar {
         flex: none;
         height: 60px;
