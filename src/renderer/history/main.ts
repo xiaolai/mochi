@@ -20,6 +20,7 @@ import { applyAccent } from '../design/apply-accent'
 import { PANES, type PaneHandlers } from '../settings/panes'
 import { MochiAvatar } from '../companion/rig/mochi'
 import { byDay, clockLabel, dayLabel, highlight, interruptions, lengthLabel } from './format'
+import { centreOffset, paintedBounds } from './centre'
 import {
   assembledPanel,
   characterCards,
@@ -263,7 +264,10 @@ function renderCards(): void {
  * blinking mark in a title bar is motion with nothing to say.
  */
 function drawMark(face: ShelfView['face']): void {
-  const px = 22
+  // Sized to the wordmark beside it rather than to a number of its own: the two
+  // are one lockup, and a 22px mark next to 15px caps read as a picture that
+  // happened to be filed there.
+  const px = 26
   const ratio = Math.min(window.devicePixelRatio || 1, 3)
   markEl.width = Math.round(px * ratio)
   markEl.height = Math.round(px * ratio)
@@ -271,10 +275,27 @@ function drawMark(face: ShelfView['face']): void {
   markEl.style.height = `${String(px)}px`
   const ctx = markEl.getContext('2d')
   if (ctx === null) return
-  const avatar = new MochiAvatar(ctx, { face, size: 'fit-canvas', random: () => 0.5 })
+
+  // Offscreen and blitted centred, exactly as `faceTile` does it and for the
+  // same reason: the rig reserves headroom for a worst-case pose, so drawn
+  // straight in she sits low and the lockup looks out of line. See `centre.ts`.
+  const off = document.createElement('canvas')
+  off.width = markEl.width
+  off.height = markEl.height
+  const offCtx = off.getContext('2d')
+  if (offCtx === null) return
+  const avatar = new MochiAvatar(offCtx, { face, size: 'fit-canvas', random: () => 0.5 })
   avatar.resize(px, px, ratio)
   avatar.setIdle(false)
   avatar.render(0)
+
+  const pixels = offCtx.getImageData(0, 0, off.width, off.height).data
+  const at = centreOffset(
+    paintedBounds((x, y) => pixels[(y * off.width + x) * 4 + 3] ?? 0, off.width, off.height),
+    off.width,
+    off.height,
+  )
+  ctx.drawImage(off, at.dx, at.dy)
 }
 
 /**

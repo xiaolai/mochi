@@ -69,9 +69,14 @@
         margin-inline: var(--s2);
       }
       /* Her face beside the wordmark, as the artifact draws it. */
+      /*
+        One lockup with the wordmark, so the two share a centre line rather than
+        each sitting on whatever baseline its own box gives it.
+      */
       .mark {
         flex: none;
         display: block;
+        align-self: center;
       }
       .wordmark {
         font-family: var(--narrow);
@@ -780,18 +785,29 @@
         to have its own. Two bars on one axis is what the `pre` rule below
         refuses — these are two different axes' worth of content, side by side.
       */
+      /*
+        Ruled off, not boxed in.
+
+        It was a bordered, rounded card inside a bordered column — a box in a
+        box, and the inner one was carrying no information the outer one did not
+        already give. The column's own edge says where this is; a single rule
+        says where the assembled string starts.
+
+        Full width by cancelling the column's padding, so the text runs to the
+        same edges the heading above it does.
+      */
       .wake-box {
         flex: 1;
         min-height: 0;
         overflow-y: auto;
-        border: 1px solid var(--rule);
-        border-radius: var(--r2);
-        background: var(--paper);
+        margin: 0 calc(var(--s5) * -1) calc(var(--s5) * -1);
+        border-top: 1px solid var(--rule);
       }
       .wake-box > pre {
         border: 0;
         border-radius: 0;
         background: transparent;
+        padding: var(--s4) var(--s5);
       }
 
       /* ---- the open character's column ------------------------------------- */
@@ -1238,19 +1254,20 @@
         user-select: text;
       }
       /*
-        Take this turn. ON the bubble's bottom-right corner, on hover and on
-        focus.
+        Take this turn. ON the bubble's top-right corner, on hover and on focus.
 
-        Sat fully INSIDE first, and the measurement killed it: a 21px button
-        inset from the right covers 11px of the line beside it, which on "Bye."
-        — a 56px bubble holding 30px of text — masks the last character.
+        Top, because that is where people already look for it. It was moved to
+        the bottom for a measured reason — the last line of a wrapped bubble has
+        room to spare and the first line is full by definition, so the bottom
+        corner covers 0px of text against 2px at the top — and 2px is a sliver
+        inside the corner radius, which is a smaller cost than a control sitting
+        where the hand does not expect it.
 
-        BOTTOM rather than top, because the last line of a wrapped bubble is the
-        one with room to spare: a paragraph ends where its words run out, while
-        the first line is full by definition. Straddling the corner on top of
-        that leaves a 2px sliver, inside the corner radius where a glyph does
-        not reach. The alternative was reserving the button's width as padding
-        on every bubble forever so that one of them can be hovered.
+        Straddling the corner, not inside it. Fully inside, a 21px button covers
+        11px of the line beside it, which on "Bye." — a 56px bubble holding 30px
+        of text — masks the last character. The alternative was reserving the
+        button's width as padding on every bubble forever so that one of them
+        can be hovered.
 
         `background: inherit` takes whichever surface its own bubble is painted
         with — `--her-wash` on her side, `--paper-2` on yours — so the part that
@@ -1260,7 +1277,7 @@
       */
       .bubble .copy {
         position: absolute;
-        bottom: -7px;
+        top: -7px;
         right: -7px;
         display: flex;
         padding: var(--s1);
