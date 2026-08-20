@@ -6,7 +6,7 @@ import { resolvePalette, whenSchemeChanges, type Palette } from '../design/resol
 import { fullPad, STATUS_ROOM, STATUS_UNDER, type Pad } from '@shared/avatar-layout'
 import { createUtterance } from './utterance'
 import { createAttending, levelOf, type Attention } from './attending'
-import { beatRect, createBeat, drawBeat, type Beat } from './beat'
+import { createBeat, type Beat } from './beat'
 import { chipRect, drawChip, hits as chipHits, visible as chipVisible } from './chip'
 import { roomFor, type Room, type SidePreference } from './place'
 import { layoutFor, FEET_FROM_TOP } from '@shared/avatar-layout'
@@ -51,19 +51,6 @@ export interface Face {
    * where she is rather than two that agree until they do not.
    */
   box(): { left: number; top: number; width: number; height: number }
-  /**
-   * How far below her body the canvas has already drawn something.
-   *
-   * The held beat lives under her feet, and so does the status line — which is
-   * DOM and therefore painted over the top of it. They overlapped by 16px, and
-   * the realistic case is the worst one: an expired session says "the hour is up
-   * — reconnecting" at the same moment the beat goes overdue and says "say that
-   * again?", so two sentences pile up exactly when something has gone wrong.
-   *
-   * Asked rather than assumed, because only this side knows whether a beat is up
-   * and how far it has faded in.
-   */
-  occupiedBelow(): number
   /** Her voice, once the peer hands it over. Drives the mouth. */
   hear(stream: MediaStream): void
   /**
@@ -273,7 +260,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // Her box as it would be with no padding, so the rects below place
     // themselves relative to her rather than to whatever window she is in now.
     const her = { left: 0, top: 0, width: body.width, height: body.height }
-    const around = [chipRect(her), beatRect(her)]
+    // Only the chip. The beat draws nothing now — what it does is move HER,
+    // which needs no room reserved for it.
+    const around = [chipRect(her)]
     const pad = {
       left: Math.max(0, ...around.map((one) => -one.x)),
       top: Math.max(0, ...around.map((one) => -one.y)),
@@ -282,16 +271,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     }
     // The status line is DOM and main places it; one constant, read by both, so
     // it cannot be positioned outside the window that was sized for it.
-    /*
-      Stacked, not overlaid: what the canvas draws below her, then the status
-      line under THAT, with the same clearance `placeStatus` applies.
-
-      `pad.bottom` already holds the beat's full extent whether or not one is
-      showing, which is deliberate — reserving it always means her window does
-      not resize every time a turn ends, and a resize per turn is the one cost
-      this whole arrangement was supposed to avoid.
-    */
-    return { ...pad, bottom: pad.bottom + body.height * STATUS_UNDER + STATUS_ROOM }
+    // The status line is the only thing under her now, so there is nothing to
+    // stack it on and nothing to reserve for a beat that draws nothing.
+    return { ...pad, bottom: Math.max(pad.bottom, body.height * STATUS_UNDER + STATUS_ROOM) }
   }
 
   /**
@@ -771,16 +753,6 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // one deliberate exception to "only painted pixels take the mouse" — a
     // control nobody can click is not a control. It is exactly the size of the
     // control and disappears with it.
-    /**
-     * The beat, drawn after her and after the bubble.
-     *
-     * Deliberately absent from the hit test below. `chip.ts` widens "only
-     * painted pixels of hers take the mouse" because a control nobody can click
-     * is not a control; this is not a control, so her hit region is unchanged
-     * and the desktop under it is still reachable.
-     */
-    drawBeat(ctx, herBox(), palette, waiting, beat.opacity(), roomOnScreen())
-
     const onChip = chip > 0 && at !== null && chipHits(at.x, at.y, herBox(), roomOnScreen())
     // Only the bubble's CONTROLS, never its text. The design's rule is that
     // only painted pixels of HERS take the mouse; two small buttons are the
@@ -893,14 +865,6 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       lookAtPointer()
     },
     box: () => herBox(),
-    occupiedBelow: () => {
-      if (beat.state() === 'none' || beat.opacity() <= 0) return 0
-      const her = herBox()
-      const rect = beatRect(her, roomOnScreen())
-      // Only what is BELOW her: the beat goes above when there is no room under
-      // her, and in that case it is not in the status line's way at all.
-      return Math.max(0, rect.y + rect.h - (her.top + her.height))
-    },
     showWords: (shown: boolean) => {
       showingWords = shown
       if (!shown) bubble.clear()

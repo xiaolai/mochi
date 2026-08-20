@@ -1,5 +1,3 @@
-import type { Body, Room } from './place'
-
 /**
  * The pause before she answers — held locally, because the wait is the point.
  *
@@ -36,9 +34,28 @@ import type { Body, Room } from './place'
  * (analyser peak exactly 0.0000) — 6 of 24 sentences with the detector never
  * settling. That is roughly one turn in four, which is a common case rather
  * than an edge, and in the app it presents as silence rather than as slowness.
- * Open-ended silence from a companion is indistinguishable from a companion
- * that has crashed, so the beat expires into something that says so and gives
- * the person the one action that helps: say it again.
+ * Open-ended silence from a companion is indistinguishable from one that has
+ * crashed, so the beat has to end in something rather than in nothing.
+ *
+ * ## What it draws: nothing
+ *
+ * It used to draw a pill under her — three dots, then the words "say that
+ * again?". That pill was removed, and the argument against it is in this file's
+ * own code: *"Her own body rather than a spinner: a companion that shows a
+ * progress indicator has stopped being a companion."* The pill was a spinner
+ * with better manners.
+ *
+ * Four things were wrong with it. It was written in the first person, so it read
+ * as HER asking — while the fault it reported is that her audio never arrived,
+ * which is the app's, not hers. It prescribed an action that does not fix that:
+ * repeating yourself rolls the same one-in-four dice again. It sat below her
+ * while her real speech sits above her, so the surface written in her voice was
+ * the one that was not her. And it taught anybody using it that she is hard of
+ * hearing, when she never got to speak.
+ *
+ * What remains is what this file always did better: she looks away and sways
+ * while she waits, then comes back to you and nods. No words, no blame, and no
+ * claim about whose fault the silence was.
  *
  * Leaving is the ANALYSER's answer rather than `output_audio_buffer.started`
  * for exactly that reason. The started frame is a promise of audio; the
@@ -134,108 +151,4 @@ export function createBeat(overdueSeconds: number = OVERDUE_S): HeldBeat {
     heldFor: () => (state === 'none' ? 0 : held),
     opacity: () => (state === 'none' ? 0 : Math.min(1, held / FADE_S)),
   }
-}
-
-/**
- * Its own opaque surface, and a fixed size.
- *
- * Opaque because the handoff settles it as a rule — anything carrying words
- * gets its own surface with an elevation, never the wallpaper — and she may be
- * sitting on a photograph. Fixed because both strings this ever draws are
- * constants in this file: measuring text to size a box whose contents cannot
- * change would be a per-frame measurement for an answer that is known here.
- */
-const WIDTH = 116
-const HEIGHT = 22
-/** Clear of her body, so the two do not read as one shape. */
-const GAP = 10
-
-/** What the overdue beat says. The one action that helps, in her own words. */
-export const OVERDUE_TEXT = 'say that again?'
-
-export interface BeatColours {
-  readonly paper: string
-  readonly ink: string
-}
-
-export interface Rect {
-  readonly x: number
-  readonly y: number
-  readonly w: number
-  readonly h: number
-}
-
-/**
- * Where it sits: centred under her, or over her head when there is no room.
- *
- * BELOW by preference, which is the opposite of the bubble's — `place.ts` tries
- * `above` first — so the two do not compete for the same strip when a persona
- * has the bubble turned on. The room is the same `Room` everything else in this
- * window is placed against: her window deliberately hangs off the display, so
- * "inside the canvas" is not the same question as "on screen".
- */
-export function beatRect(her: Body, room?: Room): Rect {
-  const below = her.top + her.height + GAP
-  const above = her.top - GAP - HEIGHT
-  const centred = her.left + her.width / 2 - WIDTH / 2
-
-  // No room means the whole canvas, which is what a caller drawing her in
-  // isolation — the tests, the tuner — should get.
-  const y = room === undefined || below + HEIGHT <= room.bottom ? below : Math.max(room.top, above)
-  const x =
-    room === undefined
-      ? centred
-      : Math.min(Math.max(centred, room.left), Math.max(room.left, room.right - WIDTH))
-  return { x, y, w: WIDTH, h: HEIGHT }
-}
-
-/**
- * Draw the beat. Nothing at all when there is none.
- *
- * An early return rather than a zero-alpha paint: this is called every frame,
- * and she is not in a beat for almost all of them.
- *
- * It does NOT take the mouse, and that is the difference between this and the
- * chip. `chip.ts` widens "only painted pixels of hers take the mouse" because a
- * control nobody can click is not a control; this is not a control, so the
- * exception does not apply and her hit region is unchanged.
- */
-export function drawBeat(
-  ctx: CanvasRenderingContext2D,
-  her: Body,
-  colours: BeatColours,
-  state: Beat,
-  opacity: number,
-  room?: Room,
-): void {
-  if (state === 'none' || opacity <= 0) return
-  const { x, y, w, h } = beatRect(her, room)
-
-  ctx.save()
-  ctx.globalAlpha = Math.min(1, opacity)
-
-  ctx.fillStyle = colours.paper
-  ctx.beginPath()
-  ctx.roundRect(x, y, w, h, 8)
-  ctx.fill()
-
-  ctx.fillStyle = colours.ink
-  if (state === 'held') {
-    // Three dots, and nothing that claims to be progress. Nothing here knows
-    // how long the wait will be — §64 is the measurement that says nothing
-    // does — so a bar filling towards an end would be an invention.
-    for (let i = 0; i < 3; i += 1) {
-      ctx.beginPath()
-      ctx.arc(x + w / 2 + (i - 1) * 8, y + h / 2, 2, 0, Math.PI * 2)
-      ctx.fill()
-    }
-    ctx.restore()
-    return
-  }
-
-  ctx.font = '11px -apple-system, system-ui, sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(OVERDUE_TEXT, x + w / 2, y + h / 2)
-  ctx.restore()
 }
