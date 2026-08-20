@@ -117,7 +117,7 @@ import { noteUsed, readUsage } from './store/usage'
 import { whatSheMayDo } from './what-she-may-do'
 import { createConversation, type Conversation } from './store/conversation'
 import { previousNote, recall, recallState, remember } from './store/memory'
-import { createCompanionWindow, showHistoryWindow, showSettingsWindow } from './window'
+import { createCompanionWindow, showHistoryWindow } from './window'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
 // application's identity is how a notification arrives attributed to nothing and
@@ -318,7 +318,9 @@ const menuHandlers = {
     showHistoryWindow()
   },
   onSettings: () => {
-    showSettingsWindow()
+    // One window, three places. The menu item survives because "Settings…" is
+    // what somebody looks for; where it lands is now a tab rather than a window.
+    showHistoryWindow().webContents.send('shell:show', 'machine')
   },
   onWear: (id: string) => {
     const written = wearPersona(id)
@@ -1186,7 +1188,9 @@ ipcMain.handle('history:export', async (): Promise<HistoryExport> => {
 })
 
 ipcMain.on('history:settings', () => {
-  showSettingsWindow()
+  // Kept, because the channel is in `SHELF_CHANNELS` and removing it would be a
+  // second change in the same commit for no gain. It now shows the tab.
+  showHistoryWindow().webContents.send('shell:show', 'machine')
 })
 
 /**

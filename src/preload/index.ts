@@ -161,6 +161,14 @@ const history: MochiHistoryApi = {
   settings() {
     ipcRenderer.send(guardShelf('history:settings'))
   },
+  onShow(run: (place: string) => void) {
+    // The value is passed through as a plain string and checked by the shell,
+    // not here: the bridge's job is the channel, and what counts as a place is
+    // the window's business.
+    ipcRenderer.on(guardShelf('shell:show'), (_event, place: unknown) => {
+      if (typeof place === 'string') run(place)
+    })
+  },
   async exportAll() {
     return (await ipcRenderer.invoke(guardShelf('history:export'))) as HistoryExport
   },
@@ -212,11 +220,25 @@ if (!ROLES.has(role)) {
   // string is the ABSENT case, and it lands here rather than on the companion.
   console.error(`[preload] refusing to expose any API: unknown role "${role}"`)
 } else if (role === 'history') {
-  // `history` is the role string the shelf window is constructed with. The name
-  // predates the window growing character cards; renaming it would rename a
-  // string nobody sees in three files, so it stays and this says so.
+  /*
+    ONE window now, so one role gets both APIs — and that is a real widening,
+    stated rather than slipped in.
+    
+    `history` is the role string the shell window is constructed with. The name
+    predates the window growing character cards and then absorbing settings;
+    renaming it would rename a string nobody sees in three files.
+    
+    What this ADDS is that the document showing a transcript can also change a
+    grant. The two were separate on defence-in-depth grounds, and folding them
+    is the cost of the merge: they are one window, and a window cannot have two
+    preload roles.
+    
+    What it does NOT add is the thing that argument was really about.
+    `COMPANION_CHANNELS` stays its own list, so no window that draws a
+    transcript can mint a key or exchange an SDP offer — which is the sentence
+    `@shared/ipc` uses to justify separate allowlists, and it is still true.
+  */
   contextBridge.exposeInMainWorld('mochiHistory', history)
-} else if (role === 'settings') {
   contextBridge.exposeInMainWorld('mochiSettings', settings)
 } else {
   contextBridge.exposeInMainWorld('mochi', api)

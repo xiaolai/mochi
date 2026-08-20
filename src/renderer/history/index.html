@@ -130,6 +130,207 @@
         color: var(--ink-3);
       }
 
+      /* ---- the three named places ------------------------------------------ */
+      /*
+        A tab strip under the state bar, not beside the content. The window has
+        one subject at a time now, so the switch belongs where a window title
+        would be rather than inside either pane.
+      */
+      .shell-tabs {
+        flex: none;
+        display: flex;
+        gap: var(--s5);
+        padding: 0 var(--s6);
+        background: var(--paper-2);
+        border-bottom: 1px solid var(--rule);
+      }
+      .shell-tab {
+        padding: var(--s3) 0 var(--s2);
+        border: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: transparent;
+        font-family: var(--narrow);
+        font-size: var(--t-label);
+        font-weight: 700;
+        letter-spacing: var(--track);
+        text-transform: uppercase;
+        color: var(--ink-3);
+        cursor: default;
+      }
+      .shell-tab:hover {
+        color: var(--ink-2);
+      }
+      /*
+        Her colour, because which place you are in is chrome — and this palette's
+        chrome has no hue of its own. `--her-deep` is the one that carries it.
+      */
+      .shell-tab[aria-current='true'] {
+        border-bottom-color: var(--her-deep);
+        color: var(--ink);
+      }
+      /* Each pane owns the whole window under the strip. */
+      .tab-pane {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ---- archive: search first, one conversation at a time ---------------- */
+      .archive {
+        padding: var(--s5) var(--s6) 0;
+        gap: var(--s5);
+      }
+      .archive > .search {
+        flex: none;
+      }
+      .archive-body {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: var(--s6);
+      }
+      .archive-body > .list {
+        border: 1px solid var(--rule);
+        border-radius: var(--r3);
+        background: var(--paper-2);
+        margin: 0;
+        overflow-y: auto;
+      }
+      .archive-body > .list .entry:first-child {
+        border-top: 0;
+      }
+      /* The transcript column: its own scroll, clear of the drawer's hairline. */
+      #talk {
+        min-height: 0;
+        overflow-y: auto;
+        padding-right: var(--s4);
+        margin-bottom: calc(var(--s6) * -1);
+        padding-bottom: var(--s6);
+      }
+
+      /* ---- machine: the six groups, as they were ---------------------------- */
+      .machine {
+        display: grid;
+        grid-template-columns: 196px minmax(0, 1fr);
+        min-height: 0;
+      }
+      .machine > .nav {
+        display: flex;
+        flex-direction: column;
+        padding: var(--s5) var(--s3);
+        gap: var(--s0);
+        border-right: 1px solid var(--rule);
+        overflow-y: auto;
+      }
+      .machine-pane {
+        min-height: 0;
+        overflow-y: auto;
+        padding: var(--s5) var(--s6) var(--s6);
+      }
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: var(--s3);
+        width: 100%;
+        text-align: left;
+        padding: var(--s2) var(--s4);
+        border: 0;
+        border-radius: var(--r2);
+        background: transparent;
+        color: var(--ink-2);
+        font: inherit;
+        font-size: var(--t-sm);
+        cursor: default;
+      }
+      .tab:hover {
+        background: var(--paper-hover);
+      }
+      .tab[aria-current='true'] {
+        background: var(--chrome-wash);
+        color: var(--ink);
+        font-weight: 600;
+      }
+      /* A dot means somebody should look, not that something is off. */
+      .tab .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--warn-line);
+        margin-left: auto;
+        flex: none;
+      }
+      .field {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: var(--s5);
+        align-items: center;
+        padding: var(--s3) 0;
+      }
+      .field > label {
+        color: var(--ink-2);
+        font-size: var(--t-sm);
+      }
+      .grant {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--s5);
+        padding: var(--s4) 0;
+        border-bottom: 1px solid var(--rule);
+      }
+      .grant .name,
+      .cap .name {
+        font-weight: 600;
+      }
+      .grant .desc,
+      .cap .desc {
+        margin: var(--s0) 0 0;
+        font-size: var(--t-sm);
+        color: var(--ink-2);
+      }
+      .grant .right {
+        text-align: right;
+        flex: none;
+      }
+      .grant .switch {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--s2);
+      }
+      .grant .used {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-3);
+      }
+      .cap {
+        padding: var(--s4) 0;
+        border-bottom: 1px solid var(--rule);
+      }
+      .cap .name {
+        font-family: var(--mono);
+        font-size: var(--t-sm);
+        color: var(--gold);
+      }
+      .folder {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s5);
+        padding: var(--s3) 0;
+        border-bottom: 1px solid var(--rule);
+      }
+      .folder .refused {
+        font-size: var(--t-data);
+        color: var(--red);
+      }
+      .note.bad {
+        color: var(--red);
+      }
+
       /* ---- characters ------------------------------------------------------ */
       .strip {
         flex: none;
@@ -876,25 +1077,51 @@
         <span class="stat" id="count"></span>
       </div>
 
-      <div class="strip">
-        <h3>Characters</h3>
-        <span class="stat" id="characters-count"></span>
-      </div>
-      <div class="cards" id="characters"></div>
+      <!--
+        Three named places, one window.
 
-      <div class="body">
-        <div id="pane"></div>
-        <aside>
-          <div class="tabs" id="tabs"></div>
-          <div class="panel" id="panel-wake"></div>
-          <div class="panel" id="panel-talks" hidden>
-            <div class="search">
-              <input id="q" type="search" placeholder="Search what was said" autocomplete="off" />
-            </div>
-            <div class="list" id="list"></div>
-          </div>
-        </aside>
-      </div>
+        This window used to carry two unrelated jobs in one column that swapped
+        between them — editing who she is, and reading what she said — and a
+        second window held everything else. "Shelf" named the container rather
+        than either job, which is why it is gone as a word: CAST is who she can
+        be, ARCHIVE is what was said, MACHINE is what is true whoever is worn.
+      -->
+      <nav class="shell-tabs" id="shell-tabs" role="tablist"></nav>
+
+      <section class="tab-pane" id="tab-cast">
+        <div class="strip">
+          <h3>Characters</h3>
+          <span class="stat" id="characters-count"></span>
+        </div>
+        <div class="cards" id="characters"></div>
+        <div class="body">
+          <div id="pane"></div>
+          <aside>
+            <div class="tabs" id="tabs"></div>
+            <div class="panel" id="panel-wake"></div>
+          </aside>
+        </div>
+      </section>
+
+      <!--
+        The archive gets the whole window: search across the top, conversations
+        on the left, the transcript at a reading measure. It was a 380px column
+        beside a character's fields, at whatever width was left over.
+      -->
+      <section class="tab-pane archive" id="tab-archive" hidden>
+        <div class="search">
+          <input id="q" type="search" placeholder="Search what was said" autocomplete="off" />
+        </div>
+        <div class="archive-body">
+          <div class="list" id="list"></div>
+          <div id="talk"></div>
+        </div>
+      </section>
+
+      <section class="tab-pane machine" id="tab-machine" hidden>
+        <nav class="nav" id="nav"></nav>
+        <div class="machine-pane" id="machine-pane"></div>
+      </section>
 
       <div class="drawer">
         <span class="handle"></span>
@@ -903,7 +1130,6 @@
         </button>
         <span class="grow"></span>
         <button class="btn" id="export" type="button">Export…</button>
-        <button class="btn" id="settings" type="button">Settings…</button>
       </div>
     </div>
     <p id="said" role="status" aria-live="polite"></p>

@@ -155,6 +155,14 @@ export const SHELF_CHANNELS = [
    */
   'history:settings',
   /**
+   * Main → the shell: show this place.
+   *
+   * The menu bar still offers "Settings…", because that is what somebody looks
+   * for; where it lands is a tab rather than a window. One-way and one string —
+   * the shell decides what to do with it, and an unknown place is ignored.
+   */
+  'shell:show',
+  /**
    * Write everything she has for the worn persona to a file the person chooses.
    *
    * Here rather than in the settings window because this is about her
@@ -879,6 +887,8 @@ export interface MochiHistoryApi {
   exportAll(): Promise<HistoryExport>
   /** Open the settings window. Opening it is all this can do. */
   settings(): void
+  /** Main asking for a place to be shown. See `shell:show`. */
+  onShow(run: (place: string) => void): void
   /** Whoever is worn. The window never gets to name a persona. */
   list(): Promise<{
     readonly persona: string

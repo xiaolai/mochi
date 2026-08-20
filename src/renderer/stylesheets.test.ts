@@ -44,7 +44,8 @@ function read(relative: string): string {
 
 const TOKENS = read('./design/tokens.css')
 
-const WINDOWS = ['companion', 'history', 'settings'] as const
+// Two, since settings became a tab rather than a window.
+const WINDOWS = ['companion', 'history'] as const
 
 /** Everything between `<style>` and `</style>`. */
 function inlineStyleOf(window: string): string {

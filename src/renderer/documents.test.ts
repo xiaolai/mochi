@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest'
 /**
  * Every element a renderer insists on is actually in its document.
  *
+ * TWO documents now, not three. Settings stopped being a window when the shell
+ * grew its Machine tab; `panes.ts` is imported by the shelf and is checked by
+ * `panes.test.ts`, which never needed a document.
+ *
  * ## Why this test exists
  *
  * All three renderers open with the same shape: `document.querySelector('#x')`,
@@ -61,21 +65,24 @@ const DOCUMENTS: readonly {
       'pane',
       'tabs',
       'panel-wake',
-      'panel-talks',
       'q',
       'list',
+      'talk',
       'troubles',
       'troubles-label',
       'export',
-      'settings',
       'said',
+      // The shell's three places. Listed explicitly because the renderer reaches
+      // for them through a template literal — `need(\`tab-${id}\`)` — which the
+      // extraction below cannot see, so without these they would be the one part
+      // of the window nothing checks.
+      'shell-tabs',
+      'tab-cast',
+      'tab-archive',
+      'tab-machine',
+      'nav',
+      'machine-pane',
     ],
-  },
-  {
-    name: 'settings',
-    file: './settings/index.html',
-    // The six-pane shell: a nav column, the pane it swaps, and the strip.
-    ids: ['nav', 'pane', 'said'],
   },
 ]
 

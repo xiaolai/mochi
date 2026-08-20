@@ -331,55 +331,14 @@ export function showHistoryWindow(): BrowserWindow {
   return window
 }
 
-/**
- * The one place a person can change who she is without opening a text editor.
- *
- * A third window rather than a third pane in the conversations one. They are
- * genuinely different jobs — that window is a reader of a person's own words,
- * this one writes to the persona those words are filed under — and they have
- * different allowlists for exactly that reason. Sharing a document would make
- * the split decorative.
- */
-let settings: BrowserWindow | null = null
+/*
+  The settings window is gone, and this is where it was.
 
-export function showSettingsWindow(): BrowserWindow {
-  if (settings !== null && !settings.isDestroyed()) {
-    if (settings.isMinimized()) settings.restore()
-    bringForward(settings)
-    return settings
-  }
-
-  const window = new BrowserWindow({
-    // 780 x 620, from the handoff. The nav column is 196 and the pane's
-    // reading measure is 62ch, which is what that width is for.
-    width: 780,
-    height: 620,
-    minWidth: 620,
-    minHeight: 420,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1d1a' : '#f7f6f1',
-    title: 'Settings',
-    skipTaskbar: false,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      additionalArguments: ['--mochi-role=settings'],
-    },
-  })
-  settings = window
-  window.on('closed', () => {
-    settings = null
-  })
-  // Shown at once, for the reason `bringForward` gives at length: waiting for a
-  // first paint in an accessory app is waiting for something that never comes.
-  bringForward(window)
-
-  const devServerUrl = process.env.ELECTRON_RENDERER_URL
-  if (devServerUrl === undefined) {
-    void window.loadFile(join(__dirname, '../renderer/settings/index.html'))
-  } else {
-    void window.loadURL(`${devServerUrl}/settings/index.html`)
-  }
-  return window
-}
+  It held six groups in their own window and now they are the MACHINE tab of the
+  shell — see `renderMachine` in the shelf's renderer. The comment that stood
+  here argued that two documents with different allowlists must not share one,
+  and that argument is answered rather than ignored: the two lists are still
+  separate and each API still guards its own, but one window carries both. What
+  it never covered, and still does not, is the companion — `COMPANION_CHANNELS`
+  is untouched, so nothing that draws a transcript can mint a key.
+*/

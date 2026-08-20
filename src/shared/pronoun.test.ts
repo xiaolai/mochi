@@ -103,8 +103,16 @@ describe('the helpers are actually wired to something', () => {
       .filter(([path]) => !path.includes('pronoun'))
       .filter(([, source]) => {
         const text = String(source)
-        const line = /import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+'[^']*pronoun'/s.exec(text)?.[1]
-        return line !== undefined && new RegExp(`\\b${name}\\b`).test(line)
+        // EVERY import from the module, not the first. A file may import the
+        // types in one statement and a function in another — `history/main.ts`
+        // does — and `.exec` stopping at the first one reported `label` as
+        // having no callers while it was being used two lines below.
+        const named = [
+          ...text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+'[^']*pronoun'/gs),
+        ]
+          .map((one) => one[1] ?? '')
+          .join(', ')
+        return new RegExp(`\\b${name}\\b`).test(named)
       })
       .map(([path]) => path)
     expect(importers.length).toBeGreaterThan(0)

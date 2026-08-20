@@ -4,11 +4,20 @@ import type {
   HistoryProblem,
   HistoryTurn,
   MochiHistoryApi,
+  MochiSettingsApi,
+  SettingsView,
   SettingsWrite,
   ShelfView,
 } from '@shared/ipc'
-import { DEFAULT_PRONOUN, forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
+import {
+  DEFAULT_PRONOUN,
+  forPronoun,
+  label as paneLabel,
+  type ByPronoun,
+  type Pronoun,
+} from '@shared/pronoun'
 import { applyAccent } from '../design/apply-accent'
+import { PANES, type PaneHandlers } from '../settings/panes'
 import { MochiAvatar } from '../companion/rig/mochi'
 import { highlight, lengthLabel, whenLabel } from './format'
 import {
@@ -22,6 +31,15 @@ import {
 declare global {
   interface Window {
     readonly mochiHistory: MochiHistoryApi
+    /*
+      Both, because this is one window with three places in it.
+
+      The preload exposes both bridges to this role and each still guards its own
+      channel list — the widening is that the document showing a transcript can
+      also change a grant. What it does not gain is the companion's channels, so
+      nothing here can mint a key or exchange an SDP offer.
+    */
+    readonly mochiSettings: MochiSettingsApi
   }
 }
 
@@ -70,15 +88,16 @@ const countEl = need('count', HTMLElement)
 const charactersEl = need('characters', HTMLElement)
 const charactersCountEl = need('characters-count', HTMLElement)
 const paneEl = need('pane', HTMLElement)
-const tabsEl = need('tabs', HTMLElement)
 const wakeEl = need('panel-wake', HTMLElement)
-const talksEl = need('panel-talks', HTMLElement)
+const talkEl = need('talk', HTMLElement)
+const shellTabsEl = need('shell-tabs', HTMLElement)
+const navEl = need('nav', HTMLElement)
+const machineEl = need('machine-pane', HTMLElement)
 const queryEl = need('q', HTMLInputElement)
 const listEl = need('list', HTMLElement)
 const troublesEl = need('troubles', HTMLButtonElement)
 const troublesLabelEl = need('troubles-label', HTMLElement)
 const exportEl = need('export', HTMLButtonElement)
-const settingsEl = need('settings', HTMLButtonElement)
 const saidEl = need('said', HTMLElement)
 
 /** Which conversation is open, so re-rendering the list does not lose it. */
@@ -89,7 +108,6 @@ let shelf: ShelfView | null = null
 /** Whether the main column is showing the open character rather than a transcript. */
 let showingCharacter = true
 /** Which inspector tab is up. */
-let tab: 'wake' | 'talks' = 'wake'
 /**
  * Which read the panes are currently showing.
  *
@@ -243,28 +261,49 @@ function openCharacter(): void {
 
 /* ---- the inspector ------------------------------------------------------- */
 
-const TABS: readonly { readonly id: 'wake' | 'talks'; readonly label: string }[] = [
-  { id: 'wake', label: 'Next wake' },
-  { id: 'talks', label: 'Conversations' },
+/**
+ * Which of the three places is on screen.
+ *
+ * The inspector's own two tabs are gone with this: Cast used to carry a "next
+ * wake" panel and a "conversations" panel side by side in a 380px column, and
+ * conversations now have the whole window. One tab strip, one subject.
+ */
+type Place = 'cast' | 'archive' | 'machine'
+let place: Place = 'cast'
+
+const PLACES: readonly { readonly id: Place; readonly label: string }[] = [
+  { id: 'cast', label: 'Cast' },
+  { id: 'archive', label: 'Archive' },
+  { id: 'machine', label: 'Machine' },
 ]
 
-function renderTabs(): void {
-  tabsEl.replaceChildren(
-    ...TABS.map((one) => {
+function showPlace(next: Place): void {
+  place = next
+  for (const one of PLACES) {
+    need(`tab-${one.id}`, HTMLElement).hidden = one.id !== place
+  }
+  renderPlaces()
+  // Read on arrival rather than held: the machine pane's answers come from disk
+  // and from another window's writes, so a cached copy is stale the first time
+  // it matters.
+  if (place === 'machine') void loadMachine()
+}
+
+function renderPlaces(): void {
+  shellTabsEl.replaceChildren(
+    ...PLACES.map((one) => {
       const button = document.createElement('button')
-      button.className = 'tab'
+      button.className = 'shell-tab'
       button.type = 'button'
+      button.setAttribute('role', 'tab')
       button.textContent = one.label
-      button.setAttribute('aria-current', String(one.id === tab))
+      button.setAttribute('aria-current', String(one.id === place))
       button.addEventListener('click', () => {
-        tab = one.id
-        renderTabs()
+        showPlace(one.id)
       })
       return button
     }),
   )
-  wakeEl.hidden = tab !== 'wake'
-  talksEl.hidden = tab !== 'talks'
 }
 
 function renderWake(): void {
@@ -489,14 +528,14 @@ async function show(token: string, term: string): Promise<void> {
   } catch (error: unknown) {
     // Loud, and in the pane that failed. Leaving the previous transcript up
     // with no message is indistinguishable from this one having loaded.
-    if (mine === generation) empty(paneEl, `Could not read that conversation: ${String(error)}`)
+    if (mine === generation) empty(talkEl, `Could not read that conversation: ${String(error)}`)
     return
   }
   // Somebody has moved on. Painting this now would replace what they asked for
   // with what they closed.
   if (mine !== generation || showingCharacter || open !== token) return
   if (turns.length === 0) {
-    empty(paneEl, 'Nothing was kept from this conversation.')
+    empty(talkEl, 'Nothing was kept from this conversation.')
     return
   }
   /*
@@ -560,8 +599,8 @@ async function show(token: string, term: string): Promise<void> {
     }
   }
 
-  paneEl.replaceChildren(transcript)
-  paneEl.scrollTop = 0
+  talkEl.replaceChildren(transcript)
+  talkEl.scrollTop = 0
 }
 
 function renderList(now: number): void {
@@ -686,8 +725,8 @@ function renderProblems(problems: readonly HistoryProblem[]): void {
     */
     lead.textContent = forPronoun(SAYS.noTroubles, saying())
     page.append(lead)
-    paneEl.replaceChildren(page)
-    paneEl.scrollTop = 0
+    talkEl.replaceChildren(page)
+    talkEl.scrollTop = 0
     return
   }
 
@@ -711,8 +750,8 @@ function renderProblems(problems: readonly HistoryProblem[]): void {
     }
     page.append(block)
   }
-  paneEl.replaceChildren(page)
-  paneEl.scrollTop = 0
+  talkEl.replaceChildren(page)
+  talkEl.scrollTop = 0
 }
 
 /** Wall-clock, not "3 minutes ago": these are all from one launch. */
@@ -742,11 +781,97 @@ function readProblemCount(): void {
     })
 }
 
-/* ---- wiring -------------------------------------------------------------- */
+/* ---- machine: the six groups, in this window --------------------------- */
 
-settingsEl.addEventListener('click', () => {
-  window.mochiHistory.settings()
-})
+/**
+ * The settings window, folded in as a pane.
+ *
+ * `PANES` is imported whole and unchanged — the six groups, their attention
+ * dots and everything they draw were never the problem, and a second window was.
+ * What is gone is `settings/main.ts`: its job was owning a window, and this
+ * window already exists.
+ */
+let machine: SettingsView | null = null
+let openGroup = PANES[0]?.id ?? ''
+
+const machineHandlers: PaneHandlers = {
+  lookup: (change) => {
+    void writeMachine(() => window.mochiSettings.lookup(change), 'Saved.')
+  },
+  screen: (change) => {
+    void writeMachine(() => window.mochiSettings.screen(change), 'Saved.')
+  },
+  grant: (change) => {
+    void writeMachine(() => window.mochiSettings.grant(change), 'Saved.')
+  },
+  reveal: (what) => {
+    window.mochiSettings.reveal(what)
+  },
+  say: (text, bad) => {
+    say(text, bad === true)
+  },
+}
+
+async function writeMachine(run: () => Promise<SettingsWrite>, ok: string): Promise<void> {
+  try {
+    const answer = await run()
+    // Main's own refusal sentence when it has one — it knows why, and a generic
+    // "could not save" would replace a reason with a shrug.
+    say(answer.ok ? ok : answer.why, !answer.ok)
+  } catch (error: unknown) {
+    say(String(error), true)
+  }
+  await loadMachine()
+}
+
+async function loadMachine(): Promise<void> {
+  try {
+    machine = await window.mochiSettings.read()
+  } catch (error: unknown) {
+    empty(machineEl, `Could not read the settings: ${String(error)}`)
+    return
+  }
+  renderMachine()
+}
+
+function renderMachine(): void {
+  const view = machine
+  if (view === null) return
+  navEl.replaceChildren(
+    ...PANES.map((one) => {
+      const button = document.createElement('button')
+      button.className = 'tab'
+      button.type = 'button'
+      button.setAttribute('aria-current', String(one.id === openGroup))
+      const label = document.createElement('span')
+      label.textContent = paneLabel(one.label, view.pronoun)
+      button.append(label)
+      // A dot means somebody should look, not that something is off — see
+      // `panes.ts`. A withheld grant is a decision and never wears one.
+      if (one.attention(view) !== null) {
+        const dot = document.createElement('span')
+        dot.className = 'dot'
+        button.append(dot)
+      }
+      button.addEventListener('click', () => {
+        openGroup = one.id
+        renderMachine()
+        machineEl.scrollTop = 0
+      })
+      return button
+    }),
+  )
+  const showing = PANES.find((one) => one.id === openGroup)
+  if (showing === undefined) {
+    machineEl.textContent = 'No settings to show.'
+    return
+  }
+  const heading = document.createElement('h2')
+  heading.textContent = paneLabel(showing.label, view.pronoun)
+  machineEl.replaceChildren(heading, ...showing.render(view, machineHandlers))
+}
+
+/* ---- wiring -------------------------------------------------------------- */
 
 troublesEl.addEventListener('click', () => {
   // Asked again on every click rather than kept: more can arrive while the
@@ -756,7 +881,7 @@ troublesEl.addEventListener('click', () => {
     .problems()
     .then(renderProblems)
     .catch((error: unknown) => {
-      empty(paneEl, `Could not read what went wrong: ${String(error)}`)
+      empty(talkEl, `Could not read what went wrong: ${String(error)}`)
     })
 })
 
@@ -827,7 +952,21 @@ queryEl.addEventListener('input', () => {
 
 window.addEventListener('focus', readProblemCount)
 readProblemCount()
-renderTabs()
+renderPlaces()
+showPlace('cast')
+
+/*
+  Main asking for a place — the menu bar's "Settings…", and the shelf's old
+  button before it was removed.
+
+  Checked HERE rather than in the bridge: what counts as a place is this
+  window's business, and an unknown one is ignored rather than throwing, because
+  a newer main talking to an older window should degrade to doing nothing.
+*/
+window.mochiHistory.onShow((asked) => {
+  const known = PLACES.find((one) => one.id === asked)
+  if (known !== undefined) showPlace(known.id)
+})
 
 /**
  * The characters FIRST, then the conversations. Sequenced, not raced.
