@@ -55,6 +55,27 @@ function inlineStyleOf(window: string): string {
   return style ?? ''
 }
 
+/**
+ * Every class a stylesheet has a rule for.
+ *
+ * `url(...)` and `format(...)` are cut first. A font is loaded as
+ * `url('./fonts/archivo-latin.woff2') format('woff2')`, and to a matcher
+ * looking for a dot followed by a name, `.woff2` is a class — which is how the
+ * first draft of the mirror check below reported the typeface as dead CSS.
+ */
+function classesIn(css: string): ReadonlySet<string> {
+  const clean = css
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\burl\([^)]*\)/g, '')
+    .replace(/\bformat\([^)]*\)/g, '')
+  return new Set([...clean.matchAll(/\.([\w-]+)/g)].map((one) => one[1] ?? ''))
+}
+
+/** What this window is styled by, its own sheet and the shared one together. */
+function classesStyledIn(window: string): ReadonlySet<string> {
+  return classesIn(stylesheetOf(window))
+}
+
 /** Whether the document actually pulls the shared sheet in. */
 function linksTokens(window: string): boolean {
   return /<link[^>]+href="[^"]*design\/tokens\.css"/.test(read(`./${window}/index.html`))
@@ -183,11 +204,6 @@ describe('a class the renderer creates is a class something styles', () => {
     return [...made]
   }
 
-  function classesStyledIn(window: string): ReadonlySet<string> {
-    const css = stylesheetOf(window).replace(/\/\*[\s\S]*?\*\//g, '')
-    return new Set([...css.matchAll(/\.([\w-]+)/g)].map((one) => one[1] ?? ''))
-  }
-
   it('has something to check', () => {
     // The companion draws to a canvas and creates no classes at all, so a
     // per-window guard would be a false one. The corpus is where emptiness
@@ -201,5 +217,138 @@ describe('a class the renderer creates is a class something styles', () => {
     const styled = classesStyledIn(window)
     const orphans = classesCreatedBy(window).filter((one) => !styled.has(one))
     expect(orphans).toEqual([])
+  })
+})
+
+/**
+ * And the MIRROR: a class the stylesheet styles that nothing anywhere creates.
+ *
+ * The check above catches the harmful direction — an element with no rule, which
+ * is how `.sheet` shipped six plates touching. This one catches the residue of a
+ * deletion: `.search input` was still styled after the search field moved into
+ * the topbar and its wrapper stopped existing, and `.panel` outlived the card it
+ * drew by one commit. Neither breaks anything on screen, and that is exactly why
+ * they accumulate — nothing ever fails.
+ *
+ * ## Why the two cannot share an extractor
+ *
+ * They want opposite errors. The check above must UNDER-collect: a class it
+ * wrongly believes is created would hide a missing rule, so it only accepts
+ * unambiguous literals. This one must OVER-collect: a class it fails to see
+ * created would be reported as dead and deleted while something still uses it.
+ *
+ * So this scans for any quoted or backticked word that could become a class —
+ * ternaries inside `element()`, template literals, class names passed to a
+ * builder like `iconButton('copy', …)` or `chooser('pills', …)` — plus every
+ * `class="…"` in the document itself. Over-collecting here is safe in the
+ * direction that matters: the worst case is a dead rule surviving, which is
+ * where this file started.
+ */
+describe('a class the stylesheet styles is a class something creates', () => {
+  /**
+   * Every string that could name a class, from two kinds of evidence.
+   *
+   * ## Split only where a multi-class string is legal
+   *
+   * `element('div', 'mood off')` and `class="tab-pane cast"` really do carry two
+   * classes, so those are split on whitespace. Everything else is taken WHOLE.
+   *
+   * That distinction is the whole check. The first version split every string
+   * in the file, so the sentence "Could not search: …" donated the word
+   * `search` and `.search input` survived as live CSS — the exact dead rule this
+   * was written to catch. The second version still split bare literals, and
+   * `'Web search'` in `panes.ts` donated it again. A guard that passes against
+   * its own motivating example is worse than none, because it is believed.
+   *
+   * ## Why bare literals count at all
+   *
+   * A class name is not always at a class-setting site: `iconButton('copy', …)`
+   * and `chooser('pills', …)` hand one to a builder that assigns it. Requiring
+   * an EXACT match — the whole literal, no splitting — keeps those without
+   * letting prose in.
+   */
+  function everyClassNameLiteral(window: string): ReadonlySet<string> {
+    const dir = fileURLToPath(new URL(`./${window}/`, import.meta.url))
+    const seen = new Set<string>()
+    const add = (word: string): void => {
+      if (/^[\w-]+$/.test(word)) seen.add(word)
+    }
+    /** A place a multi-class string is legal: split it. */
+    const takeClassList = (text: string): void => {
+      for (const one of text.matchAll(/'([^'\n]*)'/g)) {
+        for (const word of (one[1] ?? '').trim().split(/\s+/)) add(word)
+      }
+      for (const one of text.matchAll(/`([^`]*)`/gs)) {
+        for (const part of (one[1] ?? '').split(/\$\{[^}]*\}/)) {
+          for (const word of part.trim().split(/\s+/)) add(word)
+        }
+      }
+    }
+
+    const body = read(`./${window}/index.html`).split('</style>')[1] ?? ''
+    for (const one of body.matchAll(/class="([^"]+)"/g)) {
+      for (const word of (one[1] ?? '').trim().split(/\s+/)) add(word)
+    }
+
+    const paths = readdirSync(dir)
+      .filter((one) => one.endsWith('.ts') && !one.endsWith('.test.ts'))
+      .map((one) => `${dir}${one}`)
+    // `panes.ts` is authored beside the settings pane and rendered INTO this
+    // window, so its classes are created here even though the file is not.
+    if (window === 'history') {
+      paths.push(fileURLToPath(new URL('./settings/panes.ts', import.meta.url)))
+    }
+
+    for (const path of paths) {
+      const source = readFileSync(path, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+
+      for (const site of [
+        ...source.matchAll(/element\(\s*'[\w-]+'\s*,([^)]*)\)/g),
+        ...source.matchAll(/\.className\s*=([^\n]*)/g),
+        ...source.matchAll(/classList\.(?:add|remove|toggle)\(([^)]*)\)/g),
+        ...source.matchAll(/setAttribute\(\s*'class'\s*,([^)]*)\)/g),
+      ]) {
+        takeClassList(site[1] ?? '')
+      }
+
+      // A bare literal with no whitespace, anywhere: the builder case.
+      for (const one of source.matchAll(/'([^'\n\s]+)'/g)) add(one[1] ?? '')
+    }
+    return seen
+  }
+
+  it('has something to check', () => {
+    // Emptiness here would mean the scan stopped matching and every rule looks
+    // live — the failure mode this whole file exists to make impossible.
+    expect(everyClassNameLiteral('history').size).toBeGreaterThan(50)
+  })
+
+  /** A leading digit is not a class — `letter-spacing: -0.005em` reads as one. */
+  const couldBeAClass = (one: string): boolean => !/^\d/.test(one)
+
+  it.each(WINDOWS)("%s's own <style> block", (window) => {
+    // A window's INLINE sheet is its own. Nothing else can be using it, so a
+    // rule nothing here creates is a rule for an element that stopped existing.
+    const created = everyClassNameLiteral(window)
+    const dead = [...classesIn(inlineStyleOf(window))]
+      .filter(couldBeAClass)
+      .filter((one) => !created.has(one))
+    expect(dead).toEqual([])
+  })
+
+  it('the shared tokens.css, against every window at once', () => {
+    /*
+      The SHARED sheet is judged against the union, not per window.
+
+      `button.btn` is styled in `tokens.css` and created only by the shell — the
+      companion draws to a canvas and has no buttons at all. Checked per window
+      that reads as three dead rules, and deleting them would take the shell's
+      buttons with them. A shared rule needs one user, not one per document.
+    */
+    const created = new Set(WINDOWS.flatMap((one) => [...everyClassNameLiteral(one)]))
+    const dead = [...classesIn(TOKENS)].filter(couldBeAClass).filter((one) => !created.has(one))
+    expect(dead).toEqual([])
   })
 })

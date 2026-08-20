@@ -271,9 +271,13 @@ export function parseFields(value: unknown, personaIds: ReadonlySet<string>): Fi
  *
  * What keeps this inside the ceiling is the SCHEMA, upstream of here -- four
  * sections of at most `MAX_ENTRIES` entries of at most `MAX_ENTRY_CHARS`, which
- * cannot reach 20,000 characters however they are filled. `renderNote.test.ts`
- * asserts that arithmetic, so a later change to any of the three constants
- * fails there rather than silently starting to truncate somebody's note.
+ * cannot reach 20,000 characters however they are filled. `summarise.test.ts`
+ * asserts that arithmetic — it builds the worst case out of `MAX_ENTRIES` and
+ * `MAX_ENTRY_CHARS` and checks it against `PERSONA_LIMITS.memory` — so a later
+ * change to any of the three constants fails there rather than silently
+ * starting to truncate somebody's note. The name here said
+ * `renderNote.test.ts`, which does not exist; the assertion does, and pointing
+ * at the wrong file is how somebody comes to believe it does not.
  */
 export function renderNote(fields: NoteFields): string {
   const blocks: string[] = []

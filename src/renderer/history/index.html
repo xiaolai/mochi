@@ -1212,8 +1212,8 @@
         scrollbar a dozen pixels from the column's own, cut across the plate's
         8px corner, and made reading her notes a question of which of two bars
         the pointer happened to be over. One column, one axis, one bar. The
-        inspector keeps its own, and should — `.panel` is a box of fixed height,
-        not a document.
+        column beside it keeps its own, and should — `.wake-box` is a panel of
+        fixed height holding a string of any length, not a document.
       */
       pre.empty-note {
         color: var(--ink-3);
@@ -1225,17 +1225,6 @@
         display: flex;
         flex-direction: column;
         gap: var(--s4);
-      }
-      .search input {
-        width: 100%;
-        padding: var(--s2) var(--s4);
-        border: 1px solid var(--rule);
-        border-radius: var(--r2);
-        background: var(--paper);
-        color: inherit;
-        font: inherit;
-        font-size: var(--t-sm);
-        user-select: text;
       }
       .list {
         flex: 1;

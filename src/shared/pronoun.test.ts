@@ -92,9 +92,11 @@ describe('the helpers are actually wired to something', () => {
    * rendered "her" whatever the persona said. Set a character to `he` and every
    * window still called them "her".
    *
-   * Imports rather than call sites, deliberately: `settings/main.ts` imports
-   * `label as label_` to dodge a local of the same name, and a grep for `label(`
-   * would miss it and report a guarantee it does not have.
+   * Imports rather than call sites, deliberately: `history/main.ts` imports
+   * `label as paneLabel` to dodge a local of the same name, and a grep for
+   * `label(` would miss it and report a guarantee it does not have. The example
+   * used to be `settings/main.ts`, which is gone — the aliasing is the point and
+   * it outlived the file that first did it.
    */
   const SOURCES = import.meta.glob('../**/*.ts', { eager: true, query: '?raw', import: 'default' })
 
