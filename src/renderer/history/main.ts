@@ -388,6 +388,11 @@ const SAYS = {
     he: 'Nothing has been kept yet. Conversations appear here once he has been awake and retention is on.',
     it: 'Nothing has been kept yet. Conversations appear here once it has been awake and retention is on.',
   },
+  machineIsFor: {
+    she: 'Who she is is on the Cast tab. This holds only what is true whoever is worn.',
+    he: 'Who he is is on the Cast tab. This holds only what is true whoever is worn.',
+    it: 'What it is is on the Cast tab. This holds only what is true whoever is worn.',
+  },
   pickOne: {
     she: 'Pick a conversation on the left, or search everything she has ever said.',
     he: 'Pick a conversation on the left, or search everything he has ever said.',
@@ -956,13 +961,25 @@ function renderMachine(): void {
       return button
     }),
   )
+  /*
+    What this whole tab is for, under the six groups.
+
+    The artifact puts it there and it earns its place: the Cast tab and this one
+    both hold switches about her, and the difference between them — who she IS
+    versus what is true whoever is worn — is `plan-shell.md`'s split, which
+    nothing on screen said out loud. It is the sentence that stops somebody
+    looking for her voice in here.
+  */
+  const foot = document.createElement('p')
+  foot.className = 'nav-foot'
+  foot.textContent = forPronoun(SAYS.machineIsFor, view.pronoun)
+  navEl.append(foot)
+
   const showing = PANES.find((one) => one.id === openGroup)
   if (showing === undefined) {
     machineEl.textContent = 'No settings to show.'
     return
   }
-  const heading = document.createElement('h2')
-  heading.textContent = paneLabel(showing.label, view.pronoun)
   const drawn = [...showing.render(view, machineHandlers)]
 
   /*
@@ -977,7 +994,15 @@ function renderMachine(): void {
   const at = drawn.findIndex((node) => node instanceof HTMLHeadingElement)
   const body = at === -1 ? drawn : drawn.slice(0, at)
   const tools = at === -1 ? [] : drawn.slice(at)
-  machineEl.replaceChildren(heading, ...body)
+  /*
+    NO title over the body.
+
+    The nav names the open group and highlights it; a 28px heading twenty pixels
+    to its right said the same four words again, which is the artifact's own
+    arrangement being ignored — it names the group once, in the nav, and starts
+    the body with the section that is actually in it.
+  */
+  machineEl.replaceChildren(...body)
   if (tools.length === 0) {
     toolsEl.replaceChildren()
   } else {
