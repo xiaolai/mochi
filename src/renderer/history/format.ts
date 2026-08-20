@@ -12,33 +12,6 @@ const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 
 /**
- * When a conversation happened, as somebody would say it.
- *
- * Relative near the present and absolute past it, because "14 days ago" is a
- * subtraction the reader has to do and "3 August" is not. The boundary is
- * CALENDAR days, not multiples of 24 hours: something at 23:50 last night is
- * "yesterday" at 00:10 even though it was twenty minutes ago.
- */
-export function whenLabel(at: number, now: number): string {
-  const then = new Date(at)
-  const today = new Date(now)
-  const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
-  const clock = then.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-
-  if (at >= midnight) return `Today ${clock}`
-  if (at >= midnight - DAY) return `Yesterday ${clock}`
-  if (at >= midnight - 6 * DAY) {
-    return `${then.toLocaleDateString(undefined, { weekday: 'long' })} ${clock}`
-  }
-  const sameYear = then.getFullYear() === today.getFullYear()
-  return then.toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    ...(sameYear ? {} : { year: 'numeric' }),
-  })
-}
-
-/**
  * How long it ran. Null while she is still awake in it.
  *
  * Rounded to whole minutes above a minute, because a conversation is not a
@@ -87,4 +60,78 @@ export function highlight(text: string, query: string): readonly Segment[] {
   }
   if (from < text.length) segments.push({ text: text.slice(from), hit: false })
   return segments.length === 0 ? [{ text, hit: false }] : segments
+}
+
+/**
+ * Which day a conversation belongs to, as a heading over a group of them.
+ *
+ * Relative near the present and absolute past it, because "14 days ago" is a
+ * subtraction the reader has to do and "Mon 3 Aug" is not. The boundary is
+ * CALENDAR days, not multiples of 24 hours: something at 23:50 last night is
+ * "Yesterday" at 00:10 even though it was twenty minutes ago.
+ *
+ * The day and the clock are two functions rather than one `whenLabel` that
+ * returned "Today 09:41", which is what this window used to put on every row of
+ * a list already in date order. The two answers are "which pile is this in" and
+ * "when exactly", and one string doing both is how a heading ends up with a
+ * time in it.
+ */
+export function dayLabel(at: number, now: number): string {
+  const then = new Date(at)
+  const today = new Date(now)
+  const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+
+  if (at >= midnight) return 'Today'
+  if (at >= midnight - DAY) return 'Yesterday'
+  if (at >= midnight - 6 * DAY) return then.toLocaleDateString(undefined, { weekday: 'long' })
+  const sameYear = then.getFullYear() === today.getFullYear()
+  return then.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })
+}
+
+/** The time of day on its own, for a row under a day heading. */
+export function clockLabel(at: number): string {
+  return new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+}
+
+/**
+ * Split a time-ordered list into runs that share a day.
+ *
+ * Generic over the item so the ordinary list and the search results can use the
+ * same grouping — the only thing it needs from either is when it happened.
+ *
+ * CONSECUTIVE runs, not a bucket per day. The list arrives newest-first and
+ * stays in that order, so a day that somehow appears twice produces two
+ * headings rather than being silently merged and reordered. A grouping that
+ * quietly rearranges its input is one that hides the fact that the input was
+ * not what it claimed.
+ */
+export function byDay<T>(
+  items: readonly T[],
+  now: number,
+  when: (item: T) => number,
+): readonly { readonly day: string; readonly items: readonly T[] }[] {
+  const groups: { day: string; items: T[] }[] = []
+  for (const item of items) {
+    const day = dayLabel(when(item), now)
+    const last = groups.at(-1)
+    if (last !== undefined && last.day === day) last.items.push(item)
+    else groups.push({ day, items: [item] })
+  }
+  return groups
+}
+
+/**
+ * How many of her turns were cut off partway through.
+ *
+ * Counted rather than stored: `cut` is per turn, and the header states it for
+ * the conversation. Her turns ONLY — `cut` on one of yours would mean something
+ * different, and nothing sets it there today.
+ */
+export function interruptions(turns: readonly { who: 'her' | 'you'; cut: boolean }[]): number {
+  return turns.filter((one) => one.who === 'her' && one.cut).length
 }

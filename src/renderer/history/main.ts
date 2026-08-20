@@ -19,7 +19,7 @@ import {
 import { applyAccent } from '../design/apply-accent'
 import { PANES, type PaneHandlers } from '../settings/panes'
 import { MochiAvatar } from '../companion/rig/mochi'
-import { highlight, lengthLabel, whenLabel } from './format'
+import { byDay, clockLabel, dayLabel, highlight, interruptions, lengthLabel } from './format'
 import {
   assembledPanel,
   characterCards,
@@ -287,6 +287,17 @@ function showPlace(next: Place): void {
   // Search belongs to the Archive and to nothing else. Hidden rather than
   // emptied, so what is typed in it survives a trip to Cast and back.
   contextEl.hidden = place !== 'archive'
+  /*
+    The transcript column says what it is FOR when nothing is open in it.
+
+    Half a window of blank paper beside a list is indistinguishable from a
+    transcript that failed to load, and it was the first thing on screen every
+    time somebody opened the Archive. Only when nothing is open — a re-render
+    while a conversation is up must not throw it away.
+  */
+  if (place === 'archive' && open === null && talkEl.childElementCount === 0) {
+    empty(talkEl, forPronoun(SAYS.pickOne, saying()))
+  }
   renderPlaces()
   // Read on arrival rather than held: the machine pane's answers come from disk
   // and from another window's writes, so a cached copy is stale the first time
@@ -376,6 +387,11 @@ const SAYS = {
     she: 'Nothing has been kept yet. Conversations appear here once she has been awake and retention is on.',
     he: 'Nothing has been kept yet. Conversations appear here once he has been awake and retention is on.',
     it: 'Nothing has been kept yet. Conversations appear here once it has been awake and retention is on.',
+  },
+  pickOne: {
+    she: 'Pick a conversation on the left, or search everything she has ever said.',
+    he: 'Pick a conversation on the left, or search everything he has ever said.',
+    it: 'Pick a conversation on the left, or search everything it has ever said.',
   },
   noTroubles: {
     she: 'Nothing has gone wrong since she woke up.',
@@ -485,6 +501,19 @@ async function readShelf(): Promise<void> {
 
 /* ---- the conversations --------------------------------------------------- */
 
+/**
+ * One row in the archive: when it was, and what it was made of.
+ *
+ * ONE line, not two. The day is the heading above a run of these, so the row
+ * says the clock and the facts — `09:41 · 14 turns · 7 min` — where it used to
+ * repeat "Today" on every entry under a list that was already in date order.
+ *
+ * The artifact draws a second line under it with a subject: "the three files,
+ * and what moved this morning". Nothing writes one. A conversation is stored as
+ * its turns and nothing summarises them, so a subject here would either be an
+ * invention or the first line of the transcript wearing a title's clothes. It
+ * is left out rather than faked, and `plan-v2.md` W5 carries what it would take.
+ */
 function row(
   label: string,
   detail: string,
@@ -498,11 +527,8 @@ function row(
 
   const when = document.createElement('div')
   when.className = 'when'
-  when.textContent = label
-  const count = document.createElement('div')
-  count.className = 'count'
-  count.textContent = detail
-  button.append(when, count)
+  when.textContent = detail === '' ? label : `${label} · ${detail}`
+  button.append(when)
 
   if (snippet !== null) {
     const line = document.createElement('div')
@@ -523,6 +549,47 @@ function row(
     }
   })
   return button
+}
+
+/**
+ * What this conversation was, over the top of it.
+ *
+ * Read off the TURNS rather than looked up in the list. A search result can
+ * open a conversation that is not in `conversations` at all — the list is the
+ * worn character's recent ones and the search is everything ever said — so a
+ * lookup would leave the header blank exactly when somebody arrived from a
+ * search. The turns are already in hand and answer all three facts.
+ *
+ * The artifact also draws a row of tool chips here: `ask_workspace ×2`,
+ * `remember_this ×1`. Nothing archives a call. `transcripts.ts` stores turns —
+ * `{at, who, text, cut}` — and a capability's answer reaches the model and the
+ * problem log and never the record, so those chips would be invented. Left out,
+ * with what it would take written into `plan-v2.md` W5.
+ */
+function transcriptHead(turns: readonly HistoryTurn[]): HTMLElement {
+  const head = document.createElement('div')
+  head.className = 'talk-head'
+
+  const first = turns[0]?.at ?? Date.now()
+  const last = turns.at(-1)?.at ?? first
+  const title = document.createElement('div')
+  title.className = 'talk-when'
+  title.textContent = `${dayLabel(first, Date.now())}, ${clockLabel(first)}`
+
+  const facts: string[] = [`${String(turns.length)} ${turns.length === 1 ? 'turn' : 'turns'}`]
+  // The last turn's timestamp, which is what `ended_at` is — see `lengthLabel`,
+  // which is deliberate about not pretending to seconds for the same reason.
+  const length = lengthLabel(first, last)
+  if (length !== null) facts.push(length)
+  const cut = interruptions(turns)
+  if (cut > 0) facts.push(`${String(cut)} ${cut === 1 ? 'interruption' : 'interruptions'}`)
+
+  const meta = document.createElement('div')
+  meta.className = 'talk-facts'
+  meta.textContent = facts.join(' · ')
+
+  head.append(title, meta)
+  return head
 }
 
 async function show(token: string, term: string): Promise<void> {
@@ -557,6 +624,7 @@ async function show(token: string, term: string): Promise<void> {
   */
   const transcript = document.createElement('div')
   transcript.className = 'transcript'
+  transcript.append(transcriptHead(turns))
 
   let run: HTMLElement | null = null
   let said: HTMLElement | null = null
@@ -608,23 +676,44 @@ async function show(token: string, term: string): Promise<void> {
   talkEl.scrollTop = 0
 }
 
+/** A caps heading over a run of rows that share a day. */
+function dayHeading(day: string): HTMLElement {
+  const head = document.createElement('div')
+  head.className = 'day'
+  head.textContent = day
+  return head
+}
+
+/**
+ * Every conversation, under the day it happened on.
+ *
+ * The headings are what make the column readable at length: 173 rows each
+ * beginning with their own date is a list you scan rather than one you place
+ * yourself in. `byDay` groups CONSECUTIVE runs, so an unordered list produces
+ * two headings instead of being quietly rearranged.
+ */
 function renderList(now: number): void {
   if (conversations.length === 0) {
     empty(listEl, forPronoun(SAYS.noTalks, saying()))
     return
   }
-  listEl.replaceChildren(
-    ...conversations.map((one) => {
+  const parts: HTMLElement[] = []
+  for (const group of byDay(conversations, now, (one) => one.startedAt)) {
+    parts.push(dayHeading(group.day))
+    for (const one of group.items) {
       const length = lengthLabel(one.startedAt, one.endedAt)
       const turns = `${String(one.turns)} ${one.turns === 1 ? 'turn' : 'turns'}`
-      return row(
-        whenLabel(one.startedAt, now),
-        length === null ? turns : `${turns} · ${length}`,
-        one.token,
-        null,
+      parts.push(
+        row(
+          clockLabel(one.startedAt),
+          length === null ? turns : `${turns} · ${length}`,
+          one.token,
+          null,
+        ),
       )
-    }),
-  )
+    }
+  }
+  listEl.replaceChildren(...parts)
 }
 
 interface HitGroup {
@@ -640,16 +729,22 @@ function renderHits(hits: readonly HitGroup[], term: string): void {
     empty(listEl, 'Nothing matched.')
     return
   }
-  listEl.replaceChildren(
-    ...hits.map((group) =>
-      row(
-        whenLabel(group.at, Date.now()),
-        `${String(group.count)} ${group.count === 1 ? 'match' : 'matches'}`,
-        group.token,
-        { text: group.text, term },
-      ),
-    ),
-  )
+  const now = Date.now()
+  const parts: HTMLElement[] = []
+  for (const day of byDay(hits, now, (one) => one.at)) {
+    parts.push(dayHeading(day.day))
+    for (const hit of day.items) {
+      parts.push(
+        row(
+          clockLabel(hit.at),
+          `${String(hit.count)} ${hit.count === 1 ? 'match' : 'matches'}`,
+          hit.token,
+          { text: hit.text, term },
+        ),
+      )
+    }
+  }
+  listEl.replaceChildren(...parts)
 }
 
 /** One entry per conversation, keeping the first line that matched. */
@@ -757,11 +852,6 @@ function renderProblems(problems: readonly HistoryProblem[]): void {
   }
   talkEl.replaceChildren(page)
   talkEl.scrollTop = 0
-}
-
-/** Wall-clock, not "3 minutes ago": these are all from one launch. */
-function clockLabel(at: number): string {
-  return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 /**

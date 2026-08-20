@@ -201,38 +201,61 @@
         flex-direction: column;
       }
 
-      /* ---- archive: search first, one conversation at a time ---------------- */
-      .archive {
-        padding: var(--s5) var(--s6) 0;
-        gap: var(--s5);
-      }
-      .archive > .search {
-        flex: none;
-      }
+      /* ---- archive: the day list, and one conversation at a time ------------ */
       .archive-body {
         flex: 1;
         min-height: 0;
         display: grid;
         grid-template-columns: 300px minmax(0, 1fr);
-        gap: var(--s6);
       }
+      /*
+        A COLUMN, not a card floating in a padded field.
+
+        It was inset with a border and a 12px radius, which put a rounded box of
+        list inside a rectangle of window and left a 20px channel of nothing
+        between it and the transcript. The artifact runs it edge to edge with a
+        single rule down the right, exactly as the Cast list does — one window,
+        one treatment for a column of choices.
+      */
       .archive-body > .list {
-        border: 1px solid var(--rule);
-        border-radius: var(--r3);
-        background: var(--paper-2);
         margin: 0;
+        background: var(--paper-2);
+        border-right: 1px solid var(--rule);
         overflow-y: auto;
       }
       .archive-body > .list .entry:first-child {
+        border-top: 0;
+      }
+      /*
+        A day, over the run of conversations that happened on it.
+
+        Every row used to begin with its own "Today"/"Yesterday" in a list that
+        was already in date order — 173 rows each restating the same word. The
+        day moves to a heading and the row keeps the clock, which is what the
+        artifact draws and what makes the column scannable at that length.
+      */
+      .archive-body > .list .day {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        padding: var(--s4) var(--s5) var(--s2);
+        background: var(--paper-2);
+        font-family: var(--narrow);
+        font-size: var(--t-label);
+        font-weight: 700;
+        letter-spacing: var(--track);
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      /* Nothing above the first heading to rule off from. */
+      .archive-body > .list .day + .entry {
         border-top: 0;
       }
       /* The transcript column: its own scroll, clear of the drawer's hairline. */
       #talk {
         min-height: 0;
         overflow-y: auto;
-        padding-right: var(--s4);
-        margin-bottom: calc(var(--s6) * -1);
-        padding-bottom: var(--s6);
+        padding: var(--s7) var(--s7) var(--s8);
       }
 
       /* ---- machine: the six groups, as they were ---------------------------- */
@@ -987,11 +1010,11 @@
         background: var(--gold-wash);
         box-shadow: inset 2px 0 0 var(--gold);
       }
+      /* The clock and the facts, on one line — `09:41 · 14 turns · 7 min`. */
       .entry .when {
-        font-size: var(--t-sm);
+        font-size: var(--t-ui-2);
         font-weight: 600;
       }
-      .entry .count,
       .entry .snippet {
         font-size: var(--t-data);
         color: var(--ink-2);
@@ -1025,9 +1048,43 @@
         bubble is on is what says who is speaking.
       */
       .transcript {
+        /*
+          A measure, centred. A transcript set to the full width of a 900px
+          column is a line long enough to lose your place in — the artifact
+          holds it to 78ch and centres it, which is what every other document
+          in this window is already doing by having a narrower column.
+        */
+        max-width: 78ch;
+        margin: 0 auto;
         display: flex;
         flex-direction: column;
-        gap: var(--s5);
+        gap: var(--s6);
+      }
+      /*
+        What this conversation was, over the top of it.
+
+        The artifact draws a row of tool chips here too — `ask_workspace ×2`.
+        Nothing archives a call: `transcripts.ts` stores `{at, who, text, cut}`
+        and a capability's answer reaches the model and the problem log and
+        never the record. Drawing the chips would be inventing them —
+        `plan-v2.md` W5 has what it would take.
+      */
+      .talk-head {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s3);
+        padding-bottom: var(--s5);
+        border-bottom: 1px solid var(--rule);
+      }
+      .talk-when {
+        font-size: var(--t-h2);
+        font-weight: 700;
+        letter-spacing: -0.015em;
+      }
+      .talk-facts {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-3);
       }
       /* One speaker's unbroken stretch. Her face sits with the last bubble. */
       .run {
