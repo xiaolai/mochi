@@ -1238,35 +1238,50 @@
         user-select: text;
       }
       /*
-        Take this turn. On hover, and on focus so it is reachable by keyboard.
+        Take this turn. ON the bubble's bottom-right corner, on hover and on
+        focus.
 
-        OUTSIDE the bubble, on the side away from the speaker: inside it would
-        either sit on the words or force padding that every bubble pays for so
-        that one of them can be hovered.
+        Sat fully INSIDE first, and the measurement killed it: a 21px button
+        inset from the right covers 11px of the line beside it, which on "Bye."
+        — a 56px bubble holding 30px of text — masks the last character.
+
+        BOTTOM rather than top, because the last line of a wrapped bubble is the
+        one with room to spare: a paragraph ends where its words run out, while
+        the first line is full by definition. Straddling the corner on top of
+        that leaves a 2px sliver, inside the corner radius where a glyph does
+        not reach. The alternative was reserving the button's width as padding
+        on every bubble forever so that one of them can be hovered.
+
+        `background: inherit` takes whichever surface its own bubble is painted
+        with — `--her-wash` on her side, `--paper-2` on yours — so the part that
+        overlaps reads as the bubble rather than as a hole in it. One
+        declaration rather than a rule per side, and it cannot drift when either
+        colour changes.
       */
       .bubble .copy {
         position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        left: 100%;
-        margin-left: var(--s2);
+        bottom: -7px;
+        right: -7px;
         display: flex;
         padding: var(--s1);
         border: 0;
-        border-radius: var(--r1);
-        background: transparent;
+        /*
+          Round, with an edge and a lift. Square-cornered and flat it read as a
+          bump ON the bubble's own outline rather than as something resting on
+          it — the shape has to say "separate object" precisely because it is
+          painted in the bubble's own colour.
+        */
+        border-radius: var(--r-pill);
+        background: inherit;
+        box-shadow:
+          var(--lift-0),
+          0 0 0 1px var(--rule);
         color: var(--ink-3);
         cursor: default;
         opacity: 0;
         /* Untouchable while invisible, so it cannot take a click meant for the
            words underneath it. */
         pointer-events: none;
-      }
-      .run.you .bubble .copy {
-        left: auto;
-        right: 100%;
-        margin-left: 0;
-        margin-right: var(--s2);
       }
       .bubble:hover .copy,
       .bubble:focus-within .copy {

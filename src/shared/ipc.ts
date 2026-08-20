@@ -187,6 +187,21 @@ export const SHELF_CHANNELS = [
   'shelf:persona',
   /** Undo or clear what she remembers about the person. Per character. */
   'shelf:memory',
+  /**
+   * Put one turn's words on the clipboard.
+   *
+   * Through main rather than through `navigator.clipboard`, which REFUSES an
+   * unfocused document — `NotAllowedError: Document is not focused`, reproduced
+   * here in two runs out of three against a window that had not won focus. In
+   * practice a click focuses the window first and the browser path works; the
+   * point is that it does not have to be true, and a copy button whose failure
+   * depends on which window was frontmost is one nobody can diagnose.
+   *
+   * WRITE-ONLY, and deliberately not `clipboard:read`. Reading would let this
+   * page take whatever a person had copied from somewhere else, which is a
+   * different thing entirely from handing back words it is already displaying.
+   */
+  'shelf:copy',
 ] as const
 
 export type ShelfChannel = (typeof SHELF_CHANNELS)[number]
@@ -945,4 +960,6 @@ export interface MochiHistoryApi {
   character(action: PersonaAction): Promise<SettingsWrite>
   /** Undo the last change to her note, or clear it. */
   memory(action: NoteAction): Promise<SettingsWrite>
+  /** Put one turn's words on the clipboard. See `shelf:copy`. */
+  copy(text: string): Promise<SettingsWrite>
 }

@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
-import { BUILT_IN_ID, greetingFor, VOICE_NAMES } from '@shared/persona'
+import { BUILT_IN_ID, greetingFor, PERSONA_LIMITS, VOICE_NAMES } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
 import { heardPortion } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'
@@ -1476,6 +1476,39 @@ ipcMain.handle('shelf:memory', (_event, action: unknown): SettingsWrite => {
     return refuse(String(error))
   }
   console.log(`[memory] ${worn} cleared`)
+  return { ok: true }
+})
+
+/**
+ * One turn's words, onto the clipboard.
+ *
+ * ## Why this is not `navigator.clipboard`
+ *
+ * The browser's async clipboard REFUSES an unfocused document —
+ * `NotAllowedError: Document is not focused` — which was reproduced from a
+ * harness in two runs out of three. In practice a click focuses the window
+ * first, so the browser path works; the point is that it does not have to be
+ * true, and a copy button whose failure depends on which window happened to be
+ * frontmost is one nobody can diagnose. Electron's own `clipboard` has no such
+ * rule because it is not subject to a page's permission model.
+ *
+ * ## Bounded, and only a string
+ *
+ * A turn is bounded by what the archive stores, but this takes whatever a page
+ * sends, so it is checked here rather than trusted: `PERSONA_LIMITS.memory` is
+ * the same 20k ceiling every other free-text field on this bridge is held to,
+ * and it exists so a page cannot hand the system clipboard something the size
+ * of a file.
+ *
+ * WRITE-ONLY. There is deliberately no read: handing back words this window is
+ * already displaying is a different thing from taking whatever somebody copied
+ * out of their password manager a moment ago.
+ */
+ipcMain.handle('shelf:copy', (_event, text: unknown): SettingsWrite => {
+  if (typeof text !== 'string') return refuse('That is not something to copy.')
+  if (text === '') return refuse('There is nothing to copy.')
+  if (text.length > PERSONA_LIMITS.memory) return refuse('That is too long to copy.')
+  clipboard.writeText(text)
   return { ok: true }
 })
 

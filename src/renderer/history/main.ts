@@ -646,19 +646,21 @@ function copyButton(text: string): HTMLButtonElement {
 
   button.addEventListener('click', () => {
     /*
-      REPORTED either way, and that is the whole reason this goes through `say`.
+      Through MAIN, not through `navigator.clipboard`.
 
-      A copy button that silently does nothing is indistinguishable from one
-      that worked, and `writeText` genuinely rejects — `NotAllowedError:
-      Document is not focused` is what it answers when the window does not have
-      focus, which was reproduced here from a harness. A click focuses the
-      document, so the ordinary path is fine; the failure path is the one that
-      needed a voice.
+      The browser's async clipboard refuses an unfocused document —
+      `NotAllowedError: Document is not focused`, reproduced from a harness in
+      two runs out of three. A click focuses the window first, so the browser
+      path does work in practice; it just does not have to, and a button whose
+      failure depends on which window was frontmost is one nobody can diagnose.
+
+      REPORTED either way. A copy button that silently does nothing is
+      indistinguishable from one that worked.
     */
-    void navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        say('Copied.')
+    void window.mochiHistory
+      .copy(text)
+      .then((wrote) => {
+        say(wrote.ok ? 'Copied.' : wrote.why, !wrote.ok)
       })
       .catch((error: unknown) => {
         say(`Could not copy: ${String(error)}`, true)

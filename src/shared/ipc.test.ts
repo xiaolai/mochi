@@ -134,8 +134,24 @@ describe('three allowlists, and none of them reaches another', () => {
       'shelf:save',
       'shelf:persona',
       'shelf:memory',
+      'shelf:copy',
     ]) {
       expect(isShelfChannel(channel)).toBe(true)
+      expect(isSettingsChannel(channel)).toBe(false)
+      expect(isCompanionChannel(channel)).toBe(false)
+    }
+  })
+
+  it('gives NO window a way to READ the clipboard', () => {
+    /*
+      `shelf:copy` is write-only, and the absence is the point rather than an
+      omission somebody may later "complete". Handing back words this window is
+      already displaying is one thing; taking whatever a person copied out of
+      their password manager a moment ago is another, and a channel named
+      `clipboard:read` on any of the three lists would be that.
+    */
+    for (const channel of ['shelf:read-clipboard', 'clipboard:read', 'shelf:paste']) {
+      expect(isShelfChannel(channel)).toBe(false)
       expect(isSettingsChannel(channel)).toBe(false)
       expect(isCompanionChannel(channel)).toBe(false)
     }

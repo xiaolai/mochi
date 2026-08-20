@@ -190,6 +190,9 @@ const history: MochiHistoryApi = {
   async memory(action: NoteAction) {
     return (await ipcRenderer.invoke(guardShelf('shelf:memory'), action)) as SettingsWrite
   },
+  async copy(text: string) {
+    return (await ipcRenderer.invoke(guardShelf('shelf:copy'), text)) as SettingsWrite
+  },
 }
 
 const settings: MochiSettingsApi = {
