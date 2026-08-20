@@ -83,7 +83,13 @@ import {
 } from '../capabilities/ask-workspace/profile'
 import { createTray, trayMenuTemplate, type TrayHandle, type TrayModel } from './tray'
 import { parseGrip, startDrag, stopDrag } from './drag'
-import { FEET_FROM_TOP, WINDOW_W } from '@shared/avatar-layout'
+import {
+  FEET_FROM_TOP,
+  WINDOW_W,
+  originHolding,
+  windowFitting,
+  type Pad,
+} from '@shared/avatar-layout'
 import type { FaceSpec } from '@shared/avatar-spec'
 
 /**
@@ -414,21 +420,83 @@ let herBody = NOMINAL_BODY
  */
 let herFeet: number = FEET_FROM_TOP
 
-ipcMain.on('companion:body', (_event, value: unknown) => {
-  if (typeof value !== 'object' || value === null) return
-  const box = value as Record<string, unknown>
-  const read = (key: string): number | null => {
-    const found = box[key]
-    return typeof found === 'number' && Number.isFinite(found) && found >= 0 ? found : null
+/**
+ * Both of these arrive from the renderer, so both are untrusted numbers.
+ *
+ * Finite and non-negative, because every one of them becomes a window
+ * coordinate: `NaN` reaches `setBounds` as a silent no-op and a negative pad
+ * would place her outside her own window with nothing to say so.
+ */
+function readSides(value: unknown, keys: readonly string[]): Record<string, number> | null {
+  if (typeof value !== 'object' || value === null) return null
+  const found = value as Record<string, unknown>
+  const out: Record<string, number> = {}
+  for (const key of keys) {
+    const one = found[key]
+    if (typeof one !== 'number' || !Number.isFinite(one) || one < 0) return null
+    out[key] = one
   }
-  const left = read('left')
-  const top = read('top')
-  const width = read('width')
-  const height = read('height')
+  return out
+}
+
+function readBody(
+  value: unknown,
+): { left: number; top: number; width: number; height: number } | null {
+  const read = readSides(value, ['left', 'top', 'width', 'height'])
   // A zero-sized body would make the clamp meaningless in both directions.
-  if (left === null || top === null || width === null || height === null) return
-  if (width <= 0 || height <= 0) return
-  herBody = { left, top, width, height }
+  if (read === null || (read['width'] ?? 0) <= 0 || (read['height'] ?? 0) <= 0) return null
+  return {
+    left: read['left'] ?? 0,
+    top: read['top'] ?? 0,
+    width: read['width'] ?? 0,
+    height: read['height'] ?? 0,
+  }
+}
+
+function readPad(value: unknown): Pad | null {
+  const read = readSides(value, ['left', 'top', 'right', 'bottom'])
+  if (read === null) return null
+  return {
+    left: read['left'] ?? 0,
+    top: read['top'] ?? 0,
+    right: read['right'] ?? 0,
+    bottom: read['bottom'] ?? 0,
+  }
+}
+
+ipcMain.on('companion:body', (_event, value: unknown) => {
+  const body = readBody(value)
+  if (body === null) return
+  herBody = body
+})
+
+/**
+ * Resize her window to fit what the renderer is about to draw, WITHOUT moving her.
+ *
+ * A window grows from its origin, so resizing naively would slide her across the
+ * desktop every time she started speaking. `originHolding` puts the new origin
+ * where her body lands on the same screen pixels it was already on — which is
+ * the whole reason the renderer sends its new body in the same message: main
+ * needs the OLD one to know where she is now and the NEW one to know where she
+ * will be inside the resized window, and reading them from two messages would
+ * mean a frame where it had one of each.
+ */
+ipcMain.on('companion:fit', (_event, value: unknown) => {
+  if (companion === null || companion.isDestroyed()) return
+  const request = value as { pad?: unknown; body?: unknown } | null
+  if (typeof request !== 'object' || request === null) return
+  const pad = readPad(request.pad)
+  const body = readBody(request.body)
+  if (pad === null || body === null) return
+
+  const bounds = companion.getBounds()
+  // Where she is RIGHT NOW, from the body main already holds against the window
+  // she is already in. Anything else is a guess about a window mid-change.
+  const herOnScreen = { x: bounds.x + herBody.left, y: bounds.y + herBody.top }
+  const size = windowFitting(body, pad)
+  const origin = originHolding(herOnScreen, pad)
+  herBody = body
+  companion.setBounds({ x: origin.x, y: origin.y, width: size.width, height: size.height })
 })
 
 ipcMain.on('companion:grab', (_event, value: unknown) => {

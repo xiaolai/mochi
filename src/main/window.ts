@@ -124,6 +124,17 @@ export function createCompanionWindow(): BrowserWindow {
     Math.round(display.x + display.width - MARGIN - (WINDOW_W + NOMINAL.width) / 2),
     Math.round(display.y + display.height - MARGIN - FEET_FROM_TOP),
   )
+  /*
+    Born at the worst-case size and shrunk on the renderer's first frame.
+
+    It cannot be created small: the renderer decides what has to fit, and it has
+    not run yet. So the window starts as the window this build always had — with
+    her already in the corner, which the placement above still gets exactly right
+    — and `companion:fit` brings it down to what is actually drawn as soon as
+    there is a frame to measure. Starting small and growing would show her in the
+    wrong place for one frame; starting large and shrinking shows nothing at all,
+    because every pixel of the difference is transparent.
+  */
 
   window.setAlwaysOnTop(true, 'screen-saver')
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })

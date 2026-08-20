@@ -91,6 +91,78 @@ export const BASE_UNIT_SCALE = 0.94
  * The cost is a large transparent window, and it is nearly free: it is
  * click-through everywhere except her silhouette and the bubble itself.
  */
+/**
+ * What has to fit around her body, in CSS pixels on each side.
+ *
+ * Her window is a shape on the desktop rather than a rectangle she sits in, so
+ * the only number that matters is how much room the things drawn AROUND her
+ * need — the chip at her shoulder, the held beat, the status line, and a speech
+ * bubble when there is one. Everything else is empty pixels.
+ */
+export interface Pad {
+  readonly left: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+}
+
+/** The window that fits her body plus that padding, and nothing more. */
+export function windowFitting(
+  body: { readonly width: number; readonly height: number },
+  pad: Pad,
+): { width: number; height: number } {
+  return {
+    width: Math.max(1, Math.ceil(body.width + pad.left + pad.right)),
+    height: Math.max(1, Math.ceil(body.height + pad.top + pad.bottom)),
+  }
+}
+
+/**
+ * Where to put that window so HER position on the screen does not change.
+ *
+ * The whole point of resizing her window is that she is the fixed thing and the
+ * window is not. Resizing without this moves her, because a window grows from
+ * its origin — and she would slide across the desktop every time she started
+ * speaking, which is worse than a window that is too big.
+ */
+export function originHolding(
+  herOnScreen: { readonly x: number; readonly y: number },
+  pad: Pad,
+): { x: number; y: number } {
+  return { x: Math.round(herOnScreen.x - pad.left), y: Math.round(herOnScreen.y - pad.top) }
+}
+
+/**
+ * The pad that reproduces the old fixed window exactly.
+ *
+ * Used while a bubble is up, because the bubble's own rectangle is computed deep
+ * inside `bubble.ts` at draw time and asking for it here would be a second place
+ * that geometry lives. `WINDOW_W` x `WINDOW_H` is the measured worst case — a
+ * whole bubble beside her at 200% — so it is right, it is merely generous, and
+ * it is generous only while she is actually speaking.
+ */
+export function fullPad(body: { readonly width: number; readonly height: number }): Pad {
+  const left = Math.round(WINDOW_W / 2 - body.width / 2)
+  const top = Math.round(FEET_FROM_TOP - body.height)
+  return {
+    left,
+    top,
+    right: WINDOW_W - left - Math.round(body.width),
+    bottom: WINDOW_H - top - Math.round(body.height),
+  }
+}
+
+/**
+ * How far under her the status line sits, and how much room it needs.
+ *
+ * A fraction of her height rather than a pixel count, because `size` is a
+ * persona field. One source, read by `placeStatus` in the renderer and by the
+ * pad that has to leave room for what it places — two numbers here would drift
+ * into a status line that hangs off the bottom of her own window.
+ */
+export const STATUS_UNDER = 0.22
+export const STATUS_ROOM = 24
+
 export const WINDOW_W = 980
 export const WINDOW_H = 560
 /**

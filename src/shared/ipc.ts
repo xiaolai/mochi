@@ -65,6 +65,16 @@ export const COMPANION_CHANNELS = [
    */
   'companion:body',
   /**
+   * Renderer asks for a window that fits what it is about to draw.
+   *
+   * Her window is a shape on the desktop, not a rectangle she sits in, so it has
+   * no business being larger than the thing drawn in it. The renderer is the
+   * only side that knows what that is — where the chip went, whether a bubble is
+   * up and on which side — so it asks, and main holds her screen position across
+   * the change.
+   */
+  'companion:fit',
+  /**
    * She was grabbed — the pointer went down on her painted pixels.
    *
    * Carries WHERE on her she was grabbed, so she does not jump on the first
@@ -698,6 +708,11 @@ export interface MochiApi {
   wake(): void
   /** Where she is inside her window, so main can keep HER on the display. */
   body(box: { left: number; top: number; width: number; height: number }): void
+  /** Ask for a window that fits what is about to be drawn. See the channel. */
+  fit(request: {
+    pad: { left: number; top: number; right: number; bottom: number }
+    body: { left: number; top: number; width: number; height: number }
+  }): void
   /** Which sides the bubble can go on, and which it is on. For the menu. */
   sides(available: readonly string[], using: string): void
   /** Start moving her. `offsetX/Y` is where on her the pointer went down. */

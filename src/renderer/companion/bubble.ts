@@ -115,6 +115,15 @@ export interface Bubble {
   /** Turned off: forget the fade so a re-enable does not flash the last state. */
   clear(): void
   /**
+   * How visible it is, 0 to 1.
+   *
+   * Exposed for the window fit: her window has to stay large enough for the
+   * bubble while it FADES, and shrinking on the frame the text is cleared would
+   * clip the last 0.35s of it. The beat already publishes the same thing for the
+   * same kind of reason.
+   */
+  opacity(): number
+  /**
    * Draw, if there is anything to draw. Returns whether it painted.
    *
    * `text` and `at` come from the utterance, which owns them because the
@@ -335,6 +344,7 @@ export function createBubble(): Bubble {
       frames += 1
       opacity = Math.min(1, opacity + dtSeconds / FADE_S)
     },
+    opacity: () => opacity,
     clear() {
       opacity = 0
       wrapped = null

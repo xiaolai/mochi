@@ -3,12 +3,20 @@ import { MOCHI, type FaceSpec } from './avatar-spec'
 import {
   BASE_UNIT_SCALE,
   BREATHING_UNITS,
+  FEET_FROM_TOP,
   LEAN_LIMIT,
   SIZE_PERCENT,
   SQUASH_LIMIT,
+  STATUS_ROOM,
+  STATUS_UNDER,
+  WINDOW_H,
+  WINDOW_W,
   clampSizePercent,
   fitToCanvas,
+  fullPad,
   layoutFor,
+  originHolding,
+  windowFitting,
   worstCaseUnits,
 } from './avatar-layout'
 import { LOOKS } from '../renderer/companion/rig/looks'
@@ -150,5 +158,57 @@ describe('fitToCanvas on a canvas that is not a canvas yet', () => {
 
   it('still fits a real canvas', () => {
     expect(fitToCanvas(MOCHI, 240, 220)).toBeGreaterThan(0)
+  })
+})
+
+describe('a window that fits what is drawn', () => {
+  const BODY = { width: 94, height: 73 }
+
+  it('is her body plus the padding, and nothing more', () => {
+    const pad = { left: 26, top: 32, right: 26, bottom: 40 }
+    expect(windowFitting(BODY, pad)).toEqual({ width: 146, height: 145 })
+  })
+
+  it('never collapses to nothing, whatever it is handed', () => {
+    // A zero-size window is not a smaller window, it is an invisible one — and
+    // she would be gone with no error anywhere.
+    const nothing = { left: 0, top: 0, right: 0, bottom: 0 }
+    const window = windowFitting({ width: 0, height: 0 }, nothing)
+    expect(window.width).toBeGreaterThan(0)
+    expect(window.height).toBeGreaterThan(0)
+  })
+
+  it('holds her on the screen when the window changes size', () => {
+    // The property the whole thing rests on: resize her window and she does not
+    // move. A window grows from its origin, so without this she slides across
+    // the desktop every time she starts speaking.
+    const her = { x: 2000, y: 1200 }
+    for (const pad of [
+      { left: 26, top: 32, right: 26, bottom: 40 },
+      { left: 443, top: 267, right: 443, bottom: 220 },
+      { left: 0, top: 0, right: 0, bottom: 0 },
+    ]) {
+      const origin = originHolding(her, pad)
+      expect(origin.x + pad.left).toBe(her.x)
+      expect(origin.y + pad.top).toBe(her.y)
+    }
+  })
+
+  it('reproduces the old fixed window exactly, for the bubble case', () => {
+    // `fullPad` is the escape hatch while a bubble is up, and it has to be the
+    // SAME window the build shipped or the bubble gains a new way to be clipped.
+    const pad = fullPad(BODY)
+    expect(windowFitting(BODY, pad)).toEqual({ width: WINDOW_W, height: WINDOW_H })
+    // And she stands exactly where she always did inside it.
+    expect(pad.top + BODY.height).toBe(FEET_FROM_TOP)
+    expect(pad.left).toBe(Math.round(WINDOW_W / 2 - BODY.width / 2))
+  })
+
+  it('leaves room for the status line it also positions', () => {
+    // One source for both, so the line cannot be placed outside the window that
+    // was sized for it.
+    const tallest = { width: 188, height: 147 }
+    const needed = tallest.height * STATUS_UNDER + STATUS_ROOM
+    expect(fullPad(tallest).bottom).toBeGreaterThan(needed)
   })
 })

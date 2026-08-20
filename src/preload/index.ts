@@ -127,6 +127,12 @@ const api: MochiApi = {
   body(box: { left: number; top: number; width: number; height: number }) {
     ipcRenderer.send(guard('companion:body'), box)
   },
+  fit(request: {
+    pad: { left: number; top: number; right: number; bottom: number }
+    body: { left: number; top: number; width: number; height: number }
+  }) {
+    ipcRenderer.send(guard('companion:fit'), request)
+  },
   sides(available: readonly string[], using: string) {
     ipcRenderer.send(guard('companion:sides'), { available, using })
   },

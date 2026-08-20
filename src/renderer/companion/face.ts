@@ -3,12 +3,13 @@ import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createBubble } from './bubble'
 import { resolvePalette, whenSchemeChanges, type Palette } from '../design/resolve'
+import { fullPad, STATUS_ROOM, STATUS_UNDER, type Pad } from '@shared/avatar-layout'
 import { createUtterance } from './utterance'
 import { createAttending, levelOf, type Attention } from './attending'
-import { createBeat, drawBeat, type Beat } from './beat'
-import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
+import { beatRect, createBeat, drawBeat, type Beat } from './beat'
+import { chipRect, drawChip, hits as chipHits, visible as chipVisible } from './chip'
 import { roomFor, type Room, type SidePreference } from './place'
-import { layoutFor, feetY, BREATHING_UNITS, FEET_FROM_TOP } from '@shared/avatar-layout'
+import { layoutFor, FEET_FROM_TOP } from '@shared/avatar-layout'
 
 /**
  * Her, on screen.
@@ -208,12 +209,91 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    */
   function herBox(): { left: number; top: number; width: number; height: number } {
     const layout = layoutFor(worn, worn.size)
+    /*
+      Where the PAD puts her, not where a fixed window used to.
+
+      This was `centred, feetY(canvasHeight, ...)`, which is the right answer for
+      a window sized once for the worst case and the wrong one for a window that
+      fits what is drawn: her offset inside her own window is exactly the room
+      reserved on her left and above her, because that is what the pad means.
+
+      `feet` still has the last word when the drag pushes her against the top of
+      the display — that is `standingRoom`, and it is about the screen rather
+      than about this window, so it survives.
+    */
+    /*
+      `feet` has the last word only while the window is the BIG one.
+
+      `standingRoom` exists because macOS will not put a window's top edge above
+      the work area, so a 560-tall window could not carry her close to the menu
+      bar and she had to stand higher inside it instead. A window that fits her
+      is ~140 tall and can be placed anywhere she needs to be, so the stance has
+      nothing to correct for — and honouring it here would jump her by hundreds
+      of pixels inside a window with no room to hold her.
+    */
+    const top = roomy ? Math.max(0, feet - layout.bodyHeight) : pad.top
     return {
-      left: canvas.clientWidth / 2 - layout.bodyWidth / 2,
-      top: feetY(canvas.clientHeight, BREATHING_UNITS * layout.scale, feet) - layout.bodyHeight,
+      left: pad.left,
+      top,
       width: layout.bodyWidth,
       height: layout.bodyHeight,
     }
+  }
+
+  /**
+   * The room everything drawn AROUND her needs, on each side of her body.
+   *
+   * Measured from the rectangles that will actually be drawn rather than from a
+   * table of constants, which is the difference between "the window fits what is
+   * drawn" and "the window fits what somebody once wrote down". While a bubble
+   * is up it is `fullPad`, because the bubble's rectangle is computed inside
+   * `bubble.ts` at draw time and reaching for it here would put that geometry in
+   * two places.
+   */
+  function padNeeded(): Pad {
+    const layout = layoutFor(worn, worn.size)
+    const body = { width: layout.bodyWidth, height: layout.bodyHeight }
+    // While it FADES, not merely while it has text: shrinking on the frame the
+    // text is cleared would clip the last 0.35s of the bubble going away.
+    if (showingWords && bubble.opacity() > 0) return fullPad(body)
+
+    // Her box as it would be with no padding, so the rects below place
+    // themselves relative to her rather than to whatever window she is in now.
+    const her = { left: 0, top: 0, width: body.width, height: body.height }
+    const around = [chipRect(her), beatRect(her)]
+    const pad = {
+      left: Math.max(0, ...around.map((one) => -one.x)),
+      top: Math.max(0, ...around.map((one) => -one.y)),
+      right: Math.max(0, ...around.map((one) => one.x + one.w - her.width)),
+      bottom: Math.max(0, ...around.map((one) => one.y + one.h - her.height)),
+    }
+    // The status line is DOM and main places it; one constant, read by both, so
+    // it cannot be positioned outside the window that was sized for it.
+    return { ...pad, bottom: Math.max(pad.bottom, body.height * STATUS_UNDER + STATUS_ROOM) }
+  }
+
+  /**
+   * Ask for a window that fits, and only when the answer has changed.
+   *
+   * Every frame computes the pad; almost every frame it is identical, and a
+   * `setBounds` per frame would be sixty window resizes a second. The comparison
+   * is what makes this cheap enough to live in the render loop, which is in turn
+   * what makes it track what is drawn rather than track a list of events
+   * somebody remembered to hook.
+   */
+  function fitToContent(): void {
+    const wanted = padNeeded()
+    if (
+      pad.left === wanted.left &&
+      pad.top === wanted.top &&
+      pad.right === wanted.right &&
+      pad.bottom === wanted.bottom
+    ) {
+      return
+    }
+    pad = wanted
+    roomy = showingWords && bubble.opacity() > 0
+    window.mochi.fit({ pad: wanted, body: herBox() })
   }
   /**
    * Where the bubble may go, in canvas pixels — read from the DOM, not from main.
@@ -259,6 +339,14 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   let hearing = true
   /** How far into the canvas she is standing. See `stands`. */
   let feet = FEET_FROM_TOP
+  /**
+   * The room reserved around her right now, and therefore where she sits in her
+   * own window. Starts at the full layout so the first frame — drawn before any
+   * fit round-trip completes — is the window main actually created.
+   */
+  let pad: Pad = fullPad({ width: MOCHI.bodyW, height: MOCHI.bodyH })
+  /** Whether the window is currently the big one. See `herBox`. */
+  let roomy = true
   /** The last answer sent up, so an unchanged one is not sent again. */
   let lastOffered = ''
 
@@ -513,6 +601,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   })
 
   function tick(now: number): void {
+    fitToContent()
     frame = requestAnimationFrame(tick)
 
     const seconds = lastAt === null ? 1 / 60 : Math.min(0.1, (now - lastAt) / 1000)
