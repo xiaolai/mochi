@@ -74,6 +74,8 @@ const DOCUMENTS: readonly {
       'troubles-label',
       'export',
       'said',
+      'said-what',
+      'said-shut',
       // The shell's three places. Listed explicitly because the renderer reaches
       // for them through a template literal — `need(\`tab-${id}\`)` — which the
       // extraction below cannot see, so without these they would be the one part

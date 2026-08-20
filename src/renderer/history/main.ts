@@ -101,6 +101,8 @@ const troublesEl = need('troubles', HTMLButtonElement)
 const troublesLabelEl = need('troubles-label', HTMLElement)
 const exportEl = need('export', HTMLButtonElement)
 const saidEl = need('said', HTMLElement)
+const saidWhatEl = need('said-what', HTMLElement)
+const saidShutEl = need('said-shut', HTMLButtonElement)
 
 /** Which conversation is open, so re-rendering the list does not lose it. */
 let open: string | null = null
@@ -128,11 +130,46 @@ let generation = 0
  * Its own strip on its own opaque surface, rather than a button's label — the
  * handoff's structural rule, and it stops a character rename reporting itself
  * inside a control marked "Export…".
+ *
+ * ## It goes away
+ *
+ * It used to stay until the next write replaced it, so the last thing you did
+ * sat over the window for the rest of the session — and a message about a
+ * character you have since switched away from is worse than no message.
+ *
+ * Ten seconds, and the same ten for a failure. A failure that vanished with
+ * nothing behind it would be a different argument, but everything reported here
+ * as bad is ALSO in the problems strip, which does not time out.
+ *
+ * ## `hidden`, not empty
+ *
+ * The strip used to hide by way of `#said:empty`, which stopped being true the
+ * moment it held a dismiss button. `[hidden]` is a state the renderer sets, and
+ * `tokens.css` makes it beat any `display` an author writes.
+ *
+ * Shown BEFORE the text is set, deliberately: a live region that is not rendered
+ * when its content changes is not announced, so setting the words first and
+ * revealing after is a message a screen reader never hears.
  */
-function say(text: string, bad = false): void {
-  saidEl.textContent = text
-  saidEl.classList.toggle('bad', bad)
+const SAID_FOR_MS = 10_000
+let saidTimer: number | null = null
+
+function hush(): void {
+  if (saidTimer !== null) clearTimeout(saidTimer)
+  saidTimer = null
+  saidEl.hidden = true
+  saidWhatEl.textContent = ''
 }
+
+function say(text: string, bad = false): void {
+  if (saidTimer !== null) clearTimeout(saidTimer)
+  saidEl.classList.toggle('bad', bad)
+  saidEl.hidden = false
+  saidWhatEl.textContent = text
+  saidTimer = window.setTimeout(hush, SAID_FOR_MS)
+}
+
+saidShutEl.addEventListener('click', hush)
 
 function empty(parent: HTMLElement, text: string): void {
   const said = document.createElement('p')
@@ -174,13 +211,29 @@ function renderState(view: ShelfView): void {
       ? 'no key — another application has it'
       : `${restKey} to ${asleep ? 'wake' : 'rest'}`
 
+  /*
+    THREE states on the mark, where the pill had two.
+
+    `open` and `closed` are her attention; `off` is a grant this machine
+    withholds, and it is the one that must not read as "she happens to be
+    resting". The mark says it with a line through the microphone, which is a
+    shape rather than a colour — see the stylesheet.
+  */
   const listening = !asleep && microphone
-  micEl.classList.toggle('open', listening)
-  micLabelEl.textContent = listening
-    ? 'microphone open'
-    : microphone
-      ? 'microphone closed'
-      : 'microphone not allowed'
+  const state = listening ? 'open' : microphone ? 'closed' : 'off'
+  micEl.classList.toggle('open', state === 'open')
+  micEl.classList.toggle('off', state === 'off')
+
+  const words =
+    state === 'open'
+      ? 'microphone open'
+      : state === 'closed'
+        ? 'microphone closed'
+        : 'microphone not allowed'
+  // The words survive the pill. `#mic-label` is off-screen rather than deleted,
+  // so a screen reader still gets the sentence; `title` is what a pointer gets.
+  micLabelEl.textContent = words
+  micEl.title = words
 }
 
 /* ---- the characters ------------------------------------------------------ */
@@ -557,6 +610,64 @@ function row(
 }
 
 /**
+ * Take one turn's words, on hover.
+ *
+ * The bubbles are selectable — `user-select: text` — but selecting one by hand
+ * means dragging across a rounded shape and stopping before the next, and the
+ * thing people want from a transcript is almost always one whole turn.
+ *
+ * The RAW text, not what is on screen. The rendered bubble is chopped into
+ * `<mark>` elements when a search term is live, so reading it back out of the
+ * DOM would copy the words with the highlighting's seams in them.
+ *
+ * Reachable by keyboard as well as by pointer: it is revealed on `:focus-within`
+ * as well as on `:hover`, so tabbing through a transcript surfaces it rather
+ * than moving focus to a control nobody can see.
+ */
+function copyButton(text: string): HTMLButtonElement {
+  const NS = 'http://www.w3.org/2000/svg'
+  const button = document.createElement('button')
+  button.className = 'copy'
+  button.type = 'button'
+  button.title = 'Copy'
+  button.setAttribute('aria-label', 'Copy this turn')
+
+  const svg = document.createElementNS(NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 16 16')
+  svg.setAttribute('width', '13')
+  svg.setAttribute('height', '13')
+  svg.setAttribute('aria-hidden', 'true')
+  for (const d of ['M5.5 5.5h7v7h-7z', 'M10.5 5.5v-2h-7v7h2']) {
+    const path = document.createElementNS(NS, 'path')
+    path.setAttribute('d', d)
+    svg.append(path)
+  }
+  button.append(svg)
+
+  button.addEventListener('click', () => {
+    /*
+      REPORTED either way, and that is the whole reason this goes through `say`.
+
+      A copy button that silently does nothing is indistinguishable from one
+      that worked, and `writeText` genuinely rejects — `NotAllowedError:
+      Document is not focused` is what it answers when the window does not have
+      focus, which was reproduced here from a harness. A click focuses the
+      document, so the ordinary path is fine; the failure path is the one that
+      needed a voice.
+    */
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        say('Copied.')
+      })
+      .catch((error: unknown) => {
+        say(`Could not copy: ${String(error)}`, true)
+      })
+  })
+  return button
+}
+
+/**
  * What this conversation was, over the top of it.
  *
  * Read off the TURNS rather than looked up in the list. A search result can
@@ -662,7 +773,7 @@ async function show(token: string, term: string): Promise<void> {
 
     const bubble = document.createElement('div')
     bubble.className = 'bubble'
-    bubble.append(marked(turn.text, term))
+    bubble.append(marked(turn.text, term), copyButton(turn.text))
     said?.append(bubble)
 
     if (turn.cut) {

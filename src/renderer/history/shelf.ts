@@ -10,6 +10,7 @@ import { EMOTIONS, type Emotion } from '@shared/avatar'
 import type { FaceSpec } from '@shared/avatar-spec'
 import { applyTheme, THEME_IDS } from '@shared/theme'
 import { MochiAvatar } from '../companion/rig/mochi'
+import { centreOffset, paintedBounds } from './centre'
 
 /**
  * Every sentence on this pane that is ABOUT her, one phrasing per pronoun.
@@ -221,13 +222,38 @@ export function faceTile(
   canvas.style.height = `${String(px)}px`
   const ctx = canvas.getContext('2d')
   if (ctx === null) return canvas
-  const avatar = new MochiAvatar(ctx, { face, size: 'fit-canvas', random: () => 0.5 })
+
+  /*
+    Drawn OFFSCREEN, then blitted into place centred on her own pixels.
+
+    `fitToCanvas` scales her so the worst-case pose fits and stands her one
+    breathing unit off the bottom, which leaves the unused headroom above her:
+    measured at 16.5px above and 2.0px below in a 40px swatch. Right on her own
+    window, where she stands on a floor and breathes into the room above it, and
+    wrong in a tile that has neither. See `centre.ts` for why this is measured
+    rather than computed and why the canvas itself cannot simply be moved.
+  */
+  const off = document.createElement('canvas')
+  off.width = canvas.width
+  off.height = canvas.height
+  const offCtx = off.getContext('2d')
+  if (offCtx === null) return canvas
+
+  const avatar = new MochiAvatar(offCtx, { face, size: 'fit-canvas', random: () => 0.5 })
   avatar.resize(px, px, ratio)
   avatar.setIdle(false)
   if (emotion !== undefined) avatar.setEmotion({ emotion, intensity: 1 })
   // A quarter of a second of clock, at sixty a second. Long enough for the
   // squash spring to arrive at rest with `stiffness`/`damping` as shipped.
   for (let at = 0; at <= 256; at += 16) avatar.render(at)
+
+  const pixels = offCtx.getImageData(0, 0, off.width, off.height).data
+  const at = centreOffset(
+    paintedBounds((x, y) => pixels[(y * off.width + x) * 4 + 3] ?? 0, off.width, off.height),
+    off.width,
+    off.height,
+  )
+  ctx.drawImage(off, at.dx, at.dy)
   return canvas
 }
 

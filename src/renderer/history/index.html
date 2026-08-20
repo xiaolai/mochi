@@ -103,39 +103,85 @@
         color: var(--ink-2);
       }
       /*
-        The microphone, as a pill you cannot miss. Green when it is open,
-        because that is the state worth seeing from across a desk.
+        The microphone, as a mark at the end of the strip.
+
+        Read the markup above for why the words survive as the accessible name
+        and why the three states differ in shape rather than only in colour.
       */
-      .pill {
+      /*
+        `--live-off`, not `--ink-3`, and `--live` when it is open.
+
+        That family exists for exactly this fact and the pill never used it: it
+        was drawn in HER colour, which `tokens.css` rules out in as many words —
+        the halo over her head is already her colour and the two would merge.
+        Blue is the third status family and the first that means "on" rather
+        than "wrong".
+
+        Withheld stays grey too. Red would make a decision somebody made look
+        like a fault, and the same argument is why `halo.ts` draws nothing at
+        all for it. Here the SLASH is what tells it apart, which survives being
+        read by somebody who cannot see the colour.
+      */
+      .mic {
+        flex: none;
         display: flex;
         align-items: center;
-        flex: none;
+        color: var(--live-off);
+      }
+      .mic svg {
+        display: block;
+        overflow: visible;
+      }
+      .mic .cap {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+      }
+      .mic .arc,
+      .mic .stem,
+      .mic .slash {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+      }
+      /* Withheld, and only then. A line through it is the one state that has to
+         survive being read by somebody who cannot see the colour. */
+      .mic .slash {
+        display: none;
+      }
+      .mic.open {
+        color: var(--live);
+      }
+      /* Thicker when it is open, so the state carries at a glance and not only
+         on inspection — this is the one fact on the strip that must not be
+         missed. */
+      .mic.open .arc,
+      .mic.open .stem {
+        stroke-width: 1.9;
+      }
+      /* FILLED when it is open, so the loudest state is also the solid one. */
+      .mic.open .cap {
+        fill: currentColor;
+      }
+      .mic.off .slash {
+        display: initial;
+      }
+      /*
+        Present to a screen reader, absent to a pointer. Not `display: none`,
+        which removes it from the accessibility tree as well and would delete
+        the one sentence this mark exists to say.
+      */
+      .ghost {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
         white-space: nowrap;
-        gap: var(--s3);
-        padding: var(--s0) var(--s3);
-        border: 1px solid var(--rule);
-        border-radius: var(--r-pill);
-        background: var(--paper);
-        font-family: var(--narrow);
-        font-size: var(--t-data);
-        font-weight: 600;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--ink-2);
-      }
-      .pill .dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: var(--ink-3);
-        flex: none;
-      }
-      .pill.open {
-        color: var(--ink-brand);
-        border-color: var(--her);
-      }
-      .pill.open .dot {
-        background: var(--her);
+        border: 0;
       }
       .grow {
         flex: 1;
@@ -606,15 +652,23 @@
         height: 52px;
         display: grid;
         place-items: center;
-        border: 1px solid var(--rule);
-        border-radius: var(--r2);
-        background: var(--paper-2);
+        border: 0;
+        border-radius: var(--r3);
+        background: transparent;
         padding: 0;
         cursor: default;
       }
+      .theme:hover {
+        background: var(--paper-hover);
+      }
+      /*
+        A FILL, not a box — the same answer the cast rows and the Machine nav
+        give, and for the same reason: an outline is a shape and a wash is a
+        state. Eight boxed swatches in a row read as eight buttons with one of
+        them focused, rather than as one of eight colours being the one she is.
+      */
       .theme[aria-current='true'] {
-        border-color: var(--ink);
-        box-shadow: var(--lift-0);
+        background: var(--chrome-wash);
       }
       /*
         Ten voices as pills rather than a closed dropdown.
@@ -1173,6 +1227,7 @@
         somebody else wrote cannot make her own words unreadable here.
       */
       .bubble {
+        position: relative;
         padding: var(--s3) var(--s4);
         border: 1px solid var(--rule);
         border-radius: var(--r4);
@@ -1181,6 +1236,53 @@
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         user-select: text;
+      }
+      /*
+        Take this turn. On hover, and on focus so it is reachable by keyboard.
+
+        OUTSIDE the bubble, on the side away from the speaker: inside it would
+        either sit on the words or force padding that every bubble pays for so
+        that one of them can be hovered.
+      */
+      .bubble .copy {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        left: 100%;
+        margin-left: var(--s2);
+        display: flex;
+        padding: var(--s1);
+        border: 0;
+        border-radius: var(--r1);
+        background: transparent;
+        color: var(--ink-3);
+        cursor: default;
+        opacity: 0;
+        /* Untouchable while invisible, so it cannot take a click meant for the
+           words underneath it. */
+        pointer-events: none;
+      }
+      .run.you .bubble .copy {
+        left: auto;
+        right: 100%;
+        margin-left: 0;
+        margin-right: var(--s2);
+      }
+      .bubble:hover .copy,
+      .bubble:focus-within .copy {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .bubble .copy:hover {
+        background: var(--paper-hover);
+        color: var(--ink);
+      }
+      .bubble .copy svg {
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.4;
+        stroke-linejoin: round;
       }
       .run.her .bubble {
         background: var(--her-wash);
@@ -1366,24 +1468,58 @@
         border-radius: var(--r0);
       }
       /* Says what happened, on its own opaque surface with an elevation. */
+      /*
+        What just happened. Gone in ten seconds, or sooner if you say so.
+
+        It used to stay until the next write replaced it, which left the last
+        thing you did sitting over the window for the rest of the session — and
+        `#said:empty` was how it hid, which stopped working the moment it held a
+        button. `[hidden]` in `tokens.css` does that job now, and it is a state
+        the renderer sets rather than a side effect of the text being blank.
+      */
       #said {
         position: fixed;
         left: var(--s6);
         right: var(--s6);
         bottom: 56px;
         margin: 0;
-        padding: var(--s3) var(--s5);
+        display: flex;
+        align-items: center;
+        gap: var(--s4);
+        padding: var(--s3) var(--s4) var(--s3) var(--s5);
         border-radius: var(--r2);
         background: var(--paper-2);
         box-shadow: var(--lift-1);
         font-size: var(--t-sm);
       }
+      #said-what {
+        flex: 1;
+        min-width: 0;
+      }
+      #said-shut {
+        flex: none;
+        display: flex;
+        padding: var(--s1);
+        border: 0;
+        border-radius: var(--r1);
+        background: transparent;
+        color: var(--ink-3);
+        cursor: default;
+      }
+      #said-shut:hover {
+        background: var(--paper-hover);
+        color: var(--ink);
+      }
+      #said-shut svg {
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+      }
       #said.bad {
         color: var(--red);
         background: var(--red-bg);
-      }
-      #said:empty {
-        display: none;
       }
     </style>
   </head>
@@ -1418,11 +1554,33 @@
           />
         </div>
         <span class="grow"></span>
-        <span class="pill" id="mic"><span class="dot"></span><span id="mic-label"></span></span>
         <span class="state"
           ><span class="what" id="state"></span><span class="how" id="state-how"></span
         ></span>
         <span class="stat" id="count"></span>
+        <!--
+          The microphone, last and as a mark.
+
+          It was a bordered pill reading MICROPHONE OPEN, ahead of everything
+          else on the right. The words are KEPT — as the accessible name and as
+          the tooltip — because a microphone that is open with nothing saying so
+          is the worst thing this app can do, and an icon alone is only a
+          statement to somebody already looking at it.
+
+          Three states, told apart by SHAPE and not only by colour: filled for
+          open, hollow for closed, struck through for a grant that is withheld.
+          Colour alone would leave the most important state on this strip
+          invisible to a colour-blind reader.
+        -->
+        <span class="mic" id="mic">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+            <rect class="cap" x="6" y="1.6" width="4" height="7.2" rx="2"></rect>
+            <path class="arc" d="M3.6 7.4a4.4 4.4 0 0 0 8.8 0"></path>
+            <path class="stem" d="M8 11.9V14.2"></path>
+            <path class="slash" d="M2.8 2.8 13.2 13.2"></path>
+          </svg>
+          <span class="ghost" id="mic-label"></span>
+        </span>
       </div>
 
       <!--
@@ -1484,7 +1642,21 @@
         <button class="btn" id="export" type="button">Export…</button>
       </div>
     </div>
-    <p id="said" role="status" aria-live="polite"></p>
+    <!--
+      What just happened, and a way to be rid of it.
+
+      The button is in the markup rather than added by the renderer so it is
+      never a MUTATION of the live region: only the text changes, so only the
+      text is announced, and "Dismiss" is not read out after every save.
+    -->
+    <p id="said" role="status" aria-live="polite" hidden>
+      <span id="said-what"></span>
+      <button id="said-shut" type="button" aria-label="Dismiss" title="Dismiss">
+        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+          <path d="M4 4 12 12M12 4 4 12"></path>
+        </svg>
+      </button>
+    </p>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
