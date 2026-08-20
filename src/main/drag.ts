@@ -174,7 +174,29 @@ export function dragTo(
     defaultFeet,
   )
 
-  return { x: left - her.left, y: top + her.height - feetFromTop, feetFromTop }
+  /*
+    WHOLE PIXELS, because `setPosition` refuses anything else.
+
+    Her body is `bodyH * BASE_UNIT_SCALE` — 78 x 0.94 = 73.32 — so `top +
+    her.height - feetFromTop` is a fraction, and Electron's native binding does
+    not truncate it: `setPosition(x, 1436.32)` throws `Error processing argument
+    at index 1, conversion failure from`, with nothing after the "from" because a
+    double renders as empty there. Measured against a real window: an integer is
+    accepted, a float throws that exact message, and so does NaN — which is what
+    made it look like a null rather than a rounding problem.
+
+    It threw on EVERY tick of the drag interval, so a single drag produced a wall
+    of identical uncaught exceptions and moved her nowhere: the throw happens
+    before `onStance`, so nothing downstream ran either.
+
+    Rounded here rather than at the call site because this function's whole job
+    is answering where the window goes, and half an answer is a crash.
+  */
+  return {
+    x: Math.round(left - her.left),
+    y: Math.round(top + her.height - feetFromTop),
+    feetFromTop,
+  }
 }
 
 export function startDrag(

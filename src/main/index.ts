@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { BUILT_IN_ID, greetingFor, VOICE_NAMES } from '@shared/persona'
@@ -410,6 +410,8 @@ function setBubbleSide(side: string): SettingsWrite {
  * avatar, and wrong in the direction that keeps her reachable.
  */
 let herBody = NOMINAL_BODY
+/** The last size logged, so the line above is one per change rather than per frame. */
+let fitted = { width: 0, height: 0 }
 
 /**
  * How far into her window she is standing.
@@ -497,6 +499,18 @@ ipcMain.on('companion:fit', (_event, value: unknown) => {
   const origin = originHolding(herOnScreen, pad)
   herBody = body
   companion.setBounds({ x: origin.x, y: origin.y, width: size.width, height: size.height })
+  // Logged once per SIZE, not per request: the renderer asks on any frame the
+  // answer changes, and a line per frame would bury everything else. Same
+  // measurements as the creation line above, so the two can be read together.
+  if (size.width !== fitted.width || size.height !== fitted.height) {
+    fitted = size
+    const work = screen.getPrimaryDisplay().workArea
+    console.log(
+      `[window] fitted to ${size.width}x${size.height} at ${origin.x},${origin.y}; ` +
+        `her right edge ${work.x + work.width - (origin.x + body.left + body.width)}px ` +
+        `and her feet ${work.y + work.height - (origin.y + body.top + body.height)}px from the corner`,
+    )
+  }
 })
 
 ipcMain.on('companion:grab', (_event, value: unknown) => {

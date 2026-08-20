@@ -207,6 +207,23 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * This used to be `herHead` — her centre and the top of her head — which is
    * everything a bubble above her needs and not enough for one anywhere else.
    */
+  /**
+   * Her BODY out of a layout, named because the layout also has `width` and
+   * `height` and they are the WINDOW's.
+   *
+   * `fullPad(layout)` typechecks — the shapes are structurally identical — and
+   * silently passes 980x560 as her body, which yields a negative `top` that
+   * main's validator then refuses, so the window never resizes and nothing says
+   * why. Two pairs of numbers with the same names and different meanings is the
+   * kind of thing a type cannot catch, so it gets a function instead.
+   */
+  function bodyOf(layout: { bodyWidth: number; bodyHeight: number }): {
+    width: number
+    height: number
+  } {
+    return { width: layout.bodyWidth, height: layout.bodyHeight }
+  }
+
   function herBox(): { left: number; top: number; width: number; height: number } {
     const layout = layoutFor(worn, worn.size)
     /*
@@ -252,7 +269,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    */
   function padNeeded(): Pad {
     const layout = layoutFor(worn, worn.size)
-    const body = { width: layout.bodyWidth, height: layout.bodyHeight }
+    const body = bodyOf(layout)
     // While it FADES, not merely while it has text: shrinking on the frame the
     // text is cleared would clip the last 0.35s of the bubble going away.
     if (showingWords && bubble.opacity() > 0) return fullPad(body)
@@ -348,7 +365,16 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * own window. Starts at the full layout so the first frame — drawn before any
    * fit round-trip completes — is the window main actually created.
    */
-  let pad: Pad = fullPad({ width: MOCHI.bodyW, height: MOCHI.bodyH })
+  /*
+    Seeded from her LAID OUT size, not from the raw spec.
+
+    `MOCHI.bodyW/bodyH` are design units; what is drawn is those times
+    `BASE_UNIT_SCALE` — 100x78 becomes 94x73.32. Seeding from the raw numbers put
+    the first frame's answer 3px left and 5px high of where she actually stands,
+    and that answer is what main is told her body is, so the first resize moved
+    her by the difference.
+  */
+  let pad: Pad = fullPad(bodyOf(layoutFor(MOCHI, MOCHI.size)))
   /** Whether the window is currently the big one. See `herBox`. */
   let roomy = true
   /** The last answer sent up, so an unchanged one is not sent again. */

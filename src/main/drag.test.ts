@@ -112,3 +112,40 @@ describe('dragging her to the top of the display', () => {
     expect(herTop + HER.height).toBeLessThanOrEqual(WORK.y + WORK.height - KEEP)
   })
 })
+
+describe('the window origin is whole pixels', () => {
+  /**
+   * `setPosition` refuses a fraction, and her body is one.
+   *
+   * `bodyHeight` is `bodyH * BASE_UNIT_SCALE` — 78 x 0.94 = 73.32 — so
+   * `top + her.height - feetFromTop` is fractional for every ordinary drag.
+   * Electron's native binding does not truncate: measured against a real window,
+   * an integer is accepted and a float throws `Error processing argument at
+   * index 1, conversion failure from` with nothing after the "from", which is
+   * the same message NaN produces and is why it read as a null.
+   *
+   * It threw on every tick of the drag interval, so one drag produced a wall of
+   * identical uncaught exceptions and moved her nowhere — the throw lands before
+   * `onStance`, so nothing downstream ran either.
+   */
+  const WORK = { x: 0, y: 30, width: 2560, height: 1410 }
+  const FRACTIONAL = { left: 443, width: 94, height: 73.32 }
+
+  it.each([
+    ['middle of the display', { x: 1200, y: 700 }],
+    ['bottom right corner', { x: 2559, y: 1439 }],
+    ['top left corner', { x: 0, y: 0 }],
+    ['past the bottom edge', { x: 1200, y: 3000 }],
+  ])('is an integer with her fractional body: %s', (_where, cursor) => {
+    const to = dragTo(cursor, { x: 40, y: 30 }, FRACTIONAL, WORK, 4, 340, FRACTIONAL.height + 10)
+    expect(Number.isInteger(to.x), `x was ${to.x}`).toBe(true)
+    expect(Number.isInteger(to.y), `y was ${to.y}`).toBe(true)
+  })
+
+  it('still puts her where it always did, to the pixel', () => {
+    // Rounding must not move her: this is the same answer as before, rounded.
+    const to = dragTo({ x: 2559, y: 1439 }, { x: 40, y: 30 }, FRACTIONAL, WORK, 4, 340, 83.32)
+    const top = Math.min(2559 - 30, WORK.y + WORK.height - 4 - FRACTIONAL.height)
+    expect(to.y).toBe(Math.round(top + FRACTIONAL.height - to.feetFromTop))
+  })
+})
