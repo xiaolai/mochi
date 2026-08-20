@@ -463,7 +463,7 @@
         align-items: center;
         gap: var(--s3);
         padding: var(--s2) var(--s3);
-        border: 1px solid transparent;
+        border: 0;
         border-radius: var(--r3);
         background: transparent;
         color: inherit;
@@ -502,15 +502,23 @@
         background: var(--paper-hover);
       }
       /*
-        The ring is one of the TWO jobs her colour keeps — the open character.
-        Everything else that used to be green is gold now, because a selected
-        row and a focus outline are things you operate rather than things that
-        say who she is. See `tokens.css`.
+        A FILL, not an outline.
+
+        This was a 1px edge in her colour with a lift under it, which is what the
+        artifact draws — and in a column of otherwise borderless rows it read as
+        one row having been promoted to a button rather than as the row being
+        open. An outline is a shape; a wash is a state.
+
+        The same treatment the Machine tab's nav already gives the group you are
+        in, twelve pixels away in the same window and doing exactly the same job:
+        saying which of N things this column is currently about.
+
+        Not `--paper` either. It is 3% off the `--paper-2` this column is painted
+        with, so without the edge it was invisible; the edge had been carrying
+        the whole indication.
       */
       .card[aria-current='true'] {
-        background: var(--paper);
-        border-color: var(--her);
-        box-shadow: var(--lift-0);
+        background: var(--chrome-wash);
       }
       .card .name {
         font-size: var(--t-ui);
