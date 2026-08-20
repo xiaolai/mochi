@@ -49,6 +49,12 @@ export interface Palette {
    * measurements that let it stay one value.
    */
   readonly alarm: string
+  /** Her colour, filled — the open halo's ring. Follows the worn character. */
+  readonly her: string
+  /** Her colour as a film — the open halo's interior. */
+  readonly herVeil: string
+  /** Paper at low alpha: the closed ring, over a desktop of unknown colour. */
+  readonly quiet: string
 }
 
 /**
@@ -61,6 +67,15 @@ const READ = [
   { key: 'paper', token: '--paper', property: 'color' },
   { key: 'ink', token: '--ink', property: 'background-color' },
   { key: 'alarm', token: '--alarm', property: 'border-top-color' },
+  /*
+    The halo's three. `--her` and `--her-veil` are written onto the document by
+    `applyAccent` from the WORN face, so reading them here is what makes the ring
+    her colour rather than the built-in's — and it is why the palette has to be
+    re-read when she is worn, not only when the scheme flips.
+  */
+  { key: 'her', token: '--her', property: 'border-right-color' },
+  { key: 'herVeil', token: '--her-veil', property: 'border-bottom-color' },
+  { key: 'quiet', token: '--ring-thinking', property: 'border-left-color' },
 ] as const satisfies readonly { key: keyof Palette; token: string; property: string }[]
 
 /** What a token that does not exist resolves to, and therefore what to refuse. */

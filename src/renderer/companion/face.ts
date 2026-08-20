@@ -8,6 +8,7 @@ import { createUtterance } from './utterance'
 import { createAttending, levelOf, type Attention } from './attending'
 import { createBeat, type Beat } from './beat'
 import { chipRect, drawChip, hits as chipHits, visible as chipVisible } from './chip'
+import { drawHalo, haloFor, haloRect, haloReach } from './halo'
 import { roomFor, type Room, type SidePreference } from './place'
 import { layoutFor, FEET_FROM_TOP } from '@shared/avatar-layout'
 
@@ -286,9 +287,24 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // Her box as it would be with no padding, so the rects below place
     // themselves relative to her rather than to whatever window she is in now.
     const her = { left: 0, top: 0, width: body.width, height: body.height }
-    // Only the chip. The beat draws nothing now — what it does is move HER,
-    // which needs no room reserved for it.
-    const around = [chipRect(her)]
+    /*
+      The chip, and the halo's bounding box.
+
+      The halo is narrower than she is, so it never widens her window — but it
+      sits ABOVE her head, and the room for that is reserved here rather than
+      assumed to fit inside what the chip already needs. It is close: the chip
+      wants 26px above her and the halo wants about 27.
+    */
+    const ring = haloRect(her)
+    const around = [
+      chipRect(her),
+      {
+        x: ring.x - ring.rx,
+        y: ring.y - haloReach(),
+        w: ring.rx * 2,
+        h: haloReach() * 2,
+      },
+    ]
     const pad = {
       left: Math.max(0, ...around.map((one) => -one.x)),
       top: Math.max(0, ...around.map((one) => -one.y)),
@@ -297,9 +313,29 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     }
     // The status line is DOM and main places it; one constant, read by both, so
     // it cannot be positioned outside the window that was sized for it.
-    // The status line is the only thing under her now, so there is nothing to
-    // stack it on and nothing to reserve for a beat that draws nothing.
-    return { ...pad, bottom: Math.max(pad.bottom, body.height * STATUS_UNDER + STATUS_ROOM) }
+    /*
+      SYMMETRIC horizontally, and that is not tidiness — it is what makes the pad
+      true.
+
+      `MochiAvatar` centres her in the canvas; it is not told a left offset. So
+      `herBox()` saying she is at `pad.left` is only correct when the padding is
+      equal on both sides. It was not — the chip needs 26px on her right and
+      nothing on her left — and she was painted 12px right of where every other
+      thing in this file believed she was. The chip, the bubble's placement and
+      the click-through rectangle were all measured against a box she was not in.
+      Measured: painted left 12.0, `herBox()` left 0.
+
+      The cost is 26px of transparent pixels on her left. The alternative is
+      teaching the rig a horizontal offset, which is a second place her position
+      is decided.
+    */
+    const side = Math.max(pad.left, pad.right)
+    return {
+      ...pad,
+      left: side,
+      right: side,
+      bottom: Math.max(pad.bottom, body.height * STATUS_UNDER + STATUS_ROOM),
+    }
   }
 
   /**
@@ -348,6 +384,16 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     shrinkWantedSince = null
     const was = herBox()
     pad = wanted
+    /*
+      Tell the RIG where the pad puts her, or it keeps standing her where the
+      canvas alone suggests.
+
+      `feetY` places her at `min(FEET_FROM_TOP, canvasHeight - clearance)`, which
+      answered 132 in a 140px window while the pad said 100 — so `herBox()` and
+      the painted pixels were 32px apart vertically as well as 12 horizontally.
+      `setFeet` is the seam the drag already uses for exactly this.
+    */
+    avatar.setFeet(wanted.top + layoutFor(worn, worn.size).bodyHeight)
     roomy = showingWords && bubble.opacity() > 0
     /*
       Where she is ON SCREEN, measured before the pad changed.
@@ -428,6 +474,14 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     her by the difference.
   */
   let pad: Pad = fullPad(bodyOf(layoutFor(MOCHI, MOCHI.size)))
+  /**
+   * Which of the halo's three states she is in.
+   *
+   * `hearing` is one boolean and conflates two causes — main computes it as
+   * `!asleep && mayHear` — so resting is told apart from withheld using
+   * `resting`, which this file already holds. They look identical to the
+   * microphone and must not look identical to a person.
+   */
   /** Whether the window is currently the big one. See `herBox`. */
   let roomy = true
   /** When a smaller window first became the right answer. See `fitToContent`. */
@@ -824,6 +878,26 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       wanted > chip
         ? Math.min(1, chip + seconds / CHIP_FADE_S)
         : Math.max(0, chip - seconds / CHIP_FADE_S)
+    /*
+      The halo, drawn AFTER her and before the chip.
+
+      After her, because it sits over her head and a ring behind her scalp is not
+      a halo. Before the chip, because the chip is a control and controls belong
+      on top of readouts when they overlap — which they can, at her shoulder.
+
+      `beat.heldFor()` is the bead's clock and it is null unless she is actually
+      waiting, so the ordinary frame draws a ring and nothing else.
+    */
+    drawHalo(
+      ctx,
+      herBox(),
+      { her: palette.her, veil: palette.herVeil, quiet: palette.quiet },
+      haloFor(hearing, resting),
+      resting ? 0.45 : 1,
+      beat.state() === 'none' ? null : beat.heldFor(),
+      roomOnScreen(),
+    )
+
     drawChip(ctx, herBox(), palette, chip, troubles, roomOnScreen())
 
     // Only when it CHANGES. Asking main to toggle the window flag sixty times a
@@ -952,6 +1026,19 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     },
     wear: (face: FaceSpec) => {
       worn = face
+      /*
+        Re-read HER colours, because `applyAccent` has just written them.
+
+        `--her` and `--her-veil` are per persona and live on the document, so the
+        palette resolved at startup belongs to whoever was worn then. Without
+        this the halo keeps the previous character's green — the exact drift
+        `resolve.ts` exists to make impossible, reintroduced by a value that
+        changes at runtime rather than at build.
+
+        `main.ts` calls `applyAccent` BEFORE this for the same reason: the
+        document has to carry her colour before the rig reads it back.
+      */
+      palette = resolvePalette(document.documentElement)
       avatar.setSizePercent(face.size)
       // Main clamps HER to the display during a drag, not the window, and only
       // this side knows how big she is. Sent on every wear because that is

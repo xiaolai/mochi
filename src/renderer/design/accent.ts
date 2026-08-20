@@ -245,6 +245,14 @@ export function accentVariables(face: FaceSpec): Readonly<Record<string, string>
       is read against IT. A dark-scheme variant would be a second colour doing the
       same job, and the pairing that matters is unchanged either way.
     */
+    /*
+      Her colour as a FILM — the interior of the halo over her head.
+
+      Derived rather than declared, because the halo is the one place her colour
+      is drawn over an unknown desktop: a fixed tint would be some other
+      character's green sitting inside her ring.
+    */
+    '--her-veil': `rgb(${String(base.r)} ${String(base.g)} ${String(base.b)} / 22%)`,
     '--her-deep': toHex(deep(base)),
     '--her-deep-ink': '#ffffff',
   }

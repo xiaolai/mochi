@@ -101,6 +101,8 @@ describe('accentVariables', () => {
     for (const name of ['--her', '--her-hover', '--her-ink']) {
       expect(vars[name], name).toMatch(/^#[0-9a-f]{6}$/)
     }
+    // Her colour as a film, for the halo's interior. Alpha, so neither shape.
+    expect(vars['--her-veil'], '--her-veil').toMatch(/^rgb\(\d+ \d+ \d+ \/ \d+%\)$/)
     for (const name of ['--her-wash', '--ink-brand']) {
       expect(vars[name], name).toMatch(/^light-dark\(#[0-9a-f]{6}, #[0-9a-f]{6}\)$/)
     }

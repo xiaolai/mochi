@@ -236,7 +236,14 @@ async function open(): Promise<void> {
   // Her appearance first: `wear` also drops the previous voice's learned
   // speaking rate, and doing it before she can speak means the first utterance
   // is paced against the right voice rather than the last one's.
-  face.wear(next.face)
+  /*
+    Her colour on the document BEFORE the rig reads it back.
+
+    `face.wear` re-resolves the palette so the halo takes the worn character's
+    green; that read is only correct if `applyAccent` has already run. The two
+    were the other way round, which would have left the halo one character
+    behind on every switch.
+  */
   /*
     The load-time contrast guard, in the window she actually lives in.
 
@@ -255,6 +262,7 @@ async function open(): Promise<void> {
       text: `her colour was refused and the built-in used instead — ${unreadable.join('; ')}`,
     })
   }
+  face.wear(next.face)
   face.showWords(next.bubble)
   // Whatever main could not do while assembling all of the above. Usually none;
   // when there are any, the shoulder control says so on its own.
