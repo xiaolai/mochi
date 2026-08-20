@@ -776,11 +776,23 @@
         background: var(--paper-2);
         border-right: 1px solid var(--rule);
       }
+      /*
+        A COLUMN, like the cast list opposite it — not a card inside one.
+
+        `#panel-wake` carried `.panel`: a bordered, rounded, `--paper-2` card
+        with its own 16px padding, sitting inside a bordered `--paper-2` column.
+        Two edges and two surfaces for one thing, and the inner one said nothing
+        the outer had not. The class had no other user in this window and its
+        rules went with it.
+
+        20px of padding rather than 16, so this column's heading sits on the
+        same line as `CHARACTERS` on the far side. They were 13px apart.
+      */
       .cast-wake {
         min-height: 0;
         display: flex;
         flex-direction: column;
-        padding: var(--s5) var(--s5) var(--s5);
+        padding: var(--s6) var(--s6) 0;
         background: var(--paper-2);
         border-left: 1px solid var(--rule);
       }
@@ -927,8 +939,14 @@
         flex-direction: column;
         gap: var(--s2);
       }
+      /*
+        CENTRE, not baseline. The count beside the heading is mono and the
+        heading is narrow-caps; aligning their baselines pushed the h3 down by
+        the difference between two fonts' metrics, which is how one of these two
+        columns ended up with its title 13px lower than the other.
+      */
       #panel-wake .row {
-        align-items: baseline;
+        align-items: center;
       }
       #panel-wake .note {
         margin: 0 0 var(--s2);
@@ -964,14 +982,14 @@
         flex: 1;
         min-height: 0;
         overflow-y: auto;
-        margin: 0 calc(var(--s5) * -1) calc(var(--s5) * -1);
+        margin: 0 calc(var(--s6) * -1) 0;
         border-top: 1px solid var(--rule);
       }
       .wake-box > pre {
         border: 0;
         border-radius: 0;
         background: transparent;
-        padding: var(--s4) var(--s5);
+        padding: var(--s4) var(--s6);
       }
 
       /* ---- the open character's column ------------------------------------- */
@@ -1207,36 +1225,6 @@
         display: flex;
         flex-direction: column;
         gap: var(--s4);
-      }
-      /*
-        No `.panel[hidden]` here any more, and no `.warn[hidden]` either. Both
-        were the same defect — an author `display` outranking the UA's rule for
-        the attribute — and it is answered once, for all three windows, by
-        `[hidden]` in `tokens.css`. Patching it per element is what let the
-        drawer ship a chip that read "0 problems".
-      */
-      .panel {
-        flex: 1;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        gap: var(--s4);
-        background: var(--paper-2);
-        border: 1px solid var(--rule);
-        border-radius: var(--r3);
-        padding: var(--s5);
-        overflow: hidden;
-      }
-      .panel h4 {
-        margin: 0;
-        font-family: var(--narrow);
-        font-size: var(--t-data);
-        font-weight: 700;
-        letter-spacing: 0.1em;
-      }
-      .panel > pre {
-        flex: 1;
-        max-height: none;
       }
       .search input {
         width: 100%;
@@ -1798,7 +1786,7 @@
         </aside>
         <div id="pane"></div>
         <aside class="cast-wake">
-          <div class="panel" id="panel-wake"></div>
+          <div id="panel-wake"></div>
         </aside>
       </section>
 
