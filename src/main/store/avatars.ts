@@ -28,6 +28,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MOCHI, parseFaceSpec, type FaceSpec } from '@shared/avatar-spec'
 import { isPersonaId } from '@shared/persona'
+import { applyTheme, type Theme } from '@shared/theme'
 import { logBoundedRead, readBounded } from './read-bounded'
 
 export const AVATARS_DIR = 'avatars'
@@ -212,6 +213,32 @@ export const PACKAGE_FACE = 'face.json'
  * to be when a persona was a single file.
  */
 export function resolveFaceFor(
+  avatarsFolder: string,
+  packageFolder: string | null,
+  avatarId: string | null,
+  theme: Theme,
+): ResolvedAvatar {
+  const found = readFaceFor(avatarsFolder, packageFolder, avatarId)
+  /*
+    Her colour, and only over the BUILT-IN.
+
+    `Persona.theme` was validated, migrated, tested and read by nothing:
+    `applyTheme` had no callers anywhere in the tree, so eight themes were
+    stored and one green mochi was drawn. A parameter rather than a call at each
+    of the five sites, because that is what makes the next resolution unable to
+    forget her colour.
+
+    It does NOT retint a face somebody authored. `parseFaceSpec` REQUIRES all
+    five colour fields, so every avatar on disk states its colours deliberately
+    — overriding them would make those fields unreachable, which is the same
+    defect this fixes, pointed the other way. The Cast pane says so rather than
+    showing swatches that would do nothing.
+  */
+  if (found.source !== null) return found
+  return { ...found, face: applyTheme(found.face, theme) }
+}
+
+function readFaceFor(
   avatarsFolder: string,
   packageFolder: string | null,
   avatarId: string | null,

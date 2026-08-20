@@ -397,130 +397,299 @@
         color: var(--ink-3);
       }
       /*
-        The band the characters sit in, and it has to BE a band. The cards were
-        floating in the same undifferentiated field as the document below them,
-        20px from it, so the row had no bottom and the scrolling content below
-        began wherever it happened to begin. The hairline closes it.
+        The cast, as a column of rows.
+
+        It was a row of wide cards across the top of the window: the widest part
+        of the screen spent on the characters you are NOT editing, with the one
+        you are in a strip beneath. A list holds as many as you like in the
+        space four cards needed, and it is what the artifact draws.
       */
       .cards {
-        flex: none;
-        display: flex;
-        gap: var(--s6);
-        padding: var(--s5) var(--s6) var(--s7);
-        border-bottom: 1px solid var(--rule);
-        overflow-x: auto;
-      }
-      .card {
-        width: 268px;
-        flex: none;
-        text-align: left;
-        background: var(--paper-2);
-        border: 1px solid var(--rule);
-        border-radius: var(--r4);
-        padding: var(--s5);
-        color: inherit;
-        font: inherit;
-        cursor: default;
+        flex: 1;
+        min-height: 0;
         display: flex;
         flex-direction: column;
-        gap: var(--s4);
+        gap: var(--s1);
+        padding: 0 var(--s3) var(--s5);
+        overflow-y: auto;
       }
-      /* Her face, then her name over the one caps line that says who she is. */
-      .card .head {
+      .card {
         display: flex;
         align-items: center;
-        gap: var(--s4);
+        gap: var(--s3);
+        padding: var(--s2) var(--s3);
+        border: 1px solid transparent;
+        border-radius: var(--r3);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: default;
       }
       .card .tile {
         flex: none;
         display: block;
       }
       /*
-        Her face could not be resolved, so the card says so instead of showing
-        the built-in and letting a shelf of identical mochis pass for a design.
+        Her face could not be resolved, so the row says so instead of showing
+        the built-in and letting a list of identical mochis pass for a design.
         A dashed hole is the smallest honest thing that fits where she goes.
       */
       .card.faceless .tile {
-        width: 52px;
-        height: 52px;
+        width: 44px;
+        height: 44px;
         border: 1px dashed var(--warn-line);
         border-radius: var(--r2);
       }
       .card .titles {
         min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1px;
       }
       /*
         NOT gold. In the artifact gold is what "STAGED · NOT GRANTED" is written
         in — a state that wants looking at — so a gold edge appearing under the
         pointer says a character has a problem every time the mouse crosses it.
-        Hover is the quietest possible darkening of the edge it already has.
       */
       .card:hover {
-        border-color: var(--ink-3);
+        background: var(--paper-hover);
       }
       /*
-        The ring is one of the TWO jobs her colour keeps — the worn character.
+        The ring is one of the TWO jobs her colour keeps — the open character.
         Everything else that used to be green is gold now, because a selected
         row and a focus outline are things you operate rather than things that
         say who she is. See `tokens.css`.
       */
       .card[aria-current='true'] {
+        background: var(--paper);
         border-color: var(--her);
-        box-shadow:
-          var(--lift-1),
-          inset 0 0 0 1px var(--her);
+        box-shadow: var(--lift-0);
       }
       .card .name {
-        font-size: var(--t-h3);
+        font-size: var(--t-ui);
         font-weight: 600;
-        letter-spacing: -0.01em;
+        letter-spacing: -0.005em;
         overflow-wrap: anywhere;
       }
       .card .worn {
         font-family: var(--narrow);
-        font-size: var(--t-data);
+        font-size: var(--t-nano);
         font-weight: 600;
-        letter-spacing: 0.1em;
+        letter-spacing: var(--track-2);
         text-transform: uppercase;
         color: var(--ink-3);
       }
-      .card[aria-current='true'] .worn {
+      /* Which one she IS, said once, on the row it is true of. */
+      .card .wearing {
+        flex: none;
+        padding: 2px 7px;
+        border-radius: var(--r-pill);
+        background: var(--her-wash);
         color: var(--ink-brand);
-      }
-      .card dl {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        /* 4px between rows read as a dense list rather than three facts. */
-        gap: var(--s2) var(--s4);
-        margin: 0;
-        font-size: var(--t-sm);
-      }
-      .card dt {
         font-family: var(--narrow);
-        font-size: var(--t-label);
-        font-weight: 600;
-        letter-spacing: 0.1em;
+        font-size: var(--t-nano);
+        font-weight: 700;
+        letter-spacing: var(--track-2);
         text-transform: uppercase;
-        color: var(--ink-3);
-      }
-      .card dd {
-        margin: 0;
-        color: var(--ink-2);
-        overflow-wrap: anywhere;
       }
 
-      /* ---- the body: what is open, and the inspector beside it ------------- */
-      .body {
-        flex: 1;
-        min-height: 0;
+      /* ---- cast: a list, the open character, and what she will be told ------ */
+      .cast {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 380px;
-        /* 8px + the column's own 12px of scrollbar lane = the 20px it was. */
-        gap: var(--s3);
-        padding: var(--s5) var(--s6) var(--s6);
+        grid-template-columns: 268px minmax(0, 1fr) 360px;
+        min-height: 0;
+      }
+      .cast-list {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--paper-2);
+        border-right: 1px solid var(--rule);
+      }
+      .cast-wake {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: var(--s5) var(--s5) var(--s5);
+        background: var(--paper-2);
+        border-left: 1px solid var(--rule);
+      }
+
+      /* ---- the controls the sections hold ---------------------------------- */
+      /* Which words she takes: three choices, not a dropdown of three. */
+      .switchers {
+        display: inline-flex;
+        border: 1px solid var(--rule);
+        border-radius: var(--r-pill);
+        overflow: hidden;
+      }
+      .switchers button {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        padding: var(--s1) var(--s4);
+        font-family: var(--narrow);
+        font-size: var(--t-label);
+        font-weight: 700;
+        letter-spacing: var(--track-2);
+        text-transform: uppercase;
+        color: var(--ink-3);
+        cursor: default;
+      }
+      .switchers button[aria-current='true'] {
+        background: var(--her-deep);
+        color: var(--her-deep-ink);
+      }
+      /* Eight themes, drawn as her rather than as swatches of paint. */
+      .themes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s2);
+      }
+      .theme {
+        width: 52px;
+        height: 52px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--rule);
+        border-radius: var(--r2);
+        background: var(--paper-2);
+        padding: 0;
+        cursor: default;
+      }
+      .theme[aria-current='true'] {
+        border-color: var(--ink);
+        box-shadow: var(--lift-0);
       }
       /*
-        The open character's column, by id rather than by class.
+        Ten voices as pills rather than a closed dropdown.
+
+        They are all one word and the whole set fits in the width the dropdown
+        would have taken shut, so a `<select>` here hid ten answers to save no
+        room. The avatar list keeps its select: that one is as long as somebody's
+        folder and has no bounded set to draw.
+      */
+      .pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s2);
+      }
+      .pills button {
+        padding: var(--s2) var(--s4);
+        border: 0;
+        border-radius: var(--r-pill);
+        background: var(--paper-2);
+        box-shadow: inset 0 0 0 1px var(--rule);
+        color: var(--ink-2);
+        font: inherit;
+        font-size: var(--t-sm);
+        cursor: default;
+      }
+      .pills button:hover {
+        box-shadow: inset 0 0 0 1px var(--ink-3);
+        color: var(--ink);
+      }
+      .pills button[aria-current='true'] {
+        background: var(--her-wash);
+        box-shadow: inset 0 0 0 1px var(--her);
+        color: var(--ink-brand);
+        font-weight: 600;
+      }
+      /* The moods grid: eight tiles, each with the switch that decides it. */
+      .moods {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: var(--s3);
+      }
+      .mood {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--s1);
+        padding: var(--s4) var(--s3);
+        border: 1px solid var(--rule);
+        border-radius: var(--r3);
+        background: var(--paper-2);
+        text-align: center;
+      }
+      .mood.off {
+        border-style: dashed;
+        background: transparent;
+      }
+      .mood.off .tile {
+        opacity: 0.4;
+      }
+      .mood .name {
+        font-family: var(--narrow);
+        font-size: var(--t-label);
+        font-weight: 700;
+        letter-spacing: var(--track-2);
+        text-transform: uppercase;
+      }
+      .mood .when {
+        font-size: var(--t-data);
+        color: var(--ink-3);
+        min-height: 2.4em;
+      }
+      .mood .allow {
+        display: flex;
+        align-items: center;
+        gap: var(--s2);
+        font-family: var(--narrow);
+        font-size: var(--t-nano);
+        letter-spacing: var(--track-2);
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+
+      /* ---- what she will be told, down the right --------------------------- */
+      #panel-wake {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: var(--s2);
+      }
+      #panel-wake .row {
+        align-items: baseline;
+      }
+      #panel-wake .note {
+        margin: 0 0 var(--s2);
+        font-size: var(--t-cap);
+        line-height: 1.5;
+        color: var(--ink-3);
+      }
+      #panel-wake .meta {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-3);
+      }
+      /*
+        The box scrolls, the column does not.
+
+        `.sheet` is a document and takes the window's one vertical bar; this is a
+        fixed panel beside it holding a string that can be any length, so it has
+        to have its own. Two bars on one axis is what the `pre` rule below
+        refuses — these are two different axes' worth of content, side by side.
+      */
+      .wake-box {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        border: 1px solid var(--rule);
+        border-radius: var(--r2);
+        background: var(--paper);
+      }
+      .wake-box > pre {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+      }
+
+      /* ---- the open character's column ------------------------------------- */
+      /*
+        By id rather than by class.
 
         It was `.open`, and so is the microphone pill's lit state — one global
         stylesheet, two meanings, and this rule came second, so `display: flex;
@@ -532,126 +701,188 @@
       #pane {
         min-height: 0;
         overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: var(--s4);
-        /*
-          The 12px on the right of that padding is a lane for the scrollbar.
-          macOS draws an overlay bar that reserves no width -- `scrollbar-gutter`
-          cannot help, the gutter is already zero -- so without it the bar is
-          painted ON the plates' right border. `.body` gives the same 12px back
-          out of its column gap, so the inspector has not moved.
-        */
-        /*
-          Content stops existing at the top of this box, and it used to do so
-          against nothing: a plate was sliced through its middle by an invisible
-          line 16px below a real one, which reads as a rendering fault rather
-          than as "there is more above".
-
-          The fix is where the air is, not what is drawn. The box now runs edge
-          to edge between the cards' hairline and the drawer's, and carries the
-          spacing as its OWN padding — so at rest there is 16px of room under
-          the line, and scrolled, the content travels up through that padding
-          and disappears exactly AT the line. A hairline is already this
-          window's word for an edge; the topbar and the drawer both use one.
-
-          A gradient stood here first and was worth deleting rather than
-          keeping: the covers-and-shadows trick needs a scroll box whose content
-          is transparent, and every plate paints `--paper-2` over the parent's
-          background. It could not have worked, and it looked like it did.
-        */
-        margin: calc(var(--s5) * -1) 0 calc(var(--s6) * -1);
-        padding: var(--s5) var(--s4) var(--s6) 0;
       }
       /*
-        The stack of plates, and the reason it needs a rule of its own.
+        The stack of sections, and the reason it needs a rule of its own.
 
-        `#pane` is `flex-direction: column` with a `gap`, and that gap governs
+        `#pane` was `flex-direction: column` with a `gap`, and that gap governed
         `#pane`'s CHILDREN -- of which there is exactly one, this element.
-        `characterSheet` wraps the plates in it, so the gap has been styling a
-        single wrapper and the plates inside had nothing between them at all:
+        `characterSheet` wraps everything in it, so the gap styled a single
+        wrapper and the contents inside had nothing between them at all:
         measured 0.0px on all six boundaries. Adjacent 1px borders read as a
         table rather than as an obvious fault, which is why it survived.
 
-        `#pane` keeps its gap; a transcript and the problem list ARE direct
-        children of it, so it is not vestigial. This is the second stack.
+        The air is the SECTIONS' own padding now, so there is no container gap
+        left to put on the wrong box.
       */
       .sheet {
         display: flex;
         flex-direction: column;
-        gap: var(--s4);
       }
-
       /*
-        A plate: a labelled row with its value, what it resolved to, and the one
-        thing you can do to it. Three of the four are real fields; the fourth
-        says out loud that it is not.
+        A section: a caps heading, a hint in mono beside it, and whatever
+        control the field actually wants underneath.
+
+        This replaced a `.plate` — one labelled row, a value, and a meta string
+        — used for every field alike, which made her name, her colour and her
+        memory look like rows of one table. Eight themes want a grid of faces, a
+        prompt wants a textarea, a voice wants ten pills; a plate can offer one
+        shape and did.
       */
-      .plate {
+      .section {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--s5);
-        border: 1px solid var(--rule);
-        border-radius: var(--r3);
-        background: var(--paper-2);
-        /*
-          The artifact's plates are one line of type with the controls sitting in
-          it; this build had them at 12px vertical and they read as a stack of
-          form rows rather than as a document with fields in it. 8px, and the
-          controls below lose a little height to match.
-        */
-        padding: var(--s3) var(--s5);
+        flex-direction: column;
+        gap: var(--s4);
+        padding: var(--s6) var(--s7);
+        border-bottom: 1px solid var(--rule);
       }
-      .plate .label {
-        font-family: var(--narrow);
-        font-size: var(--t-data);
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--ink-3);
-        flex: none;
-        width: 92px;
+      /* Nothing below the last one to divide it from. */
+      .section:last-child {
+        border-bottom: 0;
+        padding-bottom: var(--s8);
       }
-      .plate .value {
-        flex: 1;
-        min-width: 0;
+      .section > .head {
         display: flex;
-        align-items: center;
+        align-items: baseline;
         gap: var(--s4);
       }
-      .plate .value > input[type='text'] {
-        flex: none;
-        width: 220px;
-      }
-      /* Sized to its content now, because it is type rather than a control. */
-      .plate .value > select {
-        flex: none;
-      }
-      .plate .meta {
+      .section .hint {
         font-family: var(--mono);
         font-size: var(--t-data);
         color: var(--ink-3);
       }
-      /* The prompt is the one the design lifts: her own edge and an elevation. */
-      .plate.prompt {
-        display: block;
-        border-color: var(--ink);
-        box-shadow: var(--lift-1);
-        padding: 0;
+      .section .note {
+        margin: 0;
+        max-width: 68ch;
+        font-size: var(--t-ui-2);
+        line-height: 1.55;
+        color: var(--ink-2);
       }
-      .plate.prompt .head {
+      .section .note.bad {
+        color: var(--warn-ink);
+      }
+      /*
+        `.moment`, not `.field` — which this window already uses for the Machine
+        tab's label-beside-control grid, at `align-items: center` and 150px of
+        label. `.section .field` won on the properties it named and lost on the
+        one it did not, so these two boxes were column-flexed AND centre-aligned:
+        a caps label floating over a 157px input in a 374px cell.
+
+        The sixth rule in this stylesheet to mean two things at once. Every one
+        of them compiled and passed the suite.
+      */
+      .moment {
         display: flex;
-        align-items: center;
-        gap: var(--s5);
-        padding: var(--s4) var(--s5);
+        flex-direction: column;
+        gap: var(--s1);
+      }
+      .moment .label,
+      .who-facts .label {
+        font-family: var(--narrow);
+        font-size: var(--t-label);
+        font-weight: 700;
+        letter-spacing: var(--track-2);
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .moments {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--s4);
+      }
+      /*
+        VERTICAL only. `resize: both` let the box be dragged wider than the
+        column it sits in — and it made the textarea a scroll container, which
+        is the second bar on one axis the `pre` rule below refuses.
+      */
+      .section textarea {
+        resize: vertical;
+      }
+
+      /* ---- who she is, across the top of her column ------------------------ */
+      /*
+        `.who-band`, NOT `.who` — which this window already uses for the speaker
+        label over a turn in a transcript. That is the fifth collision of this
+        exact shape here: `.open` was the microphone pill and the open column,
+        `.sheet` was styled on the wrong container, `.card` was a character and
+        a tool, and each one compiled, linted, passed the suite and governed the
+        wrong element. Two meanings in one global stylesheet is the defect;
+        naming the specific thing is the fix.
+      */
+      .who-band {
+        display: flex;
+        align-items: flex-end;
+        gap: var(--s6);
+        padding: var(--s7) var(--s7) var(--s6);
         border-bottom: 1px solid var(--rule);
       }
-      .plate.prompt .head .label {
-        color: var(--ink);
+      .who-band .tile {
+        flex: none;
       }
-      .plate.prompt .body-pad {
-        padding: var(--s5);
+      .who-of {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: var(--s2);
+        padding-bottom: var(--s2);
+      }
+      /*
+        Her name at h1, with no box until it is touched.
+
+        The largest thing on the pane is her name; that it is editable is worth
+        less than that it is her name. The underline appears on hover and focus,
+        so the affordance is there the moment somebody goes looking for it.
+      */
+      /*
+        `input[type='text'].who-name`, not `.who-name`.
+
+        The bare class is (0,1,0) and the window's own `input[type='text']` rule
+        is (0,1,1), so it WON — her name kept the ordinary field's box, border
+        and 13px type however carefully this block described a title. Written up
+        because it is the same family as the four class collisions above: a rule
+        that reads as correct, compiles, and governs nothing.
+      */
+      input[type='text'].who-name {
+        width: 100%;
+        padding: var(--s0) 0;
+        border: 0;
+        border-bottom: 1px solid transparent;
+        border-radius: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-size: var(--t-h1);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      input[type='text'].who-name:hover {
+        border-bottom-color: var(--rule);
+      }
+      input[type='text'].who-name:focus {
+        outline: none;
+        border-bottom-color: var(--ink);
+      }
+      .who-facts {
+        display: flex;
+        align-items: center;
+        gap: var(--s3);
+      }
+      .who-facts .sep {
+        width: 1px;
+        height: 18px;
+        background: var(--rule);
+      }
+      .who-facts .meta {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-3);
+        overflow-wrap: anywhere;
+      }
+      input[type='text'].inline {
+        width: 132px;
+        padding: var(--s0) var(--s3);
+        font-size: var(--t-sm);
       }
 
       pre,
@@ -689,40 +920,6 @@
         display: flex;
         flex-direction: column;
         gap: var(--s4);
-      }
-      .tabs {
-        flex: none;
-        display: flex;
-        gap: var(--s0);
-      }
-      .tab {
-        padding: var(--s1) var(--s3);
-        border: 0;
-        border-radius: var(--r1);
-        background: transparent;
-        font-family: var(--narrow);
-        font-size: var(--t-label);
-        font-weight: 700;
-        letter-spacing: var(--track);
-        text-transform: uppercase;
-        color: var(--ink-3);
-        cursor: default;
-      }
-      /*
-        An underline, not a filled chip.
-
-        The artifact underlines the open tab and fills nothing, and a gold wash
-        behind two words is a much louder object than the thing it is labelling —
-        it read as a selected row rather than as a place in a strip. Gold is kept
-        as the mark; only the fill goes.
-      */
-      .tab {
-        border-bottom: 2px solid transparent;
-        border-radius: 0;
-      }
-      .tab[aria-current='true'] {
-        border-bottom-color: var(--gold);
-        color: var(--ink);
       }
       /*
         No `.panel[hidden]` here any more, and no `.warn[hidden]` either. Both
@@ -1065,14 +1262,6 @@
         gap: var(--s3);
         align-items: center;
       }
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--s3);
-        align-items: center;
-        padding-top: var(--s5);
-        border-top: 1px solid var(--rule);
-      }
       .note {
         margin: var(--s2) 0 0;
         font-size: var(--t-cap);
@@ -1149,19 +1338,27 @@
         <span class="stat" id="count"></span>
       </div>
 
-      <section class="tab-pane" id="tab-cast">
-        <div class="strip">
-          <h3>Characters</h3>
-          <span class="stat" id="characters-count"></span>
-        </div>
-        <div class="cards" id="characters"></div>
-        <div class="body">
-          <div id="pane"></div>
-          <aside>
-            <div class="tabs" id="tabs"></div>
-            <div class="panel" id="panel-wake"></div>
-          </aside>
-        </div>
+      <!--
+        The open character gets the middle of the window, and her sections in
+        order rather than a stack of identical plates.
+
+        The cast was a row of cards across the top, which spent the widest part
+        of the window on the characters you are NOT editing and left the one you
+        are in a column beneath. A list holds as many as you like in the space a
+        row of four needed.
+      -->
+      <section class="tab-pane cast" id="tab-cast">
+        <aside class="cast-list">
+          <div class="strip">
+            <h3>Characters</h3>
+            <span class="stat" id="characters-count"></span>
+          </div>
+          <div class="cards" id="characters"></div>
+        </aside>
+        <div id="pane"></div>
+        <aside class="cast-wake">
+          <div class="panel" id="panel-wake"></div>
+        </aside>
       </section>
 
       <!--

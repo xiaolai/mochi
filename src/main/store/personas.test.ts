@@ -960,7 +960,10 @@ describe('a package is a folder, so she can carry her own face', () => {
       JSON.stringify({ ...MOCHI, colBody: '#8aa8e8' }),
     )
 
-    const resolved = resolveFaceFor(dir, join(personasRoot(dir), 'ada'), null)
+    // A theme is passed and DOES NOT WIN. `parseFaceSpec` requires all five
+    // colour fields, so a face on disk states its colours deliberately;
+    // retinting it would make those fields unreachable.
+    const resolved = resolveFaceFor(dir, join(personasRoot(dir), 'ada'), null, 'sky')
     expect(resolved.source).toBe('face.json')
     expect(resolved.face.colBody).toBe('#8aa8e8')
   })
@@ -970,9 +973,31 @@ describe('a package is a folder, so she can carry her own face', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada' })
     // No face.json in the package, and no avatarId either.
-    const resolved = resolveFaceFor(dir, join(personasRoot(dir), 'ada'), null)
+    const resolved = resolveFaceFor(dir, join(personasRoot(dir), 'ada'), null, 'moss')
     expect(resolved.source).toBeNull()
     expect(resolved.problems).toEqual([])
+  })
+
+  it('paints the built-in in her theme, which nothing used to read', async () => {
+    const { resolveFaceFor } = await import('./avatars')
+    const { paletteFor } = await import('@shared/theme')
+    const { MOCHI } = await import('@shared/avatar-spec')
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada' })
+
+    /*
+      `Persona.theme` was validated, migrated, tested — and read by nothing.
+      `applyTheme` had no caller anywhere in the tree, so eight themes were
+      storable and one green mochi was drawn. This is the assertion that says
+      the field reaches the paint.
+    */
+    const resolved = resolveFaceFor(dir, join(personasRoot(dir), 'ada'), null, 'sky')
+    expect(resolved.source).toBeNull()
+    expect(resolved.face.colBody).toBe(paletteFor('sky').colBody)
+    expect(resolved.face.colBody).not.toBe(MOCHI.colBody)
+    // Colour only. Her geometry is what a tuner decides and a theme may not
+    // touch it — see `applyTheme`.
+    expect(resolved.face.bodyH).toBe(MOCHI.bodyH)
   })
 
   it('refuses a package that both carries a face and names one', () => {

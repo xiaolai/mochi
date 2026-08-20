@@ -172,7 +172,7 @@ export const SHELF_CHANNELS = [
    */
   'history:export',
   /**
-   * The characters, the open one's four plates, and what she will be told.
+   * The characters, what had to be resolved, and what she will be told.
    *
    * ONE call rather than a channel per plate, for the reason `settings:read`
    * gives: all of it is main's to know and all of it is read fresh, so a window
@@ -322,12 +322,38 @@ export interface SettingsPersona {
    * shipped four lines of text where that face should be — the strongest piece
    * of identity on the shelf, missing from the one screen that exists to tell
    * characters apart. Resolved here rather than in the renderer for the reason
-   * `plates.face` gives: where it actually landed, not where it was asked to
+   * `ShelfResolved` gives: where it actually landed, not where it was asked to
    * look.
    */
   readonly face: FaceSpec
   /** Which words this character takes, for the line under her name. */
   readonly pronoun: Pronoun
+  /*
+    The six the Cast pane draws controls for.
+
+    On the CHARACTER rather than on `ShelfView.plates`, because that is what
+    they are: `resolved` holds values that had to be found — where her face
+    actually landed, which folder this machine lets her read — and these are
+    stored fields, the same as `name` and `voice` above.
+  */
+  /** What she calls you. Empty is a real answer: nobody has said. */
+  readonly addressUser: string
+  /**
+   * Which of the eight themes she wears, or null for a hue of her own.
+   *
+   * A `Persona.theme` may be a `CustomTheme` object — a hue nobody picked from
+   * the swatches — and the grid cannot show one. Null rather than a nearest
+   * match, so the pane can say she has a colour of her own instead of lighting
+   * up a swatch that is not what is stored.
+   */
+  readonly theme: ThemeId | null
+  /** Her own prompt — the character half of what she is told. */
+  readonly style: string
+  /** What she should convey on waking, and on going back to sleep. */
+  readonly greeting: string
+  readonly farewell: string
+  /** Which of her eight faces this character uses, in `EMOTIONS` order. */
+  readonly faces: readonly Emotion[]
 }
 
 /**
@@ -484,6 +510,21 @@ export interface PersonaChange {
   readonly voice?: string
   readonly bubble?: boolean
   readonly avatarId?: string | null
+  /*
+    The six the Cast pane can now change, and could not before.
+
+    Every one of them was a validated, persisted field with no control anywhere
+    — settable only by hand-editing a manifest. `faces` is the sharpest: it
+    narrows the tool enum on the wire and appears in her prompt, and it shipped
+    with no way to set it.
+  */
+  readonly pronoun?: string
+  readonly addressUser?: string
+  readonly theme?: string
+  readonly style?: string
+  readonly greeting?: string
+  readonly farewell?: string
+  readonly faces?: readonly string[]
 }
 
 /**
@@ -614,8 +655,10 @@ export type VoiceReport =
   /** Anything else worth saying once. */
   | { readonly kind: 'note'; readonly text: string }
 
+import type { Emotion } from './avatar'
 import type { FaceSpec } from './avatar-spec'
 import type { Pronoun } from './pronoun'
+import type { ThemeId } from './theme'
 
 /** What `session.update` is built from. Assembled in main; sent by the renderer. */
 export interface SessionConfig {
@@ -813,25 +856,6 @@ export type HistoryExport =
  */
 export type ShelfCharacter = SettingsPersona
 
-/**
- * The four plates 1a raises over the open character.
- *
- * Three of them are `Persona` fields. The fourth is not, and saying so is the
- * point: `workspace` is app-level (`plan-shell.md`'s split), so this plate is a
- * READOUT that points at settings rather than a control pretending to be
- * per-character. Drawing four plates and quietly making one of them global
- * would be worse than drawing three.
- */
-export interface ShelfPlates {
-  /** Which avatar file she wears, and where it actually resolved to. */
-  readonly face: { readonly avatarId: string | null; readonly source: string | null }
-  readonly voice: string
-  /** Her own prompt — `Persona.style`, the character half of what she is told. */
-  readonly prompt: string
-  /** App-level, and the plate says so. See above. */
-  readonly workspace: string
-}
-
 /** Everything the shelf's character half draws, answered in one call. */
 /**
  * Her state, for the strip across the top of the shelf.
@@ -867,7 +891,22 @@ export interface ShelfView {
    * accepted and both still came out "her".
    */
   readonly pronoun: Pronoun
-  readonly plates: ShelfPlates
+  /**
+   * Where the worn character's face actually resolved to, or null for the
+   * built-in.
+   *
+   * The one value the Cast pane draws that is not a stored field. The requested
+   * id is on the character; this is where the read LANDED, which is the
+   * difference between "your file is missing" and the silent fallback that
+   * presents as "the app ignored my file". It also decides whether a theme
+   * applies at all — see `resolveFaceFor`.
+   *
+   * This was a `plates` object carrying `voice`, `prompt` and `workspace` too.
+   * The first two became a second copy of `worn.voice` and `worn.style` once
+   * the pane grew controls for every stored field, and the workspace is on the
+   * Machine tab, where `plan-shell.md`'s split puts it.
+   */
+  readonly faceSource: string | null
   /**
    * Exactly what she will be told on the next wake.
    *
@@ -896,7 +935,7 @@ export interface MochiHistoryApi {
   }>
   turns(token: string): Promise<readonly HistoryTurn[]>
   search(query: string): Promise<readonly HistoryHit[]>
-  /** The characters, the open one's plates, and what she will be told. */
+  /** The characters, what had to be resolved, and what she will be told. */
   shelf(): Promise<ShelfView>
   /** Wear somebody. Checked against the catalog in main. */
   wear(id: string): Promise<SettingsWrite>

@@ -18,6 +18,9 @@
 
 import { readdirSync } from 'node:fs'
 import type { FaceSpec } from '@shared/avatar-spec'
+import { EMOTIONS, type Emotion } from '@shared/avatar'
+import { isPronoun } from '@shared/pronoun'
+import { isThemeId, type Theme } from '@shared/theme'
 import { join } from 'node:path'
 import {
   PERSONA_LIMITS,
@@ -81,7 +84,7 @@ export function listAvatars(avatarsFolder: string): readonly SettingsAvatar[] {
 /** The personas on the shelf, in a shape a page can draw and nothing more. */
 export function listPersonas(
   catalog: PersonaCatalog,
-  faceFor: (persona: { id: string; avatarId: string | null }) => FaceSpec,
+  faceFor: (persona: { id: string; avatarId: string | null; theme: Theme }) => FaceSpec,
 ): readonly SettingsPersona[] {
   return [...catalog.personas.values()]
     .map((persona) => ({
@@ -96,6 +99,18 @@ export function listPersonas(
       // page rather than a reader of disk.
       face: faceFor(persona),
       pronoun: persona.pronoun,
+      addressUser: persona.addressUser,
+      // A `CustomTheme` object is a hue nobody picked from the swatches, and
+      // the grid cannot show one — so it is reported as absent rather than as
+      // the nearest of the eight. See `SettingsPersona.theme`.
+      theme: isThemeId(persona.theme) ? persona.theme : null,
+      style: persona.style,
+      // The INSTRUCTION half only. `verbatim` is exact words a manifest author
+      // wrote and no control offers it, so sending it to a page that cannot
+      // express it is how it gets overwritten with the other half.
+      greeting: persona.greeting.instruction,
+      farewell: persona.farewell.instruction,
+      faces: persona.faces,
     }))
     .sort((a, b) => (a.name < b.name ? -1 : 1))
 }
@@ -350,6 +365,79 @@ export function applyChange(
   if (change.bubble !== undefined) {
     if (typeof change.bubble !== 'boolean') return { ok: false, why: 'That is not a yes or a no.' }
     next = { ...next, bubble: change.bubble }
+  }
+
+  if (change.pronoun !== undefined) {
+    // `isPronoun` rather than a list here: one answer to "which pronouns exist",
+    // and it already refuses the retired `they` while `parsePersona` maps a
+    // stored one forward. A window may not write what a file may still carry.
+    if (!isPronoun(change.pronoun)) {
+      return { ok: false, why: `There is no pronoun called ${String(change.pronoun)}.` }
+    }
+    next = { ...next, pronoun: change.pronoun }
+  }
+
+  if (change.addressUser !== undefined) {
+    if (typeof change.addressUser !== 'string') return { ok: false, why: 'That is not a name.' }
+    const called = change.addressUser.trim()
+    // EMPTY IS ALLOWED, and is the default. "Nobody has said" is a real answer —
+    // `addressLine` omits the instruction entirely rather than telling her to
+    // address somebody as "you", which is a sentence that says nothing.
+    if (called.length > PERSONA_LIMITS.addressUser) {
+      return { ok: false, why: 'That name is too long.' }
+    }
+    next = { ...next, addressUser: called }
+  }
+
+  if (change.theme !== undefined) {
+    if (!isThemeId(change.theme)) {
+      return { ok: false, why: `There is no theme called ${String(change.theme)}.` }
+    }
+    // The named eight only. A custom hue is a `CustomTheme` object, and a window
+    // that could post one would be a window that can set any colour on the
+    // interface — `contrastFailures` refuses an unreadable one at load, but the
+    // control offered here is the swatches, so this accepts what they can send.
+    next = { ...next, theme: change.theme }
+  }
+
+  if (change.style !== undefined) {
+    if (typeof change.style !== 'string') return { ok: false, why: 'That is not a prompt.' }
+    // Empty is allowed since 2026-08-17: `CORE_PROMPT` says who she is, so an
+    // empty box is somebody asking for the floor and nothing else.
+    if (change.style.length > PERSONA_LIMITS.style) {
+      return { ok: false, why: 'That prompt is too long.' }
+    }
+    next = { ...next, style: change.style }
+  }
+
+  for (const moment of ['greeting', 'farewell'] as const) {
+    const said = change[moment]
+    if (said === undefined) continue
+    if (typeof said !== 'string') return { ok: false, why: 'That is not an instruction.' }
+    const line = said.trim()
+    // NOT empty: `parsePersona` refuses an empty instruction, so saving one here
+    // would write a manifest this build cannot load — the failure that presents
+    // as "the app ate my character" one launch later.
+    if (line.length === 0) return { ok: false, why: 'That cannot be empty.' }
+    if (line.length > PERSONA_LIMITS.name * 4) return { ok: false, why: 'That is too long.' }
+    // `verbatim` is left alone. It is the other half of a `SpokenMoment` and no
+    // control offers it; overwriting it from a field that cannot express it
+    // would silently discard something a manifest author wrote.
+    next = { ...next, [moment]: { ...next[moment], instruction: line } }
+  }
+
+  if (change.faces !== undefined) {
+    if (!Array.isArray(change.faces)) return { ok: false, why: 'That is not a list of faces.' }
+    for (const one of change.faces) {
+      if (typeof one !== 'string' || !(EMOTIONS as readonly string[]).includes(one)) {
+        return { ok: false, why: `There is no expression called ${String(one)}.` }
+      }
+    }
+    // In EMOTIONS order, for the reason `readFaces` gives: the tuple is the
+    // contract the rig draws from, so two ways of saying the same set must
+    // produce the same character.
+    const chosen = new Set(change.faces as readonly Emotion[])
+    next = { ...next, faces: EMOTIONS.filter((one) => chosen.has(one)) }
   }
 
   if (change.avatarId !== undefined) {

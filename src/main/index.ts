@@ -733,6 +733,7 @@ function wornFace(userData: string): FaceSpec {
     avatarsRoot(userData),
     packageFolder(worn.id, catalog.sources),
     worn.avatarId,
+    worn.theme,
   ).face
 }
 
@@ -947,6 +948,7 @@ ipcMain.handle('voice:config', () => {
     avatars,
     packageFolder(resolved.persona.id, catalog.sources),
     resolved.persona.avatarId,
+    resolved.persona.theme,
   )
   // LOUD, and per file. An avatar that silently did not load presents as "the
   // app ignored my file", which the store's own comment calls the least
@@ -1296,6 +1298,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
       avatarsRoot(userData),
       packageFolder(worn.id, catalog.sources),
       worn.avatarId,
+      worn.theme,
     ).face,
     pronoun: worn.pronoun,
     // Her state, for the strip across the top. `resting` is held in this
@@ -1310,27 +1313,24 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     characters: listPersonas(
       catalog,
       (one) =>
-        resolveFaceFor(avatarsRoot(userData), packageFolder(one.id, catalog.sources), one.avatarId)
-          .face,
+        resolveFaceFor(
+          avatarsRoot(userData),
+          packageFolder(one.id, catalog.sources),
+          one.avatarId,
+          one.theme,
+        ).face,
     ),
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],
-    plates: {
-      face: {
-        avatarId: worn.avatarId,
-        // Where it actually RESOLVED to, not where it was asked to look. A
-        // plate showing the requested name for a file that fell back to the
-        // built-in is the "the app ignored my file" failure with a label on it.
-        source: resolveFaceFor(
-          avatarsRoot(userData),
-          packageFolder(worn.id, catalog.sources),
-          worn.avatarId,
-        ).source,
-      },
-      voice: worn.voice,
-      prompt: worn.style,
-      workspace: readWorkspace(userData),
-    },
+    // Where it actually RESOLVED to, not where it was asked to look. A line
+    // showing the requested name for a file that fell back to the built-in is
+    // the "the app ignored my file" failure with a label on it.
+    faceSource: resolveFaceFor(
+      avatarsRoot(userData),
+      packageFolder(worn.id, catalog.sources),
+      worn.avatarId,
+      worn.theme,
+    ).source,
     assembled: whatSheMayDo(worn, note, readGrants(userData), registry.tools).instructions,
     note: { text: note, previous: previousNote(userData, worn.id) },
   }
