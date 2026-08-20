@@ -103,12 +103,42 @@ check() {
   fi
 }
 
+# ---- is this artifact even about the current code? --------------------------
+#
+# The header above says this runs against the ARTIFACT rather than the config,
+# because a configured pipeline is not evidence that it ran. The same sentence
+# applies one level up, and the script did not: with no argument it verified
+# whatever happened to be sitting under `release/`, however old.
+#
+# That is a green light with nothing behind it. A build from three days and
+# seventeen commits ago can be signed, stapled and notarized perfectly, and this
+# script would print "This is shippable" about a binary containing none of the
+# code somebody is about to ship. A verdict is a claim about the current source;
+# an artifact older than that source cannot support it.
+#
+# Only for artifacts this script FOUND. A path given on the command line is
+# somebody asking about that specific file — a download, a copy off a colleague's
+# machine — where "newer than src/" is not a question that means anything.
+newer_than() {
+  local artifact="$1"
+  # One file is enough. `-quit` stops at the first, so this stays cheap.
+  find src package.json electron-builder.yml electron.vite.config.ts \
+    -newer "$artifact" -type f -print -quit 2>/dev/null
+}
+
 if [ "$#" -gt 0 ]; then
   for artifact in "$@"; do check "$artifact"; done
 else
   found=0
   while IFS= read -r artifact; do
     found=1
+    newest=$(newer_than "$artifact")
+    if [ -n "$newest" ]; then
+      note "$artifact"
+      bad "STALE — $newest is newer than this build; whatever this says is about older code"
+      echo '        run `pnpm dist` and check again'
+      continue
+    fi
     check "$artifact"
   done < <(find release -maxdepth 2 \( -name '*.app' -o -name '*.dmg' \) 2>/dev/null)
   if [ "$found" -eq 0 ]; then
