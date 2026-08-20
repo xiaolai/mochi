@@ -66,8 +66,13 @@ function show(text: string): void {
  */
 function placeStatus(): void {
   const her = face.box()
-  const under = Math.round(her.top + her.height * (1 + UNDER_HER))
-  status.setAttribute('style', `top: ${String(under)}px`)
+  // Under her, and under whatever the canvas has already drawn under her. The
+  // beat sits there too, and these two used to be painted on top of each other.
+  // One meaning for one constant: the clearance this line keeps from whatever
+  // is directly above it, which is her when nothing else is drawn and the beat
+  // when there is one. `max` here would leave them touching at zero.
+  const clear = face.occupiedBelow() + her.height * UNDER_HER
+  status.setAttribute('style', `top: ${String(Math.round(her.top + her.height + clear))}px`)
 }
 
 /*
@@ -79,6 +84,16 @@ function placeStatus(): void {
   exactly like the bug it was fixing: a status line at the bottom of the window.
 */
 placeStatus()
+/*
+  Re-placed on a rhythm, because what it has to clear is drawn on a canvas.
+
+  The beat fades in over 0.12s and away again, so how much room is taken under
+  her changes on frames rather than on events — there is nothing to subscribe to.
+  Four times a second is far below the cost of noticing and far above the rate a
+  person can see the difference; the alternative is threading a callback out of
+  the render loop for a line that is empty most of the time.
+*/
+setInterval(placeStatus, 250)
 // She is resized by main repositioning her window, which is a resize here.
 window.addEventListener('resize', placeStatus)
 

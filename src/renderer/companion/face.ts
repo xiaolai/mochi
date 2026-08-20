@@ -51,6 +51,19 @@ export interface Face {
    * where she is rather than two that agree until they do not.
    */
   box(): { left: number; top: number; width: number; height: number }
+  /**
+   * How far below her body the canvas has already drawn something.
+   *
+   * The held beat lives under her feet, and so does the status line — which is
+   * DOM and therefore painted over the top of it. They overlapped by 16px, and
+   * the realistic case is the worst one: an expired session says "the hour is up
+   * — reconnecting" at the same moment the beat goes overdue and says "say that
+   * again?", so two sentences pile up exactly when something has gone wrong.
+   *
+   * Asked rather than assumed, because only this side knows whether a beat is up
+   * and how far it has faded in.
+   */
+  occupiedBelow(): number
   /** Her voice, once the peer hands it over. Drives the mouth. */
   hear(stream: MediaStream): void
   /**
@@ -269,7 +282,16 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     }
     // The status line is DOM and main places it; one constant, read by both, so
     // it cannot be positioned outside the window that was sized for it.
-    return { ...pad, bottom: Math.max(pad.bottom, body.height * STATUS_UNDER + STATUS_ROOM) }
+    /*
+      Stacked, not overlaid: what the canvas draws below her, then the status
+      line under THAT, with the same clearance `placeStatus` applies.
+
+      `pad.bottom` already holds the beat's full extent whether or not one is
+      showing, which is deliberate — reserving it always means her window does
+      not resize every time a turn ends, and a resize per turn is the one cost
+      this whole arrangement was supposed to avoid.
+    */
+    return { ...pad, bottom: pad.bottom + body.height * STATUS_UNDER + STATUS_ROOM }
   }
 
   /**
@@ -871,6 +893,14 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       lookAtPointer()
     },
     box: () => herBox(),
+    occupiedBelow: () => {
+      if (beat.state() === 'none' || beat.opacity() <= 0) return 0
+      const her = herBox()
+      const rect = beatRect(her, roomOnScreen())
+      // Only what is BELOW her: the beat goes above when there is no room under
+      // her, and in that case it is not in the status line's way at all.
+      return Math.max(0, rect.y + rect.h - (her.top + her.height))
+    },
     showWords: (shown: boolean) => {
       showingWords = shown
       if (!shown) bubble.clear()
