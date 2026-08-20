@@ -38,7 +38,13 @@
 /** The four. The order is the order they are drawn in. */
 import type { ByPronoun } from './pronoun'
 
-export const GRANTS = ['microphone', 'speak_first', 'ask_workspace', 'remember_this'] as const
+export const GRANTS = [
+  'microphone',
+  'speak_first',
+  'ask_workspace',
+  'remember_this',
+  'set_expression',
+] as const
 
 export type Grant = (typeof GRANTS)[number]
 
@@ -117,6 +123,17 @@ export const GRANT_SPECS: readonly GrantSpec[] = [
     capability: 'remember_this',
     withheld: 'You can no longer write anything into your long-term notes.',
   },
+  {
+    id: 'set_expression',
+    label: 'Show a face',
+    detail: {
+      she: 'Choose one of her expressions for a reply.',
+      he: 'Choose one of his expressions for a reply.',
+      it: 'Choose one of its expressions for a reply.',
+    },
+    capability: 'set_expression',
+    withheld: 'You can no longer change your expression; you keep the one face.',
+  },
 ]
 
 /**
@@ -134,6 +151,7 @@ export const DEFAULT_GRANTS: Grants = {
   speak_first: true,
   ask_workspace: true,
   remember_this: true,
+  set_expression: true,
 }
 
 /**
@@ -156,6 +174,7 @@ export const WITHHELD_GRANTS: Grants = {
   speak_first: false,
   ask_workspace: false,
   remember_this: false,
+  set_expression: false,
 }
 
 export function isGrant(value: unknown): value is Grant {

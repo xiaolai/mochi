@@ -32,6 +32,34 @@ export interface WhatSheMayDo {
   readonly tools: readonly WireTool[]
 }
 
+/**
+ * `set_expression` is offered with THIS character's faces, not all eight.
+ *
+ * The same argument as the filter below, one level down. A face left out of the
+ * enum is not on the wire at all, so she cannot reach for it — where describing
+ * all eight and asking her to use three is a rule she can break, at the moment
+ * she is least likely to be reading rules carefully.
+ *
+ * Every other tool passes through untouched. This is deliberately a narrowing of
+ * one argument of one capability rather than a general "personas may edit
+ * manifests" hook, which would let a downloaded character rewrite what any tool
+ * claims to do.
+ */
+function narrowFaces(persona: Persona): (tool: WireTool) => WireTool {
+  return (tool) => {
+    if (tool.name !== 'set_expression') return tool
+    const face = tool.parameters.properties['face']
+    if (face === undefined) return tool
+    return {
+      ...tool,
+      parameters: {
+        ...tool.parameters,
+        properties: { ...tool.parameters.properties, face: { ...face, enum: persona.faces } },
+      },
+    }
+  }
+}
+
 export function whatSheMayDo(
   persona: Persona,
   note: string,
@@ -45,6 +73,6 @@ export function whatSheMayDo(
     // NOT OFFERED, rather than offered and refused. A description she cannot
     // act on is worse than one she never had — `registry.ts`'s deleted
     // `execution-unavailable` reasoning, arriving in a form that is still true.
-    tools: tools.filter((tool) => allowsCapability(grants, tool.name)),
+    tools: tools.filter((tool) => allowsCapability(grants, tool.name)).map(narrowFaces(persona)),
   }
 }

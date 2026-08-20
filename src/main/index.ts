@@ -797,6 +797,32 @@ function currentProfile(): string | null {
 const capabilityDeps: CapabilityDeps = {
   userData: () => app.getPath('userData'),
   wearing: () => sessionPersona,
+  /**
+   * Which faces the WORN character uses.
+   *
+   * Read from disk per call for the same reason `otherPersonaIds` is: the shelf
+   * is files, and she can be re-worn inside one session. `set_expression` is
+   * called a handful of times in a conversation at most.
+   */
+  facesSheMayWear: () => {
+    const userData = app.getPath('userData')
+    const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+    return activePersona(catalog, readWornPersonaId(userData)).persona.faces
+  },
+  /**
+   * The one dep that reaches the renderer, and it carries a single value.
+   *
+   * False when there is no window to draw in — she is between sessions, or the
+   * window has gone — so the handler can say her face could not be changed
+   * rather than reporting a face nobody can see. A general frame-sender here
+   * would let any capability push anything into her window; this is the whole
+   * hole, and it is one enum wide.
+   */
+  wearExpression: (face) => {
+    if (companion === null || companion.isDestroyed()) return false
+    companion.webContents.send('voice:send', { type: '__mochi_face__', face })
+    return true
+  },
   transcripts: () => archive,
   /**
    * Read per call rather than held, because the shelf is files on disk and

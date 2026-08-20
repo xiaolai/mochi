@@ -54,6 +54,19 @@
 export interface CapabilityProperty {
   readonly type: 'string'
   readonly description: string
+  /**
+   * The values this argument may take, when there is a closed set of them.
+   *
+   * On the wire, so the model is CONSTRAINED rather than asked. The alternative
+   * — describing the options in prose and validating on the way back — makes a
+   * refusal the normal path for a mistake the schema could have prevented.
+   *
+   * Narrowed per session where the set is per character: `set_expression`
+   * declares all eight faces here and is offered only the ones the worn
+   * character uses. A value outside the enum is still refused by the handler,
+   * because a manifest is a request and not a guarantee.
+   */
+  readonly enum?: readonly string[]
 }
 
 export interface CapabilityParameters {

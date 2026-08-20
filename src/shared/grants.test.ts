@@ -13,10 +13,19 @@ import {
 } from './grants'
 
 describe('the four', () => {
-  it('is the four 5b names, and no more', () => {
+  it('is 5b’s four, plus the face she wears, and no more', () => {
     // The plugin sandbox and the grant broker are struck, so a grant is not a
     // fence around somebody else's code — it is what this machine lets her do.
-    expect([...GRANTS]).toEqual(['microphone', 'speak_first', 'ask_workspace', 'remember_this'])
+    expect([...GRANTS]).toEqual([
+      'microphone',
+      'speak_first',
+      'ask_workspace',
+      'remember_this',
+      // The fifth. `set_expression` reaches the RENDERER rather than the disk or
+      // the network, which is why it is a grant at all: the other four are about
+      // what she may read and say, and this is about what she may show.
+      'set_expression',
+    ])
   })
 
   it('describes every one of them exactly once', () => {
@@ -27,7 +36,7 @@ describe('the four', () => {
     // Null is what says the row has no "last used" to show. A name that is not
     // a capability would be a switch that governs nothing.
     const named = GRANT_SPECS.map((one) => one.capability).filter((one) => one !== null)
-    expect(named).toEqual(['ask_workspace', 'remember_this'])
+    expect(named).toEqual(['ask_workspace', 'remember_this', 'set_expression'])
   })
 
   it('gives every one a sentence she can say out loud', () => {
@@ -56,6 +65,7 @@ describe('what an installation that has never been asked gets', () => {
       speak_first: true,
       ask_workspace: true,
       remember_this: true,
+      set_expression: true,
     })
   })
 })
@@ -136,6 +146,7 @@ describe('which capabilities may run', () => {
       speak_first: false,
       ask_workspace: false,
       remember_this: false,
+      set_expression: false,
     }
     expect(allowsCapability(nothing, 'recall_conversations')).toBe(true)
   })
@@ -187,6 +198,7 @@ describe('what applies when a stored answer cannot be read', () => {
       speak_first: false,
       ask_workspace: false,
       remember_this: false,
+      set_expression: false,
     })
   })
 

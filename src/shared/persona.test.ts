@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { EMOTIONS } from './avatar'
 import { DEFAULT_PRONOUN } from './pronoun'
 import {
   CORE_PROMPT,
@@ -45,6 +46,9 @@ const tutor: Persona = {
   theme: 'sky',
   style: 'You are a patient tutor.',
   avatarId: null,
+  // A character that narrows her faces, so the fixture exercises the field
+  // rather than only the default.
+  faces: ['neutral', 'happy', 'thinking'] as const,
   greeting: { instruction: 'ready to pick up where you left off', verbatim: null },
   farewell: { instruction: 'brisk and encouraging', verbatim: null },
 }
@@ -1167,5 +1171,84 @@ describe('the fence tag', () => {
 
   it('still fences an ordinary tag', () => {
     expect(fenced('notes', 'hello')).toBe('<notes>\nhello\n</notes>')
+  })
+})
+
+describe('which faces a character uses', () => {
+  /** A minimal v4 manifest, so each case varies exactly one thing. */
+  function manifest(extra: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      version: PERSONA_FORMAT,
+      id: 'tester',
+      name: 'Tester',
+      addressUser: '',
+      pronoun: 'she',
+      theme: 'moss',
+      voice: 'ballad',
+      bubble: false,
+      style: '',
+      avatarId: null,
+      greeting: { instruction: 'as though they just came back', verbatim: null },
+      farewell: { instruction: 'warm, not formal', verbatim: null },
+      ...extra,
+    }
+  }
+
+  it('absent means ALL of them, not none', () => {
+    // Every character written before this field exists, which is all of them.
+    // A migration that silently muted seven faces would be a redesign of
+    // characters somebody else wrote.
+    const read = parsePersona(manifest())
+    expect(read.ok).toBe(true)
+    if (!read.ok) return
+    expect(read.persona.faces).toEqual(EMOTIONS)
+  })
+
+  it('an explicit empty list is allowed, and is a different statement', () => {
+    // "This character wears one face" is a real thing to want, and it is not
+    // the same as "this character did not say".
+    const read = parsePersona(manifest({ faces: [] }))
+    expect(read.ok).toBe(true)
+    if (!read.ok) return
+    expect(read.persona.faces).toEqual([])
+  })
+
+  it('comes back in EMOTIONS order however the file wrote it', () => {
+    // The tuple is the contract the rig draws from, so two manifests naming the
+    // same faces differently must produce the same character.
+    const read = parsePersona(manifest({ faces: ['sleepy', 'happy', 'neutral'] }))
+    expect(read.ok).toBe(true)
+    if (!read.ok) return
+    expect(read.persona.faces).toEqual(['neutral', 'happy', 'sleepy'])
+  })
+
+  it('refuses a name that is not one of the eight', () => {
+    const read = parsePersona(manifest({ faces: ['happy', 'smug'] }))
+    expect(read.ok).toBe(false)
+    if (read.ok) return
+    expect(read.problems.map((one) => one.kind)).toContain('unknown-value')
+  })
+
+  it('refuses something that is not a list at all', () => {
+    const read = parsePersona(manifest({ faces: 'happy' }))
+    expect(read.ok).toBe(false)
+  })
+
+  it('does NOT let a retired `expressions` list become the allowlist', () => {
+    /*
+      The reason this is a new key rather than the retired `expressions`.
+
+      `expressions` is tolerated in any file older than format 3 — it has to be,
+      or every persona the app wrote before that retirement would stop loading.
+      Re-using the name would have turned a v2 package's decorative list into the
+      allowlist deciding which faces she may wear: a meaning it never consented
+      to, arriving in a field nobody reads before installing.
+
+      So the old key is still dropped, and the character gets all eight.
+    */
+    const old = parsePersona({ ...manifest(), version: 2, expressions: ['happy'] })
+    expect(old.ok).toBe(true)
+    if (!old.ok) return
+    expect(old.persona.faces).toEqual(EMOTIONS)
   })
 })

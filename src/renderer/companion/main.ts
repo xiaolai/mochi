@@ -1,6 +1,7 @@
 import type { MochiApi } from '@shared/ipc'
 import { showFace, type Face } from './face'
 import { applyAccent } from '../design/apply-accent'
+import { EMOTIONS, type Emotion } from '@shared/avatar'
 import { keepsNewer } from './negotiating'
 import { openSession, type Session, type SessionState } from './audio/session'
 
@@ -359,6 +360,17 @@ window.mochi.onSend((frame) => {
    * microphone is what makes it true, and her eyes are what makes it legible.
    * Either one alone is a bug somebody would report as the other.
    */
+  /*
+    She chose a face. Validated HERE as well as in the handler, because this
+    process trusts nothing that crosses the bridge — the same rule the grants
+    frame states: a value this side cannot read is not one it may act on.
+  */
+  if (type === '__mochi_face__') {
+    const chosen = (frame as { face?: unknown }).face
+    if (typeof chosen === 'string' && (EMOTIONS as readonly string[]).includes(chosen)) {
+      face.wears(chosen as Emotion)
+    }
+  }
   if (type === '__mochi_asleep__') {
     arrived.rest += 1
     asleep = (frame as { asleep?: unknown }).asleep === true

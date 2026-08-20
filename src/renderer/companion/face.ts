@@ -1,5 +1,6 @@
 import { MochiAvatar } from './rig/mochi'
 import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
+import type { Emotion } from '@shared/avatar'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createBubble } from './bubble'
 import { resolvePalette, whenSchemeChanges, type Palette } from '../design/resolve'
@@ -129,6 +130,18 @@ export interface Face {
    * wrong `#f4f2ea` — which is exactly what happened.
    */
   showWords(shown: boolean): void
+  /**
+   * Wear one of her expressions, until she changes it or is asked to rest.
+   *
+   * The caller is `set_expression`, and its absence is why six of the eight were
+   * drawn and unreachable: `setEmotion` had no caller outside the rig, so
+   * `neutral` and `sleepy` were the only two anybody ever saw.
+   *
+   * Held rather than timed. The rig can expire an emotion on its own clock, and
+   * a face that faded after a few seconds would contradict what she is told —
+   * the tool's description says it stays until she changes it.
+   */
+  wears(face: Emotion): void
   /**
    * How many things main could not do, so the shoulder control can say so.
    *
@@ -1020,6 +1033,12 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       lookAtPointer()
     },
     box: () => herBox(),
+    wears: (face: Emotion) => {
+      // Intensity 1: she picked this face on purpose, and a half-worn expression
+      // is the blend the rig uses for a signal it inferred rather than one she
+      // asked for.
+      avatar.setEmotion({ emotion: face, intensity: 1 })
+    },
     showWords: (shown: boolean) => {
       showingWords = shown
       if (!shown) bubble.clear()

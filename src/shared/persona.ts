@@ -28,6 +28,7 @@
  * one is a compile error. If the service adds a voice, this is the single line
  * that has to change.
  */
+import { EMOTIONS, type Emotion } from './avatar'
 import type { SaveProblem } from './save-problem'
 import { DEFAULT_POLICY, parsePolicy, type Policy } from './policy'
 import { DEFAULT_PRONOUN, PRONOUNS, isPronoun, isRetiredPronoun, type Pronoun } from './pronoun'
@@ -90,7 +91,7 @@ export interface SpokenMoment {
  * out, so a file edited by this build stops claiming to be readable by one
  * that would misread it.
  */
-export const PERSONA_FORMAT = 3
+export const PERSONA_FORMAT = 4
 
 /**
  * When each retired field stopped being ours.
@@ -130,6 +131,53 @@ const RETIRED_AT = {
   expressions: 3,
   motions: 3,
 } as const satisfies Record<string, number>
+
+/**
+ * Which of her faces this character uses. Absent means all of them.
+ *
+ * ## This is the retirement above, undone on its own terms
+ *
+ * `expressions` was retired at format 3, and the note there says exactly why:
+ * "What is missing is the CALLER, not the machinery ... the `set_expression`
+ * tool that would consult the other was never built at all." It is built now, so
+ * the field has a reader and earns its validator back.
+ *
+ * ## And it is a NEW name, deliberately
+ *
+ * Re-using `expressions` would be worse than it looks. That key is tolerated in
+ * any file written before format 3, so a v2 package carrying one would go from
+ * "a list nothing reads" to "the allowlist deciding which faces she may wear" —
+ * a meaning it never consented to, arriving in a field nobody reads before
+ * installing. A new key cannot be carried by an older file at all: `faces` in a
+ * v3 manifest is an unknown field and is refused, which is the correct answer.
+ *
+ * ## Absent is not empty
+ *
+ * Absent means all eight, because that is what every existing character means
+ * and a migration that silently muted seven faces would be a redesign of
+ * characters somebody else wrote. An explicit empty list is a different
+ * statement — this character wears one face — and is allowed.
+ */
+function readFaces(problems: SaveProblem[], source: Record<string, unknown>): readonly Emotion[] {
+  const given = source['faces']
+  if (given === undefined) return EMOTIONS
+  if (!Array.isArray(given)) {
+    problems.push({ kind: 'field', field: 'faces', reason: 'malformed' })
+    return EMOTIONS
+  }
+  const seen = new Set<Emotion>()
+  for (const one of given) {
+    if (typeof one !== 'string' || !(EMOTIONS as readonly string[]).includes(one)) {
+      problems.push({ kind: 'unknown-value', field: 'faces', allowed: EMOTIONS.join(', ') })
+      continue
+    }
+    seen.add(one as Emotion)
+  }
+  // In EMOTIONS order rather than the file's, so two manifests listing the same
+  // faces differently produce the same character — and so the order she is
+  // offered them in is the tuple's, which `avatar.ts` calls the contract.
+  return EMOTIONS.filter((one) => seen.has(one))
+}
 
 export interface Persona {
   /**
@@ -222,6 +270,14 @@ export interface Persona {
    * dot in the grammar, so no caller has to remember to strip them.
    */
   readonly avatarId: string | null
+  /**
+   * Which of her eight faces this character uses, in `EMOTIONS` order.
+   *
+   * All of them unless the manifest narrows it. She is offered `set_expression`
+   * with exactly this list as its enum, so a face left out is not merely
+   * discouraged — it is never on the wire and she cannot reach for it.
+   */
+  readonly faces: readonly Emotion[]
   /** How she says hello when she wakes. */
   readonly greeting: SpokenMoment
   /** How she signs off before going back to sleep. */
@@ -323,6 +379,12 @@ export const DEFAULT_PERSONA: Persona = {
     'Answer only what you heard clearly. If it was unintelligible, say so and ask for it again.',
   ].join(' '),
   avatarId: null,
+  /*
+    All eight. `PERSONA_FIELDS` is derived from this object, so listing it here
+    is also what stops `faces` reading as an unknown field — the same mechanism
+    the comment on `bubble` above describes.
+  */
+  faces: EMOTIONS,
   greeting: {
     instruction: 'as though they just came back',
     verbatim: null,
@@ -465,6 +527,27 @@ export function instructionsFor(
   // half; the ordering is what keeps the rules downstream of it.
   const briefed = brief.trim()
   if (briefed !== '') sections.push(briefed)
+
+  /*
+    Which faces she has, and only when it is not all of them.
+
+    Silent in the ordinary case, for the same reason the memory section is: an
+    "everything is available" heading is a line that costs tokens and says
+    nothing. When a character DOES narrow the set, she is told — because
+    `set_expression`'s enum is narrowed to match, and a tool that silently offers
+    three of eight leaves her wondering why a face she can see in the tuple is
+    not on her wire.
+
+    It says "you may use" rather than "you have", because she can also be refused
+    at the moment of the call: the grant can be off.
+  */
+  if (persona.faces.length !== EMOTIONS.length) {
+    sections.push(
+      persona.faces.length === 0
+        ? '# Your face\nYou wear one face and cannot change it. Say what you mean in words.'
+        : `# Faces you may use\n${persona.faces.join(' · ')}`,
+    )
+  }
 
   // A BLANK line between sections. Run together, a heading sits on the line
   // after the previous section's last rule and reads as part of it.
@@ -1010,6 +1093,7 @@ export function parsePersona(value: unknown): PersonaParse {
   const theme = readTheme(problems, source)
   const voice = readVoice(problems, source)
   const bubble = readBubble(problems, source)
+  const faces = readFaces(problems, source)
 
   const greeting = readMoment(problems, source, 'greeting')
   const farewell = readMoment(problems, source, 'farewell')
@@ -1076,6 +1160,7 @@ export function parsePersona(value: unknown): PersonaParse {
       bubble,
       style,
       avatarId,
+      faces,
       greeting,
       farewell,
     },
