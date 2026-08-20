@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { FACE_BOUNDS, MOCHI, parseFaceSpec, type FaceSpec } from '@shared/avatar-spec'
-import { accentVariables, contrast, luminance, parseHex, readableInk, shade, toHex } from './accent'
+import { THEME_IDS, paletteFor } from '@shared/theme'
+import {
+  accentVariables,
+  contrast,
+  contrastFailures,
+  luminance,
+  parseHex,
+  readableInk,
+  shade,
+  toHex,
+} from './accent'
 
 const white = { r: 255, g: 255, b: 255 }
 const black = { r: 0, g: 0, b: 0 }
@@ -148,5 +158,36 @@ describe('shade', () => {
   it('clamps beyond the ends rather than overshooting the channel range', () => {
     expect(toHex(shade(mid, -5))).toBe('#000000')
     expect(toHex(shade(mid, 5))).toBe('#ffffff')
+  })
+})
+
+describe('white on her colour, which is the pairing the palette added', () => {
+  /**
+   * The fourth check, and the only one where she is the SURFACE.
+   *
+   * The three before it ask whether her colour is readable AS TEXT. The palette
+   * now puts white text ON her — the open tab, the button that commits, a
+   * checked box — which is the reversal `accent.ts` documents in one place. A
+   * persona could satisfy every other pairing and still ship an open tab nobody
+   * can read, and nothing would have said so.
+   */
+  it('passes the built-in, whose moss is the worst of the eight at 5.64:1', () => {
+    expect(contrastFailures(MOCHI)).toEqual([])
+  })
+
+  it('refuses a hue that is fine as text and hopeless under white', () => {
+    // A pale yellow: dark ink on it reads perfectly; white on it does not.
+    const pale = { ...MOCHI, colBody: '#f7f3a0', colInk: '#3a3810', colShade: '#e2dd8a' }
+    expect(contrastFailures(pale).join(' ')).toContain('white on her colour')
+  })
+
+  it('is what the eight-theme sweep now covers too', () => {
+    // The sweep above runs `contrastFailures` per theme, so adding a pairing
+    // there adds it everywhere. This asserts the coupling rather than assuming
+    // it — a fifth pairing added to the function and not to the sweep would be
+    // a check that only ever ran on strangers.
+    for (const theme of THEME_IDS) {
+      expect(contrastFailures({ ...MOCHI, ...paletteFor(theme) })).toEqual([])
+    }
   })
 })

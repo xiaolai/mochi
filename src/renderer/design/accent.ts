@@ -232,7 +232,34 @@ export function accentVariables(face: FaceSpec): Readonly<Record<string, string>
     // definitely has keeps the role hers.
     '--her-wash': pair(shade(base, 0.82), shade(base, -0.68)),
     '--ink-brand': pair(ink, shade(base, 0.25)),
+    /*
+      Her hue deep enough to carry WHITE, and the same value in both schemes.
+      
+      The one place this file's own argument is reversed: her colour under white
+      text, on the surfaces that ARE about which character is worn — the open tab,
+      the button that commits, a checked box. That was `--gold` while the chrome
+      had a hue to spend; it does not any more, and grey leaves a checked box
+      unreadable as a state.
+      
+      It does not flip by scheme because it is not read against the page — white
+      is read against IT. A dark-scheme variant would be a second colour doing the
+      same job, and the pairing that matters is unchanged either way.
+    */
+    '--her-deep': toHex(deep(base)),
+    '--her-deep-ink': '#ffffff',
   }
+}
+
+/**
+ * Her colour taken deep enough for white to sit on it.
+ *
+ * A fixed darkening rather than a target ratio, so it stays plainly HER hue
+ * rather than sliding toward black for the light themes and stopping early for
+ * the dark ones. `contrastFailures` is what refuses a hue this is not enough for
+ * — the derivation is honest about being a rule of thumb, and the check is not.
+ */
+function deep(base: Rgb): Rgb {
+  return shade(base, -0.42)
 }
 
 /** A `light-dark()` value, so one custom property covers both schemes. */
@@ -267,6 +294,16 @@ export function contrastFailures(face: FaceSpec): readonly string[] {
   // The same pairings the theme test sweeps, and the same threshold. Two
   // different answers to "is this readable" would make one of them a lie.
   check('her colour behind its own label', base, readableInk(base))
+  /*
+    White on her deepened colour — the FOURTH pairing, added when the palette
+    started putting her under white text.
+    
+    Without it a persona could ship an open tab, a commit button and a checked
+    box that nobody can read, and every existing check would still pass: the
+    three below all ask about her colour as TEXT, and this is the one place she
+    is the SURFACE. The worst built-in is moss at 5.64:1; the floor is 4.50.
+  */
+  check('white on her colour', { r: 255, g: 255, b: 255 }, deep(base))
   for (const [name, page] of [
     ['on paper', shade(base, 0.82)],
     ['on a dark page', shade(base, -0.68)],
