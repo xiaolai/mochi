@@ -91,7 +91,9 @@ const paneEl = need('pane', HTMLElement)
 const wakeEl = need('panel-wake', HTMLElement)
 const talkEl = need('talk', HTMLElement)
 const shellTabsEl = need('shell-tabs', HTMLElement)
-const navEl = need('nav', HTMLElement)
+const navEl = need('nav-groups', HTMLElement)
+const toolsEl = need('machine-tools', HTMLElement)
+const contextEl = need('topbar-context', HTMLElement)
 const machineEl = need('machine-pane', HTMLElement)
 const queryEl = need('q', HTMLInputElement)
 const listEl = need('list', HTMLElement)
@@ -282,6 +284,9 @@ function showPlace(next: Place): void {
   for (const one of PLACES) {
     need(`tab-${one.id}`, HTMLElement).hidden = one.id !== place
   }
+  // Search belongs to the Archive and to nothing else. Hidden rather than
+  // emptied, so what is typed in it survives a trip to Cast and back.
+  contextEl.hidden = place !== 'archive'
   renderPlaces()
   // Read on arrival rather than held: the machine pane's answers come from disk
   // and from another window's writes, so a cached copy is stale the first time
@@ -868,7 +873,29 @@ function renderMachine(): void {
   }
   const heading = document.createElement('h2')
   heading.textContent = paneLabel(showing.label, view.pronoun)
-  machineEl.replaceChildren(heading, ...showing.render(view, machineHandlers))
+  const drawn = [...showing.render(view, machineHandlers)]
+
+  /*
+    The tool list moves out of the scroll and into its own column.
+
+    `panes.ts` returns one flat list with the capabilities after the grants and
+    a heading between them, which put the thing the grants are ABOUT below the
+    fold — when a withheld grant is exactly what removes a row from it. Split on
+    that heading rather than restructuring the pane: `panes.ts` is imported by
+    this window unchanged, and its own tests still describe what it returns.
+  */
+  const at = drawn.findIndex((node) => node instanceof HTMLHeadingElement)
+  const body = at === -1 ? drawn : drawn.slice(0, at)
+  const tools = at === -1 ? [] : drawn.slice(at)
+  machineEl.replaceChildren(heading, ...body)
+  if (tools.length === 0) {
+    toolsEl.replaceChildren()
+  } else {
+    const card = document.createElement('div')
+    card.className = 'tool-card'
+    card.append(...tools)
+    toolsEl.replaceChildren(card)
+  }
 }
 
 /* ---- wiring -------------------------------------------------------------- */

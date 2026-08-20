@@ -39,6 +39,22 @@
       }
 
       /* ---- the strip that is always first ---------------------------------- */
+      .topbar-context {
+        flex: none;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+      }
+      .topbar-context input[type='search'] {
+        width: 340px;
+        padding: var(--s1) var(--s4);
+        border: 1px solid var(--rule);
+        border-radius: var(--r-pill);
+        background: var(--paper);
+        color: inherit;
+        font: inherit;
+        font-size: var(--t-sm);
+      }
       .topbar {
         flex: none;
         height: 60px;
@@ -139,16 +155,14 @@
       .shell-tabs {
         flex: none;
         display: flex;
-        gap: var(--s5);
-        padding: 0 var(--s6);
-        background: var(--paper-2);
-        border-bottom: 1px solid var(--rule);
+        align-items: center;
+        gap: var(--s1);
       }
       .shell-tab {
-        padding: var(--s3) 0 var(--s2);
+        padding: var(--s1) var(--s4);
         border: 0;
         border-bottom: 2px solid transparent;
-        border-radius: 0;
+        border-radius: var(--r-pill);
         background: transparent;
         font-family: var(--narrow);
         font-size: var(--t-label);
@@ -165,9 +179,19 @@
         Her colour, because which place you are in is chrome — and this palette's
         chrome has no hue of its own. `--her-deep` is the one that carries it.
       */
+      /*
+        A FILLED pill in her colour, not an underline.
+
+        The underline was right while this strip was a row of its own; in the
+        title strip it competes with the rule under it. Filled says "you are
+        here" at a glance, and `--her-deep` is the token that exists so her
+        colour can carry white — swept for every theme and refused by
+        `contrastFailures` for a hue it would fail on.
+      */
       .shell-tab[aria-current='true'] {
-        border-bottom-color: var(--her-deep);
-        color: var(--ink);
+        background: var(--her-deep);
+        color: var(--her-deep-ink);
+        border-bottom-color: transparent;
       }
       /* Each pane owns the whole window under the strip. */
       .tab-pane {
@@ -214,8 +238,32 @@
       /* ---- machine: the six groups, as they were ---------------------------- */
       .machine {
         display: grid;
-        grid-template-columns: 196px minmax(0, 1fr);
+        grid-template-columns: 196px minmax(0, 1fr) 320px;
         min-height: 0;
+      }
+      .nav-head {
+        padding: 0 var(--s4) var(--s3);
+      }
+      /* The tool list, beside the grants that decide which rows it has. */
+      .machine-tools {
+        min-height: 0;
+        overflow-y: auto;
+        padding: var(--s5) var(--s6) var(--s6) 0;
+      }
+      /*
+        NOT `.card`, which in this window means a CHARACTER card.
+        
+        It was, for one build. `.card .name` sets `--t-h3` for a character's
+        name, so every tool name rendered at 21px and `recall_conversations`
+        wrapped mid-word. Measured, not noticed: 21px where 13 was asked for.
+        The third collision this window has had from a generic class name, and
+        the reason `stylesheets.test.ts` checks the ones the renderer creates.
+      */
+      .machine-tools > .tool-card {
+        background: var(--paper-2);
+        border: 1px solid var(--rule);
+        border-radius: var(--r3);
+        padding: var(--s5);
       }
       .machine > .nav {
         display: flex;
@@ -1065,28 +1113,41 @@
   </head>
   <body>
     <div id="app">
+      <!--
+        One strip: who she is, where you are, and what this place needs.
+
+        The tab bar was a second row under this one, which put two horizontal
+        rules across the top of a window whose whole point is that it has one
+        subject at a time. The three places live in the strip, the pane's own
+        context sits in the middle, and her state stays on the right where it
+        was — the microphone is the one thing here that is true whatever tab you
+        are on.
+      -->
       <div class="topbar">
         <canvas class="mark" id="mark"></canvas>
         <span class="wordmark">mochi</span>
         <span class="divider"></span>
+        <nav class="shell-tabs" id="shell-tabs" role="tablist"></nav>
+        <div class="topbar-context" id="topbar-context">
+          <!--
+          Search belongs to the strip, not to the pane: "search first" is the
+          Archive's whole shape, and a field inside the pane put it below the
+          rule that separates the window's subject from its chrome.
+        -->
+          <input
+            id="q"
+            type="search"
+            placeholder="Search everything ever said"
+            autocomplete="off"
+          />
+        </div>
+        <span class="grow"></span>
+        <span class="pill" id="mic"><span class="dot"></span><span id="mic-label"></span></span>
         <span class="state"
           ><span class="what" id="state"></span><span class="how" id="state-how"></span
         ></span>
-        <span class="pill" id="mic"><span class="dot"></span><span id="mic-label"></span></span>
-        <span class="grow"></span>
         <span class="stat" id="count"></span>
       </div>
-
-      <!--
-        Three named places, one window.
-
-        This window used to carry two unrelated jobs in one column that swapped
-        between them — editing who she is, and reading what she said — and a
-        second window held everything else. "Shelf" named the container rather
-        than either job, which is why it is gone as a word: CAST is who she can
-        be, ARCHIVE is what was said, MACHINE is what is true whoever is worn.
-      -->
-      <nav class="shell-tabs" id="shell-tabs" role="tablist"></nav>
 
       <section class="tab-pane" id="tab-cast">
         <div class="strip">
@@ -1109,18 +1170,25 @@
         beside a character's fields, at whatever width was left over.
       -->
       <section class="tab-pane archive" id="tab-archive" hidden>
-        <div class="search">
-          <input id="q" type="search" placeholder="Search what was said" autocomplete="off" />
-        </div>
         <div class="archive-body">
           <div class="list" id="list"></div>
           <div id="talk"></div>
         </div>
       </section>
 
+      <!--
+        Three columns, not two. The tool list used to scroll under the grants,
+        which is where you look last for the thing the grants are ABOUT — a
+        withheld grant removes a row from it, so the two belong side by side or
+        the connection is a scroll away.
+      -->
       <section class="tab-pane machine" id="tab-machine" hidden>
-        <nav class="nav" id="nav"></nav>
+        <nav class="nav" id="nav">
+          <h3 class="nav-head">This machine</h3>
+          <div id="nav-groups"></div>
+        </nav>
         <div class="machine-pane" id="machine-pane"></div>
+        <aside class="machine-tools" id="machine-tools"></aside>
       </section>
 
       <div class="drawer">
