@@ -50,7 +50,16 @@
       */
       #app {
         position: absolute;
-        inset: auto 0 6px 0;
+        /*
+          `top` is set by `main.ts` from her actual body box; only the horizontal
+          centring lives here. It was `inset: auto 0 6px 0` — six pixels off the
+          bottom of a window that is sized for a bubble above her, one below and
+          one beside, so the line sat hundreds of pixels under her feet with
+          nothing between. There is no CSS answer: where she stands depends on
+          her `size`, which is a persona field.
+        */
+        left: 0;
+        right: 0;
         width: fit-content;
         max-width: calc(100% - var(--s3));
         margin-inline: auto;

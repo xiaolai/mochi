@@ -32,9 +32,55 @@ speaker.autoplay = true
 
 const face: Face = showFace(canvas)
 
+/**
+ * How far under her the status line sits, as a fraction of her own height.
+ *
+ * A fraction rather than a pixel count, because `size` is a persona field: a
+ * fixed 8px touches her at 150% and floats at 50%, which is the same class of
+ * mistake as anchoring to the window.
+ *
+ * 0.22 rather than something smaller because `box()` returns her SILHOUETTE —
+ * that is what main uses for click-through, so it must not grow — and her drop
+ * shadow is drawn below it. At 8px the pill sat under her feet and over her
+ * shadow, which reads as touching her.
+ */
+const UNDER_HER = 0.22
+
 function show(text: string): void {
   status.textContent = text
+  placeStatus()
 }
+
+/**
+ * Put the status line under HER, not at the bottom of the window.
+ *
+ * `#app` was `bottom: 6px`, which is the bottom of a transparent window sized
+ * for a speech bubble above her, one below, and a whole one beside — so
+ * "opening…" appeared hundreds of pixels below her feet, unattached to anything.
+ * `feetY` puts her 340px from the TOP; the window's bottom edge is nowhere near
+ * her and never was.
+ *
+ * Read from `face.box()` rather than from `FEET_FROM_TOP`, because her size is a
+ * persona field and the box already accounts for it, for her body height, and
+ * for the clamp that applies when the canvas is short.
+ */
+function placeStatus(): void {
+  const her = face.box()
+  const under = Math.round(her.top + her.height * (1 + UNDER_HER))
+  status.setAttribute('style', `top: ${String(under)}px`)
+}
+
+/*
+  Placed once at startup, BELOW the declarations it reads.
+
+  The first version of this call sat immediately after `showFace`, which is above
+  `UNDER_HER` — a `const` in its temporal dead zone, so the module threw on the
+  first line it ran and the window rendered with no script at all. It looked
+  exactly like the bug it was fixing: a status line at the bottom of the window.
+*/
+placeStatus()
+// She is resized by main repositioning her window, which is a resize here.
+window.addEventListener('resize', placeStatus)
 
 function describe(state: SessionState): string {
   if (state === 'opening') return 'opening…'

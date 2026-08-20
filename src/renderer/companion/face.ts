@@ -36,6 +36,20 @@ import { layoutFor, feetY, BREATHING_UNITS, FEET_FROM_TOP } from '@shared/avatar
  */
 
 export interface Face {
+  /**
+   * Where she actually is in the canvas, in CSS pixels.
+   *
+   * Her window is deliberately much larger than she is — wide enough for a whole
+   * bubble to stand beside her, tall enough for one above and one below — so
+   * "near her" and "near an edge of the window" are hundreds of pixels apart.
+   * Anything in the DOM that belongs to HER has to ask for this rather than
+   * anchor to the window, and the status line spent this whole build anchored to
+   * the window.
+   *
+   * The same rectangle main is sent for click-through, so there is one answer to
+   * where she is rather than two that agree until they do not.
+   */
+  box(): { left: number; top: number; width: number; height: number }
   /** Her voice, once the peer hands it over. Drives the mouth. */
   hear(stream: MediaStream): void
   /**
@@ -767,6 +781,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       // with her already staring off into the corner.
       lookAtPointer()
     },
+    box: () => herBox(),
     showWords: (shown: boolean) => {
       showingWords = shown
       if (!shown) bubble.clear()
