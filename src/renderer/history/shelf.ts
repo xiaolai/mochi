@@ -231,6 +231,52 @@ export function faceTile(
   return canvas
 }
 
+/**
+ * Which one she IS, as a check rather than as the word.
+ *
+ * The row already carries her name, her pronoun and her voice; a fourth caps
+ * word in a pill was the loudest thing on it and said the least. A tick is read
+ * without being read.
+ *
+ * It keeps the WORD for anybody not looking at it. `role="img"` plus an
+ * `aria-label` is what makes a graphic announce as "worn" — dropping to a bare
+ * icon otherwise deletes the fact from a screen reader entirely, which is a
+ * regression that no screenshot shows.
+ *
+ * The span exists so the class is on an element `element()` made. `stylesheets.
+ * test.ts` finds classes by reading `element('span', 'x')` out of the source,
+ * and an SVG's class is set through `setAttribute` — invisible to that check,
+ * which is how a rule quietly stops governing anything here.
+ */
+function wornMark(): HTMLElement {
+  const NS = 'http://www.w3.org/2000/svg'
+  const mark = element('span', 'wearing')
+  mark.setAttribute('role', 'img')
+  mark.setAttribute('aria-label', 'worn')
+
+  const svg = document.createElementNS(NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 16 16')
+  svg.setAttribute('width', '15')
+  svg.setAttribute('height', '15')
+  // The graphic is announced by the span above it, so the shape itself is
+  // hidden rather than announced twice.
+  svg.setAttribute('aria-hidden', 'true')
+
+  const tick = document.createElementNS(NS, 'path')
+  tick.setAttribute('d', 'M3.5 8.6 6.4 11.5 12.5 4.8')
+  tick.setAttribute('fill', 'none')
+  // `currentColor`, so the mark takes her colour from the rule rather than
+  // carrying a second copy of it in the markup.
+  tick.setAttribute('stroke', 'currentColor')
+  tick.setAttribute('stroke-width', '2')
+  tick.setAttribute('stroke-linecap', 'round')
+  tick.setAttribute('stroke-linejoin', 'round')
+
+  svg.append(tick)
+  mark.append(svg)
+  return mark
+}
+
 /** SHE / HER, HE / HIM, IT / ITS — the caps line under her name. */
 const PRONOUN_CAPS: ByPronoun = { she: 'she / her', he: 'he / him', it: 'it / its' }
 
@@ -275,7 +321,7 @@ export function characterCards(
       element('div', 'worn', `${PRONOUN_CAPS[one.pronoun] ?? one.pronoun} · ${one.voice}`),
     )
     card.append(titles, element('span', 'grow'))
-    if (one.id === view.wornId) card.append(element('span', 'wearing', 'worn'))
+    if (one.id === view.wornId) card.append(wornMark())
 
     card.addEventListener('click', () => {
       onOpen(one.id)
