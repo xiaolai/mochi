@@ -130,6 +130,7 @@ const api: MochiApi = {
   fit(request: {
     pad: { left: number; top: number; right: number; bottom: number }
     body: { left: number; top: number; width: number; height: number }
+    at: { x: number; y: number }
   }) {
     ipcRenderer.send(guard('companion:fit'), request)
   },

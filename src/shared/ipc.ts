@@ -712,6 +712,8 @@ export interface MochiApi {
   fit(request: {
     pad: { left: number; top: number; right: number; bottom: number }
     body: { left: number; top: number; width: number; height: number }
+    /** Where she is on screen right now, measured in the renderer's own frame. */
+    at: { x: number; y: number }
   }): void
   /** Which sides the bubble can go on, and which it is on. For the menu. */
   sides(available: readonly string[], using: string): void

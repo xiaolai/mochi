@@ -429,13 +429,23 @@ let herFeet: number = FEET_FROM_TOP
  * coordinate: `NaN` reaches `setBounds` as a silent no-op and a negative pad
  * would place her outside her own window with nothing to say so.
  */
-function readSides(value: unknown, keys: readonly string[]): Record<string, number> | null {
+function readSides(
+  value: unknown,
+  keys: readonly string[],
+  /**
+   * Sizes and insets cannot be negative; SCREEN COORDINATES can — a second
+   * display left of the primary one has negative x, and refusing those would
+   * silently drop every fit over there.
+   */
+  allowNegative = false,
+): Record<string, number> | null {
   if (typeof value !== 'object' || value === null) return null
   const found = value as Record<string, unknown>
   const out: Record<string, number> = {}
   for (const key of keys) {
     const one = found[key]
-    if (typeof one !== 'number' || !Number.isFinite(one) || one < 0) return null
+    if (typeof one !== 'number' || !Number.isFinite(one)) return null
+    if (!allowNegative && one < 0) return null
     out[key] = one
   }
   return out
@@ -485,20 +495,45 @@ ipcMain.on('companion:body', (_event, value: unknown) => {
  */
 ipcMain.on('companion:fit', (_event, value: unknown) => {
   if (companion === null || companion.isDestroyed()) return
-  const request = value as { pad?: unknown; body?: unknown } | null
+  const request = value as { pad?: unknown; body?: unknown; at?: unknown } | null
   if (typeof request !== 'object' || request === null) return
   const pad = readPad(request.pad)
   const body = readBody(request.body)
   if (pad === null || body === null) return
 
-  const bounds = companion.getBounds()
-  // Where she is RIGHT NOW, from the body main already holds against the window
-  // she is already in. Anything else is a guess about a window mid-change.
-  const herOnScreen = { x: bounds.x + herBody.left, y: bounds.y + herBody.top }
+  /*
+    Where she is, AS THE RENDERER MEASURED IT, not as main can reconstruct it.
+
+    This added the last offset main had been told to the window's current bounds
+    — two facts from different moments. `companion:body` writes that offset too,
+    so an offset computed against one window size could be paired with another,
+    and the result was measured putting her 443px from a corner she had been 4px
+    from. Both halves of `at` are read in one renderer frame, so there is no pair
+    to get wrong.
+  */
+  const at = readSides(request.at, ['x', 'y'], true)
+  if (at === null) return
+  const herOnScreen = { x: at['x'] ?? 0, y: at['y'] ?? 0 }
   const size = windowFitting(body, pad)
   const origin = originHolding(herOnScreen, pad)
   herBody = body
   companion.setBounds({ x: origin.x, y: origin.y, width: size.width, height: size.height })
+  /*
+    A fit must never MOVE her, and this says so out loud rather than trusting it.
+
+    Resizing her window is only acceptable because she stays put; a version of
+    this that silently moved her shipped, and the symptom — she is not near the
+    corner any more — reads as a layout opinion rather than as a defect. One
+    subtraction, once per fit, and it names the thing that went wrong.
+  */
+  const landed = { x: origin.x + body.left, y: origin.y + body.top }
+  const moved = Math.max(Math.abs(landed.x - herOnScreen.x), Math.abs(landed.y - herOnScreen.y))
+  if (moved > 1) {
+    console.log(
+      `[window] FIT MOVED HER by ${moved.toFixed(1)}px — was ${herOnScreen.x},${herOnScreen.y}, ` +
+        `landed ${landed.x},${landed.y}; pad ${pad.left},${pad.top} body ${body.left},${body.top}`,
+    )
+  }
   // Logged once per SIZE, not per request: the renderer asks on any frame the
   // answer changes, and a line per frame would bury everything else. Same
   // measurements as the creation line above, so the two can be read together.

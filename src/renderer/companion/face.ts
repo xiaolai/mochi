@@ -346,9 +346,28 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       if (now - shrinkWantedSince < SHRINK_SETTLE_MS) return
     }
     shrinkWantedSince = null
+    const was = herBox()
     pad = wanted
     roomy = showingWords && bubble.opacity() > 0
-    window.mochi.fit({ pad: wanted, body: herBox() })
+    /*
+      Where she is ON SCREEN, measured before the pad changed.
+
+      Main used to derive this by adding the last offset it was told to the
+      window's current bounds — two facts from different moments, and it only
+      works while they happen to be from the same one. `companion:body` writes
+      that offset too, so an offset computed for one window size could be paired
+      with another and put her hundreds of pixels from where she was: measured
+      once at 443px from a corner she had been 4px from.
+
+      `screenX`/`screenY` are standard and current in this frame, and `was` is
+      her offset under the pad that is still on screen. Their sum is the one
+      thing that cannot be stale, because both halves are read here, now.
+    */
+    window.mochi.fit({
+      pad: wanted,
+      body: herBox(),
+      at: { x: window.screenX + was.left, y: window.screenY + was.top },
+    })
   }
   /**
    * Where the bubble may go, in canvas pixels — read from the DOM, not from main.
