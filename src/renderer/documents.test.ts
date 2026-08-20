@@ -68,6 +68,7 @@ const DOCUMENTS: readonly {
       // the Archive has the whole window now.
       'panel-wake',
       'q',
+      'calendar',
       'list',
       'talk',
       'troubles',

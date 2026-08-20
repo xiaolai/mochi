@@ -284,13 +284,161 @@
         single rule down the right, exactly as the Cast list does — one window,
         one treatment for a column of choices.
       */
-      .archive-body > .list {
-        margin: 0;
+      .archive-side {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
         background: var(--paper-2);
         border-right: 1px solid var(--rule);
+      }
+      .archive-side > .list {
+        flex: 1;
+        margin: 0;
         overflow-y: auto;
       }
-      .archive-body > .list .entry:first-child {
+
+      /* ---- the calendar over the day it opens on --------------------------- */
+      .cal {
+        flex: none;
+        padding: var(--s5) var(--s5) var(--s4);
+        border-bottom: 1px solid var(--rule);
+      }
+      .cal .head {
+        display: flex;
+        align-items: center;
+        gap: var(--s2);
+        margin-bottom: var(--s4);
+      }
+      .cal .month {
+        flex: 1;
+        min-width: 0;
+        font-family: var(--narrow);
+        font-size: var(--t-label);
+        font-weight: 700;
+        letter-spacing: var(--track);
+        text-transform: uppercase;
+      }
+      .cal .step {
+        flex: none;
+        display: flex;
+        padding: var(--s1);
+        border: 0;
+        border-radius: var(--r1);
+        background: transparent;
+        color: var(--ink-3);
+        cursor: default;
+      }
+      .cal .step:hover:not(:disabled) {
+        background: var(--paper-hover);
+        color: var(--ink);
+      }
+      .cal .step:disabled {
+        opacity: 0.3;
+      }
+      .cal .step svg {
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .cal .grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+      }
+      .cal .initial {
+        display: grid;
+        place-items: center;
+        height: 20px;
+        font-family: var(--narrow);
+        font-size: var(--t-nano);
+        font-weight: 700;
+        letter-spacing: var(--track-2);
+        color: var(--ink-3);
+      }
+      /*
+        A day is a button only when there is something on it. A cell that looks
+        pressable and answers with an empty column is the same lie as a tool she
+        cannot call.
+      */
+      .cal .day {
+        position: relative;
+        display: grid;
+        place-items: center;
+        height: 28px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--r2);
+        background: transparent;
+        color: var(--ink-3);
+        font: inherit;
+        font-size: var(--t-data);
+        font-variant-numeric: tabular-nums;
+        cursor: default;
+      }
+      .cal .day.has {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .cal .day.has:hover {
+        background: var(--paper-hover);
+      }
+      /* Today is named even when nothing happened on it. */
+      .cal .day.today {
+        box-shadow: inset 0 0 0 1px var(--rule);
+      }
+      .cal .day[aria-current='true'] {
+        background: var(--her-deep);
+        box-shadow: none;
+        color: var(--her-deep-ink);
+      }
+      /* How much was said, without saying how much. */
+      .cal .day .dot {
+        position: absolute;
+        bottom: 3px;
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: var(--her);
+      }
+      .cal .day[aria-current='true'] .dot {
+        background: var(--her-deep-ink);
+      }
+      /*
+        `.blank`, NOT `.empty` — which this window already uses for the sentence
+        it shows when a pane has nothing in it: `margin: 26px auto` and a 46ch
+        measure. Those landed on the five leading cells of a month and made two
+        of the six week rows 80px tall instead of 28.
+
+        The seventh rule in this stylesheet to mean two things at once, and the
+        first one a picture caught before a person did.
+      */
+      .cal .blank {
+        height: 28px;
+      }
+      /* The day the list is showing, over the list. */
+      .archive-side .picked {
+        flex: none;
+        display: flex;
+        align-items: baseline;
+        gap: var(--s3);
+        padding: var(--s4) var(--s5) var(--s2);
+      }
+      .archive-side .picked .what {
+        font-family: var(--narrow);
+        font-size: var(--t-label);
+        font-weight: 700;
+        letter-spacing: var(--track);
+        text-transform: uppercase;
+      }
+      .archive-side .picked .stat {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-3);
+      }
+      .archive-side > .list .entry:first-child {
         border-top: 0;
       }
       /*
@@ -301,7 +449,7 @@
         day moves to a heading and the row keeps the clock, which is what the
         artifact draws and what makes the column scannable at that length.
       */
-      .archive-body > .list .day {
+      .archive-side > .list .day {
         position: sticky;
         top: 0;
         z-index: 1;
@@ -315,7 +463,7 @@
         color: var(--ink-3);
       }
       /* Nothing above the first heading to rule off from. */
-      .archive-body > .list .day + .entry {
+      .archive-side > .list .day + .entry {
         border-top: 0;
       }
       /* The transcript column: its own scroll, clear of the drawer's hairline. */
@@ -1659,9 +1807,19 @@
         on the left, the transcript at a reading measure. It was a 380px column
         beside a character's fields, at whatever width was left over.
       -->
+      <!--
+        A calendar over the day it opens on, and that day's conversations under
+        it. The column was a single scrolling list of everything, which answers
+        "what happened lately" and cannot answer "what did I say on the 14th"
+        without a long scroll — and search, which is the third question, already
+        has the strip above.
+      -->
       <section class="tab-pane archive" id="tab-archive" hidden>
         <div class="archive-body">
-          <div class="list" id="list"></div>
+          <aside class="archive-side">
+            <div class="cal" id="calendar"></div>
+            <div class="list" id="list"></div>
+          </aside>
           <div id="talk"></div>
         </div>
       </section>

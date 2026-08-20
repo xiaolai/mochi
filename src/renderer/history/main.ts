@@ -22,6 +22,15 @@ import { MochiAvatar } from '../companion/rig/mochi'
 import { byDay, clockLabel, dayLabel, highlight, interruptions, lengthLabel } from './format'
 import { centreOffset, paintedBounds } from './centre'
 import {
+  dayHeadingLabel,
+  dayKey,
+  monthGrid,
+  monthLabel,
+  startOfDay,
+  stepMonth,
+  weekdayInitials,
+} from './month'
+import {
   assembledPanel,
   characterCards,
   characterSheet,
@@ -98,6 +107,7 @@ const contextEl = need('topbar-context', HTMLElement)
 const machineEl = need('machine-pane', HTMLElement)
 const queryEl = need('q', HTMLInputElement)
 const listEl = need('list', HTMLElement)
+const calEl = need('calendar', HTMLElement)
 const troublesEl = need('troubles', HTMLButtonElement)
 const troublesLabelEl = need('troubles-label', HTMLElement)
 const exportEl = need('export', HTMLButtonElement)
@@ -823,36 +833,202 @@ function dayHeading(day: string): HTMLElement {
   return head
 }
 
+/* ---- the calendar, and the day it is showing ----------------------------- */
+
 /**
- * Every conversation, under the day it happened on.
+ * Which day the list is filtered to, and which month the grid is on.
  *
- * The headings are what make the column readable at length: 173 rows each
- * beginning with their own date is a list you scan rather than one you place
- * yourself in. `byDay` groups CONSECUTIVE runs, so an unordered list produces
- * two headings instead of being quietly rearranged.
+ * Two pieces of state rather than one, because they move independently: paging
+ * to November does not choose a day in November, and choosing a day in a month
+ * you paged to does not page anywhere.
+ */
+let picked: number | null = null
+let onMonth: { readonly year: number; readonly month: number } | null = null
+
+/** How many conversations fall on each local day. */
+function countByDay(): ReadonlyMap<number, number> {
+  const found = new Map<number, number>()
+  for (const one of conversations) {
+    const key = dayKey(one.startedAt)
+    found.set(key, (found.get(key) ?? 0) + 1)
+  }
+  return found
+}
+
+/**
+ * Which day to open on: today, or the last one there is anything on.
+ *
+ * Today FIRST, because that is what somebody opening the Archive means. The
+ * fallback matters on every other day: an app used twice a week would otherwise
+ * open on an empty column most of the time, which reads as "nothing was kept"
+ * rather than as "nothing today".
+ */
+function openingDay(now: number): number | null {
+  const today = startOfDay(now)
+  const counts = countByDay()
+  if (counts.has(today)) return today
+  const days = [...counts.keys()].sort((a, b) => b - a)
+  return days[0] ?? null
+}
+
+function arrow(direction: 'back' | 'on', label: string, go: () => void): HTMLButtonElement {
+  const NS = 'http://www.w3.org/2000/svg'
+  const button = document.createElement('button')
+  button.className = 'step'
+  button.type = 'button'
+  button.title = label
+  button.setAttribute('aria-label', label)
+  const svg = document.createElementNS(NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 16 16')
+  svg.setAttribute('width', '13')
+  svg.setAttribute('height', '13')
+  svg.setAttribute('aria-hidden', 'true')
+  const path = document.createElementNS(NS, 'path')
+  path.setAttribute('d', direction === 'back' ? 'M10 3 5 8l5 5' : 'M6 3l5 5-5 5')
+  svg.append(path)
+  button.append(svg)
+  button.addEventListener('click', go)
+  return button
+}
+
+/**
+ * The month, with a dot on every day something was said.
+ *
+ * The dot is the reason a calendar beats a date field here: it answers "when
+ * was I talking to her" before anybody clicks anything, which no list of rows
+ * can do without being scrolled.
+ *
+ * A day with nothing on it is NOT a button. A cell that looks pressable and
+ * answers with an empty column is the same lie as offering her a tool she
+ * cannot call.
+ */
+function renderCalendar(now: number): void {
+  if (onMonth === null) return
+  const { year, month } = onMonth
+  const counts = countByDay()
+  const today = startOfDay(now)
+
+  const head = document.createElement('div')
+  head.className = 'head'
+  const label = document.createElement('div')
+  label.className = 'month'
+  label.textContent = monthLabel(year, month)
+  head.append(
+    label,
+    arrow('back', 'Previous month', () => {
+      onMonth = stepMonth(year, month, -1)
+      renderCalendar(Date.now())
+    }),
+    arrow('on', 'Next month', () => {
+      onMonth = stepMonth(year, month, 1)
+      renderCalendar(Date.now())
+    }),
+  )
+
+  const grid = document.createElement('div')
+  grid.className = 'grid'
+  for (const initial of weekdayInitials()) {
+    const cell = document.createElement('div')
+    cell.className = 'initial'
+    cell.textContent = initial
+    grid.append(cell)
+  }
+  for (const week of monthGrid(year, month)) {
+    for (const cell of week) {
+      if (cell === null) {
+        // `blank`, not `empty`: this window already styles `.empty` as the
+        // sentence a pane shows when it has nothing in it, and it was sizing
+        // two of the six week rows to 80px.
+        const blank = document.createElement('div')
+        blank.className = 'blank'
+        grid.append(blank)
+        continue
+      }
+      const many = counts.get(cell.at) ?? 0
+      const day = document.createElement('button')
+      day.className = `day${many > 0 ? ' has' : ''}${cell.at === today ? ' today' : ''}`
+      day.type = 'button'
+      day.textContent = String(cell.day)
+      day.setAttribute('aria-current', String(cell.at === picked))
+      day.disabled = many === 0
+      if (many > 0) {
+        day.title = `${String(many)} ${many === 1 ? 'conversation' : 'conversations'}`
+        const dot = document.createElement('span')
+        dot.className = 'dot'
+        day.append(dot)
+        day.addEventListener('click', () => {
+          picked = cell.at
+          renderCalendar(Date.now())
+          renderList(Date.now())
+        })
+      }
+      grid.append(day)
+    }
+  }
+
+  calEl.replaceChildren(head, grid)
+}
+
+/**
+ * One day's conversations, under the day they happened on.
+ *
+ * FILTERED, not scrolled to. The alternative — keep the whole list and jump it
+ * to the date — preserves browsing across days at the cost of never being able
+ * to say "this column is that day". This is the shape that was chosen: one day
+ * is the subject, and the calendar above is how you reach another.
  */
 function renderList(now: number): void {
+  calEl.hidden = false
   if (conversations.length === 0) {
+    calEl.hidden = true
     empty(listEl, forPronoun(SAYS.noTalks, saying()))
     return
   }
-  const parts: HTMLElement[] = []
-  for (const group of byDay(conversations, now, (one) => one.startedAt)) {
-    parts.push(dayHeading(group.day))
-    for (const one of group.items) {
+  picked ??= openingDay(now)
+  const opened = new Date(picked ?? now)
+  onMonth ??= { year: opened.getFullYear(), month: opened.getMonth() }
+  renderCalendar(now)
+
+  const day = picked
+  if (day === null) {
+    empty(listEl, forPronoun(SAYS.noTalks, saying()))
+    return
+  }
+
+  const head = document.createElement('div')
+  head.className = 'picked'
+  const what = document.createElement('span')
+  what.className = 'what'
+  what.textContent = dayHeadingLabel(day)
+  const mine = conversations.filter((one) => dayKey(one.startedAt) === day)
+  const stat = document.createElement('span')
+  stat.className = 'stat'
+  stat.textContent = String(mine.length)
+  head.append(what, stat)
+
+  if (mine.length === 0) {
+    // Only reachable from a stale render — a day with nothing on it is not a
+    // button — so it says which day rather than leaving the column blank.
+    const none = document.createElement('p')
+    none.className = 'empty'
+    none.textContent = 'Nothing was said on this day.'
+    listEl.replaceChildren(head, none)
+    return
+  }
+
+  listEl.replaceChildren(
+    head,
+    ...mine.map((one) => {
       const length = lengthLabel(one.startedAt, one.endedAt)
       const turns = `${String(one.turns)} ${one.turns === 1 ? 'turn' : 'turns'}`
-      parts.push(
-        row(
-          clockLabel(one.startedAt),
-          length === null ? turns : `${turns} · ${length}`,
-          one.token,
-          null,
-        ),
+      return row(
+        clockLabel(one.startedAt),
+        length === null ? turns : `${turns} · ${length}`,
+        one.token,
+        null,
       )
-    }
-  }
-  listEl.replaceChildren(...parts)
+    }),
+  )
 }
 
 interface HitGroup {
@@ -864,6 +1040,14 @@ interface HitGroup {
 
 /** Search results, grouped so a conversation appears once with its best line. */
 function renderHits(hits: readonly HitGroup[], term: string): void {
+  /*
+    The calendar goes away while a search is live.
+
+    Searching spans every day there has ever been, so a grid highlighting one of
+    them would be describing a filter that is not in force. Hidden rather than
+    emptied, so clearing the field brings back the month somebody had paged to.
+  */
+  calEl.hidden = true
   if (hits.length === 0) {
     empty(listEl, 'Nothing matched.')
     return
