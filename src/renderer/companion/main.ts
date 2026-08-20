@@ -1,6 +1,7 @@
 import type { MochiApi } from '@shared/ipc'
 import { showFace, type Face } from './face'
 import { applyAccent } from '../design/apply-accent'
+import { keepsNewer } from './negotiating'
 import { openSession, type Session, type SessionState } from './audio/session'
 
 declare global {
@@ -172,8 +173,24 @@ function applyHeldGrants(): boolean {
  */
 let opening = 0
 
+/**
+ * How many frames have arrived about each thing `open` also reads a snapshot of.
+ *
+ * Counted, not compared — see `negotiating.ts` for why, and for the three places
+ * this shape was found. Every one of these has a live frame AND a value taken
+ * from `voice:config` before two network round trips.
+ */
+const arrived = { rest: 0, problems: 0, bubbleSide: 0 }
+
+/** The live values those frames set, so a stale snapshot has something to lose to. */
+let problems = 0
+let bubbleSide = 'auto'
+
 async function open(): Promise<void> {
   const mine = ++opening
+  // Taken BEFORE the negotiation, so what arrives during it can be told apart
+  // from what was true when it started.
+  const before = { ...arrived }
   session?.close()
   session = null
 
@@ -241,10 +258,32 @@ async function open(): Promise<void> {
   face.showWords(next.bubble)
   // Whatever main could not do while assembling all of the above. Usually none;
   // when there are any, the shoulder control says so on its own.
-  face.troubled(next.problems)
-  face.prefersBubble(next.bubbleSide as Parameters<typeof face.prefersBubble>[0])
-  // How she was left, and what she is allowed.
-  asleep = next.asleep
+  problems = keepsNewer(next.problems, problems, arrived.problems !== before.problems)
+  face.troubled(problems)
+  bubbleSide = keepsNewer(next.bubbleSide, bubbleSide, arrived.bubbleSide !== before.bubbleSide)
+  face.prefersBubble(bubbleSide as Parameters<typeof face.prefersBubble>[0])
+  /*
+    How she was left — unless she was told otherwise while this was negotiating.
+
+    `next.asleep` is a snapshot taken when the session was configured, and this
+    line applied it unconditionally after two network round trips. Toggle rest in
+    that window and the stale answer won, in both directions and neither
+    self-correcting: `setAsleep` in main returns early when the value has not
+    changed, so main never re-sends a value it believes the renderer already has.
+    The two halves stay disagreeing until somebody toggles rest twice.
+
+    Woken during a negotiation, she kept `asleep: true` — eyes held shut by
+    `blink: 1` and the microphone closed — while main thought she was up and went
+    on driving her voice. That is talking with her eyes closed and not hearing a
+    word, which is what this was reported as.
+
+    Put to REST during one, she kept `asleep: false`, and that is the direction
+    that matters more: her microphone stayed open after somebody had asked her to
+    stop listening.
+
+    Exactly the shape `held` fixes for grants, three lines up.
+  */
+  asleep = keepsNewer(next.asleep, asleep, arrived.rest !== before.rest)
   mayHear = next.microphone
   face.sleeps(asleep)
   // Nothing from the last session is owed by this one. A beat still held when
@@ -295,7 +334,11 @@ window.mochi.onSend((frame) => {
   // Problems keep happening after the session opens — a capability that threw,
   // a reconnect that could not be scheduled. The count on `session.problems` is
   // a snapshot taken at the door; this is how it stays true afterwards.
-  if (type === '__mochi_problems__') face.troubled(Number((frame as { count?: unknown }).count))
+  if (type === '__mochi_problems__') {
+    arrived.problems += 1
+    problems = Number((frame as { count?: unknown }).count)
+    face.troubled(problems)
+  }
   // Somebody picked a side in the menu bar. Straight through, because they are
   // looking at her while they pick it.
   // She was dragged against the top of the display and had to rise inside her
@@ -309,6 +352,7 @@ window.mochi.onSend((frame) => {
    * Either one alone is a bug somebody would report as the other.
    */
   if (type === '__mochi_asleep__') {
+    arrived.rest += 1
     asleep = (frame as { asleep?: unknown }).asleep === true
     face.sleeps(asleep)
     applyMicrophone()
@@ -355,9 +399,9 @@ window.mochi.onSend((frame) => {
     }
   }
   if (type === '__mochi_bubble_side__') {
-    face.prefersBubble(
-      String((frame as { side?: unknown }).side) as Parameters<typeof face.prefersBubble>[0],
-    )
+    arrived.bubbleSide += 1
+    bubbleSide = String((frame as { side?: unknown }).side)
+    face.prefersBubble(bubbleSide as Parameters<typeof face.prefersBubble>[0])
   }
 })
 
