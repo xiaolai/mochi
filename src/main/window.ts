@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, screen } from 'electron'
 import { FEET_FROM_TOP, WINDOW_H, WINDOW_W } from '@shared/avatar-layout'
+import { KEEP_ON_SCREEN } from './drag'
 
 /**
  * Her window: a shape on the desktop, not a rectangle with her inside it.
@@ -30,13 +31,20 @@ import { FEET_FROM_TOP, WINDOW_H, WINDOW_W } from '@shared/avatar-layout'
 /**
  * How far she rests from the corner she starts in.
  *
- * Measured to HER, not to her window. The window is `WINDOW_W` x `WINDOW_H` —
- * far larger than she is, because the bubble is drawn inside it and has to be
- * able to go above, below or beside her — so with her in a corner most of it
- * hangs off the display. Positioning the WINDOW with a margin would park her
- * hundreds of pixels inland.
+ * Measured to HER, not to her window. The window is created far larger than she
+ * is, because the bubble is drawn inside it and has to be able to go above,
+ * below or beside her — so with her in a corner most of it hangs off the
+ * display. Positioning the WINDOW with a margin would park her hundreds of
+ * pixels inland.
+ *
+ * `KEEP_ON_SCREEN` rather than a number of its own. There were two constants
+ * for "how close to the edge she may be" and they were 6x apart: the drag would
+ * put her 4px from the corner and the first launch put her at 24, so she started
+ * noticeably further out than anybody could then drag her, for no reason either
+ * one stated. One number, and it is the drag's — that one has the argument
+ * attached to it, about zero reading as half of her having fallen off.
  */
-const MARGIN = 24
+const MARGIN = KEEP_ON_SCREEN
 
 /**
  * Where she stands inside her own window: horizontally centred, feet at
@@ -107,14 +115,6 @@ export function createCompanionWindow(): BrowserWindow {
     },
   })
 
-  // Logged because a transparent, frameless, taskbar-less window that fails to
-  // appear looks exactly like one that appeared somewhere unexpected, and the
-  // desktop may be several displays wide while `workArea` is one of them.
-  const at = window.getBounds()
-  console.log(
-    `[window] ${at.width}x${at.height} at ${at.x},${at.y} on a ${display.width}x${display.height} work area`,
-  )
-
   /**
    * Where she actually starts: bottom right, HER inset by a margin, with the
    * window's overhang hanging off the display. See the note on the size above
@@ -135,6 +135,23 @@ export function createCompanionWindow(): BrowserWindow {
     wrong place for one frame; starting large and shrinking shows nothing at all,
     because every pixel of the difference is transparent.
   */
+
+  /*
+    Logged AFTER the move, and reporting HER rather than the window.
+
+    It said `980x560 at 0,30` — the corner the window is born in, which is not
+    where anything ends up and is the one position that is never interesting.
+    The comment on it says it exists because "a window that fails to appear looks
+    exactly like one that appeared somewhere unexpected", and a birth position
+    cannot tell those apart. Her feet and her right edge can, which is what
+    somebody reading this log is actually trying to check.
+  */
+  const at = window.getBounds()
+  console.log(
+    `[window] ${at.width}x${at.height} at ${at.x},${at.y} on a ${display.width}x${display.height} work area; ` +
+      `her right edge ${display.x + display.width - (at.x + WINDOW_W / 2 + NOMINAL.width / 2)}px ` +
+      `and her feet ${display.y + display.height - (at.y + FEET_FROM_TOP)}px from the corner`,
+  )
 
   window.setAlwaysOnTop(true, 'screen-saver')
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })

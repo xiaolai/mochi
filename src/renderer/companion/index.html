@@ -96,7 +96,14 @@
   </head>
   <body>
     <canvas id="face"></canvas>
-    <main id="app">starting…</main>
+    <!--
+      Empty, deliberately. It carried "starting…", which was a caption on a
+      window that had just appeared with her in it — and `#app:empty` hides the
+      surface, so an empty one costs nothing and shows nothing. It fills in only
+      for the states you cannot see: a session that closed, an hour that ran out,
+      a failure with its own text.
+    -->
+    <main id="app"></main>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

@@ -83,10 +83,19 @@ placeStatus()
 window.addEventListener('resize', placeStatus)
 
 function describe(state: SessionState): string {
-  if (state === 'opening') return 'opening…'
-  // Nothing, once she is up. The status line exists for the states where there
-  // is no her to look at; "listening" written under her face is a label on a
-  // thing that is plainly already listening.
+  /*
+    Nothing while she is opening, and nothing once she is up.
+
+    The status line is for states where there is no HER to look at. "listening"
+    written under a face that is plainly listening is a label on the obvious, and
+    "opening…" is the same thing one step earlier: she is on screen, she is
+    breathing, and the only thing the word adds is a caption saying so. Neither
+    told anybody anything they could not see.
+
+    What survives is what you CANNOT see: a session that closed, an hour that ran
+    out, and a failure with its own text. Those are the reason this line exists.
+  */
+  if (state === 'opening') return ''
   if (state === 'listening') return ''
   if (state === 'closed') return 'closed'
   if ('expired' in state) return 'the hour is up — reconnecting'
