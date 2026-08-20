@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, screen } from 'electron'
 import { FEET_FROM_TOP, WINDOW_H, WINDOW_W } from '@shared/avatar-layout'
 import { KEEP_ON_SCREEN } from './drag'
+import { letDevToolsInspect } from './inspect'
 
 /**
  * Her window: a shape on the desktop, not a rectangle with her inside it.
@@ -165,6 +166,10 @@ export function createCompanionWindow(): BrowserWindow {
     window.show()
   })
 
+  // Right-click to inspect, in development only. Reaches her painted pixels and
+  // nothing else, because the rest of this window is click-through.
+  letDevToolsInspect(window.webContents)
+
   // `ELECTRON_RENDERER_URL` is set by `electron-vite dev` and absent in a build,
   // which is what distinguishes the two. Checked against `undefined` rather than
   // for truthiness so an empty value fails loudly here instead of silently
@@ -320,6 +325,7 @@ export function showHistoryWindow(): BrowserWindow {
   window.on('closed', () => {
     history = null
   })
+  letDevToolsInspect(window.webContents)
   bringForward(window)
 
   const devServerUrl = process.env.ELECTRON_RENDERER_URL
