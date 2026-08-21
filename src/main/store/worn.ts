@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { isPersonaId } from '@shared/persona'
 import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
+import { BUBBLE_SIDES, type BubbleSide } from '@shared/persona'
 import { isHaloWhen, type HaloWhen } from '@shared/ipc'
 import {
   DEFAULT_GRANTS,
@@ -476,6 +477,60 @@ export function readHaloWhen(userData: string): HaloWhen {
 export function writeHaloWhen(userData: string, when: HaloWhen): void {
   if (!isHaloWhen(when)) throw new Error(`not a time the halo can be drawn: ${when}`)
   writeMerged(userData, { haloWhen: when })
+}
+
+/**
+ * The side her words used to sit on, app-level, kept only to be MIGRATED.
+ *
+ * This was the setting. It is a persona field now — `Persona.bubbleSide` says
+ * why — and nothing writes this key any more. It is read once, by
+ * `migrateBubbleSide`, so that a choice somebody made before the move is
+ * carried onto their characters rather than silently reset.
+ */
+export function readLegacyBubbleSide(userData: string): BubbleSide {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return 'auto'
+  try {
+    const value: unknown = JSON.parse(read.text)
+    const found = (value as { bubbleSide?: unknown } | null)?.bubbleSide
+    return typeof found === 'string' && (BUBBLE_SIDES as readonly string[]).includes(found)
+      ? (found as BubbleSide)
+      : 'auto'
+  } catch {
+    return 'auto'
+  }
+}
+
+/**
+ * Whether that carry-over has already happened. Marked BEFORE it is done.
+ *
+ * ## Why the order is the opposite of `retentionMigrated`'s
+ *
+ * That marker may fail to write, and says so: its pass "only seeds where there
+ * is no setting already", so running twice is harmless and losing the marker
+ * costs nothing. This pass has no such luxury. `bubbleSide` defaults to `auto`,
+ * and "nobody was ever asked" is deliberately indistinguishable from "somebody
+ * chose auto" — that ambiguity is the whole reason the field has no null.
+ *
+ * So a re-run cannot tell a fresh persona from one whose owner has since
+ * chosen. Marking first makes the failure mode *the migration is skipped*,
+ * which costs one trip to a dropdown and is visible. Marking last would make it
+ * *a choice is silently reverted*, which is neither.
+ */
+export function bubbleSideMigrated(userData: string): boolean {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return false
+  try {
+    const value: unknown = JSON.parse(read.text)
+    return (value as { bubbleSideMigrated?: unknown } | null)?.bubbleSideMigrated === true
+  } catch {
+    // Unreadable is not "not yet". A pass that cannot be gated must not run.
+    return true
+  }
+}
+
+export function markBubbleSideMigrated(userData: string): void {
+  writeMerged(userData, { bubbleSideMigrated: true })
 }
 
 /**

@@ -70,7 +70,10 @@ import {
   writeWornPersonaId,
   readSleepAfterMinutes,
   writeSleepAfterMinutes,
+  bubbleSideMigrated,
+  markBubbleSideMigrated,
   readHaloWhen,
+  readLegacyBubbleSide,
   writeHaloWhen,
   readShoulderChip,
   writeShoulderChip,
@@ -604,6 +607,67 @@ const menuHandlers = {
  * edited on her sheet. A second grammar for one field is how the two come to
  * disagree about what a side is.
  */
+/**
+ * Carry the old app-level bubble side onto every character, once.
+ *
+ * ## Why every character, and not the worn one
+ *
+ * The value it replaces was GLOBAL: one side, inherited by whoever was worn. A
+ * migration that wrote it to the worn persona alone would leave every other
+ * character on `auto` and call the difference a migration. Behaviour-preserving
+ * means all of them see what they saw before.
+ *
+ * At the moment this runs, no persona has ever carried the field — it did not
+ * exist — so every one of them is on the parser's default. Writing the legacy
+ * value to all of them is exactly what they had.
+ *
+ * ## The marker goes down FIRST
+ *
+ * `bubbleSideMigrated` explains the ordering: `auto` is both the default and a
+ * real choice, so a second pass cannot tell a character nobody has touched from
+ * one whose owner has since picked `auto`. Marked first, a crash mid-pass skips
+ * the carry-over — one visible trip to a dropdown. Marked last, it would
+ * silently revert a later choice.
+ *
+ * ## And nothing at all when the legacy value was `auto`
+ *
+ * Which is the ordinary case: `auto` is what the setting shipped as and what
+ * the new field defaults to. The marker still goes down, so this never runs
+ * again either way.
+ */
+function migrateBubbleSide(): void {
+  const userData = app.getPath('userData')
+  if (bubbleSideMigrated(userData)) return
+  const legacy = readLegacyBubbleSide(userData)
+  try {
+    markBubbleSideMigrated(userData)
+  } catch (error: unknown) {
+    // Ungated, so it must not run. Skipping costs a dropdown; running twice
+    // could overwrite a choice made in between.
+    console.error('[persona] the bubble-side migration could not be gated:', error)
+    return
+  }
+  if (legacy === 'auto') {
+    console.log('[persona] bubble side: nothing to carry over')
+    return
+  }
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  let carried = 0
+  for (const persona of catalog.personas.values()) {
+    const changed = applyChange(persona, { id: persona.id, bubbleSide: legacy }, [])
+    if (!changed.ok) continue
+    try {
+      savePersonaTo(userData, catalog, changed.persona)
+      carried += 1
+    } catch (error: unknown) {
+      // Said, not thrown. One character that could not be written must not stop
+      // the others, and the marker is already down.
+      console.error(`[persona] ${persona.id} did not take the old bubble side:`, error)
+    }
+  }
+  console.log(`[persona] bubble side ${legacy} carried onto ${String(carried)} character(s)`)
+}
+
 function setBubbleSide(side: string): SettingsWrite {
   const userData = app.getPath('userData')
   const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
@@ -2608,6 +2672,21 @@ const startup = app.whenReady().then(
         null,
         `an interrupted deletion could not be finished: ${String(error)}`,
       )
+    }
+
+    /*
+      AFTER the v1 import and the deletion sweep, and that order is the point.
+
+      The import can create the characters this has to write to, and the sweep
+      can remove ones it would otherwise write to and resurrect. Running before
+      either would migrate a catalog that is not yet the catalog.
+    */
+    try {
+      migrateBubbleSide()
+    } catch (error: unknown) {
+      // Never a reason not to start. The cost of not carrying it over is one
+      // trip to a dropdown; the cost of refusing to launch is the app.
+      console.error('[persona] the bubble side could not be carried over:', error)
     }
 
     const seeded = seedProfile(codexHome(process.env, app.getPath('home')), (path) =>

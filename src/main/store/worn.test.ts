@@ -16,7 +16,10 @@ import {
   readSleepAfterMinutes,
   writeSleepAfterMinutes,
   DEFAULT_SLEEP_AFTER_MINUTES,
+  bubbleSideMigrated,
+  markBubbleSideMigrated,
   readHaloWhen,
+  readLegacyBubbleSide,
   writeHaloWhen,
   readShoulderChip,
   writeShoulderChip,
@@ -423,5 +426,54 @@ describe('where she and the shelf were left', () => {
   it('reads nothing back from a zero-sized one', () => {
     writePreferences({ herPlace: { x: 10, y: 20, width: 0, height: 73 } })
     expect(readHerPlace(userData)).toBeNull()
+  })
+})
+
+/**
+ * The side that used to be everybody's, carried onto each character once.
+ *
+ * `bubbleSide` was app-level in `preferences.json` and is a persona field now.
+ * A migration that dropped the old value would silently reset anybody who had
+ * chosen one; a migration that could run twice would silently revert a choice
+ * made in between. Both are invisible, which is why the gate is tested rather
+ * than trusted.
+ */
+describe('carrying the old bubble side over', () => {
+  it('reads a value stored before the field moved', () => {
+    writePreferences({ bubbleSide: 'left' })
+    expect(readLegacyBubbleSide(userData)).toBe('left')
+  })
+
+  it('answers auto for a file that never had one, or cannot be read', () => {
+    expect(readLegacyBubbleSide(userData)).toBe('auto')
+    writeFileSync(join(userData, 'preferences.json'), '{ not json')
+    expect(readLegacyBubbleSide(userData)).toBe('auto')
+  })
+
+  it('is not marked until it is marked', () => {
+    expect(bubbleSideMigrated(userData)).toBe(false)
+    markBubbleSideMigrated(userData)
+    expect(bubbleSideMigrated(userData)).toBe(true)
+  })
+
+  it('treats an unreadable file as DONE, not as pending', () => {
+    /*
+      The direction matters and it is the opposite of most reads here. A pass
+      that cannot be gated must not run: `auto` is both the default and a real
+      choice, so a second run cannot tell a character nobody has touched from
+      one whose owner has since chosen it.
+    */
+    writeFileSync(join(userData, 'preferences.json'), '{ not json')
+    expect(bubbleSideMigrated(userData)).toBe(true)
+  })
+
+  it('keeps the mark when the rest of the file is rewritten', () => {
+    // One file, several writers. A marker that a later write dropped would let
+    // the pass run again — the failure it exists to prevent.
+    markBubbleSideMigrated(userData)
+    writeWornPersonaId(userData, 'loki')
+    writeShoulderChip(userData, false)
+    expect(bubbleSideMigrated(userData)).toBe(true)
+    expect(readWornPersonaId(userData)).toBe('loki')
   })
 })
