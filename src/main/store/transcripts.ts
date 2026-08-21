@@ -110,6 +110,15 @@ export interface Hit {
 }
 
 /** What an export contains. Versioned for the reason the persona format is. */
+/**
+ * The most conversations one confirmed deletion may carry.
+ *
+ * Not a performance limit -- a sanity one. The list a person can select from is
+ * their own archive, so a payload larger than this did not come from somebody
+ * clicking, and the transaction should not be asked to find out.
+ */
+const MOST_AT_ONCE = 1000
+
 export const ARCHIVE_FORMAT = 2
 
 export interface Archive {
@@ -195,14 +204,28 @@ export interface Transcripts {
   /** Read an archive INTO a persona the caller names. */
   importInto(personaId: string, value: unknown): ImportResult
   /**
-   * Drop ONE conversation of hers. False if it is not hers, or not there.
+   * Drop conversations of hers -- one, or several -- all together or not at all.
    *
-   * The finer of the two grains. With only "delete all of
-   * hers", correcting one conversation costs the whole archive, so the safe
-   * action is the expensive one -- and that is the shape that makes people
-   * keep what they wanted gone.
+   * The finer of the two grains. With only "delete all of hers", correcting one
+   * conversation costs the whole archive, so the safe action is the expensive
+   * one, and that is the shape that makes people keep what they wanted gone.
+   *
+   * ## Why not a loop over `forgetSession`
+   *
+   * That was the plan, and it gives one transaction and one scrub per token.
+   * A failure at the second leaves the first permanently gone -- after a single
+   * confirmation naming three. "Atomic per token" is the wrong boundary: the
+   * unit the user agreed to is the batch, so the batch is the unit that
+   * commits.
+   *
+   * Duplicates are collapsed and unknown tokens are skipped rather than
+   * refused: a conversation that is already gone is the outcome being asked
+   * for, and failing the whole batch over one would make the safe answer
+   * "delete them one at a time", which is the shape this exists to avoid.
+   *
+   * The count is what was actually removed, read after the commit.
    */
-  forgetSession(personaId: string, token: SessionToken): boolean
+  forgetSessions(personaId: string, tokens: readonly SessionToken[]): number
   /** Delete a persona's history. Called when she is deleted. */
   forget(personaId: string): void
   /**
@@ -217,6 +240,14 @@ export interface Transcripts {
    * situations somebody reaches for it.
    */
   forgetEverything(): void
+  /**
+   * Whether deleted text is still sitting in the write-ahead log.
+   *
+   * So a caller can say "deleted" and "not yet scrubbed" as the different
+   * things they are. The rows are gone either way; the bytes follow when the
+   * reader holding the log lets go.
+   */
+  scrubPending(): boolean
   /*
     `pruneBefore` was here: drop her sessions that ended before a cutoff.
 
@@ -821,16 +852,22 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       }
       return { ok: true, sessions, turns, skipped, conflicts }
     },
-    forgetSession(personaId, token) {
+    forgetSessions(personaId, tokens) {
+      // Collapsed and bounded BEFORE the transaction opens. A payload arrives
+      // from the renderer, which is the least trusted process here, and a
+      // hundred thousand tokens is not a request anybody made by hand.
+      const wanted = [...new Set(tokens)].slice(0, MOST_AT_ONCE)
+      if (wanted.length === 0) return 0
       const gone = atomically(() => {
-        // The index rows FIRST, while the turns they name still exist: the
-        // cascade takes those with the session, and after that the subquery
-        // selecting them finds nothing and the rows orphan.
-        stmt.dropIndexFor.run(token, personaId)
-        // Not hers and not there are the same answer here, for the reason
-        // they are the same answer in `turns`: telling them apart discloses
-        // that somebody else's conversation exists.
-        return Number(stmt.dropSession.run(token, personaId).changes) === 1
+        let removed = 0
+        for (const token of wanted) {
+          // The index rows FIRST, while the turns they name still exist: the
+          // cascade takes those with the session, and after that the subquery
+          // selecting them finds nothing and the rows orphan.
+          stmt.dropIndexFor.run(token, personaId)
+          removed += Number(stmt.dropSession.run(token, personaId).changes)
+        }
+        return removed
       })
       scrubsLeft = SCRUB_TRIES
       scrub()
@@ -860,6 +897,7 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       scrubsLeft = SCRUB_TRIES
       scrub()
     },
+    scrubPending: () => pendingScrub,
     close() {
       if (scrubRetry !== null) {
         clearTimeout(scrubRetry)

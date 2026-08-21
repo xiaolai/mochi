@@ -52,6 +52,16 @@ export interface Conversation {
   end(): void
   /** Whether anything is currently being written. For assertions and the log. */
   isLive(): boolean
+  /**
+   * Let go of a token that has been deleted, so recording can start again.
+   *
+   * Without it, deleting the conversation currently being had leaves `live`
+   * pointing at a row that is gone, and every turn after that is dropped with
+   * only a log line to say so.
+   */
+  forget(token: string): void
+  /** Whatever conversation is open, so a deletion can tell whether it is this. */
+  liveToken(): string | null
 }
 
 export function createConversation(input: {
@@ -126,5 +136,30 @@ export function createConversation(input: {
 
     end,
     isLive: () => live !== null,
+
+    /**
+     * Let go of a conversation that has been deleted out from under us.
+     *
+     * ## Why this has to exist
+     *
+     * `live` is a token, and deleting that row is allowed -- the user can
+     * delete the conversation they are in the middle of having. After that,
+     * every `say` finds no open session, logs, and drops the turn. Recording
+     * stops silently and stays stopped until some unrelated lifecycle event
+     * happens to reset it: she talks, nothing is written, and nothing says so.
+     *
+     * Forgetting the token rather than ending it, because there is nothing left
+     * to end -- `end` would stamp a row that is gone. The next turn opens a
+     * fresh conversation, which is the honest outcome: what was said before the
+     * deletion was deleted, and what is said after is new.
+     */
+    forget(token: string) {
+      if (live !== token) return
+      live = null
+      say('the conversation being had was deleted; a new one will begin')
+    },
+
+    /** Whatever is open right now, so a deletion can tell whether it is this. */
+    liveToken: () => live,
   }
 }

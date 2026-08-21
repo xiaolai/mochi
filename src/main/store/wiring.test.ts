@@ -115,10 +115,6 @@ const KNOWN_DEBT: readonly string[] = [
   // nothing asks -- which is why deleting the live conversation was able to
   // become defect A-4 unnoticed.
   'conversation.ts: isLive',
-  // WI-7.
-  'transcripts.ts: forgetEverything',
-  // WI-5 and WI-6.
-  'transcripts.ts: forgetSession',
   // No caller and no work item. The archive can be exported and cannot be
   // imported back: the reader exists, is transactional, is tested, and no
   // surface offers it. Recorded here rather than fixed, because an import

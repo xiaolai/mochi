@@ -4,6 +4,8 @@ import {
   isSettingsChannel,
   isShelfChannel,
   type HistoryConversation,
+  type ForgetTalk,
+  type Forgotten,
   type HistoryHit,
   type HistoryExport,
   type HistoryProblem,
@@ -180,6 +182,9 @@ const history: MochiHistoryApi = {
   },
   async search(query: string) {
     return (await ipcRenderer.invoke(guardShelf('history:search'), query)) as readonly HistoryHit[]
+  },
+  async forget(action: ForgetTalk) {
+    return (await ipcRenderer.invoke(guardShelf('history:forget'), action)) as Forgotten
   },
   async shelf() {
     return (await ipcRenderer.invoke(guardShelf('shelf:read'))) as ShelfView

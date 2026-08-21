@@ -143,6 +143,8 @@ export const SHELF_CHANNELS = [
   'history:turns',
   /** Full-text search across hers. */
   'history:search',
+  /** Delete conversations: some of hers, all of hers, or every one there is. */
+  'history:forget',
   /** Everything that went wrong, for the window that can show it. */
   'history:problems',
   /**
@@ -576,6 +578,52 @@ export interface SettingsNote {
 export type NoteAction =
   | { readonly kind: 'restore'; readonly id: string }
   | { readonly kind: 'clear'; readonly id: string }
+
+/**
+ * What may be deleted from the archive, and at which scope.
+ *
+ * ## `one` is absent on purpose
+ *
+ * Deleting one is `some` with a single token. One code path, one transaction,
+ * one confirmation shape -- and it keeps the batch as the unit that commits,
+ * which is the property a per-token loop quietly gives up.
+ *
+ * ## The id is a PRECONDITION, not an instruction
+ *
+ * Main deletes the WORN character's conversations, decided in main, exactly as
+ * the note actions do. The id says which character the page was showing when
+ * the button was pressed, and main refuses when the two disagree. Without it,
+ * arming "delete all of hers" and having the tray switch character before the
+ * second gesture deletes somebody else's archive, after a confirmation that
+ * named the first.
+ *
+ * ## What this is not
+ *
+ * It is not a security boundary. The same bridge exposes `wear`, so a page that
+ * had been taken over could simply become another character first. It bounds
+ * ACCIDENTS -- a stale view, a switch in flight -- which is the failure that
+ * actually happens. Anything stronger has to be enforced somewhere a renderer
+ * cannot reach at all.
+ */
+export type ForgetTalk =
+  | { readonly kind: 'some'; readonly id: string; readonly tokens: readonly string[] }
+  | { readonly kind: 'hers'; readonly id: string }
+  | { readonly kind: 'everything' }
+
+/**
+ * What came of it.
+ *
+ * `pending` is the honest half: the rows are gone, and the words may still be
+ * in the write-ahead log because a reader held the checkpoint off. It clears
+ * itself, but a UI that said "deleted" while that was outstanding would be
+ * making a promise the disk has not kept yet.
+ */
+export interface Forgotten {
+  readonly ok: boolean
+  readonly gone: number
+  readonly pending: boolean
+  readonly why: string | null
+}
 
 /**
  * What may be done to the shelf of personas.
@@ -1140,6 +1188,8 @@ export interface MochiHistoryApi {
   }>
   turns(token: string): Promise<readonly HistoryTurn[]>
   search(query: string): Promise<readonly HistoryHit[]>
+  /** Delete conversations: some of hers, all of hers, or every one there is. */
+  forget(action: ForgetTalk): Promise<Forgotten>
   /** The characters, what had to be resolved, and what she will be told. */
   shelf(): Promise<ShelfView>
   /** Wear somebody. Checked against the catalog in main. */

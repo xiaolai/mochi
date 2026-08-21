@@ -101,7 +101,7 @@ import {
 } from './codex/status'
 import { CODEX_SAYS, REMEDY_SAYS } from '@shared/delegation'
 import { EMOTIONS } from '@shared/avatar'
-import type { SettingsCodex } from '@shared/ipc'
+import type { Forgotten, SettingsCodex } from '@shared/ipc'
 import {
   codexHome,
   profileFile,
@@ -2510,6 +2510,85 @@ ipcMain.on('settings:reveal', (_event, what: unknown) => {
   // folder that exists rather than a path that does not.
   mkdirSync(folder, { recursive: true })
   void shell.openPath(folder)
+})
+
+/**
+ * Delete conversations, at one of three scopes.
+ *
+ * ## Whose, and why the page still names them
+ *
+ * Main deletes the WORN character's, decided here, exactly as the note actions
+ * do. The id the page sends is a PRECONDITION: it says which character was on
+ * screen when the button was pressed, and a disagreement is refused. A
+ * character switch is a write and a re-read, and the old sheet stays clickable
+ * while that is in flight -- long enough to confirm "delete all of hers" about
+ * one character and have it land on another.
+ *
+ * This is not a security boundary and is not described as one. The same bridge
+ * exposes `wear`, so a page that had been taken over could become another
+ * character first and delete her archive legitimately. What this stops is
+ * accidents, which is the failure that actually happens.
+ *
+ * ## The conversation she is in the middle of
+ *
+ * Deleting it is allowed. What is not allowed is leaving the open token
+ * pointing at a row that no longer exists -- every turn after that is dropped
+ * with only a log line, so she talks and nothing is written down and nothing
+ * says so. The live token is handed back to `Conversation` to let go of.
+ *
+ * ## Why the answer distinguishes gone from scrubbed
+ *
+ * The rows go inside a transaction. The words leave the write-ahead log at the
+ * next checkpoint, which a reader can hold off. Both are true at once, and a
+ * screen that says "deleted" while the second is outstanding is making a
+ * promise the disk has not kept.
+ */
+ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
+  const no = (why: string): Forgotten => ({ ok: false, gone: 0, pending: false, why })
+  const kind = (action as { kind?: unknown } | null)?.kind
+  if (kind !== 'some' && kind !== 'hers' && kind !== 'everything') {
+    return no('That is not something to delete.')
+  }
+
+  const worn = wornId()
+  if (kind !== 'everything') {
+    const shown = (action as { id?: unknown }).id
+    if (typeof shown !== 'string') return no('That does not name a character.')
+    if (shown !== worn) {
+      return no('That was for a different character — she has changed since. Have another look.')
+    }
+  }
+
+  const archive = transcripts()
+  const live = conversation().liveToken()
+  let gone = 0
+  try {
+    if (kind === 'some') {
+      const tokens = (action as { tokens?: unknown }).tokens
+      if (!Array.isArray(tokens) || tokens.some((one) => typeof one !== 'string')) {
+        return no('That does not name any conversations.')
+      }
+      const wanted = tokens as readonly string[]
+      gone = archive.forgetSessions(worn, wanted)
+      if (live !== null && wanted.includes(live)) conversation().forget(live)
+    } else if (kind === 'hers') {
+      archive.forget(worn)
+      if (live !== null) conversation().forget(live)
+      gone = 1
+    } else {
+      archive.forgetEverything()
+      if (live !== null) conversation().forget(live)
+      gone = 1
+    }
+  } catch (error: unknown) {
+    // Said, not swallowed. A deletion that failed and reported success is the
+    // one outcome here nobody can check for themselves.
+    console.error(`[transcripts] a deletion (${kind}) failed:`, error)
+    problems.note('history', worn, `conversations could not be deleted: ${String(error)}`)
+    return no('They could not be deleted. Nothing was removed.')
+  }
+  console.log(`[transcripts] deleted (${kind}): ${String(gone)}`)
+  return { ok: true, gone, pending: archive.scrubPending(), why: null }
 })
 
 ipcMain.handle('history:search', (_event, query: unknown) => {

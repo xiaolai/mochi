@@ -182,7 +182,7 @@ describe('a session and its turns', () => {
     const t = store()
     const first = conversation(t, 'ada', 1000)
     const reusedRowid = rowidOf(t, first)
-    t.forgetSession('ada', first)
+    t.forgetSessions('ada', [first])
 
     const second = conversation(t, 'ada', 2000)
 
@@ -192,7 +192,7 @@ describe('a session and its turns', () => {
     // The token is not. A stale one names nothing rather than the replacement.
     expect(second).not.toBe(first)
     expect(t.turns('ada', first)).toEqual([])
-    expect(t.forgetSession('ada', first)).toBe(false)
+    expect(t.forgetSessions('ada', [first])).toBe(0)
     expect(t.sessions('ada')).toHaveLength(1)
   })
 
@@ -353,7 +353,7 @@ describe('forgetting one conversation', () => {
     conversation(t, 'ada', 9000)
     const rowid = rowidOf(t, first)
 
-    expect(t.forgetSession('ada', first)).toBe(true)
+    expect(t.forgetSessions('ada', [first])).toBe(1)
 
     expect(t.sessions('ada').map((s) => s.startedAt)).toEqual([9000])
     expect(t.turns('ada', first)).toEqual([])
@@ -371,7 +371,7 @@ describe('forgetting one conversation', () => {
     const t = store()
     const hers = conversation(t, 'ada')
 
-    expect(t.forgetSession('coach', hers)).toBe(false)
+    expect(t.forgetSessions('coach', [hers])).toBe(0)
 
     expect(t.sessions('ada')).toHaveLength(1)
     expect(t.turns('ada', hers)).toHaveLength(2)
@@ -379,7 +379,7 @@ describe('forgetting one conversation', () => {
 
   it('says no to a session that is not there rather than throwing', () => {
     const t = store()
-    expect(t.forgetSession('ada', 'no-such-token')).toBe(false)
+    expect(t.forgetSessions('ada', ['no-such-token'])).toBe(0)
   })
 
   it('drops a conversation still in progress, because it is still hers', () => {
@@ -390,7 +390,7 @@ describe('forgetting one conversation', () => {
     const live = t.begin('ada', 1000)
     t.say(live!, 'you', 'hello', 1010)
 
-    expect(t.forgetSession('ada', live!)).toBe(true)
+    expect(t.forgetSessions('ada', [live!])).toBe(1)
     expect(t.sessions('ada')).toEqual([])
   })
 })
@@ -442,7 +442,7 @@ describe('deleted text is actually gone from the file', () => {
     // Enough other conversations that the index is not a single empty page.
     for (let i = 0; i < 40; i += 1) conversation(t, 'ada', 5_000 + i * 100)
 
-    expect(t.forgetSession('ada', doomed)).toBe(true)
+    expect(t.forgetSessions('ada', [doomed])).toBe(1)
 
     const home = homes.get(t) ?? ''
     for (const suffix of ['', '-wal']) {
@@ -505,7 +505,7 @@ describe('a delete that fails partway', () => {
     if (!newer) throw new Error('the conversation to delete should be there')
     exec(
       t,
-      // On the SECOND step. `forgetSession` clears the index rows first and
+      // On the SECOND step. `forgetSessions` clears the index rows first and
       // drops the session after, so refusing the drop is a failure with the
       // index already gone — the exact partway state one transaction exists to
       // undo. (`turn_fts` cannot carry a trigger; it is a virtual table.)
@@ -513,7 +513,7 @@ describe('a delete that fails partway', () => {
        BEGIN SELECT raise(ABORT, 'refused'); END`,
     )
 
-    expect(() => t.forgetSession('ada', newer.token)).toThrow()
+    expect(() => t.forgetSessions('ada', [newer.token])).toThrow()
 
     exec(t, 'DROP TRIGGER refuse')
     expect(t.sessions('ada').map((one) => one.startedAt)).toEqual([9000, 1000])
@@ -1256,7 +1256,7 @@ describe('a scrub a reader held off comes back on its own', () => {
       reader.exec('BEGIN')
       reader.prepare('SELECT count(*) FROM session').get()
 
-      expect(t.forgetSession('ada', token)).toBe(true)
+      expect(t.forgetSessions('ada', [token])).toBe(1)
       expect(inTheLog(), 'the reader should have held the checkpoint off').toBe(true)
 
       // The reader lets go, and nothing else destructive happens.
@@ -1309,7 +1309,7 @@ describe('deleted text leaves the write-ahead log', () => {
     reader.exec('BEGIN')
     reader.prepare('SELECT count(*) FROM session').get()
 
-    expect(t.forgetSession('ada', token)).toBe(true)
+    expect(t.forgetSessions('ada', [token])).toBe(1)
     // Held off, so the words are still in the log.
     expect(anywhere()).toContain('CANARY-must-not-survive-deletion')
 
@@ -1320,5 +1320,71 @@ describe('deleted text leaves the write-ahead log', () => {
     open.splice(open.indexOf(t), 1)
 
     expect(anywhere()).not.toContain('CANARY-must-not-survive-deletion')
+  })
+})
+
+/**
+ * A confirmed batch is one transaction.
+ *
+ * Deleting several by calling the single-conversation delete in a loop gives one
+ * transaction and one scrub EACH: a failure at the second leaves the first
+ * permanently gone, after a single confirmation that named three. The unit the
+ * user agreed to is the batch, so the batch is the unit that commits.
+ */
+describe('deleting several of hers', () => {
+  it('leaves every one of them when any one of them fails', () => {
+    const t = store()
+    const a = conversation(t, 'ada', 1_000)
+    const b = conversation(t, 'ada', 9_000)
+    const c = conversation(t, 'ada', 20_000)
+
+    // Refuse the SECOND, so the first is already deleted when it happens.
+    exec(
+      t,
+      `CREATE TRIGGER refuse BEFORE DELETE ON session WHEN old.started_at = 9000
+       BEGIN SELECT raise(ABORT, 'refused'); END`,
+    )
+
+    expect(() => t.forgetSessions('ada', [a, b, c])).toThrow()
+
+    exec(t, 'DROP TRIGGER refuse')
+    // All three, including the one deleted before the failure -- which a loop
+    // over a single-conversation delete would have committed and lost.
+    expect(
+      t
+        .sessions('ada')
+        .map((one) => one.token)
+        .sort(),
+    ).toEqual([a, b, c].sort())
+    // And their words are still findable, so no index row was orphaned.
+    expect(t.search('ada', '苹果')).toHaveLength(3)
+  })
+
+  it('collapses duplicates and counts only what was really there', () => {
+    const t = store()
+    const a = conversation(t, 'ada', 1_000)
+    // Twice over, plus one that does not exist. Already-gone is the outcome
+    // being asked for, not an error -- failing the batch over one would make
+    // "delete them one at a time" the safe answer, which is what this avoids.
+    expect(t.forgetSessions('ada', [a, a, 'no-such-token'])).toBe(1)
+    expect(t.sessions('ada')).toHaveLength(0)
+  })
+
+  it('refuses to be handed an unreasonable pile', () => {
+    const t = store()
+    const a = conversation(t, 'ada', 1_000)
+    const flood = Array.from({ length: 100_000 }, (_, i) => `token-${String(i)}`)
+    // Bounded before the transaction opens: a payload this size did not come
+    // from somebody clicking, and the transaction should not find out the hard
+    // way. The real one is still in the first thousand, so it goes.
+    expect(t.forgetSessions('ada', [a, ...flood])).toBe(1)
+  })
+
+  it('never reaches another character', () => {
+    const t = store()
+    const hers = conversation(t, 'ada', 1_000)
+    const his = conversation(t, 'coach', 2_000)
+    expect(t.forgetSessions('coach', [hers, his])).toBe(1)
+    expect(t.sessions('ada')).toHaveLength(1)
   })
 })
