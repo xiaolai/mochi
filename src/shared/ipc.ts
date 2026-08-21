@@ -148,8 +148,10 @@ export const SHELF_CHANNELS = [
   /**
    * Main → the shell: show this place.
    *
-   * The menu bar still offers "Settings…", because that is what somebody looks
-   * for; where it lands is a tab rather than a window. One-way and one string —
+   * A deep link into one of the window's three places, used by the problems
+   * chip. The menu bar no longer offers a second entry alongside it: settings
+   * stopped being a window when the six groups became a tab, so two items
+   * opening one window was two doors into one room. One-way and one string —
    * the shell decides what to do with it, and an unknown place is ignored.
    */
   'shell:show',
@@ -179,6 +181,16 @@ export const SHELF_CHANNELS = [
   /** Undo or clear what she remembers about the person. Per character. */
   'shelf:memory',
   /**
+   * Write the system prompt document.
+   *
+   * APP-LEVEL, unlike everything else on this list, and it is on the shelf's
+   * channels rather than the settings window's because that is where it is
+   * edited — the pane already shows what it produces, and putting the editor
+   * and the receipt in two windows would be two places to reason about one
+   * string. See `store/prompt.ts` for why it is a file the user owns.
+   */
+  'shelf:prompt',
+  /**
    * Put one turn's words on the clipboard.
    *
    * Through main rather than through `navigator.clipboard`, which REFUSES an
@@ -193,6 +205,30 @@ export const SHELF_CHANNELS = [
    * different thing entirely from handing back words it is already displaying.
    */
   'shelf:copy',
+  /**
+   * Try one of her expressions on, from the grid that decides which she may use.
+   *
+   * ## Why the switches were not enough
+   *
+   * Eight faces are drawn and six were, in practice, still hard to ever see.
+   * `set_expression` made them reachable BY HER, and her manifest asks her not
+   * to use one every reply — rightly, since a face that changes every sentence
+   * stops meaning anything. So somebody deciding which faces a character should
+   * use had a grid of 56px tiles and no way to see the answer at the size she
+   * actually appears on the desktop.
+   *
+   * ## It is not gated on `faces`, and that is the point
+   *
+   * The grant and the character's `faces` constrain what SHE may reach for on
+   * her own. A person clicking a tile in their own settings window is not her
+   * reaching for anything, and requiring the face to be enabled first would
+   * make it impossible to look at one before deciding to enable it — which is
+   * the whole reason to click.
+   *
+   * Checked against `EMOTIONS` all the same: this ends at `wearExpression`,
+   * which is one enum wide, and a window may not widen it.
+   */
+  'shelf:wear-face',
 ] as const
 
 export type ShelfChannel = (typeof SHELF_CHANNELS)[number]
@@ -246,12 +282,52 @@ export const SETTINGS_CHANNELS = [
    * cannot write each other's answers back.
    */
   'settings:grant',
+  /**
+   * Ask the machine about Codex again, and wait for the answer.
+   *
+   * `invoke`, not a fire-and-forget: the check spawns two child processes with
+   * a deadline each, so it takes long enough that a button which returned
+   * immediately would look like it had done nothing. The renderer disables the
+   * control until this resolves and redraws from what comes back.
+   *
+   * It exists because three of the seven states are FIXED FROM OUTSIDE THIS
+   * APP — install the CLI, sign in, wait for a busy machine to settle — and a
+   * status that could only be refreshed by relaunching would send somebody
+   * looking for the fix back to the one place the fix cannot be applied.
+   */
+  'settings:codex-recheck',
 ] as const
 
 export type SettingsChannel = (typeof SETTINGS_CHANNELS)[number]
 
 export function isSettingsChannel(value: unknown): value is SettingsChannel {
   return typeof value === 'string' && (SETTINGS_CHANNELS as readonly string[]).includes(value)
+}
+
+/**
+ * When the ring over her head is drawn, and why `never` is one of the answers.
+ *
+ * Here rather than in `store/worn.ts` beside `BUBBLE_SIDES`, because unlike a
+ * bubble side this crosses into HER window as well as into the settings one —
+ * `showsHalo` in `face.ts` takes it — and a type main owns is a type the
+ * renderer cannot import.
+ *
+ * - `always` — the open ring and the resting hairline. The default.
+ * - `listening` — the open ring only, which is the state that means the
+ *   microphone is live. The hairline is the one people find noisy.
+ * - `never` — nothing on her at all.
+ *
+ * `never` is offerable because the promise moved. `halo.ts` exists so that an
+ * open microphone is never silent on screen, and while the halo was the only
+ * surface saying it, an off switch for the halo was an off switch for that. The
+ * tray item marks itself while the microphone is open now: it cannot be hidden,
+ * cannot be dragged off a display, and is the only way to quit the application.
+ */
+export const HALO_WHEN = ['always', 'listening', 'never'] as const
+export type HaloWhen = (typeof HALO_WHEN)[number]
+
+export function isHaloWhen(value: unknown): value is HaloWhen {
+  return typeof value === 'string' && (HALO_WHEN as readonly string[]).includes(value)
 }
 
 /**
@@ -265,11 +341,40 @@ export function isSettingsChannel(value: unknown): value is SettingsChannel {
 export interface SettingsScreen {
   readonly bubbleSide: string
   readonly sides: readonly string[]
+  /**
+   * When the halo over her head is drawn. See `HALO_WHEN`.
+   *
+   * It was `haloAtRest: boolean`, and deliberately narrower than "show the
+   * halo": while the halo was the only surface saying the microphone was open,
+   * a switch that could turn it off was a way to make the worst thing this app
+   * can do happen. The tray marks itself while the microphone is live now, and
+   * it cannot be hidden or switched off, so all three answers are ordinary
+   * preferences. See `readHaloWhen`.
+   */
+  readonly halo: HaloWhen
+  /** Every value the pane may offer, so it never draws one main would refuse. */
+  readonly haloChoices: readonly HaloWhen[]
+  /**
+   * Whether the speech-bubble control appears at her shoulder on hover.
+   *
+   * Offerable as a plain switch, unlike the halo, because nothing is only
+   * reachable through it: the bubble carries the same control and the tray menu
+   * opens the same window. See `readShoulderChip`.
+   */
+  readonly shoulderChip: boolean
+  /** Minutes of silence before she rests on her own. `0` is never. */
+  readonly sleepAfterMinutes: number
+  /** Every value the pane may offer, so it never draws one main would refuse. */
+  readonly sleepAfterChoices: readonly number[]
 }
 
 /** What may be changed about the screen. Absent means unchanged. */
 export interface ScreenChange {
   readonly bubbleSide?: string
+  /** A `HaloWhen`, unchecked — this is the WIRE shape. `applyScreen` decides. */
+  readonly halo?: string
+  readonly shoulderChip?: boolean
+  readonly sleepAfterMinutes?: number
 }
 
 /**
@@ -411,14 +516,30 @@ export interface SettingsLookup {
   /** Where that file is, so somebody can go and edit it. Null when none. */
   readonly profilePath: string | null
   /**
-   * Whether the Codex CLI was found at all.
+   * What the local Codex is actually worth, in seven states rather than two.
    *
-   * Without it she cannot look anything up, and the failure otherwise presents
-   * as her declining to help. It is on this view so the group carrying the
-   * lookup settings can mark itself as needing attention rather than showing
-   * three controls for something that cannot run.
+   * It was `codexFound: boolean`, which answers one of the three questions that
+   * decide whether she can speak at all: is it installed, does it run, and is
+   * its login usable BY US. The last is stricter than Codex's own answer — it
+   * reports itself signed in while holding an expired access token, because it
+   * owns a refresh token and renews on its next run, and this app cannot renew
+   * because the JWT's `client_id` is Codex's. So "found" was true for a machine
+   * whose credential was dead, and the failure arrived as a bare 401 at the
+   * moment somebody spoke to her.
+   *
+   * `CodexReadiness` and nothing else from `main/codex/status.ts`: that type
+   * carries a resolved binary path and the list of directories searched, and a
+   * search path is a home directory, which is a username. `readinessOf` maps
+   * one to the other with an exhaustive switch.
    */
-  readonly codexFound: boolean
+  readonly codex: SettingsCodex
+}
+
+/** How ready Codex is, and what a person does about it. Nothing else. */
+export interface SettingsCodex {
+  readonly readiness: CodexReadiness
+  /** Keyed for `REMEDY_SAYS`, and null exactly when nothing is wrong. */
+  readonly remedy: Remedy | null
 }
 
 /**
@@ -573,6 +694,16 @@ export interface MochiSettingsApi {
   screen(change: ScreenChange): Promise<SettingsWrite>
   grant(change: GrantChange): Promise<SettingsWrite>
   reveal(what: Revealable): void
+  /**
+   * Ask the machine about Codex again. Answers with what it found.
+   *
+   * The one settings call that is not a WRITE, which is why it does not answer
+   * `SettingsWrite`: nothing is saved, a machine is examined. Every remedy for
+   * an unhappy Codex is applied outside this app, so without this the only way
+   * to clear a stale status is to quit the application somebody was just told
+   * to go and fix something for.
+   */
+  recheckCodex(): Promise<SettingsCodex>
 }
 
 /**
@@ -581,8 +712,9 @@ export interface MochiSettingsApi {
  *
  * `voice:send` does two jobs. Most of what crosses it is the ledger's answers,
  * which belong on the data channel; the rest is main talking to the renderer —
- * the reconnect, the problem count, asleep, her stance, the bubble's side, the
- * standing grants. A channel per lifecycle event is the shape v1's 45 message
+ * the reconnect, the close, the problem count, asleep, her stance, the bubble's
+ * side, the standing grants, whether a lookup is running, whether the halo is
+ * drawn at rest. A channel per lifecycle event is the shape v1's 45 message
  * kinds grew out of, so they share one and are told apart by this.
  *
  * It is load-bearing rather than cosmetic. The renderer forwards what arrives
@@ -661,6 +793,7 @@ export type VoiceReport =
   /** Anything else worth saying once. */
   | { readonly kind: 'note'; readonly text: string }
 
+import type { CodexReadiness, Remedy } from './delegation'
 import type { Emotion } from './avatar'
 import type { FaceSpec } from './avatar-spec'
 import type { Pronoun } from './pronoun'
@@ -693,16 +826,6 @@ export interface SessionConfig {
    * The renderer branches on it, so the turn is never requested at all.
    */
   readonly greeting: string | null
-  /**
-   * Whether the microphone may open at all — 5b's first grant.
-   *
-   * On the config for the same reason `asleep` is: it is read from the same
-   * file at the same moment, and a second message would arrive after she had
-   * already started transmitting. It is NOT the same thing as `asleep`, which
-   * is where she was left; this is what she is permitted, and the microphone
-   * opens only when both agree.
-   */
-  readonly microphone: boolean
   /**
    * How she looks — the whole `FaceSpec`, resolved in main.
    *
@@ -769,8 +892,24 @@ export interface MochiApi {
   fit(request: {
     pad: { left: number; top: number; right: number; bottom: number }
     body: { left: number; top: number; width: number; height: number }
-    /** Where she is on screen right now, measured in the renderer's own frame. */
-    at: { x: number; y: number }
+    /**
+     * Where she sits inside the window RIGHT NOW, before this pad is applied.
+     *
+     * This was `at` — her position on SCREEN, `window.screenX + offset`, read in
+     * the renderer's own frame. That number is not reliable: a renderer's screen
+     * coordinates are a cached rect that Chromium refreshes on notifications it
+     * does not always receive for a frameless transparent window moved by
+     * `setPosition`. It answered `0` for a window main had already placed at
+     * 1957,1058 — so main computed her position as the pad's own offsets from
+     * the origin of a window nobody had ever seen, and moved her there.
+     *
+     * An OFFSET instead, which the renderer knows for certain because it is the
+     * layout it is drawing. Main pairs it with `getBounds()` read in the same
+     * handler, so both halves come from one moment — which is the whole property
+     * the screen reading was introduced to get, obtained from the side that
+     * actually has it.
+     */
+    was: { left: number; top: number }
   }): void
   /** Which sides the bubble can go on, and which it is on. For the menu. */
   sides(available: readonly string[], using: string): void
@@ -862,9 +1001,15 @@ export type ShelfCharacter = SettingsPersona
  * is the one surface that always answers whether she is listening.
  */
 export interface ShelfState {
+  /**
+   * Awake or resting, and that is now the WHOLE answer about the microphone.
+   *
+   * There used to be a second field here — the `microphone` grant — because the
+   * strip had to tell "she is resting" apart from "this machine forbids it".
+   * That grant is gone (`@shared/grants` records why), so resting is the only
+   * thing that closes the device and one boolean says so without ambiguity.
+   */
   readonly asleep: boolean
-  /** Whether the microphone grant allows one at all. See `@shared/grants`. */
-  readonly microphone: boolean
   /** The key that wakes her, or null when another application took it. */
   readonly restKey: string | null
 }
@@ -878,6 +1023,15 @@ export interface ShelfView {
   readonly characters: readonly ShelfCharacter[]
   readonly avatars: readonly SettingsAvatar[]
   readonly voices: readonly string[]
+  /**
+   * Which of `voices` carry a mark, and nothing about why.
+   *
+   * Sent rather than decided in the pane, for the same reason `voices` is: two
+   * places holding the same list is how a mark comes to be on a different pill
+   * in each of them. See `RECOMMENDED_VOICES` for what the mark is allowed to
+   * claim — it is somebody else's recommendation, not a measurement of ours.
+   */
+  readonly recommendedVoices: readonly string[]
   /**
    * Which words this interface uses for the worn character.
    *
@@ -913,6 +1067,24 @@ export interface ShelfView {
    * second place her prompt is built.
    */
   readonly assembled: string
+  /**
+   * The system prompt document — the thing that is EDITED, beside the string it
+   * produces.
+   *
+   * Both, because they are different objects and the pane shows both: one is
+   * what somebody wrote, the other is what she is handed once her character,
+   * her notes and her tools have been folded in. Sending only the second would
+   * make the editor unable to open; sending only the first would make the
+   * receipt a second assembly of the prompt, which is the drift
+   * `assembled`'s own comment exists to prevent.
+   */
+  readonly prompt: {
+    readonly text: string
+    /** Where it is, so somebody can open it in their own editor. */
+    readonly path: string
+    /** Which tokens move a piece. Sent, so the hint cannot list a stale one. */
+    readonly slots: readonly string[]
+  }
   readonly note: SettingsNote
 }
 
@@ -945,10 +1117,20 @@ export interface MochiHistoryApi {
   wear(id: string): Promise<SettingsWrite>
   /** Change a field on a character. Main decides what may be written, and where. */
   saveCharacter(change: PersonaChange): Promise<SettingsWrite>
+  /**
+   * Put one of her expressions on her, now, to look at it.
+   *
+   * Nothing is saved: this is the same one-value frame `set_expression` sends,
+   * from the grid that decides which expressions she may choose herself. See
+   * `shelf:wear-face`.
+   */
+  wearFace(face: string): Promise<SettingsWrite>
   /** Make one, copy one, remove one, or put the built-in back. */
   character(action: PersonaAction): Promise<SettingsWrite>
   /** Undo the last change to her note, or clear it. */
   memory(action: NoteAction): Promise<SettingsWrite>
+  /** Store the system prompt document. Empty is a real answer and is allowed. */
+  prompt(text: string): Promise<SettingsWrite>
   /** Put one turn's words on the clipboard. See `shelf:copy`. */
   copy(text: string): Promise<SettingsWrite>
 }

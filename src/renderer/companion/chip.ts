@@ -24,6 +24,16 @@
  * moving towards it leaves her, which hides it, which un-solids it under the
  * cursor. `visible()` therefore takes both, and the two together are stable:
  * the pointer is always on one or the other along any path between them.
+ *
+ * ## It can be switched OFF, and not from here
+ *
+ * `readShoulderChip` is a preference, and `face.ts` is where it is honoured.
+ * `visible()` answers "is the pointer on it", which is a question about
+ * geometry with one right answer whatever anybody has switched; putting the
+ * preference in it would make a geometric predicate lie. The gate sits at the
+ * single place that decides whether the control exists this frame — the fade —
+ * and that is what makes one line enough: at zero the mark is not painted, its
+ * rectangle stops taking the mouse, and the click handler returns early.
  */
 
 import type { Body, Room } from './place'
@@ -59,9 +69,23 @@ const GRACE = 12
 const DOT = 5
 
 export interface ChipColours {
-  /** Its own opaque surface. She may be sitting on a photograph. */
-  readonly paper: string
-  readonly ink: string
+  /**
+   * The bubble itself: HER colour, taken deep enough to carry white.
+   *
+   * It was `ink` on a `paper` plate — a black glyph in a light rounded square,
+   * which is a system tray icon rather than anything of hers. Two things were
+   * wrong with it and only one of them was the colour: the plate made a button
+   * out of a control that belongs to her, so it read as an application's chrome
+   * that happened to be parked at her shoulder.
+   *
+   * `--her-deep` rather than `--her`: her body is a fill seen at two hundred
+   * pixels inside her own outline, and the same value in a fourteen-pixel mark
+   * on an unknown desktop is a smudge. This is that colour darkened by a fixed
+   * amount — plainly hers, and legible alone.
+   */
+  readonly herDeep: string
+  /** The three dots, knocked out of it. What `--her-deep` is derived to carry. */
+  readonly herDeepInk: string
   /**
    * The unread-problems dot. Not themed, unlike everything else here.
    *
@@ -72,6 +96,16 @@ export interface ChipColours {
    * that let one value serve both schemes.
    */
   readonly alarm: string
+  /**
+   * The ring around that dot, and the LAST thing here still drawn on paper.
+   *
+   * The plate is gone, so this is no longer "the surface it sits on" — it is
+   * one 6px halo whose whole job is to keep a red dot from disappearing into a
+   * red pixel of somebody's wallpaper. A badge is not readable on its own the
+   * way a glyph in her colour is, because red against an unknown backdrop is a
+   * coincidence away from nothing.
+   */
+  readonly paper: string
 }
 
 export interface Rect {
@@ -161,6 +195,23 @@ export function visible(
  * scaled for two pixel ratios and kept in step with the theme. At this size the
  * drawing is also sharper, because it is drawn at the device ratio the window
  * happens to have rather than resampled to it.
+ *
+ * ## The glyph alone, at her colour
+ *
+ * There is no plate under it any more. It used to be a light rounded square
+ * with a black bubble on it, which is a tray icon: a second application's
+ * chrome standing beside her, in a colour belonging to neither the desktop nor
+ * the character. What is left is the mark itself in `--her-deep`, so the one
+ * control she carries looks like it is hers.
+ *
+ * ## The rectangle did not shrink with it
+ *
+ * `chipRect` is unchanged, so the glyph now fills a 26px target rather than
+ * being a 14px glyph centred on a 26px plate. `hits()` still answers for the
+ * whole rectangle and that is deliberate — the drawn mark is 20px across, which
+ * is already at the bottom of what a pointer can be asked to find, and the
+ * exception `chip.ts` makes to "only painted pixels take the mouse" was always
+ * the size of the CONTROL rather than the size of the paint.
  */
 export function drawChip(
   ctx: CanvasRenderingContext2D,
@@ -176,35 +227,36 @@ export function drawChip(
   ctx.save()
   ctx.globalAlpha = opacity
 
-  ctx.fillStyle = colours.paper
-  ctx.beginPath()
-  ctx.roundRect(x, y, w, h, 8)
-  ctx.fill()
+  /*
+    The glyph: a rounded speech bubble with a tail at the bottom left, and three
+    dots — the shape that reads as "what was said" at this size.
 
-  // The glyph: a rounded speech bubble with a tail at the bottom left, and three
-  // dots — the shape that reads as "what was said" at 26 pixels.
-  const pad = 6
+    3 of padding rather than 6. The old number left room for a plate's corners
+    around the mark; with the plate gone that margin is only a smaller drawing,
+    and the mark is the whole control now.
+  */
+  const pad = 3
   const bx = x + pad
   const by = y + pad + 1
   const bw = w - pad * 2
-  const bh = h - pad * 2 - 3
+  const bh = h - pad * 2 - 4
 
-  ctx.fillStyle = colours.ink
+  ctx.fillStyle = colours.herDeep
   ctx.beginPath()
-  ctx.roundRect(bx, by, bw, bh, 3)
+  ctx.roundRect(bx, by, bw, bh, 5)
   ctx.fill()
 
   ctx.beginPath()
-  ctx.moveTo(bx + 3, by + bh)
-  ctx.lineTo(bx + 3, by + bh + 3)
-  ctx.lineTo(bx + 7, by + bh)
+  ctx.moveTo(bx + 4, by + bh)
+  ctx.lineTo(bx + 4, by + bh + 4)
+  ctx.lineTo(bx + 10, by + bh)
   ctx.closePath()
   ctx.fill()
 
-  ctx.fillStyle = colours.paper
+  ctx.fillStyle = colours.herDeepInk
   for (let i = 0; i < 3; i += 1) {
     ctx.beginPath()
-    ctx.arc(bx + bw / 2 + (i - 1) * 3.5, by + bh / 2, 1, 0, Math.PI * 2)
+    ctx.arc(bx + bw / 2 + (i - 1) * 4.5, by + bh / 2, 1.4, 0, Math.PI * 2)
     ctx.fill()
   }
 

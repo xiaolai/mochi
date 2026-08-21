@@ -91,9 +91,9 @@ const SAYS = {
     it: 'its notes and its conversations',
   },
   assembled: {
-    she: 'The exact string she is handed, assembled on her next wake. Nothing here is sent until then.',
-    he: 'The exact string he is handed, assembled on his next wake. Nothing here is sent until then.',
-    it: 'The exact string it is handed, assembled on its next wake. Nothing here is sent until then.',
+    she: 'Write the prompt; Sent is the exact string she is handed once her character, her notes and her tools are folded in. Saving lands on her next wake.',
+    he: 'Write the prompt; Sent is the exact string he is handed once his character, his notes and his tools are folded in. Saving lands on his next wake.',
+    it: 'Write the prompt; Sent is the exact string it is handed once its character, its notes and its tools are folded in. Saving lands on its next wake.',
   },
 } as const satisfies Readonly<Record<string, ByPronoun>>
 
@@ -142,9 +142,19 @@ const SAYS = {
 
 export interface ShelfHandlers {
   readonly wear: (id: string) => void
+  /**
+   * Put an expression on her, now, to look at it. Nothing is stored.
+   *
+   * Separate from `save` because it is not a change: the switch beside the tile
+   * decides what she MAY use, and this decides nothing at all — it is how you
+   * see the answer at the size she appears on the desktop rather than at 56px.
+   */
+  readonly tryFace: (face: Emotion) => void
   readonly save: (change: PersonaChange) => void
   readonly persona: (action: PersonaAction) => void
   readonly memory: (action: NoteAction) => void
+  /** Store the system prompt document. Empty is a real answer. */
+  readonly prompt: (text: string) => void
   /** Say what happened. Silence after a write reads as the write not landing. */
   readonly say: (text: string, bad?: boolean) => void
 }
@@ -172,7 +182,18 @@ function section(title: string, hint: string, ...body: readonly HTMLElement[]): 
 /** A row of buttons where exactly one is current. Used for pronoun and voice. */
 function chooser(
   className: string,
-  entries: readonly { readonly value: string; readonly label: string }[],
+  entries: readonly {
+    readonly value: string
+    readonly label: string
+    /**
+     * Whether this one carries a dot, and NOT what the dot means.
+     *
+     * The caller writes the sentence under the row; the dot is only a pointer
+     * at it. A mark whose meaning lived here would be a claim made by a layout
+     * helper — see `RECOMMENDED_VOICES` for how careful the claim has to be.
+     */
+    readonly marked?: boolean
+  }[],
   chosen: string,
   pick: (value: string) => void,
 ): HTMLElement {
@@ -181,6 +202,21 @@ function chooser(
     const button = element('button', undefined, entry.label)
     button.type = 'button'
     button.setAttribute('aria-current', String(entry.value === chosen))
+    if (entry.marked === true) {
+      /*
+        A dot, and the WORD beside it in the accessible name.
+
+        The same rule the microphone mark in the top strip states: an icon alone
+        is only a statement to somebody already looking at it, so the fact is
+        kept as text for anybody who is not. `aria-hidden` on the dot itself,
+        because otherwise the graphic and the name both announce.
+      */
+      const dot = element('span', 'dot')
+      dot.setAttribute('aria-hidden', 'true')
+      button.append(dot)
+      button.setAttribute('aria-label', `${entry.label} — recommended`)
+      button.title = 'recommended for realtime'
+    }
     button.addEventListener('click', () => {
       // Nothing to save when it is already the answer, and a write would
       // redraw the pane under the pointer for no change.
@@ -363,10 +399,20 @@ export function characterCards(
  * The open character, as `Mochi Next.dc.html` draws her.
  *
  * Her, then her colour, then her moods, then her voice, then her file, then
- * what she is told, then what she remembers, then the cast itself. The order is
- * the artifact's and it is not arbitrary: it runs from what she IS toward what
- * has happened to her, so the sections that change identity are above the ones
- * that change history.
+ * what she is told, then what she remembers. The order is the artifact's and it
+ * is not arbitrary: it runs from what she IS toward what has happened to her,
+ * so the sections that change identity are above the ones that change history.
+ *
+ * ## Making and deleting characters is NOT one of these
+ *
+ * It was, as an eighth section, and it is the one thing on this pane that is
+ * not about the open character at all — New, Duplicate and Delete act on the
+ * LIST. Under that order it also landed at the very bottom of a long scrolling
+ * column, so on a first run with one character the control that makes the
+ * second one was below the fold.
+ *
+ * It lives under the list now — see `castActions`, which the column draws as
+ * its footer, the way the drawer is the window's.
  */
 export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLElement {
   const worn = view.characters.find((one) => one.id === view.wornId)
@@ -384,7 +430,6 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
     fileSection(view, worn, handlers),
     promptSection(view, worn, handlers),
     memorySection(view, handlers),
-    castSection(worn, view.pronoun, handlers),
   )
   return page
 }
@@ -406,6 +451,10 @@ function whoBand(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHandlers)
 
   const name = element('input', 'who-name')
   name.type = 'text'
+  // Her name can be cleared to nothing in the field before it is put back on
+  // `change`, and the h1 has no box of its own — so without this there is one
+  // keystroke of a pane with nothing on it. See the field rule in `tokens.css`.
+  name.placeholder = 'her name'
   name.value = worn.name
   name.addEventListener('change', () => {
     if (name.value.trim() === worn.name) {
@@ -437,7 +486,6 @@ function whoBand(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHandlers)
   facts.append(
     element('span', 'label', 'calls you'),
     called,
-    element('span', 'sep'),
     chooser(
       'switchers',
       PRONOUNS.map((one) => ({ value: one, label: one })),
@@ -547,10 +595,20 @@ const MOOD_WHEN: Readonly<Record<Emotion, ByPronoun>> = {
     he: 'a number that was not expected',
     it: 'a number that was not expected',
   },
+  /*
+    What she chooses, not what the app sets.
+
+    This read "while a lookup is running", which was a caption for machinery
+    that does not exist: nothing in the build has ever set this face, and
+    `set_expression` is the only caller of `setEmotion` outside the rig. A
+    running lookup is now drawn by the bead travelling her halo — see
+    `halo.ts` — which is the app's own statement about the app's own wait, and
+    leaves this face meaning what the tool says it means.
+  */
   thinking: {
-    she: 'while a lookup is running',
-    he: 'while a lookup is running',
-    it: 'while a lookup is running',
+    she: 'working something out, when she says so',
+    he: 'working something out, when he says so',
+    it: 'working something out, when it says so',
   },
   sleepy: { she: 'the hour ran out', he: 'the hour ran out', it: 'the hour ran out' },
 }
@@ -572,8 +630,31 @@ function moodSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHandl
   for (const emotion of EMOTIONS) {
     const allowed = on.has(emotion)
     const tile = element('div', allowed ? 'mood' : 'mood off')
+    /*
+      The DRAWING is the button, not the tile around it.
+
+      Clicking it puts that expression on her at the size she appears on the
+      desktop, which is the only way to see six of the eight: `set_expression`'s
+      own manifest tells her not to change face every reply, rightly, so in
+      ordinary conversation most of them almost never come up.
+
+      Wrapping the whole tile was the first version and it is invalid HTML — the
+      `allowed` checkbox lives inside it, and interactive content nested in a
+      `<button>` is not reliably clickable in Chromium. So the target is the one
+      thing somebody is actually looking at, and the switch beside it keeps its
+      own job with nothing to disambiguate.
+    */
+    const tryIt = element('button', 'mood-try')
+    tryIt.type = 'button'
+    // What it DOES. The name under it is what the expression is called; a
+    // tooltip repeating that would tell nobody anything they cannot see.
+    tryIt.title = `See ${emotion} on her`
+    tryIt.append(faceTile(worn.face, 56, emotion))
+    tryIt.addEventListener('click', () => {
+      handlers.tryFace(emotion)
+    })
     tile.append(
-      faceTile(worn.face, 56, emotion),
+      tryIt,
       element('span', 'name', emotion),
       element('span', 'when', forPronoun(MOOD_WHEN[emotion], view.pronoun)),
     )
@@ -629,9 +710,10 @@ function moodSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHandl
  * than an update — the hint says so.
  */
 function voiceSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHandlers): HTMLElement {
+  const recommended = new Set(view.recommendedVoices)
   const pills = chooser(
     'pills',
-    view.voices.map((one) => ({ value: one, label: one })),
+    view.voices.map((one) => ({ value: one, label: one, marked: recommended.has(one) })),
     worn.voice,
     (value) => {
       handlers.save({ id: worn.id, voice: value })
@@ -650,7 +732,28 @@ function voiceSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHand
   const row = element('div', 'row')
   row.append(bubble, label)
 
-  return section('Voice', forPronoun(SAYS.nextWake, view.pronoun), pills, row)
+  /*
+    What the dot means, said once under the row rather than in ten tooltips.
+
+    Careful about whose claim it is. §25's "What is NOT established" is explicit
+    that latency and quality are entirely unmeasured here — nobody in this
+    project has listened to ten voices and ranked them — so this points at
+    somebody else's recommendation instead of making one. The one fact measured
+    on this machine is in §24 §3: the service's own default output voice is
+    `marin`, which is one of the two.
+  */
+  const marked = element('p', 'note')
+  const dot = element('span', 'dot')
+  dot.setAttribute('aria-hidden', 'true')
+  marked.append(dot, ` ${view.recommendedVoices.join(' and ')} are the two OpenAI recommends `)
+  marked.append('for realtime. The rest all work; nothing here has measured how they sound.')
+
+  const body: HTMLElement[] = [pills]
+  // Only when there is something to explain. A legend for a mark that is not on
+  // screen is a sentence about nothing, and this list comes from main.
+  if (view.recommendedVoices.length > 0) body.push(marked)
+  body.push(row)
+  return section('Voice', forPronoun(SAYS.nextWake, view.pronoun), ...body)
 }
 
 /**
@@ -732,6 +835,9 @@ function promptSection(
   ] as const) {
     const box = element('input')
     box.type = 'text'
+    // Both of these are legitimately empty — a character can have nothing to
+    // convey on waking — and an unboxed empty field is a blank patch of paper.
+    box.placeholder = 'nothing in particular'
     box.value = moment.value
     box.addEventListener('change', () => {
       if (box.value.trim() === moment.value) {
@@ -825,14 +931,43 @@ function memorySection(view: ShelfView, handlers: ShelfHandlers): HTMLElement {
 }
 
 /**
- * Making, copying and removing characters.
+ * Making, copying and removing characters — under the LIST they act on.
+ *
+ * ## Why it is not a section of the sheet
+ *
+ * It was the eighth one, and it was the only thing on that pane not about the
+ * open character: New, Duplicate and Delete change what is in the column, not
+ * who somebody is. `characterSheet`'s own ordering argues that the pane runs
+ * "from what she IS toward what has happened to her", and none of these is
+ * either. Being last also put the control that makes a second character below
+ * the fold of a long scroll on the one install that has exactly one.
+ *
+ * ## It still names the open character, and has to
+ *
+ * "Duplicate Loki" and "Delete Loki" are about whoever is open, which on this
+ * shelf is whoever is worn — clicking a card wears them. So it takes the same
+ * `worn` the sheet does, and the two cannot disagree because there is one
+ * answer to who that is.
  *
  * A NAME, never an id. The id is derived in main against what is already taken
  * AND what a pending deletion still reserves, because an id is what her memory
  * and her conversations are filed under: choosing one from here would be
  * choosing whose leftovers a new character inherits.
  */
-function castSection(worn: ShelfCharacter, pronoun: Pronoun, handlers: ShelfHandlers): HTMLElement {
+export function castActions(view: ShelfView, handlers: ShelfHandlers): readonly HTMLElement[] {
+  const worn = view.characters.find((one) => one.id === view.wornId)
+  // Nothing to duplicate or delete when nothing is loaded, and "New" alone
+  // wants the empty state's own words rather than a lone button under a list
+  // that is not there.
+  if (worn === undefined) return []
+  return castRow(worn, view.pronoun, handlers)
+}
+
+function castRow(
+  worn: ShelfCharacter,
+  pronoun: Pronoun,
+  handlers: ShelfHandlers,
+): readonly HTMLElement[] {
   const row = element('div', 'row')
 
   const name = element('input')
@@ -920,28 +1055,150 @@ function castSection(worn: ShelfCharacter, pronoun: Pronoun, handlers: ShelfHand
     guarded.push(remove)
   }
 
-  return section('Cast', 'a character is a folder · deleting one takes its memory', row)
+  /*
+    A footer, not a section, and not a wrapper either.
+
+    `section()` draws a caps heading with a hint beside it, which is the shape
+    the SHEET uses for a field. Under the list this is the same thing the drawer
+    is to the window — controls that belong to what is above them — so it gets
+    the one-line note and no second heading, because the column already says
+    "Characters" a few pixels above the list these act on.
+
+    Returned as a LIST rather than inside a `div` of its own: `#cast-actions`
+    already exists in the markup with the padding and the rule on it, and a
+    second box inside it would be two containers for one thing — the mistake
+    `#panel-wake` was carrying when it wore `.panel` inside `.cast-wake`.
+  */
+  return [row, element('p', 'note', 'a character is a folder · deleting one takes its memory')]
 }
 
 /**
- * The exact string she will be handed, not a summary of it.
+ * The system prompt: the document you write, and the string it produces.
  *
- * The artifact's right-hand column is literally `instructionsFor`'s output, and
- * main sends it as one string for that reason — a column that re-assembled it
- * here would be a second place her prompt is built, and the two would drift the
+ * ## Two views of one thing, and both are needed
+ *
+ * WRITE is the document — a markdown file the user owns, empty on a fresh
+ * install, with Save and Cancel. SENT is `instructionsFor`'s output: the exact
+ * string she is handed once her character, her notes and her tool list have
+ * been folded in.
+ *
+ * Neither replaces the other. Editing without seeing what it produces is
+ * writing into a box and hoping; seeing without editing was this panel until
+ * now. And the sent half stays main's — a column that re-assembled it here
+ * would be a second place her prompt is built, and the two would drift the
  * first time either changed.
+ *
+ * ## Save and Cancel, and why THIS control has them
+ *
+ * Every other control on this shelf autosaves on `change`, which is right for a
+ * voice or a swatch: the value is small, the change is one gesture, and an
+ * accidental one is one gesture to undo. A system prompt is none of those.
+ * Tabbing out of a half-written paragraph would commit it, and there would be
+ * nothing to go back to.
  */
-export function assembledPanel(view: ShelfView): readonly HTMLElement[] {
+export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readonly HTMLElement[] {
   const head = element('div', 'row')
-  head.append(
-    element('h3', undefined, 'Next wake'),
-    element('span', 'grow'),
-    element('span', 'meta', `${String(view.assembled.length)} chars`),
-  )
-  const note = element('p', 'note', forPronoun(SAYS.assembled, view.pronoun))
-  const box = element('div', 'wake-box')
+  const count = element('span', 'meta')
+  head.append(element('h3', undefined, 'System prompt'), element('span', 'grow'), count)
+
+  const editor = element('textarea', 'wake-edit')
+  editor.value = view.prompt.text
+  editor.spellcheck = false
+  editor.rows = 10
+  // What it is FOR, in the window rather than in the file. Markdown has no
+  // comment a model cannot read, so anything put in the document to explain it
+  // would be text she is handed — see `store/prompt.ts`.
+  editor.placeholder = `Empty. She is still told her character, what she remembers and what she can do — this is prose of your own, above all of it.\n\nSlots move a piece instead of leaving it where it goes: ${view.prompt.slots.map((one) => `{${one}}`).join(' ')} and {name}.`
+
+  const sent = element('div', 'wake-box')
   const body = element('pre')
   body.textContent = view.assembled
-  box.append(body)
-  return [head, note, box]
+  sent.append(body)
+
+  /*
+    One pane at a time, and WRITE is not the default.
+
+    Opening on the editor would put a text box where a readout used to be, on a
+    panel most visits do not come to edit. Sent is the answer to "what will she
+    be told", which is what the column is for; Write is a step you take.
+  */
+  const save = element('button', 'btn primary', 'Save')
+  save.type = 'button'
+  const cancel = element('button', 'btn', 'Cancel')
+  cancel.type = 'button'
+  const actions = element('div', 'row wake-actions')
+  actions.append(save, cancel)
+
+  const tabs = element('div', 'switchers wake-tabs')
+  let writing = false
+
+  const draw = (): void => {
+    tabs.replaceChildren()
+    for (const [id, label] of [
+      ['sent', 'Sent'],
+      ['write', 'Write'],
+    ] as const) {
+      const button = element('button', undefined, label)
+      button.type = 'button'
+      button.setAttribute('aria-current', String((id === 'write') === writing))
+      button.addEventListener('click', () => {
+        if ((id === 'write') === writing) return
+        writing = id === 'write'
+        // The draft survives the switch. Looking at what it produces and coming
+        // back is exactly what somebody does while writing one.
+        draw()
+      })
+      tabs.append(button)
+    }
+    sent.hidden = writing
+    editor.hidden = !writing
+    actions.hidden = !writing
+    count.textContent = writing
+      ? `${String(editor.value.length)} chars`
+      : `${String(view.assembled.length)} sent`
+  }
+
+  editor.addEventListener('input', () => {
+    // The Save is enabled by there being a difference, not by having typed —
+    // typing a character and deleting it is not a change to save.
+    const changed = editor.value !== view.prompt.text
+    save.disabled = !changed
+    cancel.disabled = !changed
+    count.textContent = `${String(editor.value.length)} chars`
+  })
+  save.disabled = true
+  cancel.disabled = true
+
+  save.addEventListener('click', () => {
+    save.disabled = true
+    cancel.disabled = true
+    handlers.prompt(editor.value)
+  })
+  cancel.addEventListener('click', () => {
+    // Back to what is stored, not to empty. Cancel undoes the edit; there is a
+    // separate and deliberate way to store nothing, which is to clear the box
+    // and Save.
+    editor.value = view.prompt.text
+    save.disabled = true
+    cancel.disabled = true
+    count.textContent = `${String(editor.value.length)} chars`
+  })
+
+  head.append(tabs)
+  const note = element('p', 'note', forPronoun(SAYS.assembled, view.pronoun))
+  /*
+    Where the file is, so it can be opened in a real editor — this box is a text
+    area, not somewhere anybody should have to write a long prompt.
+
+    UNDER THE NOTE, not under the box. It says what this panel is, which is what
+    the note above it does, and the foot of the column belongs to Save and
+    Cancel now: the box grows to fill the sidebar, so whatever is listed after
+    it lands on the bottom edge, and a two-line path down there would push the
+    buttons off it.
+  */
+  const where = element('p', 'note')
+  where.append(element('code', undefined, view.prompt.path))
+
+  draw()
+  return [head, note, where, sent, editor, actions]
 }

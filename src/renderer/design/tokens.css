@@ -265,6 +265,38 @@
   --live-off: light-dark(#98a2ad, #6b7682);
 
   /*
+   * ---- working ------------------------------------------------------------
+   *
+   * The FOURTH status family, and the only one that means "this is fine".
+   *
+   * `--warn-*` says a person has an errand, `--alarm` says read me now, and
+   * `--live-*` says a device is on. None of them can say "the thing you came
+   * here to check is healthy", and the settings window needs to: a pane where
+   * the only status that is ever drawn is a bad one leaves "nothing there" with
+   * two meanings — fine, and not checked yet — for checks that genuinely have a
+   * not-checked-yet.
+   *
+   * FIXED, not hers. `accent.ts` states that the accent is her and there is no
+   * second place to set an app colour, and this does not break that rule so
+   * much as fall outside it: whether the Codex CLI on this machine is signed in
+   * has nothing to do with which character is worn, and a green light that
+   * turned blue because somebody put on a blue persona would be reporting the
+   * wrong subject. It is the same argument `--live` already makes for not
+   * taking her hue, one family over.
+   *
+   * Measured, like the rest of this block. A light is a non-text mark, so the
+   * floor is 3.00 (WCAG 1.4.11); these are text-grade anyway because the word
+   * beside them may take the colour too:
+   *
+   *   light `#1f7a44` — 4.85 on `--paper`, 5.16 on `--paper-2`, 4.97 on `--warn-bg`
+   *   dark  `#5fbc84` — 7.66 on `--paper`, 7.03 on `--paper-2`, 6.51 on `--warn-bg`
+   */
+  --ok: light-dark(#1f7a44, #5fbc84);
+  /* The glow around a lit one. Her veil's trick: the same hue at low alpha, so
+     it sits on an unknown surface without deciding what is behind it. */
+  --ok-wash: light-dark(rgb(31 122 68 / 18%), rgb(95 188 132 / 22%));
+
+  /*
    * ---- the halo over her head ----------------------------------------------
    *
    * Geometry as tokens because several surfaces draw it and the ellipse has to
@@ -357,7 +389,7 @@
 }
 
 /*
- * The one component in this file: a button.
+ * The first component in this file: a button.
  *
  * It was an underline for a while, on a study that asked which treatment stops
  * you noticing that the labels are different lengths -- the real message tables
@@ -371,9 +403,11 @@
  * underlined text beside two other underlined texts reads as a list of links,
  * not as three buttons one of which is destructive.
  *
- * Inputs keep their own box and their own radius; the difference between "type
- * in me" and "I do something" is now carried by fill and weight rather than by
- * presence of a border, which is the distinction the artifact makes.
+ * A button keeps its box at rest and a FIELD does not -- see the field component
+ * below, which is what tells the two apart now. The paragraph that stood here
+ * said the opposite ("inputs keep their own box"), and that arrangement is what
+ * produced a settings column with a boxed text field above an unboxed dropdown
+ * above another boxed text field, all three doing the same kind of job.
  */
 button.btn {
   min-height: 30px;
@@ -410,6 +444,111 @@ button.btn.arming {
   border-color: var(--red);
   color: var(--red);
   font-weight: 600;
+}
+
+/*
+ * The second component: a field. Quiet when it has something to say.
+ *
+ * ## What it replaces, and why one rule rather than five
+ *
+ * Every window decided this separately and they disagreed. In the shelf,
+ * `select` was already transparent-until-hover with a comment arguing for it --
+ * *"a column of grey dropdown chrome is the single biggest reason this window
+ * read as a form where the artifact reads as a document"* -- and
+ * `input[type='text']` two rules above it kept a resting `--rule` border. The
+ * Machine tab's "Looking things up" group draws all three in one column:
+ * Workspace (boxed), Web search (quiet), Codex profile (boxed). Nothing about
+ * those three jobs differs; only which rule happened to reach them did.
+ *
+ * So the argument the `select` rule already won is applied to all of them, once,
+ * here -- and the two comments that argued the other way are rewritten rather
+ * than left standing over a sheet that no longer obeys them.
+ *
+ * ## Three states, and the third one is the one that was missed
+ *
+ * Quiet with a value; BOXED while empty; filled-but-unboxed on focus. The
+ * middle one was found by photographing the pane rather than by reading the
+ * rule: an empty field with no edge is a placeholder floating over paper.
+ *
+ * ## TRANSPARENT, never `border: 0`
+ *
+ * The box keeps its 1px at rest and only loses its colour. Removing the border
+ * outright makes every control jump by two pixels on hover, which is a layout
+ * that moves under the pointer -- the same reasoning the search field's own
+ * `:focus` rule already gives for going transparent instead of to zero.
+ *
+ * ## What is deliberately NOT here
+ *
+ * `textarea` is a field by this definition and keeps its box anyway, because it
+ * is the one control whose EXTENT is part of what it tells you: five rows of
+ * prompt with no edge is a paragraph somebody has to discover is editable.
+ * Fields are one line and their extent says nothing.
+ */
+input[type='text'],
+input[type='search'],
+select {
+  padding: var(--s1) var(--s3);
+  border: 1px solid transparent;
+  border-radius: var(--r2);
+  /*
+   * `background-color`, NEVER the `background` shorthand.
+   *
+   * A `select` draws its chevron as two `background-image` gradients, and the
+   * shorthand resets that longhand to `none` -- so a hover rule written as
+   * `background:` erases the arrow for exactly as long as the pointer is over
+   * the control, which is the one moment somebody is looking at it.
+   */
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--t-sm);
+  user-select: text;
+}
+input[type='text']:hover,
+input[type='search']:hover,
+select:hover {
+  border-color: var(--rule);
+  background-color: var(--paper);
+}
+/*
+ * An EMPTY field keeps its box, because there is nothing else to look at.
+ *
+ * The quiet rule above rests on there being something to read: a field with a
+ * value in it still shows the value and reads as a field. One showing only a
+ * placeholder shows nothing that looks operable — the "name" box under the
+ * character list became a grey word floating over paper, and the only thing
+ * saying it could be typed in was that it happened to be above three buttons.
+ *
+ * `:placeholder-shown` rather than a class somebody remembers to add, which is
+ * how the next empty field comes to be missing it. The cost is that a field
+ * with no `placeholder` attribute can never match, so every one-line field in
+ * these windows carries a placeholder — and it should anyway, since an empty
+ * box with no word in it does not say what it is for either.
+ */
+input[type='text']:placeholder-shown,
+input[type='search']:placeholder-shown {
+  border-color: var(--rule);
+  background-color: var(--paper);
+}
+/*
+ * Focused: the fill, but NOT the border, so the ring is not doubled.
+ *
+ * Two rings, one inside the other: the gold `:focus-visible` outline sits a
+ * pixel outside the field's own grey hairline and the pair read as a doubled
+ * border rather than as a field being focused. The search field alone used to
+ * handle this; every field inherits it now, which is the point of the rule
+ * living here.
+ *
+ * `:focus` rather than `:focus-visible`, because a text field matches the
+ * latter however focus arrived and matching the wider rule is what stops the
+ * hairline surviving a case the outline does not. Last, so it beats both the
+ * hover and the empty rules above at equal specificity.
+ */
+input[type='text']:focus,
+input[type='search']:focus,
+select:focus {
+  border-color: transparent;
+  background-color: var(--paper);
 }
 
 /*

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { trayMenuTemplate, WINDOWS_SCALES } from './tray'
 
@@ -9,8 +11,7 @@ const RESTING = { asleep: false, hidden: false }
 const KEYS = { rest: 'Control+Shift+L', hide: 'Control+Shift+M' }
 
 const HANDLERS = {
-  onShelf: () => undefined,
-  onSettings: () => undefined,
+  onOpen: () => undefined,
   onWear: () => undefined,
   onBubbleSide: () => undefined,
   onRest: () => undefined,
@@ -21,6 +22,87 @@ const HANDLERS = {
 function labels(template: ReturnType<typeof trayMenuTemplate>): string[] {
   return template.map((item) => (item.type === 'separator' ? '—' : String(item.label)))
 }
+
+/**
+ * The microphone's one unswitchable surface.
+ *
+ * ## Why this is a source check and not a unit
+ *
+ * `markListening` runs inside `createTray`, which needs a real `Tray`. What is
+ * being asserted is not what it draws — it is that the fact reaches the tray at
+ * all, and that no preference stands between them. Neither is observable from
+ * either module alone, which is the case `lifecycle.test.ts` and
+ * `stylesheets.test.ts` already read source text for.
+ *
+ * ## What it is guarding
+ *
+ * `halo.ts` exists because an open microphone with nothing on screen saying so
+ * is the worst thing this application can do. The halo used to be the only
+ * surface carrying that, which made it a promise rather than a preference — and
+ * left `setHidden` able to break the promise in one click, since hiding her
+ * window deliberately does not touch the session.
+ *
+ * The tray item cannot be hidden, cannot be dragged off a display, and is the
+ * only way to quit. Moving the fact here is what makes "never draw the halo" an
+ * ordinary preference. The moment a preference reaches this file, that is
+ * undone — quietly, and the app goes on looking exactly the same.
+ */
+describe('what the menu bar says about the microphone', () => {
+  const source = readFileSync(fileURLToPath(new URL('./tray.ts', import.meta.url)), 'utf8')
+
+  it('takes the fact from the model and puts it on the item', () => {
+    expect(source).toContain('readonly listening: boolean')
+    expect(source).toMatch(/markListening\(item, now\.listening\)/)
+    expect(source).toMatch(/setTitle\(/)
+    // In words as well as in a shape. A mark alone is only a statement to
+    // somebody who can see it, which is the rule the shelf's own microphone
+    // already follows with its off-screen label.
+    expect(source).toMatch(/setToolTip\(/)
+  })
+
+  it('is reachable from no preference at all', () => {
+    // Every switch this app offers, by the name it has in the store. Any of
+    // them appearing in this file would mean the one surface that cannot be
+    // turned off had acquired a way to be turned off.
+    for (const preference of ['haloWhen', 'haloAtRest', 'shoulderChip', 'bubbleSide']) {
+      expect(source, `${preference} must not reach the tray mark`).not.toContain(preference)
+    }
+  })
+})
+
+/**
+ * The menu never offers a side nothing computed.
+ *
+ * `bubbleSides` in main is a placeholder until her window reports, and it was
+ * `['above']` — not a default so much as a fabrication. The renderer only
+ * reported while it was DRAWING a bubble, so a character with the bubble
+ * switched off never reported at all, and the menu spent whole sessions
+ * offering one invented side on a machine where three of the four fitted.
+ *
+ * A placeholder cannot be right, so this pins which way it is allowed to be
+ * wrong. Too many is recoverable — `auto` declines a side that does not fit,
+ * and the menu marks what was ASKED rather than what was used. Too few hides
+ * real choices behind an answer that looks considered.
+ */
+describe('the sides main starts with', () => {
+  it('is every real side, not one somebody picked', () => {
+    const index = readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf8')
+    const held = /let bubbleSides[\s\S]*?\n\}/.exec(index)?.[0] ?? ''
+    expect(held, 'main still holds the sides').not.toBe('')
+    // Derived from the one list, so a fifth side cannot arrive without this
+    // placeholder learning about it.
+    expect(held).toContain('BUBBLE_SIDES')
+    expect(held).not.toMatch(/available: \['above'\]/)
+  })
+
+  it('leaves `auto` out, because it is not a side', () => {
+    // `auto` is the absence of a choice. The submenu draws it separately, above
+    // the rule; listing it as available would put it in twice.
+    const index = readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf8')
+    const held = /let bubbleSides[\s\S]*?\n\}/.exec(index)?.[0] ?? ''
+    expect(held).toContain("!== 'auto'")
+  })
+})
 
 describe('the only way out', () => {
   it('always offers quit, whatever else is in the menu', () => {
@@ -34,6 +116,7 @@ describe('the only way out', () => {
         pronoun: 'she' as const,
         bubble: BUBBLE,
         resting: RESTING,
+        listening: false,
         keys: KEYS,
       },
       HANDLERS,
@@ -50,6 +133,7 @@ describe('the only way out', () => {
         pronoun: 'she' as const,
         bubble: BUBBLE,
         resting: RESTING,
+        listening: false,
         keys: KEYS,
       },
       HANDLERS,
@@ -59,7 +143,7 @@ describe('the only way out', () => {
     expect(quit?.accelerator).toBe('Command+Q')
   })
 
-  it('offers both windows, which are otherwise reached only by hovering her', () => {
+  it('offers the window, which is otherwise reached only by hovering her', () => {
     const template = trayMenuTemplate(
       {
         personas: [],
@@ -67,12 +151,40 @@ describe('the only way out', () => {
         pronoun: 'she' as const,
         bubble: BUBBLE,
         resting: RESTING,
+        listening: false,
         keys: KEYS,
       },
       HANDLERS,
       'Mochi',
     )
-    expect(labels(template)).toEqual(expect.arrayContaining(['Shelf…', 'Settings…', 'Quit Mochi']))
+    expect(labels(template)).toEqual(expect.arrayContaining(['Mochi…', 'Quit Mochi']))
+  })
+
+  it('offers ONE way into the window, not one per tab of it', () => {
+    /*
+      "Shelf…" and "Settings…" both stood here and both opened the same window;
+      the second sent it to the Machine tab afterwards. That was honest while
+      settings was its own window and became two doors into one room when the
+      six groups became a tab.
+
+      Counted rather than named, so adding a third entry that opens it fails
+      here rather than being noticed on somebody's screen.
+    */
+    const template = trayMenuTemplate(
+      {
+        personas: [{ id: 'mochi', name: 'Mochi' }],
+        wornId: 'mochi',
+        pronoun: 'she' as const,
+        bubble: BUBBLE,
+        resting: RESTING,
+        listening: false,
+        keys: KEYS,
+      },
+      HANDLERS,
+      'Mochi',
+    )
+    const opens = labels(template).filter((one) => one.endsWith('…'))
+    expect(opens).toEqual(['Mochi…'])
   })
 })
 
@@ -86,6 +198,7 @@ describe('who she is, and who she could be', () => {
     pronoun: 'she' as const,
     bubble: BUBBLE,
     resting: RESTING,
+    listening: false,
     keys: KEYS,
   }
 
@@ -114,6 +227,7 @@ describe('who she is, and who she could be', () => {
       pronoun: 'she' as const,
       bubble: BUBBLE,
       resting: RESTING,
+      listening: false,
       keys: KEYS,
     }
     const template = trayMenuTemplate(alone, HANDLERS, 'Mochi')
@@ -130,6 +244,7 @@ describe('who she is, and who she could be', () => {
       pronoun: 'she' as const,
       bubble: BUBBLE,
       resting: RESTING,
+      listening: false,
       keys: KEYS,
     }
     expect(trayMenuTemplate(stray, HANDLERS, 'Mochi')[0]?.label).toBe('Mochi')
@@ -152,6 +267,7 @@ describe('choosing where she speaks from', () => {
     pronoun: 'she' as const,
     bubble: { available: ['above', 'left'], asked: 'auto', using: 'above' },
     resting: RESTING,
+    listening: false,
     keys: KEYS,
   }
 
@@ -217,6 +333,7 @@ describe('resting and hiding', () => {
     wornId: 'mochi',
     pronoun: 'she' as const,
     bubble: BUBBLE,
+    listening: false,
     keys: KEYS,
   }
 
@@ -262,6 +379,6 @@ describe('resting and hiding', () => {
 
   it('puts them first, where somebody in a hurry looks', () => {
     const shown = labels({ ...BASE, resting: { asleep: false, hidden: false } })
-    expect(shown.indexOf('Let her rest')).toBeLessThan(shown.indexOf('Shelf…'))
+    expect(shown.indexOf('Let her rest')).toBeLessThan(shown.indexOf('Mochi…'))
   })
 })

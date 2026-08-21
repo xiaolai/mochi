@@ -14,7 +14,7 @@ const MINUTE = 60_000
 /**
  * How long it ran. Null while she is still awake in it.
  *
- * Rounded to whole minutes above a minute, because a conversation is not a
+ * Rounded to whole minutes, never below one, because a conversation is not a
  * stopwatch and "4 min 37 s" invites a precision the number does not have —
  * `ended_at` is the last turn's timestamp, not the moment she stopped talking.
  */
@@ -30,15 +30,22 @@ export function lengthLabel(startedAt: number, endedAt: number | null): string |
     without anything being corrupt.
   */
   if (!Number.isFinite(span) || span < 0) return null
-  if (span < MINUTE) return 'under a minute'
   /*
     Rounded to whole MINUTES first, then split into hours and a remainder.
 
     Rounding the remainder independently produced `1 h 60 min` for 1h59m30s,
     and `60 min` for 59m30s — both of which are a number nobody writes. One
     rounding, then division, cannot say sixty of anything.
+
+    FLOORED at one, which is what a short conversation now says. It used to
+    answer `under a minute` — true, and the only row in the list that was a
+    sentence rather than a duration, so a column of `1 min · 4 min · under a
+    minute · 2 h` had one entry somebody had to read instead of compare. The
+    floor is what the words were carrying: without it a thirty-second
+    conversation rounds to `1 min` and a ten-second one to `0 min`, and zero of
+    something that happened is worse than the sentence was.
   */
-  const minutes = Math.round(span / MINUTE)
+  const minutes = Math.max(1, Math.round(span / MINUTE))
   if (minutes < 60) return `${String(minutes)} min`
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60

@@ -22,6 +22,14 @@ const GOOD = {
   last_refresh: '2026-08-12T15:20:31.131382Z',
 }
 
+/** A JWT with the given `exp`, in seconds. Only the payload matters. */
+function jwt(expSeconds: number): string {
+  const body = Buffer.from(JSON.stringify({ sub: 'x', exp: Math.floor(expSeconds) })).toString(
+    'base64url',
+  )
+  return `header.${body}.signature`
+}
+
 /** A `fetch` that answers once, with whatever the test says. */
 function answering(status: number, body: string): typeof globalThis.fetch {
   return async () => new Response(body, { status })
@@ -67,6 +75,40 @@ describe('reading the credential off disk', () => {
     expect(read.ok).toBe(true)
     if (!read.ok) return
     expect(read.value.lastRefresh).toBeNull()
+  })
+
+  it('refuses a token that has already expired, WITHOUT asking the service', () => {
+    /*
+      §51, several seconds earlier than it used to be found.
+
+      The stored token goes stale between 5 and 17 days and nothing refreshes it
+      but running the CLI, so a machine nobody has opened Codex on has a dead
+      credential — and this was discovered as a bare 401 at the moment a session
+      opened, after a peer had been built and a request had gone out. The `exp`
+      claim is in the token; reading it is free.
+
+      No `fetch` is passed anywhere in this test, which is the assertion: if the
+      refusal came from the network it could not happen here at all.
+    */
+    writeAuth({ tokens: { access_token: jwt(Date.now() / 1000 - 60) }, last_refresh: 'then' })
+    const read = readBearer(home)
+    expect(read.ok).toBe(false)
+    if (read.ok) return
+    expect(read.problem).toEqual({ kind: 'stale-token', lastRefresh: 'then' })
+  })
+
+  it('accepts one with time left', () => {
+    writeAuth({ tokens: { access_token: jwt(Date.now() / 1000 + 3600) } })
+    expect(readBearer(home).ok).toBe(true)
+  })
+
+  it('accepts a token whose expiry cannot be read, and lets the service decide', () => {
+    // NOT the same as refusing it. An unreadable lifetime is a token this side
+    // cannot promise anything about — refusing would turn "we do not know" into
+    // "sign in again", which is wrong advice for a credential that works. The
+    // 401 path is what catches this one, and it is still there.
+    writeAuth({ tokens: { access_token: 'not-a-jwt' } })
+    expect(readBearer(home).ok).toBe(true)
   })
 })
 

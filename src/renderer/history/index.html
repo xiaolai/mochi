@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Shelf</title>
+    <title>Mochi</title>
     <link rel="stylesheet" href="../design/tokens.css" />
     <style>
       /*
@@ -45,31 +45,18 @@
         align-items: center;
         min-width: 0;
       }
+      /*
+        Only the size and the shape are this window's.
+
+        The border, the fill, and the way an empty field keeps an edge while a
+        filled one goes quiet are all the field component's, in `tokens.css` —
+        which is why a search box nobody has typed in still looks operable
+        without a rule here saying so.
+      */
       .topbar-context input[type='search'] {
         width: 340px;
         padding: var(--s1) var(--s4);
-        border: 1px solid var(--rule);
         border-radius: var(--r-pill);
-        background: var(--paper);
-        color: inherit;
-        font: inherit;
-        font-size: var(--t-sm);
-      }
-      /*
-        The resting edge goes when the focus ring arrives.
-
-        Two rings, one inside the other: the gold `:focus-visible` outline sits
-        a pixel outside the field's own grey hairline, and the pair read as a
-        doubled border rather than as a field being focused. TRANSPARENT rather
-        than `border: 0`, so the box keeps its 1px and nothing shifts.
-
-        `:focus` rather than `:focus-visible` — the outline is drawn by the
-        latter, but a text field matches it however focus arrived, and matching
-        the wider rule here means the hairline cannot survive a case the outline
-        does not.
-      */
-      .topbar-context input[type='search']:focus {
-        border-color: transparent;
       }
       .topbar {
         flex: none;
@@ -126,8 +113,9 @@
       /*
         The microphone, as a mark at the end of the strip.
 
-        Read the markup above for why the words survive as the accessible name
-        and why the three states differ in shape rather than only in colour.
+        Read the markup above for why the words survive as the accessible name,
+        and why the two states differ in weight and fill rather than only in
+        colour.
       */
       /*
         `--live-off`, not `--ink-3`, and `--live` when it is open.
@@ -138,10 +126,12 @@
         Blue is the third status family and the first that means "on" rather
         than "wrong".
 
-        Withheld stays grey too. Red would make a decision somebody made look
-        like a fault, and the same argument is why `halo.ts` draws nothing at
-        all for it. Here the SLASH is what tells it apart, which survives being
-        read by somebody who cannot see the colour.
+        TWO states, where there were three. The third was `off` — the
+        `microphone` grant withheld — drawn with a line through the mark,
+        because a decision somebody made must not read as a fault and the shape
+        had to say so to anybody who cannot see the colour. That grant is gone
+        (`@shared/grants` records why), so resting is the only thing that closes
+        the device and the slash has nothing left to mean.
       */
       .mic {
         flex: none;
@@ -159,17 +149,11 @@
         stroke-width: 1.6;
       }
       .mic .arc,
-      .mic .stem,
-      .mic .slash {
+      .mic .stem {
         fill: none;
         stroke: currentColor;
         stroke-width: 1.6;
         stroke-linecap: round;
-      }
-      /* Withheld, and only then. A line through it is the one state that has to
-         survive being read by somebody who cannot see the colour. */
-      .mic .slash {
-        display: none;
       }
       .mic.open {
         color: var(--live);
@@ -184,9 +168,6 @@
       /* FILLED when it is open, so the loudest state is also the solid one. */
       .mic.open .cap {
         fill: currentColor;
-      }
-      .mic.off .slash {
-        display: initial;
       }
       /*
         Present to a screen reader, absent to a pointer. Not `display: none`,
@@ -570,6 +551,86 @@
         margin-left: auto;
         flex: none;
       }
+      /*
+        What this machine's Codex is worth, above the settings that depend on it.
+
+        A CARD rather than a bare note, and drawn in both the healthy and the
+        unhappy case. This used to be one red line that appeared only when the
+        CLI was missing, which gave "nothing here" two meanings — everything is
+        fine, and the check has not finished — for a check that genuinely has a
+        not-finished-yet state.
+
+        `--warn-*` rather than `--red`: an unusable Codex is a machine somebody
+        has to go and fix, not a fault in this application, and the same family
+        marks the problems chip in the drawer for the same reason.
+      */
+      .codex {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s2);
+        margin-bottom: var(--s5);
+        padding: var(--s4) var(--s5);
+        border: 1px solid var(--rule);
+        border-radius: var(--r3);
+        background: var(--paper-2);
+      }
+      .codex.bad {
+        border-color: var(--warn-line);
+        background: var(--warn-bg);
+      }
+      /*
+        The light, the state, and the button — one line, in that order.
+
+        `grow` on the sentence rather than `margin-left: auto` on the button, so
+        the button is pushed by the thing it is about rather than pulling itself
+        away from it. The difference shows the moment the sentence wraps: the
+        button stays on the first line's baseline either way.
+      */
+      .codex-head {
+        display: flex;
+        align-items: center;
+        gap: var(--s3);
+      }
+      .codex-said {
+        flex: 1;
+        min-width: 0;
+        font-size: var(--t-cap);
+        color: var(--ink-2);
+      }
+      .codex.bad .codex-said {
+        color: var(--warn-ink);
+        font-weight: 600;
+      }
+      .codex-head .btn {
+        flex: none;
+      }
+      /*
+        Green when it is working, and NOT red when it is not.
+
+        `--ok` is the fourth status family and the only one that means "this is
+        fine" — see `tokens.css` for why it is fixed rather than hers, and for
+        the measurements. Unlit is `--warn-line`, not `--red`: an unusable Codex
+        is a machine somebody has to go and fix, not a fault in this
+        application, and red would make an errand look like a crash.
+
+        A ring around the lit one only. An 8px dot of colour on paper reads as a
+        bullet; the glow is what makes it a light, and it should only be there
+        when there is something to be pleased about.
+      */
+      .light {
+        width: 8px;
+        height: 8px;
+        flex: none;
+        border-radius: 50%;
+        background: var(--warn-line);
+      }
+      .light.on {
+        background: var(--ok);
+        box-shadow: 0 0 0 3px var(--ok-wash);
+      }
+      .codex .note {
+        margin: 0;
+      }
       .field {
         display: grid;
         grid-template-columns: 150px minmax(0, 1fr);
@@ -672,6 +733,37 @@
         gap: var(--s1);
         padding: 0 var(--s3) var(--s5);
         overflow-y: auto;
+      }
+      /*
+        The list's own footer: what you do TO the list, under it.
+
+        `flex: none` against the `.cards` above it, which is `flex: 1` and
+        scrolls — so the buttons stay put while the characters move past them,
+        which is the whole reason this is a footer rather than the bottom of the
+        scroll. The rule above it is the same one the drawer draws across the
+        window, and it means the same thing in both places.
+
+        `flex-wrap` because "Delete Constance Wickham" is as long as the label
+        gets and this column is 268px: without it the row would decide the
+        column's width instead of the other way round.
+      */
+      .cast-foot {
+        flex: none;
+        padding: var(--s4) var(--s5) var(--s5);
+        border-top: 1px solid var(--rule);
+      }
+      .cast-foot .row {
+        gap: var(--s2);
+      }
+      .cast-foot input[type='text'] {
+        width: 100%;
+      }
+      .cast-foot .btn {
+        /* The window-wide floor is 9ch, which overflows a 268px column two
+           buttons wide. They are stacked here, so the floor has nothing to
+           even up and a full-width button is the more legible answer. */
+        min-width: 0;
+        width: 100%;
       }
       .card {
         display: flex;
@@ -787,27 +879,57 @@
 
         20px of padding rather than 16, so this column's heading sits on the
         same line as `CHARACTERS` on the far side. They were 13px apart.
+
+        A BOTTOM as well, which it did not have. Nothing used to reach the foot
+        of this column — the panel stopped wherever its text ran out and left
+        blank paper under it — so an open bottom cost nothing and was never
+        noticed. Save and Cancel sit on that edge now, and a button flush
+        against the drawer's rule reads as having fallen out of the column.
       */
       .cast-wake {
         min-height: 0;
         display: flex;
         flex-direction: column;
-        padding: var(--s6) var(--s6) 0;
+        padding: var(--s6);
         background: var(--paper-2);
         border-left: 1px solid var(--rule);
       }
 
+      /*
+        How tall the system prompt panel's two views are, at least.
+
+        A local custom property rather than the number twice: the whole point is
+        that the readout and the editor cannot disagree, and two literals is
+        exactly how they would come to.
+      */
+      #app {
+        --wake-floor: 220px;
+      }
+
       /* ---- the controls the sections hold ---------------------------------- */
-      /* Which words she takes: three choices, not a dropdown of three. */
+      /*
+        Which words she takes: three choices, not a dropdown of three.
+
+        A TRACK with a pill inside it, rather than a pill-shaped group whose
+        current item is a full-bleed segment of it. Under the old rule the group
+        carried the only radius and `overflow: hidden` clipped the fill to it —
+        so the selected item was a rectangle in the middle and a half-pill at
+        either end, and which shape it had depended on where it happened to sit
+        in the list rather than on it being selected.
+
+        The inner pill is also the shape the voice row beside it uses for the
+        same job, so the pane now says "this one" one way instead of two.
+      */
       .switchers {
         display: inline-flex;
+        gap: 2px;
+        padding: 2px;
         border: 1px solid var(--rule);
         border-radius: var(--r-pill);
-        overflow: hidden;
       }
       .switchers button {
         border: 0;
-        border-radius: 0;
+        border-radius: var(--r-pill);
         background: transparent;
         padding: var(--s1) var(--s4);
         font-family: var(--narrow);
@@ -817,6 +939,10 @@
         text-transform: uppercase;
         color: var(--ink-3);
         cursor: default;
+      }
+      .switchers button:hover:not([aria-current='true']) {
+        background: var(--paper-hover);
+        color: var(--ink);
       }
       .switchers button[aria-current='true'] {
         background: var(--her-deep);
@@ -865,6 +991,9 @@
         gap: var(--s2);
       }
       .pills button {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s2);
         padding: var(--s2) var(--s4);
         border: 0;
         border-radius: var(--r-pill);
@@ -874,6 +1003,30 @@
         font: inherit;
         font-size: var(--t-sm);
         cursor: default;
+      }
+      /*
+        The mark on a recommended voice, and on the sentence that explains it.
+
+        HER colour rather than the warning family: this is a suggestion, not
+        something wrong. `--her-deep` so it carries against both the pill's
+        `--paper-2` and the selected pill's `--her-wash`, where plain `--her`
+        would nearly vanish.
+
+        The word "recommended" is in the button's accessible name — see
+        `chooser` — because an icon alone is only a statement to somebody
+        already looking at it.
+      */
+      .pills .dot,
+      .note .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--her-deep);
+        flex: none;
+      }
+      .note .dot {
+        display: inline-block;
+        vertical-align: middle;
       }
       .pills button:hover {
         box-shadow: inset 0 0 0 1px var(--ink-3);
@@ -901,6 +1054,37 @@
         border-radius: var(--r3);
         background: var(--paper-2);
         text-align: center;
+      }
+      /*
+        The face is a control now: click it to see that expression on her.
+
+        Bare of every button default — a `<button>` does not inherit `font`, and
+        it arrives with its own border, background and padding, all of which
+        would draw a second box around a drawing that is already inside one.
+
+        The affordance is the WASH, appearing on hover. A permanent outline
+        around eight faces would read as eight buttons rather than as eight
+        faces, which is the wrong subject: the drawing is what somebody came to
+        this grid to look at.
+      */
+      .mood-try {
+        display: block;
+        padding: var(--s1);
+        border: 0;
+        border-radius: var(--r3);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: default;
+      }
+      .mood-try:hover {
+        background: var(--paper-hover);
+      }
+      /* Dimmed with the tile it sits in, so a face she may not use does not
+         advertise itself more loudly than one she may. Still clickable — being
+         able to look at one before enabling it is the point. */
+      .mood.off .mood-try:hover {
+        background: var(--hair-soft);
       }
       .mood.off {
         border-style: dashed;
@@ -933,7 +1117,21 @@
       }
 
       /* ---- what she will be told, down the right --------------------------- */
+      /*
+        The panel IS the column, not a block sitting at the top of one.
+
+        `.cast-wake` is a grid item and stretches to the full height of the row;
+        this was content-sized inside it, so `flex: 1` on the box below had no
+        free space to distribute and the writing surface stopped dead at its
+        220px floor. On a full-height window that left several hundred pixels of
+        blank paper under the box you write paragraphs in.
+
+        Filling the column is what lets the box grow to the sidebar, and what
+        gives Save and Cancel a bottom edge to sit on instead of following the
+        text up to wherever it happened to end.
+      */
       #panel-wake {
+        flex: 1;
         min-height: 0;
         display: flex;
         flex-direction: column;
@@ -980,7 +1178,7 @@
       */
       .wake-box {
         flex: 1;
-        min-height: 0;
+        min-height: var(--wake-floor);
         overflow-y: auto;
         margin: 0 calc(var(--s6) * -1) 0;
         border-top: 1px solid var(--rule);
@@ -990,6 +1188,122 @@
         border-radius: 0;
         background: transparent;
         padding: var(--s4) var(--s6);
+      }
+      /*
+        The editor, occupying exactly what the readout beside it does.
+
+        Both are `flex: 1` in the same column and only one is ever shown, so
+        switching between Sent and Write must not move anything else on the
+        panel — a Save button that jumped when you pressed a tab would read as
+        the tab having done something else.
+
+        Edge to edge, like `.wake-box`, so a long line disappears AT a drawn
+        rule rather than at an arbitrary inset — the finding the shelf's scroll
+        regions were rebuilt around.
+      */
+      .wake-edit {
+        flex: 1;
+        /*
+          The SAME floor as the readout, and now ONLY a floor.
+
+          It used to be the size. The panel was content-driven, so `flex: 1` had
+          nothing to distribute: the textarea's `rows` set one height and the
+          `<pre>`'s content set the other, and the panel grew by 35px when you
+          pressed Write. Measured, not noticed: 166 against 201 in the same
+          window.
+
+          The panel fills the column now, so both views take everything the
+          heading, the notes and the action row leave — the same amount, because
+          they are the same box in the same place. What the floor still does is
+          stop that amount going to nothing in a 560px window, which is as short
+          as this one is allowed to get.
+        */
+        min-height: var(--wake-floor);
+        margin: 0 calc(var(--s6) * -1) 0;
+        /*
+          The READOUT's inset, not the base rule's.
+
+          `pre, textarea` pads by `--s4`, and `.wake-box > pre` overrides the
+          horizontal half to `--s6` so the assembled string starts under the
+          heading. The editor kept the 12px and nothing said so: the first
+          character of the document you write sat 8px left of the first
+          character of the string it produces, and the text shifted under the
+          pointer when you pressed Write. The panel already refuses to move its
+          two views relative to each other; this is that same promise about
+          where the words begin.
+        */
+        padding: var(--s4) var(--s6);
+        border-width: 1px 0 0;
+        border-radius: 0;
+        resize: none;
+      }
+      /*
+        NO ring on this one. The rule it hangs from darkens instead.
+
+        `:focus-visible` is 2px of gold, which is right for a control with an
+        edge of its own for a ring to sit outside. This box has no edges: its
+        sides are cancelled and its negative margins put it against the column's
+        rule on one side and the window's edge on the other. So the ring drew a
+        gold rectangle around the one thing on this panel that is deliberately
+        not a rectangle — straddling the column's border on the way out, and
+        boxing in a full-bleed writing surface when pulled back inside. There is
+        no offset that makes a box correct where there is no box.
+
+        The hairline going to ink says the same thing and says it in the
+        window's own voice. It is the answer her name already gives on the pane
+        beside this one, where the shared field box is undone for the same
+        reason and a single line carries the focus.
+
+        `:focus` rather than `:focus-visible` — a text box matches the latter
+        however focus arrived, and matching the wider rule is what keeps a click
+        and a Tab looking the same.
+      */
+      .wake-edit:focus-visible {
+        outline: none;
+      }
+      .wake-edit:focus {
+        border-top-color: var(--ink);
+      }
+      /*
+        A prompt nobody has written must not read as one somebody has.
+
+        The placeholder is four lines of prose in the document's own mono, at
+        its size, in its ink — so an empty file looked like a written one, and
+        `0 chars` beside the heading was the only thing on the panel that
+        disagreed. `--ink-3` is the answer this window already gives to the same
+        question one column over, where `pre.empty-note` says what an empty
+        memory means.
+
+        Mono still, and deliberately: `{style}` and `{notes}` are strings
+        somebody types, and a proportional font would stop them looking like it.
+      */
+      .wake-edit::placeholder {
+        color: var(--ink-3);
+      }
+      /*
+        The two tabs, at the size of the heading they sit beside.
+
+        `.switchers` is the pronoun control's shape and this borrows it whole —
+        one way of saying "this one, not that one" in this window. Smaller here
+        because it shares a line with an h3 rather than standing under one.
+      */
+      .wake-tabs button {
+        padding: 2px var(--s3);
+        font-size: var(--t-nano);
+      }
+      /*
+        On the bottom edge, under a box that has taken everything above them.
+
+        `flex: none`, so the box grows and these keep their height rather than
+        the other way round. The margin is because they are what you do when you
+        have STOPPED writing — pressed against the writing surface they read as
+        part of it. The air underneath is the column's own bottom padding, so
+        the two gaps are set in one place each and neither is a number.
+      */
+      .wake-actions {
+        flex: none;
+        justify-content: flex-end;
+        margin-top: var(--s4);
       }
 
       /* ---- the open character's column ------------------------------------- */
@@ -1161,6 +1475,23 @@
         font-weight: 700;
         letter-spacing: -0.02em;
       }
+      /*
+        The two shared states are UNDONE here, not merely added to.
+
+        `tokens.css` gives every field a `--rule` border and a `--paper` fill on
+        hover and focus. Winning on specificity is not enough, because the
+        cascade runs per DECLARATION: a rule that names only
+        `border-bottom-color` leaves the shared `border-color` and
+        `background-color` in force however specific it is, and her name would
+        grow the full box this whole block exists to remove — on hover only,
+        which is exactly the kind of thing a screenshot of a resting window does
+        not show. So every property the shared rule sets is named back.
+      */
+      input[type='text'].who-name:hover,
+      input[type='text'].who-name:focus {
+        border-color: transparent;
+        background-color: transparent;
+      }
       input[type='text'].who-name:hover {
         border-bottom-color: var(--rule);
       }
@@ -1172,11 +1503,6 @@
         display: flex;
         align-items: center;
         gap: var(--s3);
-      }
-      .who-facts .sep {
-        width: 1px;
-        height: 18px;
-        background: var(--rule);
       }
       .who-facts .meta {
         font-family: var(--mono);
@@ -1201,7 +1527,16 @@
         background: var(--paper);
         color: inherit;
         font-family: var(--mono);
-        font-size: var(--t-label);
+        /*
+          `--t-data`, which is what every other piece of mono in this window is
+          set in — the hints beside the headings, the paths, the counts, the
+          problem chip in the drawer. This said `--t-label`, and `--t-label` is
+          11px because it is the size of a CAPS LABEL of two or three words.
+          These three boxes are documents: the prompt you write, the string it
+          produces, and the note she keeps. One pixel, and it is the difference
+          between glancing at a word and reading a paragraph.
+        */
+        font-size: var(--t-data);
         line-height: 1.6;
         user-select: text;
       }
@@ -1253,6 +1588,9 @@
       }
       /* The clock and the facts, on one line — `09:41 · 14 turns · 7 min`. */
       .entry .when {
+        display: flex;
+        align-items: center;
+        gap: var(--s3);
         font-size: var(--t-ui-2);
         font-weight: 600;
       }
@@ -1323,9 +1661,42 @@
         letter-spacing: -0.015em;
       }
       .talk-facts {
+        display: flex;
+        align-items: center;
+        gap: var(--s4);
         font-family: var(--mono);
         font-size: var(--t-data);
         color: var(--ink-3);
+      }
+      /*
+        A glyph and a number, in the two places that draw the same two facts.
+
+        `14 turns · 7 min` was the same two nouns down a whole column, and the
+        numbers are what somebody is comparing. The noun survives as the
+        accessible name and the tooltip — see `glyph.ts` — so nothing is lost to
+        anybody who cannot see the picture.
+
+        Quieter than what it sits beside: in the list the clock is the row's
+        subject and these are its footnotes, so they take `--ink-3` against the
+        entry's own weight rather than matching it.
+      */
+      .fact {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s1);
+        flex: none;
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        font-weight: 400;
+        color: var(--ink-3);
+      }
+      .fact svg {
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
       /* One speaker's unbroken stretch. Her face sits with the last bubble. */
       .run {
@@ -1537,13 +1908,6 @@
         background: var(--paper-2);
         border-top: 1px solid var(--rule);
       }
-      .handle {
-        width: 46px;
-        height: 4px;
-        border-radius: var(--r-pill);
-        background: var(--rule);
-        flex: none;
-      }
       .warn {
         display: flex;
         align-items: center;
@@ -1566,39 +1930,57 @@
 
       /* The button treatment is `button.btn` in tokens.css — a box, told apart
          from the select beside it by fill and weight rather than by border. */
+      /*
+        HERS, not gold.
+
+        `accent.ts` states the design's second semantic rule — *the accent is
+        her*, derived from `colBody`, with no second place to set an app colour
+        — and then this rule set one. The gold was the last of a chrome hue that
+        file records as a migration reported finished and never made: the open
+        tab, the card ring, a selected row and the search hit all take her
+        colour, so the mark somebody sees most often was the only thing left
+        arguing for a palette nothing else in the window uses.
+
+        `--ink-brand` rather than `--her` or `--her-deep`, and which of the three
+        is not a matter of taste. This ring is read against the PAGE, and
+        `--ink-brand` is the one of them composed per scheme for exactly that:
+        `--her` is her body, which measures about 1.7:1 on `--paper` and is not
+        an indicator at all, and `--her-deep` is one value for both schemes
+        because white is read against IT rather than it against anything —
+        3.1:1 on a dark page, which clears by too little to be worth having.
+
+        What makes it safe for a hue nobody has seen: `contrastFailures` checks
+        `--ink-brand` against her own wash at 4.5:1 in both schemes and falls
+        back to the built-in when it fails. `--paper` is lighter than that wash
+        in light and darker than it in dark, so the measured pairing is the
+        WORSE one either way — every character that can be worn clears 4.5:1
+        here, against a bar of 3:1.
+      */
       :focus-visible {
-        outline: 2px solid var(--gold);
+        outline: 2px solid var(--ink-brand);
         outline-offset: 1px;
       }
       /*
-        A field you TYPE in keeps its box; a field you CHOOSE from loses it.
+        EVERY field is quiet at rest now, and the rule lives in `tokens.css`.
 
-        The artifact has no `<select>` anywhere — it writes the value as plain
-        type with a quiet action beside it ("built-in mochi  94 × 73 pt · 100%"
-        … "SWAP · TUNE"), and a column of grey dropdown chrome is the single
-        biggest reason this window read as a form where the artifact reads as a
-        document. The box comes back on hover and focus, so the affordance is
-        still there the moment somebody goes looking for it.
+        This window used to answer it twice and differently: a `select` was
+        transparent-until-hover, with a comment arguing that *"a column of grey
+        dropdown chrome is the single biggest reason this window read as a form
+        where the artifact reads as a document"*, and an `input[type='text']`
+        two rules above it kept a resting border. The Machine tab's "Looking
+        things up" group draws all three in one column — Workspace, Web search,
+        Codex profile — so the mismatch was visible in a single glance and
+        nothing about the three jobs justified it.
+
+        What stays here is the CHEVRON, which is a `select`'s alone and needs
+        room reserved for it on the right that no text field wants.
       */
-      input[type='text'] {
-        padding: var(--s1) var(--s3);
-        border: 1px solid var(--rule);
-        border-radius: var(--r2);
-        background: var(--paper);
-        color: inherit;
-        font: inherit;
-        font-size: var(--t-sm);
-      }
       select {
         appearance: none;
-        padding: var(--s1) var(--s6) var(--s1) var(--s2);
-        border: 1px solid transparent;
-        border-radius: var(--r2);
-        background: transparent;
-        color: inherit;
-        font: inherit;
+        padding-right: var(--s6);
+        padding-left: var(--s2);
         font-size: var(--t-body);
-        /* The chevron, drawn rather than shipped: one token, both schemes. */
+        /* Drawn rather than shipped: one token, both schemes. */
         background-image:
           linear-gradient(45deg, transparent 50%, currentColor 50%),
           linear-gradient(135deg, currentColor 50%, transparent 50%);
@@ -1609,14 +1991,6 @@
           5px 5px,
           5px 5px;
         background-repeat: no-repeat;
-      }
-      select:hover,
-      select:focus {
-        border-color: var(--rule);
-        background-color: var(--paper);
-      }
-      input[type='text'] {
-        user-select: text;
       }
       .row {
         display: flex;
@@ -1640,7 +2014,6 @@
         color: var(--gold);
         border-radius: var(--r0);
       }
-      /* Says what happened, on its own opaque surface with an elevation. */
       /*
         What just happened. Gone in ten seconds, or sooner if you say so.
 
@@ -1649,25 +2022,40 @@
         `#said:empty` was how it hid, which stopped working the moment it held a
         button. `[hidden]` in `tokens.css` does that job now, and it is a state
         the renderer sets rather than a side effect of the text being blank.
+
+        IN the drawer, not floating over it. It was `position: fixed; bottom:
+        56px`, which put a full-width bar eight pixels above the full-width bar
+        the window already had. It keeps its own surface, which is what makes
+        `.bad` tint the message rather than the whole status line.
+
+        No elevation any more: it sits ON a surface now rather than over the
+        document, and a shadow inside a bar reads as a seam.
       */
       #said {
-        position: fixed;
-        left: var(--s6);
-        right: var(--s6);
-        bottom: 56px;
+        flex: 0 1 auto;
+        min-width: 0;
         margin: 0;
         display: flex;
         align-items: center;
-        gap: var(--s4);
-        padding: var(--s3) var(--s4) var(--s3) var(--s5);
-        border-radius: var(--r2);
-        background: var(--paper-2);
-        box-shadow: var(--lift-1);
+        gap: var(--s2);
+        padding: var(--s1) var(--s2) var(--s1) var(--s4);
+        border-radius: var(--r-pill);
+        background: var(--paper);
+        box-shadow: inset 0 0 0 1px var(--rule);
         font-size: var(--t-sm);
       }
+      /*
+        ONE line, with the rest in the tooltip.
+
+        The drawer is a fixed 48px, so a message that wrapped would be clipped
+        rather than shown — and the renderer sets `title` to the same text, so
+        nothing is only half available.
+      */
       #said-what {
-        flex: 1;
         min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       #said-shut {
         flex: none;
@@ -1693,6 +2081,7 @@
       #said.bad {
         color: var(--red);
         background: var(--red-bg);
+        box-shadow: inset 0 0 0 1px var(--red);
       }
     </style>
   </head>
@@ -1750,7 +2139,6 @@
             <rect class="cap" x="6" y="1.6" width="4" height="7.2" rx="2"></rect>
             <path class="arc" d="M3.6 7.4a4.4 4.4 0 0 0 8.8 0"></path>
             <path class="stem" d="M8 11.9V14.2"></path>
-            <path class="slash" d="M2.8 2.8 13.2 13.2"></path>
           </svg>
           <span class="ghost" id="mic-label"></span>
         </span>
@@ -1772,6 +2160,17 @@
             <span class="stat" id="characters-count"></span>
           </div>
           <div class="cards" id="characters"></div>
+          <!--
+            New, Duplicate and Delete, under the list they act on.
+
+            They were the last section of the character sheet, which is the one
+            place on that pane that is not about the open character — and being
+            last put the control that makes a SECOND character below the fold of
+            a long scroll, on the one install that has exactly one. This column
+            is what they change, so this is where they live: a footer to the
+            list, the way the drawer is a footer to the window.
+          -->
+          <div class="cast-foot" id="cast-actions"></div>
         </aside>
         <div id="pane"></div>
         <aside class="cast-wake">
@@ -1816,30 +2215,41 @@
         <aside class="machine-tools" id="machine-tools"></aside>
       </section>
 
+      <!--
+        The window's status line: what is wrong, what just happened, and the one
+        action that is about the window rather than about her.
+
+        The grab handle that used to open this row is GONE. It was a 46 x 4 pill
+        with no listener anywhere — an affordance inherited from the artifact for
+        a drawer that does not open — and a handle nobody can grab is the same
+        kind of thing as a caption for machinery that does not exist.
+
+        `#said` moved IN here. It was `position: fixed; bottom: 56px`, which is a
+        floating strip resting eight pixels above this one: two horizontal bars
+        at the bottom of the window saying different kinds of thing. It is still
+        its own element with its own surface, so `#said.bad` tints the message
+        and not the problems chip or `Export…` beside it.
+
+        The dismiss button is in the markup rather than added by the renderer so
+        it is never a MUTATION of the live region: only the text changes, so only
+        the text is announced, and "Dismiss" is not read out after every save.
+      -->
       <div class="drawer">
-        <span class="handle"></span>
         <button class="warn" id="troubles" type="button" hidden>
           <span class="dot"></span><span id="troubles-label"></span>
         </button>
+        <p id="said" role="status" aria-live="polite" hidden>
+          <span id="said-what"></span>
+          <button id="said-shut" type="button" aria-label="Dismiss" title="Dismiss">
+            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+              <path d="M4 4 12 12M12 4 4 12"></path>
+            </svg>
+          </button>
+        </p>
         <span class="grow"></span>
         <button class="btn" id="export" type="button">Export…</button>
       </div>
     </div>
-    <!--
-      What just happened, and a way to be rid of it.
-
-      The button is in the markup rather than added by the renderer so it is
-      never a MUTATION of the live region: only the text changes, so only the
-      text is announced, and "Dismiss" is not read out after every save.
-    -->
-    <p id="said" role="status" aria-live="polite" hidden>
-      <span id="said-what"></span>
-      <button id="said-shut" type="button" aria-label="Dismiss" title="Dismiss">
-        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-          <path d="M4 4 12 12M12 4 4 12"></path>
-        </svg>
-      </button>
-    </p>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

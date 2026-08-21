@@ -195,8 +195,29 @@ export function createLedger(input: {
    * `dispatch.ts` use.
    */
   readonly used: (name: string, at: number) => void
+  /**
+   * How many calls she has said she would come back to and has not yet.
+   *
+   * Reported rather than polled, because the only thing that can see the moment
+   * it changes is `emit` — and it is called AFTER the state is written, so the
+   * count is the new one rather than the one that was true a line earlier.
+   *
+   * ## What it is for
+   *
+   * The bead that travels her halo. `beat.ts` covers the 1.5–2s before her
+   * voice arrives (§64); this covers the other wait, which is the long one — a
+   * lookup runs about 22 seconds (§8) and she has already spoken by then, so
+   * the beat has closed and nothing on screen says anything is still running.
+   * `thinking` was captioned "while a lookup is running" in the shelf and was
+   * reachable only if she chose it herself.
+   *
+   * OPTIONAL, unlike `used`, and the asymmetry is deliberate: forgetting `used`
+   * makes the panel state a falsehood, and forgetting this loses an animation.
+   */
+  readonly working?: (outstanding: number) => void
 }): Ledger {
   const { registry, send, now, used } = input
+  const working = input.working
   /** A `call_id` is never removed. The map IS the record. */
   const calls = new Map<string, LedgerCall>()
   let sent = 0
@@ -246,6 +267,24 @@ export function createLedger(input: {
       })
     }
     sent += 1
+    /*
+      AFTER the state is written, and guarded like every other observer here.
+
+      Before it, the count would be one deferral behind — the frame promising
+      "I will look" would report nothing outstanding, which is the exact moment
+      the indicator has to come on.
+
+      A throw from an observer must never cost an answer that has already gone
+      out: `dispatch.ts` makes the same argument for `log`, `warn` and `note`,
+      and this one reaches `webContents.send` on a window that can be destroyed.
+    */
+    if (working !== undefined) {
+      try {
+        working(idsIn('deferred').length)
+      } catch (error: unknown) {
+        console.warn('[capability] could not report what is outstanding:', error)
+      }
+    }
   }
 
   function idsIn(state: CallState): readonly string[] {

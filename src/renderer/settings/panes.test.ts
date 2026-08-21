@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MOCHI } from '@shared/avatar-spec'
 import type { SettingsView } from '@shared/ipc'
+import { CODEX_READINESS } from '@shared/delegation'
 import { PANES } from './panes'
 
 /**
@@ -19,7 +20,6 @@ function settled(): SettingsView {
     pronoun: 'she',
     capabilities: [{ name: 'ask_workspace', description: 'Look something up.' }],
     grants: [
-      { id: 'microphone', allowed: true, lastUsed: { kind: 'not-recorded' } },
       { id: 'speak_first', allowed: true, lastUsed: { kind: 'not-recorded' } },
       { id: 'ask_workspace', allowed: true, lastUsed: { kind: 'never' } },
       { id: 'remember_this', allowed: true, lastUsed: { kind: 'at', at: 1_700_000_000_000 } },
@@ -31,9 +31,17 @@ function settled(): SettingsView {
       webSearchModes: ['follow'],
       profile: null,
       profilePath: null,
-      codexFound: true,
+      codex: { readiness: 'ready', remedy: null },
     },
-    screen: { bubbleSide: 'auto', sides: ['auto', 'above'] },
+    screen: {
+      bubbleSide: 'auto',
+      sides: ['auto', 'above'],
+      halo: 'always',
+      haloChoices: ['always', 'listening', 'never'],
+      shoulderChip: true,
+      sleepAfterMinutes: 15,
+      sleepAfterChoices: [0, 5, 15],
+    },
     keys: [
       { id: 'rest', what: 'Let her rest', accelerator: 'Control+Shift+L', refused: null },
       { id: 'hide', what: 'Hide her', accelerator: 'Control+Shift+M', refused: null },
@@ -43,19 +51,21 @@ function settled(): SettingsView {
   }
 }
 
-describe('the six groups', () => {
-  it('is six, in the order they are drawn', () => {
-    expect(PANES.map((one) => one.id)).toEqual([
-      'may-do',
-      'looking',
-      'on-screen',
-      'keys',
-      'where',
-      'about',
-    ])
+describe('the five groups', () => {
+  it('is five, in the order they are drawn', () => {
+    /*
+      `where` is gone, folded into `about`.
+
+      It was two rows — avatars and personas — and About ended with the sentence
+      "Everything of hers is under `~/…/Mochi`", which is the parent of both. One
+      group named the root in prose and another listed two of its children with
+      buttons, so finding either meant knowing which of two words this
+      repository had picked for one subject.
+    */
+    expect(PANES.map((one) => one.id)).toEqual(['may-do', 'looking', 'on-screen', 'keys', 'about'])
   })
 
-  it('is W-S1’s six rather than the handoff’s', () => {
+  it('is W-S1’s groups rather than the handoff’s', () => {
     // The handoff lists Voice, Sound, On screen, Keys, What is kept, About.
     // Voice is a `Persona` field and retention is filed under her id, so both
     // are per character and live on the shelf; Sound would be empty, and an
@@ -93,17 +103,38 @@ describe('the dot, and what it is for', () => {
     for (const pane of PANES) expect(pane.attention(withheld)).toBeNull()
   })
 
-  it('appears on Looking things up when the CLI is not installed', () => {
-    // Without it she cannot look anything up, and the failure otherwise
-    // presents as her declining to help.
-    const view = settled()
-    const missing: SettingsView = { ...view, lookup: { ...view.lookup, codexFound: false } }
+  it.each(CODEX_READINESS.filter((one) => one !== 'ready'))(
+    'appears on Looking things up when Codex is %s',
+    (readiness) => {
+      /*
+        EVERY unhappy state, not only "not installed".
+
+        This asserted one case, because the view carried one boolean. Three
+        questions decide whether she can look anything up — is it installed,
+        does it run, is its login usable BY US — and the third is the one that
+        actually fails: a token Codex is content with because it can refresh it,
+        and this app cannot. That machine drew no dot at all.
+      */
+      const view = settled()
+      const unhappy: SettingsView = {
+        ...view,
+        lookup: { ...view.lookup, codex: { readiness, remedy: 'login' } },
+      }
+      const looking = PANES.find((one) => one.id === 'looking')
+      expect(looking?.attention(unhappy)).toContain('Codex')
+      // And on that group only.
+      for (const pane of PANES.filter((one) => one.id !== 'looking')) {
+        expect(pane.attention(unhappy)).toBeNull()
+      }
+    },
+  )
+
+  it('says nothing on Looking things up when Codex is ready', () => {
+    // The other half, and it is what stops the dot becoming decoration: a group
+    // marked as needing attention on a machine where nothing is wrong is a
+    // group whose mark nobody reads.
     const looking = PANES.find((one) => one.id === 'looking')
-    expect(looking?.attention(missing)).toContain('Codex')
-    // And on that group only.
-    for (const pane of PANES.filter((one) => one.id !== 'looking')) {
-      expect(pane.attention(missing)).toBeNull()
-    }
+    expect(looking?.attention(settled())).toBeNull()
   })
 
   it('appears on Keys when another application took one, and names it', () => {

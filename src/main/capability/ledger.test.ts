@@ -22,6 +22,8 @@ function manifest(name: string): CapabilityManifest {
 function ledgerWithSpy() {
   const frames: AnswerFrame[] = []
   const uses: { name: string; at: number }[] = []
+  /** Every outstanding count reported, in order. See `working` below. */
+  const working: number[] = []
   const registry = createRegistry([manifest('ask_workspace')])
   const clock = { at: 1_000 }
   const ledger = createLedger({
@@ -29,8 +31,9 @@ function ledgerWithSpy() {
     send: (frame) => frames.push(frame),
     now: () => clock.at,
     used: (name, at) => uses.push({ name, at }),
+    working: (outstanding) => working.push(outstanding),
   })
-  return { ledger, frames, uses, clock }
+  return { ledger, frames, uses, working, clock }
 }
 
 const CALL = { name: 'ask_workspace', callId: 'call_1', args: JSON.stringify({ question: 'what' }) }
@@ -418,5 +421,50 @@ describe('recording that a capability was used', () => {
     expect(() => ledger.arrived(CALL)).not.toThrow()
     expect(ledger.answer('call_1', 'done')).toEqual({ ok: true })
     expect(frames).toHaveLength(1)
+  })
+})
+
+describe('what is still owed, for the bead on her halo', () => {
+  it('reports the count AFTER the state is written, not before', () => {
+    /*
+      The ordering is the whole of it. `emit` sends first and records second,
+      so a count taken at the send would be one deferral behind: the frame that
+      promises "I will look" would report nothing outstanding, which is exactly
+      the moment the indicator has to come on.
+    */
+    const { ledger, working } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    ledger.defer('call_1', { answer: 'I will look.' })
+    expect(working).toEqual([1])
+  })
+
+  it('goes back to none when the late result is delivered', () => {
+    const { ledger, working } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    ledger.defer('call_1', { answer: 'I will look.' })
+    ledger.deliver('call_1', { answer: 'here it is' })
+    expect(working).toEqual([1, 0])
+  })
+
+  it('counts two lookups as two, so settling one does not clear the other', () => {
+    // A boolean here would be wrong in the direction that matters: the frame
+    // settling the first of two would turn the indicator off while the second
+    // was still running.
+    const { ledger, working } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    ledger.arrived({ ...CALL, callId: 'call_2' })
+    ledger.defer('call_1', { answer: 'looking' })
+    ledger.defer('call_2', { answer: 'looking' })
+    ledger.deliver('call_1', { answer: 'one' })
+    expect(working).toEqual([1, 2, 1])
+  })
+
+  it('reports nothing outstanding for a call answered on the spot', () => {
+    // An immediate capability is never owed anything, so it must not flicker
+    // the indicator on and off — `answer` writes `settled`, not `deferred`.
+    const { ledger, working } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    ledger.answer('call_1', { answer: 'done' })
+    expect(working).toEqual([0])
   })
 })

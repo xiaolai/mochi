@@ -133,6 +133,38 @@ export function originHolding(
 }
 
 /**
+ * Where her body is on screen, from the two facts that are certain.
+ *
+ * ## Neither process can answer this alone, and one of them used to pretend to
+ *
+ * Main knows the window's origin, authoritatively, from `getBounds()`. It does
+ * NOT reliably know her offset inside it: that arrives by message, and pairing
+ * an offset from one message with bounds from another put her 443px from a
+ * corner she had been 4px from.
+ *
+ * The renderer knows her offset for certain — it is the layout it is drawing —
+ * and appeared to know the window's position too, from `window.screenX`. That
+ * was the trap. A renderer's screen coordinates are a cached rect Chromium
+ * refreshes on notifications it does not reliably receive for a frameless
+ * transparent window moved by `setPosition`; it answered `0` for a window main
+ * had placed at 1957,1058, and went on answering `0` after the window was
+ * shown. Main believed it and moved her to 443,267 — `fullPad`'s own offsets
+ * from an origin nobody had ever seen.
+ *
+ * ## So each side gives the half it holds
+ *
+ * The offset comes in the fit message; the origin is read in the handler that
+ * receives it. Both from one moment, and neither is a coordinate the process
+ * supplying it has to infer.
+ */
+export function herPositionFrom(
+  windowOrigin: { readonly x: number; readonly y: number },
+  offsetInWindow: { readonly left: number; readonly top: number },
+): { x: number; y: number } {
+  return { x: windowOrigin.x + offsetInWindow.left, y: windowOrigin.y + offsetInWindow.top }
+}
+
+/**
  * The pad that reproduces the old fixed window exactly.
  *
  * Used while a bubble is up, because the bubble's own rectangle is computed deep

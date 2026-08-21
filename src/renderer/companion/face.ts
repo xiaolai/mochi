@@ -1,16 +1,31 @@
 import { MochiAvatar } from './rig/mochi'
 import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
 import type { Emotion } from '@shared/avatar'
+import type { HaloWhen } from '@shared/ipc'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
-import { createBubble } from './bubble'
+import { BUBBLE_REACH, createBubble, WIDEST_BUBBLE } from './bubble'
 import { resolvePalette, whenSchemeChanges, type Palette } from '../design/resolve'
-import { fullPad, STATUS_ROOM, STATUS_UNDER, type Pad } from '@shared/avatar-layout'
+import {
+  fullPad,
+  STATUS_ROOM,
+  STATUS_UNDER,
+  WINDOW_H,
+  WINDOW_W,
+  type Pad,
+} from '@shared/avatar-layout'
 import { createUtterance } from './utterance'
 import { createAttending, levelOf, type Attention } from './attending'
 import { createBeat, type Beat } from './beat'
 import { chipRect, drawChip, hits as chipHits, visible as chipVisible } from './chip'
 import { drawHalo, haloFor, haloRect, haloReach } from './halo'
-import { roomFor, type Room, type SidePreference } from './place'
+import {
+  placeBubble,
+  roomFor,
+  sidesThatFit,
+  type Room,
+  type Side,
+  type SidePreference,
+} from './place'
 import { layoutFor, FEET_FROM_TOP } from '@shared/avatar-layout'
 
 /**
@@ -150,6 +165,41 @@ export interface Face {
    * anything with it. The window that CAN read them asks main directly.
    */
   troubled(count: number): void
+  /**
+   * How many things she has said she would come back to and has not yet.
+   *
+   * The bead on her halo, for the wait `beat.ts` does not cover. The beat is
+   * the 1.5–2s before her voice arrives (§64) and it closes the instant she
+   * speaks — but a lookup runs about 22 seconds (§8) and she has already said
+   * "let me check" by then, so the one wait long enough to need an indicator
+   * was the one with nothing on screen.
+   *
+   * A COUNT, because two lookups in flight are one indicator and the frame
+   * settling the first must not turn it off. Main sends the number and the
+   * arithmetic is done there; this only has to be greater than zero.
+   */
+  working(outstanding: number): void
+  /**
+   * When the halo is drawn: `always`, only while `listening`, or `never`.
+   *
+   * It was a boolean over the resting hairline alone, and it had to be: while
+   * the halo was the only surface saying the microphone was open, a preference
+   * that could switch it off was a preference that could switch off the one
+   * thing `halo.ts` exists to guarantee. The tray marks itself while the
+   * microphone is live now — it cannot be hidden and it is the only way to quit
+   * — so this is about her appearance and `never` is an ordinary answer.
+   */
+  showsHalo(when: HaloWhen): void
+  /**
+   * Whether the speech-bubble control is offered at her shoulder at all.
+   *
+   * A plain preference, unlike the one above it. That one had to be narrowed
+   * because the halo is the only thing on screen that says the microphone is
+   * open; this is a shortcut to a window two other controls also open, so there
+   * is nothing here that must survive being switched off. See
+   * `readShoulderChip`.
+   */
+  showsShoulderChip(shown: boolean): void
   /** Stop the loop, release the analyser, drop the canvas. */
   dispose(): void
 }
@@ -406,26 +456,55 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       the painted pixels were 32px apart vertically as well as 12 horizontally.
       `setFeet` is the seam the drag already uses for exactly this.
     */
-    avatar.setFeet(wanted.top + layoutFor(worn, worn.size).bodyHeight)
+    /*
+      BOTH copies of her standing height, from one number.
+
+      Her position is held twice — `feet` here, which `herBox()` measures from,
+      and `MochiAvatar.feetFromTop`, which she is PAINTED from — and this line
+      used to set only the second. `stands()` sets both, so the two agreed
+      whenever main last sent a stance and drifted the moment a pad change came
+      between two stances.
+
+      What that looks like: `herBox()` said her top was `pad.top` (26 for the
+      small pad) while the rig painted her at `FEET_FROM_TOP - bodyHeight`
+      (267). Everything that MEASURES her — the halo over her head, the bubble's
+      anchor, the shoulder chip, the click-through rectangle — was 241px above
+      the pixels she was drawn as. Nothing looked broken; it looked absurd.
+
+      Nothing is lost by assigning both. The rig's copy was already being
+      overwritten here, so a stance did not survive a pad change either way;
+      this only stops the other copy pretending it did.
+    */
+    feet = wanted.top + layoutFor(worn, worn.size).bodyHeight
+    avatar.setFeet(feet)
     roomy = showingWords && bubble.opacity() > 0
     /*
-      Where she is ON SCREEN, measured before the pad changed.
+      Her OFFSET under the pad still on screen — not her position on it.
 
-      Main used to derive this by adding the last offset it was told to the
-      window's current bounds — two facts from different moments, and it only
-      works while they happen to be from the same one. `companion:body` writes
-      that offset too, so an offset computed for one window size could be paired
-      with another and put her hundreds of pixels from where she was: measured
-      once at 443px from a corner she had been 4px from.
+      Main used to derive her position by adding the last offset it was told to
+      the window's current bounds: two facts from different messages, and
+      `companion:body` writes that offset too, so an offset computed for one
+      window size could be paired with another. Measured once at 443px from a
+      corner she had been 4px from.
 
-      `screenX`/`screenY` are standard and current in this frame, and `was` is
-      her offset under the pad that is still on screen. Their sum is the one
-      thing that cannot be stale, because both halves are read here, now.
+      The answer to that was `window.screenX + was.left`, on the grounds that
+      both halves are read here, in this frame, so neither can be stale. The
+      second half is true. The first is not: a renderer's screen coordinates are
+      a cached rect Chromium refreshes on notifications it does not reliably get
+      for a frameless transparent window moved by `setPosition`. It reported `0`
+      for a window main had placed at 1957,1058 — including after the window was
+      shown — so main moved her to the pad's own offsets from an origin of zero
+      and she stopped coming back to where she had been left.
+
+      So the renderer sends the half it genuinely knows. `was` is the layout it
+      is drawing, and main pairs it with `getBounds()` inside the same handler:
+      one moment, two facts, neither of them a coordinate this process has to
+      guess at.
     */
     window.mochi.fit({
       pad: wanted,
       body: herBox(),
-      at: { x: window.screenX + was.left, y: window.screenY + was.top },
+      was: { left: was.left, top: was.top },
     })
   }
   /**
@@ -440,20 +519,103 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * repositioning the window, so there is no event here to hang it on, and the
    * read is two properties.
    */
+  /**
+   * Which sides the menu may offer, asked EVERY frame and about the widest
+   * bubble that can exist.
+   *
+   * ## What it replaces, and the two things that were wrong with it
+   *
+   * This was `bubble.offered()`, set inside the drawing. `draw` returns early
+   * when there is nothing to say — `if (text === '') return false` — without
+   * touching it, so the answer froze at her last utterance and stopped tracking
+   * her the moment she went quiet. Dragged across the display, the menu went on
+   * describing the corner she had spoken from.
+   *
+   * And it measured the box she HAPPENED to say, so the same position offered
+   * different sides for a short reply and a long one.
+   *
+   * ## Why the geometry is the big window's, not the one she is in
+   *
+   * With nothing on screen her window is about 146px wide, and no bubble fits
+   * beside her in that at any position — which is exactly why the question used
+   * to be asked only while a bubble was already up and the window was already
+   * big. The menu is about where her NEXT words go, so it asks against the
+   * window she will have when she has some: `fullPad`, which is what
+   * `padNeeded` returns the instant there is text.
+   *
+   * `screenX` is sound here, and that is worth stating because it was not
+   * always: an unshown window reports 0, which is why she used to be placed at
+   * the pad's own offsets from an origin nobody had seen. She is only shown once
+   * she has been fitted now, so by the time this runs the window is on screen
+   * and reporting its real position.
+   */
+  function sidesForTheMenu(): {
+    available: readonly Side[]
+    using: Side
+    /** What it decided from, so a surprising answer can be checked at a glance. */
+    from: { her: string; box: string; room: string }
+  } | null {
+    const box = herBox()
+    const full = fullPad({ width: box.width, height: box.height })
+    // Where the big window would sit to leave her exactly where she is.
+    const origin = {
+      x: window.screenX + box.left - full.left,
+      y: window.screenY + box.top - full.top,
+    }
+    const room = roomFor(
+      { width: WINDOW_W, height: WINDOW_H },
+      origin,
+      availableScreen(),
+      SCREEN_INSET,
+    )
+    const her = { left: full.left, top: full.top, width: box.width, height: box.height }
+    const available = sidesThatFit(her, WIDEST_BUBBLE, room, BUBBLE_REACH)
+    if (available.length === 0) return null
+    /*
+      What it WOULD use, from the same call that listed them.
+
+      The menu marks what was asked for and the bubble goes where it fits, and
+      those differ whenever a chosen side stopped fitting. `placeBubble` is the
+      one function that decides, so asking it here rather than reading back what
+      the last drawing chose keeps the two from ever disagreeing.
+    */
+    return {
+      available,
+      using: placeBubble(her, WIDEST_BUBBLE, room, BUBBLE_REACH, bubbleSide).side,
+      from: {
+        her: `${String(her.left)},${String(her.top)} ${String(her.width)}x${String(her.height)}`,
+        box: `${String(WIDEST_BUBBLE.w)}x${String(WIDEST_BUBBLE.h)}`,
+        room: `${String(room.left)},${String(room.top)} to ${String(room.right)},${String(room.bottom)}`,
+      },
+    }
+  }
+
+  /**
+   * The usable screen, read once for the two callers that need it.
+   *
+   * `roomOnScreen` places the bubble that is being drawn; `sidesForTheMenu`
+   * asks what could be drawn. Two copies of this read would be two answers to
+   * where the screen ends, and the menu would be entitled to disagree with the
+   * drawing about it.
+   */
+  function availableScreen(): { x: number; y: number; width: number; height: number } {
+    return {
+      // `availLeft`/`availTop` are real and implemented, and are missing from
+      // the DOM lib's `Screen` — they are in the CSSOM View spec's appendix
+      // rather than its interface. Read through a narrow cast rather than
+      // widening `Screen` globally, which would let a typo elsewhere compile.
+      x: (window.screen as unknown as { availLeft?: number }).availLeft ?? 0,
+      y: (window.screen as unknown as { availTop?: number }).availTop ?? 0,
+      width: window.screen.availWidth,
+      height: window.screen.availHeight,
+    }
+  }
+
   function roomOnScreen(): Room {
     return roomFor(
       { width: canvas.clientWidth, height: canvas.clientHeight },
       { x: window.screenX, y: window.screenY },
-      {
-        // `availLeft`/`availTop` are real and implemented, and are missing from
-        // the DOM lib's `Screen` — they are in the CSSOM View spec's appendix
-        // rather than its interface. Read through a narrow cast rather than
-        // widening `Screen` globally, which would let a typo elsewhere compile.
-        x: (window.screen as unknown as { availLeft?: number }).availLeft ?? 0,
-        y: (window.screen as unknown as { availTop?: number }).availTop ?? 0,
-        width: window.screen.availWidth,
-        height: window.screen.availHeight,
-      },
+      availableScreen(),
       SCREEN_INSET,
     )
   }
@@ -491,10 +653,47 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * Which of the halo's three states she is in.
    *
    * `hearing` is one boolean and conflates two causes — main computes it as
-   * `!asleep && mayHear` — so resting is told apart from withheld using
-   * `resting`, which this file already holds. They look identical to the
-   * microphone and must not look identical to a person.
+   * `!asleep && session !== null` — so "she is resting" is told apart from
+   * "there is no session" using `resting`, which this file already holds. They
+   * look identical to the microphone and must not look identical to a person.
    */
+  /**
+   * How many deferred capability calls are still owed an answer.
+   *
+   * Main's count, not one kept here: a renderer that tracked its own would be a
+   * second record of the ledger's state, and the two would disagree exactly
+   * when one of them was wrong.
+   */
+  let outstanding = 0
+  /**
+   * When the current run of outstanding work began, on the render clock.
+   *
+   * Set when the count goes from none to some and cleared when it goes back,
+   * NOT reset per call: a second lookup starting while the first is running is
+   * the same wait continuing, and restarting the clock would jump the bead back
+   * to the top of the ring for a reason nobody watching could see.
+   */
+  let workingSince: number | null = null
+  /** When the ring over her head is drawn at all. See `showsHalo`. */
+  let haloWhen: HaloWhen = 'always'
+
+  /**
+   * How long she has been waiting on something, in seconds, or null.
+   *
+   * ONE clock for two waits, and they do not overlap in practice: the beat
+   * closes when her voice arrives (§64) and a lookup only becomes outstanding
+   * after she has spoken about it. Written as one function anyway, because
+   * `drawHalo` takes one number and two sources feeding it separately is how a
+   * bead comes to be drawn at two angles on alternate frames.
+   *
+   * The beat wins when both are live. It is the shorter and the more urgent of
+   * the two, and it is the one somebody is actively waiting through.
+   */
+  function waitedFor(now: number): number | null {
+    if (beat.state() !== 'none') return beat.heldFor()
+    if (workingSince === null) return null
+    return Math.max(0, (now - workingSince) / 1000)
+  }
   /** Whether the window is currently the big one. See `herBox`. */
   let roomy = true
   /** When a smaller window first became the right answer. See `fitToContent`. */
@@ -548,6 +747,38 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   let lastAt: number | null = null
   /** What main was last told, so the IPC is not a per-frame message. */
   let solid: boolean | null = null
+  /**
+   * Whether a drag is running, and why this window has to know.
+   *
+   * ## The bug it fixes: she forgot where she had been put
+   *
+   * Her place on the desktop is written on `companion:drop`, which this window
+   * sends from a `mouseup` listener — and the listener's own comment said *"the
+   * cursor is routinely off her by the time the button comes up: that is what
+   * dragging is."* Both halves are true and together they are the defect:
+   * `setIgnoreMouseEvents(true, { forward: true })` forwards MOVES and lets
+   * CLICKS through, so a release that happens off her silhouette is delivered
+   * to the desktop and this listener never runs.
+   *
+   * That is not a rare corner. `dragTo` clamps her into the work area, so the
+   * last inch of any drag toward an edge — which is where somebody puts her —
+   * moves the cursor while she stands still, and the pointer ends up off her.
+   * The drag then ran to its deadline, nothing was written, and quitting put
+   * her back wherever she had last been dropped somewhere harmless.
+   *
+   * ## The fix, and its backstop
+   *
+   * While a drag is running the window is SOLID, whatever the pointer is over,
+   * so the release lands here. That is correct on its own terms as well: during
+   * a drag the pointer belongs to the drag.
+   *
+   * The backstop is in `mousemove` — a forwarded move carrying no buttons means
+   * the release happened somewhere this window never saw. Without it, a flag
+   * that is only cleared by an event that can be missed would leave a 320px
+   * invisible brick over somebody's desktop, which is the failure the whole
+   * click-through arrangement exists to prevent.
+   */
+  let dragging = false
   /** Null until a persona with `bubble: true` is worn. Off is the default. */
   let showingWords = false
   /**
@@ -555,6 +786,16 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * snap into existence under a cursor that was only passing over her.
    */
   let chip = 0
+  /**
+   * Whether that control is offered at all. A preference — see `readShoulderChip`.
+   *
+   * It gates `wanted` below rather than the drawing, and that is the whole
+   * implementation: everything else about the chip already keys off the fade.
+   * At zero it is not painted, its rectangle stops taking the mouse, and the
+   * click handler returns early — so one gate turns the control off in every
+   * sense rather than hiding a button that is still there.
+   */
+  let shoulderChip = true
 
   /**
    * Things main could not do. Zero, almost always.
@@ -600,6 +841,18 @@ export function showFace(canvas: HTMLCanvasElement): Face {
 
   window.addEventListener('mousemove', (event) => {
     pointer = { x: event.clientX, y: event.clientY }
+    /*
+      A release this window never saw — see `dragging`.
+
+      `event.buttons` is a bitmask of what is held down NOW, and moves are
+      forwarded even while the window is click-through, so this is the one
+      signal that arrives whether or not the release did. Cheap, and it is what
+      stops a missed `mouseup` leaving her solid over the whole desktop.
+    */
+    if (dragging && event.buttons === 0) {
+      dragging = false
+      window.mochi.drop()
+    }
     if (thinking) return
     avatar.lookAt(
       (event.clientX / canvas.clientWidth) * 2 - 1,
@@ -677,18 +930,27 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   window.addEventListener('mousedown', (event) => {
     if (event.button !== 0) return
     if (!avatar.hitTest(event.clientX, event.clientY)) return
+    // Before the grab, so the frame that follows is already solid — see
+    // `dragging`. The release is what writes where she was left, and it can
+    // only be received by a window that is taking the mouse.
+    dragging = true
     window.mochi.grab(event.clientX, event.clientY)
   })
 
   /**
-   * Let go — on `mouseup` ANYWHERE, not only on her.
+   * Let go — on `mouseup` ANYWHERE IN THIS WINDOW, not only on her.
    *
    * The cursor is routinely off her by the time the button comes up: that is
-   * what dragging is. Listening on her silhouette would leave the drag running
-   * whenever somebody released the button anywhere else, which is most of the
-   * time.
+   * what dragging is, and listening on her silhouette would leave the drag
+   * running whenever somebody released the button anywhere else.
+   *
+   * "Anywhere in this window" is a promise `dragging` is what keeps. Off her
+   * silhouette this window is click-through, so the release used to be
+   * delivered to the desktop and never reached here at all — see `dragging` for
+   * what that cost.
    */
   window.addEventListener('mouseup', () => {
+    dragging = false
     window.mochi.drop()
   })
 
@@ -761,6 +1023,10 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       analyser.getFloatTimeDomainData(samples)
       envelope = advanceEnvelope(rms(samples), envelope, seconds, DEFAULT_ENVELOPE)
       avatar.setMouthOpen(envelope.mouthOpen)
+      // Her eyes, from the same measurement as her mouth. The rig holds a
+      // blink shut for the whole of `asleep`, and a mouth moving under closed
+      // lids is a picture no path may produce — see `setSpeaking`.
+      avatar.setSpeaking(envelope.speaking)
     }
     // Unconditionally, including before the analyser exists — `SILENT.quietFor`
     // is `Infinity` and `step` handles it. This used to be guarded here with
@@ -860,16 +1126,49 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         overBubble,
         troubles,
       )
-      // Only when it CHANGES. The menu is rebuilt from this, and rebuilding it
-      // sixty times a second would be sixty IPC messages for an answer that
-      // moves when she is dragged across a screen edge.
-      const now = bubble.offered()
-      if (now !== null) {
-        const key = `${now.available.join(',')}|${now.using}`
-        if (key !== lastOffered) {
-          lastOffered = key
-          window.mochi.sides(now.available, now.using)
-        }
+    }
+
+    /*
+      OUTSIDE `showingWords`, and that is the whole of this fix.
+
+      This sat inside the branch that draws her words, so a character with the
+      bubble switched off never reported anything — and main kept the value it
+      had invented at startup, `['above']`. The tray menu has been offering one
+      fabricated side, on every launch, to anybody wearing the built-in.
+
+      The list is not about whether THIS character shows a bubble. `bubbleSide`
+      is an app-level preference in `preferences.json`, shared by every persona,
+      so the question is "where could her words go" and it has an answer whether
+      or not this one has any. Asked every frame now, for anybody worn.
+    */
+    // Only when it CHANGES. The menu is rebuilt from this, and rebuilding it
+    // sixty times a second would be sixty IPC messages for an answer that
+    // moves when she is dragged across a screen edge.
+    const sides = sidesForTheMenu()
+    if (sides !== null) {
+      const key = `${sides.available.join(',')}|${sides.using}`
+      if (key !== lastOffered) {
+        lastOffered = key
+        window.mochi.sides(sides.available, sides.using)
+        /*
+            Said out loud, WITH what it was decided from.
+
+            This list is the whole of what the tray menu may offer, and it
+            crossed to main with nothing to check it against — so a menu showing
+            one side where two were expected looked exactly like a menu showing
+            the right thing. Reconstructing it by hand needs her box, the
+            measured bubble and the room in canvas coordinates at the instant of
+            the call; getting any one of them wrong yields a confident wrong
+            answer, which it has done twice.
+
+            Only when it CHANGES, which is what this branch already is.
+          */
+        window.mochi.report({
+          kind: 'note',
+          text:
+            `[bubble] sides ${sides.available.join(',') || 'none'} · using ${sides.using} · ` +
+            `her ${sides.from.her} · box ${sides.from.box} · room ${sides.from.room}`,
+        })
       }
     }
 
@@ -886,7 +1185,8 @@ export function showFace(canvas: HTMLCanvasElement): Face {
      * turned off, or one the reader has dismissed.
      */
     const inBubble = bubble.controls() !== null
-    const wanted = !inBubble && chipVisible(at, onHer, herBox(), roomOnScreen()) ? 1 : 0
+    const wanted =
+      shoulderChip && !inBubble && chipVisible(at, onHer, herBox(), roomOnScreen()) ? 1 : 0
     chip =
       wanted > chip
         ? Math.min(1, chip + seconds / CHIP_FADE_S)
@@ -898,17 +1198,47 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       a halo. Before the chip, because the chip is a control and controls belong
       on top of readouts when they overlap — which they can, at her shoulder.
 
-      `beat.heldFor()` is the bead's clock and it is null unless she is actually
-      waiting, so the ordinary frame draws a ring and nothing else.
+      The bead's clock is null unless she is actually waiting on something, so
+      the ordinary frame draws a ring and nothing else.
+
+      TWO waits feed it, and they do not overlap. The beat is the pause before
+      her voice arrives and closes the moment it does (§64); `working` is a
+      lookup she has already spoken about and which runs for twenty seconds
+      after that (§8). `waitedFor` is the one clock, so a lookup that starts
+      while a beat is still open does not restart the bead half way round.
+
+      The RESTING hairline is a preference; `open` never is. `haloFor` answers
+      the state and this only suppresses the one it is allowed to.
     */
-    drawHalo(
-      ctx,
-      herBox(),
-      { her: palette.her, veil: palette.herVeil, quiet: palette.quiet },
-      haloFor(hearing, resting),
-      resting ? 0.45 : 1,
-      beat.state() === 'none' ? null : beat.heldFor(),
-    )
+    const halo = haloFor(hearing, resting)
+    /*
+      Three answers, and `off` is nothing in every one of them.
+
+      `always` draws whatever `haloFor` decided; `listening` keeps only the
+      filled ring, which is the state that means the microphone is open; `never`
+      draws nothing. `drawHalo` already treats `off` as nothing, so the first
+      branch does not special-case it.
+    */
+    const ringed = haloWhen === 'never' ? false : haloWhen === 'listening' ? halo === 'open' : true
+    if (ringed) {
+      drawHalo(
+        ctx,
+        herBox(),
+        {
+          her: palette.her,
+          veil: palette.herVeil,
+          quiet: palette.quiet,
+          // Hers, deep enough to be seen against the ring it travels on — see
+          // `HaloColours.bead`, and `resolve.ts` for why these are read from
+          // the sheet rather than written here.
+          bead: palette.herDeep,
+          beadEdge: palette.herDeepInk,
+        },
+        halo,
+        resting ? 0.45 : 1,
+        waitedFor(now),
+      )
+    }
 
     drawChip(ctx, herBox(), palette, chip, troubles, roomOnScreen())
 
@@ -947,7 +1277,10 @@ export function showFace(canvas: HTMLCanvasElement): Face {
      * only solid while the pointer is inside it, and the × dismisses it.
      */
     const onControls = at !== null && bubble.covers(at.x, at.y)
-    const on = onHer || onChip || onControls
+    // `dragging` first, and it overrides the rest: a drag that has left her
+    // silhouette still owns the pointer, and the release is what remembers
+    // where she was put.
+    const on = dragging || onHer || onChip || onControls
     if (on !== solid) {
       solid = on
       window.mochi.report({ kind: 'pointer', onHer: on })
@@ -1030,6 +1363,24 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     },
     troubled: (count: number) => {
       troubles = Math.max(0, count)
+    },
+    working: (count: number) => {
+      // Checked rather than trusted: it crosses the bridge, and a NaN would
+      // make `> 0` false and quietly turn the indicator off for ever.
+      const now = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0
+      if (now === outstanding) return
+      outstanding = now
+      // Started on the transition into work and cleared on the transition out.
+      // A lookup beginning while another is running is the same wait carrying
+      // on, so the clock is not restarted — see `workingSince`.
+      if (outstanding > 0) workingSince ??= performance.now()
+      else workingSince = null
+    },
+    showsHalo: (when: HaloWhen) => {
+      haloWhen = when
+    },
+    showsShoulderChip: (shown: boolean) => {
+      shoulderChip = shown
     },
     opened: () => {
       beat.reset()

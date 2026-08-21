@@ -78,8 +78,15 @@ describe('how long it ran', () => {
     expect(lengthLabel(NOW, null)).toBeNull()
   })
 
-  it('does not pretend to seconds', () => {
-    expect(lengthLabel(NOW, NOW + 20_000)).toBe('under a minute')
+  it('does not pretend to seconds, and never says none', () => {
+    // A DURATION, like every other row in the column. It said "under a minute",
+    // which was true and was the only entry in a list of numbers that had to be
+    // read rather than compared. The floor is what that sentence was carrying:
+    // ten seconds rounds to zero, and `0 min` for something that happened is a
+    // worse answer than the words were.
+    expect(lengthLabel(NOW, NOW + 20_000)).toBe('1 min')
+    expect(lengthLabel(NOW, NOW + 1_000)).toBe('1 min')
+    expect(lengthLabel(NOW, NOW)).toBe('1 min')
   })
 
   it('rounds to minutes, then to hours and minutes', () => {

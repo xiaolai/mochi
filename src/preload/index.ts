@@ -18,6 +18,7 @@ import {
   type PersonaChange,
   type Revealable,
   type ScreenChange,
+  type SettingsCodex,
   type SettingsView,
   type SettingsWrite,
   type SessionConfig,
@@ -138,7 +139,7 @@ const api: MochiApi = {
   fit(request: {
     pad: { left: number; top: number; right: number; bottom: number }
     body: { left: number; top: number; width: number; height: number }
-    at: { x: number; y: number }
+    was: { left: number; top: number }
   }) {
     ipcRenderer.send(guard('companion:fit'), request)
   },
@@ -189,11 +190,17 @@ const history: MochiHistoryApi = {
   async saveCharacter(change: PersonaChange) {
     return (await ipcRenderer.invoke(guardShelf('shelf:save'), change)) as SettingsWrite
   },
+  async wearFace(face: string) {
+    return (await ipcRenderer.invoke(guardShelf('shelf:wear-face'), face)) as SettingsWrite
+  },
   async character(action: PersonaAction) {
     return (await ipcRenderer.invoke(guardShelf('shelf:persona'), action)) as SettingsWrite
   },
   async memory(action: NoteAction) {
     return (await ipcRenderer.invoke(guardShelf('shelf:memory'), action)) as SettingsWrite
+  },
+  async prompt(text: string) {
+    return (await ipcRenderer.invoke(guardShelf('shelf:prompt'), text)) as SettingsWrite
   },
   async copy(text: string) {
     return (await ipcRenderer.invoke(guardShelf('shelf:copy'), text)) as SettingsWrite
@@ -215,6 +222,9 @@ const settings: MochiSettingsApi = {
   },
   async grant(change: GrantChange) {
     return (await ipcRenderer.invoke(guardSettings('settings:grant'), change)) as SettingsWrite
+  },
+  async recheckCodex() {
+    return (await ipcRenderer.invoke(guardSettings('settings:codex-recheck'))) as SettingsCodex
   },
 }
 

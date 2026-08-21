@@ -1,4 +1,12 @@
-import type { GrantUse, LookupChange, Revealable, ScreenChange, SettingsView } from '@shared/ipc'
+import type {
+  GrantUse,
+  LookupChange,
+  Revealable,
+  ScreenChange,
+  SettingsCodex,
+  SettingsView,
+} from '@shared/ipc'
+import { CODEX_SAYS, REMEDY_SAYS } from '@shared/delegation'
 import { GRANT_SPECS } from '@shared/grants'
 import { forPronoun, type ByPronoun } from '@shared/pronoun'
 
@@ -98,6 +106,50 @@ const SAYS = {
       'A side that will not fit is not honoured — dragged into a corner it puts its words ' +
       'wherever there is room. Whether it shows them at all is per character, on the shelf.',
   },
+  halo: {
+    she:
+      'The ring over her head. Hiding it hides nothing you need: the menu bar item marks ' +
+      'itself while the microphone is open, whatever this says and wherever she is, and macOS ' +
+      'shows its own orange dot beside it that no application can turn off.',
+    he:
+      'The ring over his head. Hiding it hides nothing you need: the menu bar item marks ' +
+      'itself while the microphone is open, whatever this says and wherever he is, and macOS ' +
+      'shows its own orange dot beside it that no application can turn off.',
+    it:
+      'The ring over it. Hiding it hides nothing you need: the menu bar item marks itself ' +
+      'while the microphone is open, whatever this says and wherever it is, and macOS shows ' +
+      'its own orange dot beside it that no application can turn off.',
+  },
+  chipSwitch: {
+    she: 'Show it while the pointer is on her',
+    he: 'Show it while the pointer is on him',
+    it: 'Show it while the pointer is on it',
+  },
+  chip: {
+    she:
+      'The little speech bubble at her shoulder, which opens her conversations. Turning it off ' +
+      'closes no door: the same control sits inside her speech bubble whenever she has said ' +
+      'something, and the menu bar opens the same window.',
+    he:
+      'The little speech bubble at his shoulder, which opens his conversations. Turning it off ' +
+      'closes no door: the same control sits inside his speech bubble whenever he has said ' +
+      'something, and the menu bar opens the same window.',
+    it:
+      'The little speech bubble at its shoulder, which opens its conversations. Turning it off ' +
+      'closes no door: the same control sits inside its speech bubble whenever it has said ' +
+      'something, and the menu bar opens the same window.',
+  },
+  rests: {
+    she:
+      'Resting closes the session and gives the microphone back, so nothing is connected while ' +
+      'nobody is talking to her. She wakes from the menu bar, the key, or a click on her.',
+    he:
+      'Resting closes the session and gives the microphone back, so nothing is connected while ' +
+      'nobody is talking to him. He wakes from the menu bar, the key, or a click on him.',
+    it:
+      'Resting closes the session and gives the microphone back, so nothing is connected while ' +
+      'nobody is talking to it. It wakes from the menu bar, the key, or a click on it.',
+  },
   kept: {
     she:
       'What she remembers and how long conversations are kept are per character, and live ' +
@@ -130,8 +182,31 @@ const SAYS = {
   },
 } as const satisfies Readonly<Record<string, ByPronoun>>
 
+/**
+ * What each halo answer is called on screen.
+ *
+ * Here rather than in `HALO_WHEN`, because the store's list is the GRAMMAR — the
+ * values main will accept — and these are words somebody reads. `?? one` in the
+ * caller, so a value main starts offering before anybody writes a label for it
+ * appears as itself rather than as a blank row.
+ */
+const HALO_LABELS: Readonly<Record<string, string>> = {
+  always: 'always',
+  listening: 'only while the microphone is open',
+  never: 'never',
+}
+
 export interface PaneHandlers {
   readonly lookup: (change: LookupChange) => void
+  /**
+   * Ask the machine about Codex again, and hand back what it said.
+   *
+   * A PROMISE, because the check spawns two child processes with a deadline
+   * each: a button that returned at once would look like it had done nothing on
+   * the one machine where the answer takes a second. The pane disables the
+   * control while this is outstanding and redraws from the result.
+   */
+  readonly recheckCodex: () => Promise<SettingsCodex>
   readonly screen: (change: ScreenChange) => void
   readonly grant: (change: { id: string; allowed: boolean }) => void
   readonly reveal: (what: Revealable) => void
@@ -265,10 +340,26 @@ const MAY_DO: Pane = {
 const LOOKING: Pane = {
   id: 'looking',
   label: 'Looking things up',
-  attention: (view) => (view.lookup.codexFound ? null : forPronoun(SAYS.noCli, view.pronoun)),
+  /*
+    Seven states rather than two, and the dot is on for six of them.
+
+    It read `codexFound`, which is the first of three questions — installed,
+    runs, login usable by us — and the one that fails least often. A machine
+    whose Codex token went stale a fortnight ago answered `true` here and drew
+    no dot at all, and the first anybody heard of it was her failing to speak.
+  */
+  attention: (view) =>
+    view.lookup.codex.readiness === 'ready'
+      ? null
+      : `${CODEX_SAYS[view.lookup.codex.readiness]} ${forPronoun(SAYS.noCli, view.pronoun)}`,
   render(view, handlers) {
     const workspace = element('input')
     workspace.type = 'text'
+    // Present so the field keeps an edge while it is empty — the rule in
+    // `tokens.css` reads `:placeholder-shown`, and an empty box with nothing in
+    // it does not say what it is for either. Never reachable in practice: the
+    // workspace always resolves to at least the default.
+    workspace.placeholder = 'a folder she may read'
     workspace.value = view.lookup.workspace
     workspace.spellcheck = false
     workspace.addEventListener('change', () => {
@@ -311,11 +402,7 @@ const LOOKING: Pane = {
       field('Web search', search),
       field('Codex profile', profile),
     ]
-    if (!view.lookup.codexFound) {
-      // First, because everything below it is configuration for something that
-      // cannot run. Without this the failure presents as her declining to help.
-      parts.unshift(element('p', 'note bad', forPronoun(SAYS.noCliLong, view.pronoun)))
-    }
+    parts.unshift(codexBlock(view.lookup.codex, view.pronoun, handlers))
     if (view.lookup.workspaceIsDefault) {
       parts.push(element('p', 'note', 'Nobody has chosen one, so this is the default.'))
     }
@@ -329,6 +416,96 @@ const LOOKING: Pane = {
     }
     return parts
   },
+}
+
+/**
+ * What the machine's Codex is worth, said before anything that depends on it.
+ *
+ * ## Why it is here at all, and always
+ *
+ * It used to appear only when the CLI was missing, and to say one thing. Three
+ * questions decide whether she can look anything up — is it installed, does it
+ * run, is its login usable BY US — and only the first had a surface. The third
+ * is the one that actually fails: Codex reports itself signed in while holding
+ * an expired token, because it owns a refresh token and renews on its next run,
+ * and this app cannot renew. So a perfectly ordinary machine can sit in a state
+ * this pane called healthy and she cannot speak on it.
+ *
+ * Drawn in the ready case too, quietly. A pane that only ever shows a status
+ * when something is wrong is a pane where "nothing there" has two meanings —
+ * fine, and not checked yet — and this check has a genuine not-checked-yet.
+ *
+ * ## The button, and why it is not a relaunch
+ *
+ * Every remedy here is applied OUTSIDE this app: install the CLI, run `codex`
+ * to sign in, or wait for a busy machine. Somebody who has just done one of
+ * those is standing in front of a window telling them to do it, and without
+ * this the only way to clear it is to quit the thing they were told to fix.
+ */
+function codexBlock(
+  codex: SettingsCodex,
+  pronoun: SettingsView['pronoun'],
+  handlers: PaneHandlers,
+): HTMLElement {
+  const ready = codex.readiness === 'ready'
+  const box = element('div', ready ? 'codex' : 'codex bad')
+
+  /*
+    ONE line: a light, what is true, and the button, in that order.
+
+    The state was a paragraph with the control under it, which put the thing
+    somebody came here to press below three sentences they had already read.
+    Read left to right it is now the shape of an answer — is it working, why
+    not, and what to do about it — and the button sits at the end of the line it
+    acts on rather than at the end of the block.
+
+    The LIGHT carries the state a second time, in a shape rather than in words.
+    That is not decoration: this pane is scanned rather than read, and green or
+    not-green is the whole question at a glance. It is the same argument the
+    microphone mark in the top strip makes, and the reason `aria-hidden` is on
+    it — the sentence beside it already says this to a screen reader, and a
+    second announcement of the same fact is noise.
+  */
+  const head = element('div', 'codex-head')
+  const light = element('span', ready ? 'light on' : 'light')
+  light.setAttribute('aria-hidden', 'true')
+
+  const again = element('button', 'btn', 'Check again')
+  again.type = 'button'
+  head.append(light, element('span', 'codex-said', CODEX_SAYS[codex.readiness]), again)
+  box.append(head)
+
+  if (codex.remedy !== null) {
+    // Under it, not beside it: what is true and what to do are two sentences,
+    // and joining them makes a paragraph somebody skims instead of an
+    // instruction somebody follows.
+    box.append(element('p', 'note', REMEDY_SAYS[codex.remedy]))
+  }
+  if (!ready) {
+    // The consequence FOR HER, which is the only pronoun-bearing sentence here
+    // — everything above is about a binary and a sign-in on this machine.
+    box.append(element('p', 'note', forPronoun(SAYS.noCliLong, pronoun)))
+  }
+
+  again.addEventListener('click', () => {
+    // Disabled for the whole round trip. Two checks in flight would spawn four
+    // child processes and the later answer would not necessarily land last.
+    again.disabled = true
+    again.textContent = 'Checking…'
+    void handlers.recheckCodex().then(
+      () => {
+        // Nothing to redraw here: main answers and the window re-reads, which
+        // is the one path that cannot show a status the rest of the pane
+        // disagrees with.
+      },
+      (error: unknown) => {
+        again.disabled = false
+        again.textContent = 'Check again'
+        handlers.say(`Codex could not be checked: ${String(error)}`, true)
+      },
+    )
+  })
+  return box
 }
 
 /** Where she sits, and where her words go when she has any. */
@@ -349,9 +526,84 @@ const ON_SCREEN: Pane = {
     side.addEventListener('change', () => {
       handlers.screen({ bubbleSide: side.value })
     })
+
+    /*
+      THREE answers, so a select rather than a switch.
+
+      It was a checkbox over the resting hairline alone, and it had to be:
+      while the halo was the only surface saying the microphone was open, an off
+      switch was a way to make the worst thing this app can do happen. The tray
+      marks itself while the microphone is live now — it cannot be hidden,
+      dragged off a screen or switched off — so the halo is about her appearance
+      and `never` is an ordinary answer.
+
+      The choices come from main for the same reason `sides` does: a page
+      holding its own list is a second answer to what may be chosen, and only
+      one of the two is checked on the way back.
+    */
+    const halo = document.createElement('select')
+    options(
+      halo,
+      view.screen.haloChoices.map((one) => ({ value: one, label: HALO_LABELS[one] ?? one })),
+      view.screen.halo,
+    )
+    halo.addEventListener('change', () => {
+      handlers.screen({ halo: halo.value })
+    })
+
+    /*
+      The control at her shoulder, as a plain switch.
+
+      Offerable in a way the halo is not, and the difference is worth stating
+      beside them: the halo is the only thing on screen that says the microphone
+      is open, so its switch had to be narrowed to the half that promises
+      nothing. This one is a shortcut with two other doors — the same control is
+      inside her bubble, and the menu bar opens the same window — so there is no
+      half to hold back.
+    */
+    const chip = element('input')
+    chip.type = 'checkbox'
+    chip.checked = view.screen.shoulderChip
+    chip.id = 'shoulder-chip'
+    chip.addEventListener('change', () => {
+      handlers.screen({ shoulderChip: chip.checked })
+    })
+    const chipLabel = element('label', undefined, forPronoun(SAYS.chipSwitch, view.pronoun))
+    chipLabel.htmlFor = chip.id
+    const chipSwitch = element('div', 'switch')
+    chipSwitch.append(chip, chipLabel)
+
+    /*
+      How long she stays connected with nothing said.
+
+      A `select` rather than a number field: the useful range is small and a
+      free minute count invites a value that reads as reasonable and is not.
+      The choices come from main for the same reason `sides` does — a page
+      holding its own list is a second answer to what may be chosen, and only
+      one of the two is checked on the way back.
+    */
+    const rest = document.createElement('select')
+    options(
+      rest,
+      view.screen.sleepAfterChoices.map((minutes) => ({
+        value: String(minutes),
+        label: minutes === 0 ? 'never on her own' : `after ${String(minutes)} minutes`,
+      })),
+      String(view.screen.sleepAfterMinutes),
+    )
+    rest.addEventListener('change', () => {
+      handlers.screen({ sleepAfterMinutes: Number(rest.value) })
+    })
+
     return [
       field('Speech bubble', side),
       element('p', 'note', forPronoun(SAYS.sides, view.pronoun)),
+      field('Halo', halo),
+      element('p', 'note', forPronoun(SAYS.halo, view.pronoun)),
+      field('Shoulder button', chipSwitch),
+      element('p', 'note', forPronoun(SAYS.chip, view.pronoun)),
+      field('Rests', rest),
+      element('p', 'note', forPronoun(SAYS.rests, view.pronoun)),
     ]
   },
 }
@@ -399,9 +651,35 @@ const KEYS: Pane = {
 }
 
 /** Where the app's own files are, so somebody can go and edit one. */
-const WHERE: Pane = {
-  id: 'where',
-  label: 'Where things live',
+/** What this build is, and where the rest of the settings went. */
+/**
+ * What this install is, and where it keeps things.
+ *
+ * ## Two groups, and the second was inside the first already
+ *
+ * `Where things live` was a group of its own: two rows — avatars and personas —
+ * each with a Show button. This pane ENDED with the sentence "Everything of
+ * hers is under `~/…/Mochi`", which is the parent of those two folders. One
+ * group named the root in prose and another listed two of its children with
+ * buttons, and somebody looking for either had to know which of the two words
+ * this repository had chosen for the same subject.
+ *
+ * `Looking things up` was the other candidate for absorbing it, and it is the
+ * wrong one on the same test. Its folder — the workspace — is one the USER
+ * points her at, deliberately outside anything of hers, and its first control
+ * is a health check for a capability. A pane holding an amber "the Codex
+ * sign-in has expired" card is not a pane about where files are.
+ *
+ * ## The order: what it is, then where it keeps things, then what is not here
+ *
+ * The rows sit between the version and the two notes rather than after them,
+ * because the notes are about the rows: one says what folder they are inside,
+ * the other says which of her things are deliberately not in this window at
+ * all. A note that comes before what it qualifies is a note read twice.
+ */
+const ABOUT: Pane = {
+  id: 'about',
+  label: 'About',
   attention: () => null,
   render(view, handlers) {
     const rows = (Object.keys(view.folders) as Revealable[]).map((kind) => {
@@ -417,16 +695,7 @@ const WHERE: Pane = {
       row.append(left, open)
       return row
     })
-    return [...rows, element('p', 'note', forPronoun(SAYS.kept, view.pronoun))]
-  },
-}
 
-/** What this build is, and where the rest of the settings went. */
-const ABOUT: Pane = {
-  id: 'about',
-  label: 'About',
-  attention: () => null,
-  render(view) {
     const where = element('p', 'note')
     where.append(
       forPronoun(SAYS.everythingOf, view.pronoun),
@@ -435,11 +704,16 @@ const ABOUT: Pane = {
     return [
       field('Application', element('div', undefined, `${view.about.name} ${view.about.version}`)),
       field('Electron', element('div', undefined, view.about.electron)),
+      ...rows,
       where,
+      // What is NOT here, and why. Her memory and her retention are per
+      // character and live on the shelf; this window holds only what is true
+      // whoever is worn.
+      element('p', 'note', forPronoun(SAYS.kept, view.pronoun)),
       element('p', 'note', forPronoun(SAYS.whoSheIs, view.pronoun)),
     ]
   },
 }
 
 /** In the order they are drawn. `plan-shell.md` derives them; this is the list. */
-export const PANES: readonly Pane[] = [MAY_DO, LOOKING, ON_SCREEN, KEYS, WHERE, ABOUT]
+export const PANES: readonly Pane[] = [MAY_DO, LOOKING, ON_SCREEN, KEYS, ABOUT]

@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { isPersonaId } from '@shared/persona'
 import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
+import { isHaloWhen, type HaloWhen } from '@shared/ipc'
 import {
   DEFAULT_GRANTS,
   WITHHELD_GRANTS,
@@ -391,4 +392,275 @@ export function writeProfile(userData: string, name: string | null): void {
     throw new Error(`not a usable profile name: ${JSON.stringify(name)}`)
   }
   writeMerged(userData, { codexProfile: name })
+}
+
+/**
+ * How long she stays connected with nothing said, in minutes. `0` is never.
+ *
+ * ## Why this exists at all
+ *
+ * A session used to be opened on launch and kept for the life of the process:
+ * `asleep` muted the microphone track and left the peer, the data channel and
+ * the hourly reconnect (§53) running. So a machine left on overnight opened a
+ * session an hour, every hour, into an empty room — and greeted it each time.
+ *
+ * The remedy is that resting means no session, and this is what decides when
+ * resting happens on its own.
+ *
+ * ## Minutes, and a ceiling
+ *
+ * Minutes because that is the unit somebody thinks in for this, and a ceiling
+ * because a session cannot outlive its own hour anyway — a value above 60 would
+ * be a number that describes nothing, since the reconnect would have fired
+ * first. `0` is the opt-out and is the one value that is not a duration, which
+ * is why it is checked separately rather than clamped into the range.
+ */
+export const SLEEP_AFTER_MAX = 60
+export const DEFAULT_SLEEP_AFTER_MINUTES = 15
+
+export function isSleepAfterMinutes(value: unknown): value is number {
+  return (
+    typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= SLEEP_AFTER_MAX
+  )
+}
+
+export function readSleepAfterMinutes(userData: string): number {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return DEFAULT_SLEEP_AFTER_MINUTES
+  try {
+    const value: unknown = JSON.parse(read.text)
+    const found = (value as { sleepAfterMinutes?: unknown } | null)?.sleepAfterMinutes
+    return isSleepAfterMinutes(found) ? found : DEFAULT_SLEEP_AFTER_MINUTES
+  } catch {
+    return DEFAULT_SLEEP_AFTER_MINUTES
+  }
+}
+
+export function writeSleepAfterMinutes(userData: string, minutes: number): void {
+  if (!isSleepAfterMinutes(minutes)) {
+    throw new Error(`not a usable idle timeout: ${JSON.stringify(minutes)}`)
+  }
+  writeMerged(userData, { sleepAfterMinutes: minutes })
+}
+
+/**
+ * When the halo over her head is drawn — three answers, where there were two.
+ *
+ * ## Why `never` is offerable now, and was not before
+ *
+ * `halo.ts` exists because an open microphone with nothing on screen saying so
+ * is the worst thing this application can do. While the halo was the only
+ * surface carrying that fact, a switch that could turn it off was a switch that
+ * handed somebody a way to make the worst thing happen — so the old preference
+ * was deliberately narrower than "show the halo" and governed the resting
+ * hairline alone.
+ *
+ * What changed is that the promise moved somewhere it cannot be switched off.
+ * The tray item marks itself while the microphone is live: it exists whenever
+ * the app runs, it is the only way to quit, and it cannot be hidden or dragged
+ * off a screen. So the halo is a statement about HER APPEARANCE now rather than
+ * the app's one honest surface, and all three answers are ordinary preferences.
+ *
+ * That was not merely a missing feature. `setHidden` hides her window without
+ * touching the session, and its own header says hidden and asleep are
+ * deliberately different things — so *hidden while awake* was already a live
+ * microphone with nothing on screen saying so, reachable from the menu bar in
+ * one click. The tray mark closes that too, and it is why it had to be the tray
+ * rather than a second thing drawn on her.
+ *
+ * ## The three
+ *
+ * - `always` — the open ring and the resting hairline, which is the default.
+ * - `listening` — the open ring only. The hairline is the one people find
+ *   noisy, and it is the one that promises nothing.
+ * - `never` — nothing on her at all.
+ *
+ * A preference rather than a persona field, for `bubbleSide`'s reason: it is a
+ * fact about this screen and this desk, not about who is being worn.
+ */
+export function readHaloWhen(userData: string): HaloWhen {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return 'always'
+  try {
+    const value: unknown = JSON.parse(read.text)
+    const found = (value as { haloWhen?: unknown } | null)?.haloWhen
+    if (isHaloWhen(found)) return found
+    /*
+      The OLD key, honoured rather than ignored.
+
+      This was `haloAtRest: boolean`, and `false` meant exactly what
+      `'listening'` means now. A reader that only knew the new key would answer
+      `always` for every install that had switched the hairline off — a
+      preference somebody set, silently reverting on the launch after an update,
+      which is the failure `readResting`'s header names for rest and hiding.
+
+      Read-only: nothing writes `haloAtRest` any more, so the old key is
+      migrated on the next write of the new one and the file converges without a
+      migration step that has to run exactly once.
+    */
+    const old = (value as { haloAtRest?: unknown } | null)?.haloAtRest
+    if (old === false) return 'listening'
+    return 'always'
+  } catch {
+    // A file that cannot be read fails toward the indicator existing.
+    return 'always'
+  }
+}
+
+export function writeHaloWhen(userData: string, when: HaloWhen): void {
+  if (!isHaloWhen(when)) throw new Error(`not a time the halo can be drawn: ${when}`)
+  writeMerged(userData, { haloWhen: when })
+}
+
+/**
+ * Whether the little speech-bubble control appears at her shoulder on hover.
+ *
+ * ## What turning it off actually costs
+ *
+ * Nothing that is only reachable through it. Her conversations are also one
+ * click away inside the bubble whenever she has said something, and the tray
+ * menu opens the same window from the menu bar — so this is a control with two
+ * other doors, which is what makes it safe to offer as a preference at all. The
+ * halo switch next to it is deliberately narrower for the opposite reason.
+ *
+ * What it does cost is the unread-problems badge on ITS copy of the control:
+ * with the chip off, a persona file that was rejected is announced by the
+ * bubble's own badge instead, and if the bubble is off as well the problems
+ * strip in the shelf is what is left. Said here rather than discovered.
+ *
+ * A preference rather than a persona field, for `readHaloAtRest`'s reason: it
+ * is a fact about this screen and this desk, not about who is being worn.
+ */
+export function readShoulderChip(userData: string): boolean {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return true
+  try {
+    const value: unknown = JSON.parse(read.text)
+    const found = (value as { shoulderChip?: unknown } | null)?.shoulderChip
+    // Shown unless somebody has said otherwise, and a file that cannot be read
+    // fails toward the control existing — the same direction as the halo, and
+    // for the plainer reason that a missing button looks like a broken app.
+    return found !== false
+  } catch {
+    return true
+  }
+}
+
+export function writeShoulderChip(userData: string, shown: boolean): void {
+  writeMerged(userData, { shoulderChip: shown })
+}
+
+/**
+ * Where she was left standing, and how big the shelf was left.
+ *
+ * ## Why a position is stored at all
+ *
+ * `createCompanionWindow` put her in the bottom right on every launch and
+ * nothing remembered otherwise, so dragging her somewhere was undone by
+ * quitting. That is the same failure `readResting`'s header names for rest and
+ * hiding: a state that quietly resets on relaunch makes quitting a way to
+ * change it.
+ *
+ * ## Stored raw, VALIDATED ON READ
+ *
+ * Not clamped on the way in. The display it was written against may not exist
+ * the next time this runs — an external monitor is unplugged, a resolution
+ * changes — so a value that was correct when written can be off every screen
+ * when read. Clamping at write time would bake in an answer computed against a
+ * layout that is gone; the caller clamps against the displays that exist now,
+ * with `containToWorkArea`, which already picks the display nearest HER rather
+ * than nearest her window.
+ *
+ * ## Her SIZE travels with her position, and it has to
+ *
+ * What is stored for her is where her BODY is on screen, not where her window
+ * is — her window is resized on every bubble and `originHolding` exists so that
+ * those resizes do not move her, which makes the window's origin a number that
+ * means something different depending on whether she was speaking when it was
+ * written.
+ *
+ * Turning a body position back into a window origin needs the body's SIZE,
+ * because the pad above her is `FEET_FROM_TOP - height`. Restoring against a
+ * nominal 94×73 would land a 200% character 73px out — not a drift, a constant
+ * offset, and exactly the kind of "nobody will notice" that somebody notices on
+ * the one setup where it is large. So the size is written down beside the
+ * position, and a file without one falls back to the nominal.
+ */
+export interface Place {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
+function readPlaceKey(userData: string, key: 'herPlace' | 'shelfPlace'): Place | null {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return null
+  try {
+    const value: unknown = JSON.parse(read.text)
+    const found = (value as Record<string, unknown> | null)?.[key]
+    if (typeof found !== 'object' || found === null) return null
+    const { x, y, width, height } = found as Record<string, unknown>
+    // Finite integers only. `setPosition` throws on a fractional value, and a
+    // NaN out of a hand-edited file would put her at an origin no display has.
+    if (!Number.isInteger(x) || !Number.isInteger(y)) return null
+    // A zero or negative size is not a small window, it is an unusable one —
+    // and as a BODY it would make the pad arithmetic above her meaningless.
+    if (!Number.isInteger(width) || !Number.isInteger(height)) return null
+    if ((width as number) < 1 || (height as number) < 1) return null
+    return {
+      x: x as number,
+      y: y as number,
+      width: width as number,
+      height: height as number,
+    }
+  } catch {
+    return null
+  }
+}
+
+function writePlaceKey(userData: string, key: 'herPlace' | 'shelfPlace', place: Place): void {
+  /*
+    Refused rather than rounded, and THROWN rather than returned.
+
+    A fractional or absent value here is a caller bug, and silently storing a
+    repaired version of it would leave the next launch restoring a position
+    nothing ever measured. But this refused by returning, which is the same
+    failure one level up: "she does not remember where she was put" is exactly
+    what a write that quietly did nothing looks like, and there was nothing
+    anywhere to distinguish it from a write that never ran.
+
+    Both callers already treat a throw as reportable — `companion:drop` logs it
+    and `remember` in `window.ts` does the same — so this turns a silent no-op
+    into a line somebody can find.
+  */
+  if (!Number.isInteger(place.x) || !Number.isInteger(place.y)) {
+    throw new Error(`refusing a ${key} that is not whole pixels: ${JSON.stringify(place)}`)
+  }
+  if (!Number.isInteger(place.width) || !Number.isInteger(place.height)) {
+    throw new Error(`refusing a ${key} with an unusable size: ${JSON.stringify(place)}`)
+  }
+  if (place.width < 1 || place.height < 1) {
+    throw new Error(`refusing a ${key} with a zero or negative size: ${JSON.stringify(place)}`)
+  }
+  writeMerged(userData, {
+    [key]: { x: place.x, y: place.y, width: place.width, height: place.height },
+  })
+}
+
+export function readHerPlace(userData: string): Place | null {
+  return readPlaceKey(userData, 'herPlace')
+}
+
+export function writeHerPlace(userData: string, place: Place): void {
+  writePlaceKey(userData, 'herPlace', place)
+}
+
+/** The shelf's last bounds — a window position, since it has no body inside it. */
+export function readShelfPlace(userData: string): Place | null {
+  return readPlaceKey(userData, 'shelfPlace')
+}
+
+export function writeShelfPlace(userData: string, place: Place): void {
+  writePlaceKey(userData, 'shelfPlace', place)
 }

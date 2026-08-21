@@ -3,7 +3,13 @@ import { beadAngle, drawHalo, haloFor, haloRect, haloReach } from './halo'
 
 /** Where she stands at size 100, as the rig lays her out. */
 const HER = { left: 0, top: 26, width: 94, height: 73.32 }
-const COLOURS = { her: '#8ec8a8', veil: 'rgb(142 200 168 / 22%)', quiet: 'rgb(250 251 252 / 62%)' }
+const COLOURS = {
+  her: '#8ec8a8',
+  veil: 'rgb(142 200 168 / 22%)',
+  quiet: 'rgb(250 251 252 / 62%)',
+  bead: '#357351',
+  beadEdge: '#ffffff',
+}
 
 /** Enough of a 2D context to record what was asked for. */
 function recorder(): {
@@ -33,6 +39,46 @@ function recorder(): {
   } as unknown as CanvasRenderingContext2D
   return { ctx, calls, strokes, fills }
 }
+
+/**
+ * The bead has to be a different colour from the ring it runs on.
+ *
+ * It was `colours.her`, and so is the open ring's stroke — a 6px dot of exactly
+ * its own green, riding a 2.5px stroke of the same, around an ellipse 16px tall,
+ * for the second and a half a beat lasts. It was drawn on every frame and could
+ * not be seen, so the one clock this app shows for "she is thinking about it"
+ * reported to nobody.
+ *
+ * A test comparing the two values is the only thing that catches this: every
+ * other check passes, because nothing was wrong except that the answer was
+ * invisible.
+ */
+describe('the travelling bead', () => {
+  it('is not painted in the colour of the ring it runs on', () => {
+    const { ctx, fills, strokes } = recorder()
+    drawHalo(ctx, HER, COLOURS, 'open', 1, 0.4)
+    // The ring is stroked before the bead is filled, so the ring's colour is
+    // whatever the stroke recorded first.
+    expect(strokes[0]).toBe(COLOURS.her)
+    expect(fills).toContain(COLOURS.bead)
+    expect(fills).not.toContain(COLOURS.her)
+  })
+
+  it('carries an edge, so it survives whatever is behind her', () => {
+    // Her deep on her light measures 2.99:1 — under the floor for a non-text
+    // mark, and that is before the halo overhangs onto somebody's wallpaper.
+    const { ctx, strokes } = recorder()
+    drawHalo(ctx, HER, COLOURS, 'open', 1, 0.4)
+    expect(strokes).toContain(COLOURS.beadEdge)
+  })
+
+  it('draws none of it when nothing is being waited for', () => {
+    const { ctx, fills, strokes } = recorder()
+    drawHalo(ctx, HER, COLOURS, 'open', 1, null)
+    expect(fills).not.toContain(COLOURS.bead)
+    expect(strokes).not.toContain(COLOURS.beadEdge)
+  })
+})
 
 describe('where the halo sits', () => {
   it('is centred on her and clear of her head', () => {
@@ -135,10 +181,14 @@ describe('which state the two booleans mean', () => {
   /**
    * The whole semantic content of the halo, and the reason it is a function.
    *
-   * `hearing` alone cannot answer this: main computes it as `!asleep && mayHear`,
-   * so a closed microphone means either she is resting or somebody withheld the
-   * grant. Those must not look alike — one is a state that ends when she wakes,
-   * the other a decision somebody made.
+   * `hearing` alone cannot answer this: main computes it as
+   * `!asleep && session !== null`, so a closed microphone means either she is
+   * resting or there is no session at all. Those must not look alike — one is a
+   * state that ends when she wakes, and the other has nothing to come back to.
+   *
+   * The second cause used to be the `microphone` grant. It is gone, and the
+   * distinction survived it because deleting `off` would have drawn a hairline
+   * — "resting; it comes back" — over a session that failed to negotiate.
    */
   it('is open only when the microphone is actually live', () => {
     expect(haloFor(true, false)).toBe('open')
@@ -147,12 +197,12 @@ describe('which state the two booleans mean', () => {
     expect(haloFor(true, true)).toBe('open')
   })
 
-  it('is a hairline while she rests, and nothing when the grant is withheld', () => {
+  it('is a hairline while she rests, and nothing when there is no session', () => {
     expect(haloFor(false, true)).toBe('closed')
     expect(haloFor(false, false)).toBe('off')
   })
 
-  it('never reports the same state for resting and withheld', () => {
+  it('never reports the same state for resting and having no session', () => {
     expect(haloFor(false, true)).not.toBe(haloFor(false, false))
   })
 })

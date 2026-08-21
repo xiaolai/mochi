@@ -96,6 +96,26 @@ function rigAt(size: number): Shape {
   return shapeOf((x, y) => (data[(y * size + x) * 4 + 3] ?? 0) > 128, size, size)
 }
 
+/**
+ * How big an asset is, WITHOUT measuring what is drawn in it.
+ *
+ * `Shape.size` is `Math.max(width, height)` and nothing else, so asking
+ * `assetOf` for it decoded the image, drew it to a canvas, copied a megapixel
+ * back out, scanned every pixel for green and then ran `shapeOf`'s double loop
+ * — to read a number `loadImage` already had. Across thirty-three assets, four
+ * of them 1024 square, that was the slowest thing in this file and it was
+ * measuring nothing.
+ *
+ * It went over the five-second default and started failing under the parallel
+ * load of an ordinary full run. The sibling `it.each` carries an explicit
+ * 30-second timeout because it genuinely does this work; this one does not need
+ * to, so the fix is to stop doing it rather than to widen the bound.
+ */
+async function sizeOf(file: string): Promise<number> {
+  const image = await loadImage(RESOURCES + file)
+  return Math.max(image.width, image.height)
+}
+
 async function assetOf(file: string): Promise<Shape> {
   const image = await loadImage(RESOURCES + file)
   const canvas = createCanvas(image.width, image.height)
@@ -216,7 +236,7 @@ describe('the shipped marks are still the mochi the rig draws', () => {
   })
 
   it('says how many assets are too small to measure, rather than hiding it', async () => {
-    const sizes = await Promise.all(ASSETS.map(async (one) => (await assetOf(one)).size))
+    const sizes = await Promise.all(ASSETS.map((one) => sizeOf(one)))
     const unmeasured = sizes.filter((one) => one < SMALLEST_MEASURABLE).length
     // Written down, so the number moving is a thing somebody has to look at. If
     // a 512px icon is replaced by a 32px one this goes red, and that is the

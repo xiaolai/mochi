@@ -62,6 +62,9 @@ const DOCUMENTS: readonly {
       'count',
       'characters',
       'characters-count',
+      // New / Duplicate / Delete, moved out of the character sheet's last
+      // section and under the list they actually act on.
+      'cast-actions',
       'pane',
       // `tabs` is gone with the inspector's own two-tab strip: Cast used to
       // carry a "next wake" panel and a "conversations" panel side by side, and

@@ -107,15 +107,42 @@ function recorder() {
   return { ctx: ctx as unknown as CanvasRenderingContext2D, calls, raw: ctx }
 }
 
-const COLOURS = { paper: '#f4f1ea', ink: '#16170f', alarm: '#d1495b' }
+const COLOURS = {
+  herDeep: '#357351',
+  herDeepInk: '#ffffff',
+  alarm: '#d1495b',
+  paper: '#f4f1ea',
+}
 
 describe('what it draws', () => {
-  it('paints its own opaque surface, like anything else she sits in front of', () => {
+  it('is the mark alone, in HER colour, with nothing under it', () => {
+    // It was a black glyph on a light rounded plate — a tray icon standing at
+    // her shoulder, in a colour belonging to neither the desktop nor the
+    // character. Both halves of that are asserted, because only one of them is
+    // visible in a screenshot of a dark desktop: the glyph is hers, and no
+    // plate is painted beneath it.
     const { ctx, calls, raw } = recorder()
     drawChip(ctx, HER, COLOURS, 1)
-    expect(calls).toContain(`fill:${COLOURS.paper}`)
-    expect(calls).toContain(`fill:${COLOURS.ink}`)
+    expect(calls).toContain(`fill:${COLOURS.herDeep}`)
+    expect(calls).toContain(`fill:${COLOURS.herDeepInk}`)
     expect(raw.globalAlpha).toBe(1)
+  })
+
+  it('paints no paper at all while there is nothing to read', () => {
+    // The ASSERTION that the plate does not come back. Paper survives in this
+    // file for exactly one job — the ring that keeps the problems dot legible
+    // against a photograph — so with no problems outstanding, a paper fill can
+    // only be a surface, and a surface is the thing that was removed.
+    const { calls } = (() => {
+      const made = recorder()
+      drawChip(made.ctx, HER, COLOURS, 1, 0)
+      return made
+    })()
+    expect(calls).not.toContain(`fill:${COLOURS.paper}`)
+
+    const badged = recorder()
+    drawChip(badged.ctx, HER, COLOURS, 1, 2)
+    expect(badged.calls).toContain(`fill:${COLOURS.paper}`)
   })
 
   it('draws nothing at all when it has faded out', () => {

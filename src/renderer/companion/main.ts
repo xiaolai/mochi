@@ -5,6 +5,21 @@ import { EMOTIONS, type Emotion } from '@shared/avatar'
 import { STATUS_UNDER } from '@shared/avatar-layout'
 import { keepsNewer } from './negotiating'
 import { openSession, type Session, type SessionState } from './audio/session'
+import { installLogStamp } from '@shared/log'
+
+/*
+  A wall clock on every line this window prints, installed before it prints one.
+
+  The two processes interleave on one stream, and this one used to stamp a
+  relative offset from the moment the SESSION opened — which resets on every
+  reconnect, so two lines forty minutes apart could carry the same number. See
+  `shared/log.ts`; the same call is the first statement in main.
+
+  Idempotent by construction, which matters here rather than there: this is the
+  kind of module a dev-server reload imports twice, and two installations would
+  double-stamp every line.
+*/
+installLogStamp()
 
 declare global {
   interface Window {
@@ -99,16 +114,19 @@ function describe(state: SessionState): string {
 let session: Session | null = null
 
 /**
- * Whether the microphone may be open, which is TWO answers rather than one.
+ * Whether the microphone may be open, which is ONE answer now.
  *
- * `asleep` is where she was left; `mayHear` is 5b's standing grant. They change
- * from different places — the tray, a key and a click for the first, the
- * settings window for the second — and either one alone closes the microphone.
- * Held here rather than derived at each call site, because a call site that
- * knew only its own half would re-open the track the other half had closed.
+ * It was two: `asleep` — where she was left — and `mayHear`, 5b's standing
+ * grant, either one of which alone closed the track. The grant is gone
+ * (`@shared/grants` records why it was the one this machine already answered
+ * twice), and with it the whole apparatus that kept the two in step: the held
+ * revocation, the give-it-back reconnect, and `closeMicrophone`.
+ *
+ * Still held here rather than derived at each call site. A call site that knew
+ * only about its own reason to close the track is exactly what re-opened one
+ * the other had just closed.
  */
 let asleep = false
-let mayHear = true
 
 /**
  * A grant change that arrived while a session was still opening.
@@ -121,37 +139,54 @@ let mayHear = true
  * of the session. Kept here, applied the moment there is something to apply it
  * to, and cleared only once it has been.
  */
-let held: { microphone: boolean; instructions: string; tools: readonly unknown[] } | null = null
+let held: { instructions: string; tools: readonly unknown[] } | null = null
 
 function applyMicrophone(): void {
-  const on = !asleep && mayHear
+  const on = !asleep
   session?.listen(on)
-  // Her side of it too. With no microphone there is no turn to detect, and a
-  // track that is muted or ended still produces frames — silence read as "they
-  // stopped talking" put her into a held beat behind a closed microphone.
-  face.hears(on)
+  /*
+    Her side of it too, and it asks whether there IS a session.
+
+    With no microphone there is no turn to detect, and a track that is muted or
+    ended still produces frames — silence read as "they stopped talking" put her
+    into a held beat behind a closed microphone.
+
+    `session !== null` is what gives the halo's third state a producer again.
+    `off` used to mean the `microphone` grant was withheld; that grant is gone,
+    and without this the state was unreachable while its opposite was a lie —
+    awake with a session that failed to negotiate drew a filled ring over a
+    window holding no peer and no device. See `haloFor`.
+  */
+  const live = on && session !== null
+  face.hears(live)
+  /*
+    The SAME boolean to main, which is what puts it in the menu bar.
+
+    Reported here rather than from `session.listen`, and that is the whole point
+    of moving it: `listen` is only reached when there IS a session, so the case
+    that matters most — no session at all — could not report anything and main
+    would hold the last value for ever. One computation, three consumers: the
+    track, the ring on her head, and the mark on the tray. They cannot disagree
+    because there is nothing for them to disagree about.
+  */
+  window.mochi.report({ kind: 'state', state: live ? 'listening' : 'muted' })
 }
 
 /**
  * Whatever arrived while she was opening, applied now that she is up.
  *
- * Returns whether a NEW session is needed. A session opened while the
- * microphone grant was off never asked for the device, so it has no track and
- * cannot grow one — the offer is already negotiated. Turning the grant back on
- * is therefore a reconnect rather than a flag, and this is where that is known.
+ * It used to return whether a NEW session was needed, because one grant could
+ * not be applied to a live peer: a session opened without the microphone grant
+ * never asked for the device, so it had no track and could not grow one into an
+ * offer already answered. Every grant left is a tool, and a tool list is a
+ * `session.update` — so there is nothing here that a running session cannot
+ * take, and nothing to report back.
  */
-function applyHeldGrants(): boolean {
-  if (session === null || held === null) return false
+function applyHeldGrants(): void {
+  if (session === null || held === null) return
   const change = held
   held = null
-  mayHear = change.microphone
-  // GIVEN BACK, not merely muted. `listen(false)` leaves the device open and
-  // the indicator lit, which is the one thing somebody can see from outside the
-  // app — and it is the thing a switch marked "Hear you" promises.
-  if (!mayHear) session.closeMicrophone()
   session.mayDo({ instructions: change.instructions, tools: change.tools })
-  applyMicrophone()
-  return mayHear && !session.hasMicrophone()
 }
 
 /**
@@ -208,7 +243,13 @@ async function open(): Promise<void> {
   } catch (error: unknown) {
     // Only the current one gets to say so. A stale failure would overwrite the
     // state of the session that replaced it.
-    if (mine === opening) show(String(error))
+    if (mine === opening) {
+      show(String(error))
+      // And the ring stops promising a microphone. `session` is null from the
+      // top of this function, so this is what turns the halo off rather than
+      // leaving it filled over a negotiation that never completed.
+      applyMicrophone()
+    }
     return
   }
 
@@ -283,7 +324,6 @@ async function open(): Promise<void> {
     Exactly the shape `held` fixes for grants, three lines up.
   */
   asleep = keepsNewer(next.asleep, asleep, arrived.rest !== before.rest)
-  mayHear = next.microphone
   face.sleeps(asleep)
   // Nothing from the last session is owed by this one. A beat still held when
   // the hour ran out would otherwise carry into the new session and go overdue
@@ -291,31 +331,21 @@ async function open(): Promise<void> {
   face.opened()
 
   /**
-   * The held grant BEFORE the microphone is touched, and that order is the
-   * point.
+   * The held grants BEFORE the microphone is touched, and that order is kept.
    *
-   * `next.microphone` is a snapshot taken when this session was configured. A
-   * revocation that arrived while it was negotiating is newer, and applying it
-   * afterwards meant the track was enabled from the stale answer first — she
-   * transmitted, briefly, into a permission somebody had already taken away.
+   * It mattered absolutely when one of the grants WAS the microphone: a
+   * revocation arriving mid-negotiation is newer than the snapshot the session
+   * was configured from, and applying it afterwards meant the track was enabled
+   * from the stale answer first — she transmitted, briefly, into a permission
+   * somebody had already taken away. Nothing here touches the track any more,
+   * so the order is no longer load-bearing; it is kept because "the newest
+   * answer wins before anything acts on the old one" is the rule, and a rule
+   * that is only followed where it is currently provable is not one.
    */
-  const needsAnother = applyHeldGrants()
+  applyHeldGrants()
   // The microphone opens only once the session is up, so she is never
   // transmitting into a peer that is still being negotiated.
   applyMicrophone()
-
-  /**
-   * And the other direction: a grant GIVEN BACK while this was opening.
-   *
-   * This session never asked for the device, so it has no track and cannot grow
-   * one — the offer is already answered. Honouring the answer rather than
-   * ignoring it is what stops her staying deaf until an unrelated reconnect an
-   * hour later.
-   */
-  if (needsAnother) {
-    window.mochi.report({ kind: 'note', text: 'the microphone was allowed while opening' })
-    void open()
-  }
 }
 
 /**
@@ -330,6 +360,57 @@ async function open(): Promise<void> {
 window.mochi.onSend((frame) => {
   const type = (frame as { type?: unknown }).type
   if (type === '__mochi_reconnect__') void open()
+  /**
+   * Close it, and do not open another.
+   *
+   * Resting used to mute the microphone track and leave everything else up: the
+   * peer, the data channel, the remote audio element and the hourly reconnect
+   * (§53). So "asleep" was a companion holding a live connection to the service
+   * all night, renewing it every hour.
+   *
+   * `opening` is bumped as well as the session closed, and that is the half
+   * that is easy to miss: a reconnect can be in flight when this arrives, and
+   * without it that negotiation completes a few seconds later and assigns
+   * itself to `session` — reopening the thing that was just closed, with
+   * nothing on screen to say why she is listening again.
+   */
+  if (type === '__mochi_close__') {
+    opening += 1
+    session?.close()
+    session = null
+    // Nothing from that session is owed by whatever comes next, and a beat left
+    // held would go overdue against a session that no longer exists.
+    face.opened()
+    face.working(0)
+    // And the ring and the menu bar stop saying she can hear you. `session` is
+    // null one line up, so this is the transition that turns both off — without
+    // it, closing a session left a filled halo over a window holding no peer.
+    applyMicrophone()
+  }
+  if (type === '__mochi_working__') {
+    face.working(Number((frame as { outstanding?: unknown }).outstanding))
+  }
+  if (type === '__mochi_halo__') {
+    /*
+      An unreadable answer leaves the ring at `always`.
+
+      It used to be `!== false` for the same reason: everything else about this
+      preference is taste, and the direction a wrong guess fails in is not. That
+      argument is weaker than it was — the menu bar carries the microphone now,
+      so a hidden halo hides nothing anybody needs — and it is kept anyway,
+      because failing toward MORE indication costs a ring somebody did not want
+      and failing the other way costs the thing this app promises.
+    */
+    const when = (frame as { when?: unknown }).when
+    face.showsHalo(when === 'listening' || when === 'never' ? when : 'always')
+  }
+  if (type === '__mochi_chip__') {
+    // `!== false` again: a frame this side cannot read leaves the control on
+    // screen. A missing indicator is a lie about the microphone; a missing
+    // button is only a missing button — but it still reads as a broken app, and
+    // failing toward the thing existing is the same answer to both.
+    face.showsShoulderChip((frame as { shown?: unknown }).shown !== false)
+  }
   // Problems keep happening after the session opens — a capability that threw,
   // a reconnect that could not be scheduled. The count on `session.problems` is
   // a snapshot taken at the door; this is how it stays true afterwards.
@@ -377,36 +458,22 @@ window.mochi.onSend((frame) => {
    * and the instructions that tell her what she may no longer do.
    */
   if (type === '__mochi_grants__') {
-    const said = frame as { microphone?: unknown; instructions?: unknown; tools?: unknown }
+    const said = frame as { instructions?: unknown; tools?: unknown }
     /**
-     * Checked WHOLE, and an explicit boolean.
+     * Checked WHOLE, and it stays that way with one field fewer.
      *
-     * `!== false` was the first version and it fails in the wrong direction: a
-     * frame missing the field, or carrying a value from a build that spelt it
-     * differently, opened the microphone. A permission this process cannot read
-     * is not a permission it may act on, so a malformed frame changes nothing
-     * and says so out loud instead.
+     * These are permissions, so a frame this process cannot read is not one it
+     * may act on: a malformed frame changes nothing and says so out loud rather
+     * than applying the half it could parse.
      */
-    if (
-      typeof said.microphone !== 'boolean' ||
-      typeof said.instructions !== 'string' ||
-      !Array.isArray(said.tools)
-    ) {
+    if (typeof said.instructions !== 'string' || !Array.isArray(said.tools)) {
       window.mochi.report({ kind: 'note', text: 'a malformed grants frame was ignored' })
       return
     }
-    held = { microphone: said.microphone, instructions: said.instructions, tools: said.tools }
+    held = { instructions: said.instructions, tools: said.tools }
     // Applied now if there is a session, and kept for the one that is opening
     // if there is not. Either way the switch is not lost.
-    //
-    // A microphone GIVEN BACK needs a new session: this one never opened the
-    // device, so there is no track to enable and no way to add one to an offer
-    // that has already been answered. Taking it away needs no reconnect — the
-    // track is stopped where it stands.
-    if (applyHeldGrants()) {
-      window.mochi.report({ kind: 'note', text: 'the microphone was allowed; reconnecting' })
-      void open()
-    }
+    applyHeldGrants()
   }
   if (type === '__mochi_bubble_side__') {
     arrived.bubbleSide += 1
@@ -415,4 +482,20 @@ window.mochi.onSend((frame) => {
   }
 })
 
-void open()
+/*
+  The first session is MAIN's to ask for, and this file no longer opens one.
+
+  It ended in a bare `void open()`, so a session was negotiated on every launch
+  before anything had asked for one — including a launch into a stored
+  `asleep: true`, where the entire meaning of the state is that she is not
+  participating. `session.ts`'s own header says where that decision belongs:
+  which capability runs, whether a call has been answered, when to reconnect —
+  *"all of it is main's, because all of it is a decision about what this machine
+  does on somebody's behalf"*. This process holds the peer and the microphone,
+  which makes it the one that should have the least say in when they exist.
+
+  Main sends `__mochi_reconnect__` on `did-finish-load`, which fires after this
+  module has run and therefore after the listener above is registered — and
+  again on a reload, which is what makes a development refresh reconnect rather
+  than sit there mute.
+*/

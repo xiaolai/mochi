@@ -6,14 +6,30 @@
  * 1c's receipt asked for every permission at the moment of installing a
  * package, which is the worst moment to ask: nobody has used the thing yet, so
  * every answer is a guess, and the guess is then permanent. 5b replaces it with
- * five switches that are always there and always answerable — and each carries
+ * switches that are always there and always answerable — and each carries
  * **when it was last used**, which is what turns "should she be allowed to?"
  * into a decision somebody can actually make.
  *
- * There are five because there are five real ones. The plugin sandbox and the
- * grant broker are struck (`plan-capabilities.md` W-F): capabilities are
- * compiled in now, so a grant is not a fence around somebody else's code. It is
- * a statement about what this machine lets HER do.
+ * The plugin sandbox and the grant broker are struck (`plan-capabilities.md`
+ * W-F): capabilities are compiled in now, so a grant is not a fence around
+ * somebody else's code. It is a statement about what this machine lets HER do.
+ *
+ * ## There were five. `microphone` was the one this machine already answered
+ *
+ * "Hear you" opened and closed the audio track, and every state it could reach
+ * was reachable twice over. macOS owns microphone permission for this
+ * application and revokes it from System Settings, where somebody looking for
+ * that answer actually goes; resting closes the session and hands the device
+ * back, from the key, the tray and a click on her. What the switch alone could
+ * produce was *awake, connected, and deaf* — a state in which she can still
+ * greet you and cannot hear a word of the reply, which is not a permission
+ * anybody wants and reads as the app being broken.
+ *
+ * Deleted rather than hidden. A grant with no control is a line in
+ * `preferences.json` that only a file editor can reach, which is the defect
+ * `LOOKING`'s header names — and it took `SessionConfig.microphone`, the
+ * renderer's `mayHear`, `closeMicrophone`, the reconnect-on-regrant path and
+ * the shelf's third microphone state with it.
  *
  * ## App-level, not per character
  *
@@ -35,16 +51,10 @@
  *    the dispatch answers with a sentence rather than an error.
  */
 
-/** The five. The order is the order they are drawn in. */
+/** The order is the order they are drawn in. */
 import type { ByPronoun } from './pronoun'
 
-export const GRANTS = [
-  'microphone',
-  'speak_first',
-  'ask_workspace',
-  'remember_this',
-  'set_expression',
-] as const
+export const GRANTS = ['speak_first', 'ask_workspace', 'remember_this', 'set_expression'] as const
 
 export type Grant = (typeof GRANTS)[number]
 
@@ -69,7 +79,7 @@ export interface GrantSpec {
    * something that is not a tool call.
    *
    * Null is also what says the row has no "last used" to show: the ledger
-   * records calls, and the microphone is not one. 5b's acceptance is that the
+   * records calls, and speaking first is not one. 5b's acceptance is that the
    * column is real or the row does not claim it, so this is what the window
    * branches on rather than on a time that happens to be missing.
    */
@@ -79,17 +89,6 @@ export interface GrantSpec {
 }
 
 export const GRANT_SPECS: readonly GrantSpec[] = [
-  {
-    id: 'microphone',
-    label: 'Hear you',
-    detail: {
-      she: 'Open the microphone while she is awake.',
-      he: 'Open the microphone while he is awake.',
-      it: 'Open the microphone while it is awake.',
-    },
-    capability: null,
-    withheld: 'Your microphone is off, so you cannot hear them at all right now.',
-  },
   {
     id: 'speak_first',
     label: 'Speak first',
@@ -142,12 +141,11 @@ export const GRANT_SPECS: readonly GrantSpec[] = [
  *
  * Permissive by default and deliberately so: these are the capabilities this
  * build ships with, described in her tool list and in the settings window, and
- * a companion that arrives unable to hear you is not a safer companion — it is
- * a broken one. The switch exists so somebody can say no, not so the app can
+ * a companion that arrives unable to greet you or remember anything is not a
+ * safer companion — it is a broken one. The switch exists so somebody can say no, not so the app can
  * say it for them.
  */
 export const DEFAULT_GRANTS: Grants = {
-  microphone: true,
   speak_first: true,
   ask_workspace: true,
   remember_this: true,
@@ -164,13 +162,12 @@ export const DEFAULT_GRANTS: Grants = {
  * would settle an unreadable permission in the one direction that lets her do
  * something they may have said she may not.
  *
- * It fails loud rather than quiet: with these in force she cannot hear, cannot
- * greet, cannot look anything up and cannot write a note, which is a state
+ * It fails loud rather than quiet: with these in force she cannot greet, cannot
+ * look anything up, cannot write a note and has one face, which is a state
  * somebody notices in about four seconds. A permission that silently stayed on
  * is a state nobody notices at all.
  */
 export const WITHHELD_GRANTS: Grants = {
-  microphone: false,
   speak_first: false,
   ask_workspace: false,
   remember_this: false,

@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { HALO_WHEN } from '@shared/ipc'
 import {
   readBubbleSide,
   readResting,
@@ -14,6 +15,17 @@ import {
   writeProfile,
   readGrants,
   writeGrant,
+  readSleepAfterMinutes,
+  writeSleepAfterMinutes,
+  DEFAULT_SLEEP_AFTER_MINUTES,
+  readHaloWhen,
+  writeHaloWhen,
+  readShoulderChip,
+  writeShoulderChip,
+  readHerPlace,
+  writeHerPlace,
+  readShelfPlace,
+  writeShelfPlace,
 } from './worn'
 import { DEFAULT_GRANTS, WITHHELD_GRANTS } from '@shared/grants'
 
@@ -223,10 +235,10 @@ describe('what she may do while nobody is watching', () => {
     // The whole reason there is one writer for this file: a second one that
     // knew only its own key would drop the worn persona.
     writePreferences({ activePersonaId: 'loki', bubbleSide: 'left' })
-    writeGrant(userData, 'microphone', false)
+    writeGrant(userData, 'speak_first', false)
     expect(readWornPersonaId(userData)).toBe('loki')
     expect(readBubbleSide(userData)).toBe('left')
-    expect(readGrants(userData).microphone).toBe(false)
+    expect(readGrants(userData).speak_first).toBe(false)
   })
 
   it('keeps the other refusals when one is changed back', () => {
@@ -270,10 +282,174 @@ describe('what she may do while nobody is watching', () => {
     // nobody made: `readGrants` answers "all withheld", and writing THAT back
     // would put it on disk.
     writeFileSync(join(userData, 'preferences.json'), '{ not json')
-    expect(() => writeGrant(userData, 'microphone', true)).toThrow()
+    expect(() => writeGrant(userData, 'speak_first', true)).toThrow()
   })
 
   it('refuses to write something that is not a grant', () => {
     expect(() => writeGrant(userData, 'sudo' as never, true)).toThrow()
+  })
+})
+
+describe('when she rests on her own', () => {
+  it('defaults rather than never, so an untouched install still stops connecting', () => {
+    expect(readSleepAfterMinutes(userData)).toBe(DEFAULT_SLEEP_AFTER_MINUTES)
+  })
+
+  it('keeps zero, which is the one value that is not a duration', () => {
+    writeSleepAfterMinutes(userData, 0)
+    expect(readSleepAfterMinutes(userData)).toBe(0)
+  })
+
+  it('refuses a value nothing can honour rather than clamping it', () => {
+    // Clamping would store a number nobody chose and show it back as though
+    // they had. The caller sees the throw; the file keeps what it had.
+    expect(() => {
+      writeSleepAfterMinutes(userData, 90)
+    }).toThrow()
+    expect(() => {
+      writeSleepAfterMinutes(userData, 2.5)
+    }).toThrow()
+  })
+
+  it('falls back when the file says something unusable, rather than never sleeping', () => {
+    // A hand-edited file is ordinary here. The direction matters: an unreadable
+    // value must not become "stay connected for ever".
+    writePreferences({ sleepAfterMinutes: 'soon' })
+    expect(readSleepAfterMinutes(userData)).toBe(DEFAULT_SLEEP_AFTER_MINUTES)
+    writePreferences({ sleepAfterMinutes: 600 })
+    expect(readSleepAfterMinutes(userData)).toBe(DEFAULT_SLEEP_AFTER_MINUTES)
+  })
+})
+
+describe('when the halo is drawn', () => {
+  it('is always, unless somebody has said otherwise', () => {
+    expect(readHaloWhen(userData)).toBe('always')
+    writePreferences({ haloWhen: 'sometimes' })
+    // A value this side cannot read is not one it may act on, and the direction
+    // a wrong guess should fail in is toward MORE indication rather than less.
+    expect(readHaloWhen(userData)).toBe('always')
+  })
+
+  it.each([...HALO_WHEN])('round-trips %s', (when) => {
+    writeHaloWhen(userData, when)
+    expect(readHaloWhen(userData)).toBe(when)
+  })
+
+  it('refuses to store an answer nothing can honour', () => {
+    expect(() => {
+      writeHaloWhen(userData, 'sometimes' as never)
+    }).toThrow()
+  })
+
+  it('honours the OLD boolean, so a preference does not revert on update', () => {
+    /*
+      This was `haloAtRest: boolean`, and `false` meant exactly what
+      `'listening'` means now — the open ring, no resting hairline.
+
+      A reader that knew only the new key would answer `always` for every
+      install that had switched the hairline off: a preference somebody set,
+      silently coming back on the launch after an update. That is the failure
+      `readResting`'s header names for rest and hiding, and it is invisible —
+      the app looks like it is working, it is simply doing something nobody
+      asked for.
+    */
+    writePreferences({ haloAtRest: false })
+    expect(readHaloWhen(userData)).toBe('listening')
+
+    // And `true` is the default, which is what it always meant.
+    writePreferences({ haloAtRest: true })
+    expect(readHaloWhen(userData)).toBe('always')
+
+    // The NEW key wins when both are there, which is what makes the migration
+    // converge: the next write of `haloWhen` settles it for good.
+    writePreferences({ haloAtRest: false, haloWhen: 'never' })
+    expect(readHaloWhen(userData)).toBe('never')
+  })
+})
+
+describe('whether the control at her shoulder is offered', () => {
+  it('is shown unless somebody has said otherwise', () => {
+    expect(readShoulderChip(userData)).toBe(true)
+    writePreferences({ shoulderChip: 'no' })
+    // The halo's direction, for a plainer reason: a missing indicator is a lie
+    // about the microphone, and a missing button is only a missing button —
+    // but it still reads as a broken app, so an unreadable value leaves it on.
+    expect(readShoulderChip(userData)).toBe(true)
+  })
+
+  it('round-trips a deliberate no', () => {
+    writeShoulderChip(userData, false)
+    expect(readShoulderChip(userData)).toBe(false)
+    writeShoulderChip(userData, true)
+    expect(readShoulderChip(userData)).toBe(true)
+  })
+
+  it('does not disturb the other preferences in the same file', () => {
+    // One file holds all of them and `writeMerged` is what keeps that true.
+    // A write that replaced the object would turn the halo back on for anybody
+    // who had switched it off, which is a preference silently reverting.
+    writeHaloWhen(userData, 'never')
+    writeShoulderChip(userData, false)
+    expect(readHaloWhen(userData)).toBe('never')
+    expect(readShoulderChip(userData)).toBe(false)
+  })
+})
+
+describe('where she and the shelf were left', () => {
+  it('has no answer before anything has been written', () => {
+    expect(readHerPlace(userData)).toBeNull()
+    expect(readShelfPlace(userData)).toBeNull()
+  })
+
+  it('round-trips her body position and the size it was measured at', () => {
+    // The SIZE travels with the position because turning a body corner back
+    // into a window origin needs the pad above her, which is her height.
+    writeHerPlace(userData, { x: 1200, y: 700, width: 94, height: 73 })
+    expect(readHerPlace(userData)).toEqual({ x: 1200, y: 700, width: 94, height: 73 })
+  })
+
+  it('keeps the two windows apart', () => {
+    writeHerPlace(userData, { x: 10, y: 20, width: 94, height: 73 })
+    writeShelfPlace(userData, { x: 30, y: 40, width: 1440, height: 900 })
+    expect(readHerPlace(userData)?.x).toBe(10)
+    expect(readShelfPlace(userData)?.x).toBe(30)
+  })
+
+  it('reads a negative origin, because a second display can be left of the first', () => {
+    writeHerPlace(userData, { x: -900, y: 300, width: 94, height: 73 })
+    expect(readHerPlace(userData)?.x).toBe(-900)
+  })
+
+  it('refuses anything that is not whole, because setPosition throws on a fraction', () => {
+    // THROWS rather than returning. It used to refuse silently, which is the
+    // same thing a write that never ran looks like — and "she does not remember
+    // where she was put" was exactly the symptom, with nothing anywhere to say
+    // which of the two had happened. Both callers log a throw.
+    expect(() => {
+      writeHerPlace(userData, { x: 10.5, y: 20, width: 94, height: 73 })
+    }).toThrow()
+    expect(readHerPlace(userData)).toBeNull()
+  })
+
+  it('refuses a size that could not place her, and says so', () => {
+    expect(() => {
+      writeHerPlace(userData, { x: 10, y: 20, width: 0, height: 73 })
+    }).toThrow()
+    expect(() => {
+      writeHerPlace(userData, { x: 10, y: 20, width: 94, height: 0.5 })
+    }).toThrow()
+    expect(readHerPlace(userData)).toBeNull()
+  })
+
+  it('reads nothing back from a record missing its size', () => {
+    // The size is what the restore needs. A record without one would place her
+    // against a nominal body and land a large character visibly out.
+    writePreferences({ herPlace: { x: 10, y: 20 } })
+    expect(readHerPlace(userData)).toBeNull()
+  })
+
+  it('reads nothing back from a zero-sized one', () => {
+    writePreferences({ herPlace: { x: 10, y: 20, width: 0, height: 73 } })
+    expect(readHerPlace(userData)).toBeNull()
   })
 })

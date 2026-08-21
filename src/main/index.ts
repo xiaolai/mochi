@@ -1,8 +1,14 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
-import { BUILT_IN_ID, greetingFor, PERSONA_LIMITS, VOICE_NAMES } from '@shared/persona'
+import {
+  BUILT_IN_ID,
+  greetingFor,
+  PERSONA_LIMITS,
+  PROMPT_SLOTS,
+  RECOMMENDED_VOICES,
+  VOICE_NAMES,
+} from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
 import { heardPortion } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'
@@ -43,6 +49,7 @@ import {
   sweepDeletions,
 } from './store/personas'
 import { readPolicy } from './store/policy'
+import { checkPrompt, promptFile, readPrompt, seedPrompt, writePrompt } from './store/prompt'
 import {
   readBubbleSide,
   readResting,
@@ -63,6 +70,13 @@ import {
   writeBubbleSide,
   writeResting,
   writeWornPersonaId,
+  readSleepAfterMinutes,
+  writeSleepAfterMinutes,
+  readHaloWhen,
+  writeHaloWhen,
+  readShoulderChip,
+  writeShoulderChip,
+  writeHerPlace,
   type BubbleSide,
   type Resting,
 } from './store/worn'
@@ -74,7 +88,17 @@ import { setAsideV1 } from './store/inherited'
 import { createProblems } from './problems'
 import { leftoverCapabilities, legacyCapabilitiesRoot } from './capability/legacy'
 import type { CapabilityDeps } from '../capabilities/kind'
-import { isLocated, locateCodex } from '../capabilities/ask-workspace/locate'
+import {
+  checkCodex,
+  describeStatus,
+  pathOf,
+  readinessOf,
+  remedyFor,
+  type CodexStatus,
+} from './codex/status'
+import { CODEX_SAYS, REMEDY_SAYS } from '@shared/delegation'
+import { EMOTIONS } from '@shared/avatar'
+import type { SettingsCodex } from '@shared/ipc'
 import {
   codexHome,
   profileFile,
@@ -86,11 +110,31 @@ import { parseGrip, startDrag, stopDrag } from './drag'
 import {
   FEET_FROM_TOP,
   WINDOW_W,
+  herPositionFrom,
   originHolding,
   windowFitting,
   type Pad,
 } from '@shared/avatar-layout'
 import type { FaceSpec } from '@shared/avatar-spec'
+import { installLogStamp, runName } from '@shared/log'
+
+/*
+  A wall clock on every line, before anything has a chance to print one.
+
+  FIRST, ahead of every other statement in this module: `installLogStamp`
+  rewrites `console.log`/`warn`/`error`, and a line printed before it runs is a
+  line with no clock on it. The capability count a few lines down was exactly
+  that line.
+
+  Two processes interleave on one stream and neither used to stamp anything, so
+  `[memory] codex exited with 1` and `[voice] taken at teardown` could not be
+  ordered against each other — reading a real conversation meant inferring order
+  from position, which is a guess dressed as evidence. `shared/log.ts` carries
+  the rest of the argument, including why this wraps the console rather than
+  offering a helper nobody remembers to call at midnight.
+*/
+installLogStamp()
+console.log(`[main] run ${runName(new Date())}`)
 
 /**
  * Her body before the renderer has said where it is — the same nominal one the
@@ -196,6 +240,66 @@ const registry = createRegistry(CAPABILITIES.manifests)
  */
 let codexPath: string | null = null
 
+/**
+ * What the last check made of the local Codex, and why it is held rather than
+ * asked for.
+ *
+ * `checkCodex` spawns two child processes with a deadline each. `settings:read`
+ * runs whenever the window redraws, so probing there would put two spawns
+ * behind a tab change — and the answer barely moves: it changes when somebody
+ * installs the CLI, signs in, or lets a token expire, none of which happen
+ * while a pane is being looked at.
+ *
+ * Null until the first check completes. The window is told `timed-out` for that
+ * window of a second or two, which is the one state whose remedy is "ask
+ * again" — the honest answer for "the check has not finished".
+ */
+let codexStatus: CodexStatus | null = null
+
+/** The last answer, reduced to what a renderer may hear. See `SettingsCodex`. */
+function codexForWindow(): SettingsCodex {
+  if (codexStatus === null) return { readiness: 'timed-out', remedy: 'retry' }
+  return { readiness: readinessOf(codexStatus), remedy: remedyFor(codexStatus) }
+}
+
+/**
+ * Run the whole check, take its two consequences, and answer.
+ *
+ * TWO consequences, and they are different in kind. `codexPath` is what
+ * `ask-workspace` spawns, so it must follow the check rather than a separate
+ * search — there were two answers to "where is Codex" and only one of them
+ * looked at whether the binary runs. The problems note is what somebody sees
+ * without opening the settings window at all.
+ *
+ * `describeStatus` goes to the LOG and nothing else: it carries the resolved
+ * path and every directory searched, which is a home directory, which is a
+ * username. What reaches the window is `readinessOf`, which is seven words.
+ */
+async function checkCodexNow(): Promise<SettingsCodex> {
+  const status = await checkCodex({
+    platform: process.platform,
+    env: process.env,
+    home: app.getPath('home'),
+  })
+  codexStatus = status
+  // From the check that RAN it, not from a second search. There were two
+  // answers to "where is Codex" and only this one knows the file is executable.
+  codexPath = pathOf(status)
+  console.log(`[codex] ${describeStatus(status)}`)
+  if (status.kind !== 'ready') {
+    // Loud, and reported. Without a usable Codex she cannot look anything up,
+    // and the failure otherwise presents as her declining to help.
+    problems.note('codex', null, `${CODEX_SAYS[readinessOf(status)]} ${remedySentence(status)}`)
+  }
+  return codexForWindow()
+}
+
+/** The remedy as words, or nothing when there is none. See `REMEDY_SAYS`. */
+function remedySentence(status: CodexStatus): string {
+  const remedy = remedyFor(status)
+  return remedy === null ? '' : REMEDY_SAYS[remedy]
+}
+
 console.log(
   `[capability] ${registry.tools.length} available: ${registry.tools.map((t) => t.name).join(', ')}`,
 )
@@ -225,6 +329,7 @@ function menuModel(): TrayModel {
     pronoun: activePersona(catalog, readWornPersonaId(userData)).persona.pronoun,
     bubble: { ...bubbleSides, asked: readBubbleSide(userData) },
     resting,
+    listening,
     keys: {
       rest: claimed.find((one) => one.id === 'rest')?.refused === null ? SHORTCUTS.rest : null,
       hide: claimed.find((one) => one.id === 'hide')?.refused === null ? SHORTCUTS.hide : null,
@@ -245,18 +350,114 @@ let resting: Resting = { asleep: false, hidden: false }
 let claimed: readonly ShortcutOutcome[] = []
 
 /**
+ * One frame to her window, or nothing if there is no window to send it to.
+ *
+ * Every private frame in this file went out through its own null check and two
+ * of them omitted the `isDestroyed` half — which throws rather than being
+ * ignored, out of a listener where nothing catches it.
+ */
+function tellCompanion(frame: Record<string, unknown>): void {
+  if (companion === null || companion.isDestroyed()) return
+  companion.webContents.send('voice:send', frame)
+}
+
+/**
  * Send her to sleep, or wake her. One implementation, three ways to ask.
  *
  * Asleep is about her ATTENTION — the microphone closes and her eyes shut — and
  * is deliberately not the same thing as hidden, which is about the screen.
+ *
+ * ## Resting CLOSES THE SESSION. It used to mute a track.
+ *
+ * `session.listen(false)` sets `micTrack.enabled = false` and stops there: the
+ * peer, the data channel, the remote audio element and the hourly reconnect
+ * (§53) all carried on. So a machine left running overnight opened a session an
+ * hour, all night, into an empty room — and greeted it every time, because a
+ * reconnect is a NEW session and `greeted` is per session.
+ *
+ * That is three costs for a state whose whole meaning is that she is not
+ * participating: a live connection to the service, an open credential, and her
+ * voice in an empty room. Resting now tears the session down, and waking opens
+ * a new one — which is not a new mechanism, it is the reconnect path that
+ * already runs every hour.
+ *
+ * **The microphone is released by the same act**, which is the property worth
+ * keeping in mind: `close()` stops the tracks, so the operating system's own
+ * recording indicator goes out. A mute never did that, and "asleep" with the
+ * system microphone light on is the app disagreeing with the platform about
+ * something a person can see.
  */
 function setAsleep(asleep: boolean): void {
   if (asleep === resting.asleep) return
   resting = { ...resting, asleep }
   writeResting(app.getPath('userData'), { asleep })
-  companion?.webContents.send('voice:send', { type: '__mochi_asleep__', asleep })
+  // Her eyes, first and unconditionally. The session frame below is about the
+  // connection; this is about what is on screen, and it must not wait on one.
+  tellCompanion({ type: '__mochi_asleep__', asleep })
+  if (asleep) {
+    // Nothing to reconnect TO. Left standing, the timer fires an hour later and
+    // opens a session behind her closed eyes — the exact thing this change is
+    // removing.
+    if (reconnectTimer !== null) clearTimeout(reconnectTimer)
+    reconnectTimer = null
+    stopIdleSleep()
+    tellCompanion({ type: '__mochi_close__' })
+  } else {
+    // The same frame the hourly reconnect sends. One open path, not two.
+    tellCompanion({ type: '__mochi_reconnect__' })
+    armIdleSleep()
+  }
   console.log(`[rest] ${asleep ? 'asleep' : 'awake'}`)
   tray?.refresh()
+}
+
+/**
+ * She rests on her own after a while with nothing said.
+ *
+ * ## Why a timer rather than letting the hour run out
+ *
+ * The session expires after an hour and reconnects (§53), so "do nothing" is
+ * not the same as "stop" — it is a connection held open indefinitely, renewing
+ * itself, on a companion nobody is talking to. The timeout is what makes the
+ * idle case end rather than renew.
+ *
+ * ## What counts as activity
+ *
+ * A turn filed to the archive, either party's. That is the one signal in this
+ * process that means somebody is actually in a conversation with her — the
+ * session opening does not, because opening is what this timer is measuring the
+ * silence after, and a frame from the service does not, because a reconnect
+ * produces plenty of those with nobody in the room.
+ *
+ * The timer is not armed while she is already resting: `setAsleep` is a no-op
+ * for a value that has not changed, so a stray fire would be harmless, but an
+ * hourly timer that exists for no reason is a thing somebody has to reason
+ * about later.
+ */
+let idleTimer: NodeJS.Timeout | null = null
+
+function stopIdleSleep(): void {
+  if (idleTimer !== null) clearTimeout(idleTimer)
+  idleTimer = null
+}
+
+function armIdleSleep(): void {
+  stopIdleSleep()
+  if (resting.asleep) return
+  const minutes = readSleepAfterMinutes(app.getPath('userData'))
+  // Zero is the opt-out, and it is checked here rather than turned into a very
+  // long timer: "never" and "in a thousand hours" are different promises.
+  if (minutes === 0) return
+  idleTimer = setTimeout(() => {
+    idleTimer = null
+    console.log(`[rest] ${String(minutes)} minutes with nothing said`)
+    setAsleep(true)
+  }, minutes * 60_000)
+}
+
+/** Somebody said something. Whatever silence was being counted starts again. */
+function stirred(): void {
+  armIdleSleep()
 }
 
 /**
@@ -281,6 +482,25 @@ function setHidden(hidden: boolean): void {
 }
 
 /**
+ * Whether the microphone is open right now, as her window last reported it.
+ *
+ * Held rather than derived: main knows whether she is ASLEEP, which is not the
+ * same question — a session that failed to negotiate leaves her awake with no
+ * device at all, and a menu bar marking itself in that state would be the same
+ * lie the halo used to tell.
+ */
+let listening = false
+
+function setListening(on: boolean): void {
+  if (on === listening) return
+  listening = on
+  // Only on the transition. The report arrives on every `listen()`, and
+  // rewriting the menu bar title with the value it already has is work per
+  // frame for an answer that moves when somebody speaks to her or walks away.
+  tray?.refresh()
+}
+
+/**
  * Which sides the bubble can currently go on, as last reported by the renderer.
  *
  * Held rather than asked for, because the menu is built the moment somebody
@@ -289,7 +509,22 @@ function setHidden(hidden: boolean): void {
  * costs nothing: a side that no longer fits is not honoured either way.
  */
 let bubbleSides: { available: readonly string[]; using: string } = {
-  available: ['above'],
+  /*
+    ALL of them until her window says otherwise, never one invented.
+
+    This was `['above']`, and it was not a default so much as a fabrication: the
+    renderer only reported sides while it was drawing a bubble, so a character
+    with the bubble switched off never reported at all — and the tray menu spent
+    the whole session offering a single side that nothing had computed, on a
+    machine where three of the four fitted.
+
+    A placeholder cannot be right, so the question is which way it should be
+    wrong. Too MANY is recoverable: `auto` already declines to honour a side
+    that does not fit, and the menu marks what was asked rather than what was
+    used, so an extra entry for the frame before the first report costs nothing.
+    Too few hides real choices behind an answer that looks considered.
+  */
+  available: [...BUBBLE_SIDES].filter((one) => one !== 'auto'),
   using: 'above',
 }
 
@@ -301,6 +536,11 @@ ipcMain.on('companion:sides', (_event, value: unknown) => {
     available: said.available.filter((one): one is string => typeof one === 'string'),
     using: said.using,
   }
+  // Said out loud on the main side too, because this is the value the tray menu
+  // is built from and the renderer's own line explains how it was reached. Two
+  // lines rather than one: a list that never arrives looks identical to a list
+  // that arrived and was ignored, and only the pair tells them apart.
+  console.log(`[bubble] main has ${bubbleSides.available.join(',') || 'none'}`)
   // The menu is rebuilt on demand, but a menu already open is a snapshot — and
   // this is the value it snapshots.
   tray?.refresh()
@@ -314,13 +554,8 @@ ipcMain.on('companion:sides', (_event, value: unknown) => {
  * other, and neither is obviously the wrong one when somebody notices.
  */
 const menuHandlers = {
-  onShelf: () => {
+  onOpen: () => {
     showHistoryWindow()
-  },
-  onSettings: () => {
-    // One window, three places. The menu item survives because "Settings…" is
-    // what somebody looks for; where it lands is now a tab rather than a window.
-    showHistoryWindow().webContents.send('shell:show', 'machine')
   },
   onWear: (id: string) => {
     const written = wearPersona(id)
@@ -495,31 +730,116 @@ ipcMain.on('companion:body', (_event, value: unknown) => {
  * will be inside the resized window, and reading them from two messages would
  * mean a frame where it had one of each.
  */
+/**
+ * Show her, once, at the size she is going to be.
+ *
+ * ## Why not `ready-to-show`, which is where this used to live
+ *
+ * macOS clamps a window onto the display the first time it is shown. Her window
+ * is 980x560 with her body 443px in from its left edge, so putting her in a
+ * corner requires it to hang off two edges — and the first `show()` dragged it
+ * back by exactly the overhang, 377 left and 178 up. Measured against this
+ * configuration; `window.ts` carries the trace.
+ *
+ * Once she is visible the clamp stops applying, so the window can grow over the
+ * display edge again for a bubble. It is only the FIRST show that has to happen
+ * at a size that fits.
+ *
+ * ## And not while she is hidden
+ *
+ * `resting.hidden` is a state somebody chose, and it survives a relaunch. This
+ * used to be unconditional, so quitting while she was hidden and relaunching put
+ * her back on screen — a preference undone by the one act that should preserve
+ * it.
+ */
+let shown = false
+
+function showHerOnce(why: string): void {
+  if (shown) return
+  if (companion === null || companion.isDestroyed()) return
+  shown = true
+  if (resting.hidden) {
+    console.log('[window] she was left hidden; not showing her')
+    return
+  }
+  // `showInactive`, so a launch does not steal focus from whatever somebody is
+  // typing into. She is furniture appearing, not an app demanding attention.
+  companion.showInactive()
+  const at = companion.getBounds()
+  console.log(`[window] shown on ${why}: ${at.width}x${at.height} at ${at.x},${at.y}`)
+}
+
+/**
+ * The backstop, because a renderer that never fits must not leave her invisible.
+ *
+ * The fit is the ONLY thing that shows her now, so a renderer that fails to boot
+ * — a bundle that did not build, a throw before the first frame — would be an
+ * app running with nothing on screen and no way to tell it from one that
+ * launched fine. Generous rather than tight: the ordinary path shows her the
+ * moment the first fit lands, a few hundred milliseconds in, so nothing waits
+ * for this timer unless something is already wrong.
+ */
+const SHOW_ANYWAY_MS = 4000
+
 ipcMain.on('companion:fit', (_event, value: unknown) => {
   if (companion === null || companion.isDestroyed()) return
-  const request = value as { pad?: unknown; body?: unknown; at?: unknown } | null
+  const request = value as { pad?: unknown; body?: unknown; was?: unknown } | null
   if (typeof request !== 'object' || request === null) return
   const pad = readPad(request.pad)
   const body = readBody(request.body)
   if (pad === null || body === null) return
 
   /*
-    Where she is, AS THE RENDERER MEASURED IT, not as main can reconstruct it.
+    Where she is, from the half each process actually holds.
 
-    This added the last offset main had been told to the window's current bounds
-    — two facts from different moments. `companion:body` writes that offset too,
-    so an offset computed against one window size could be paired with another,
-    and the result was measured putting her 443px from a corner she had been 4px
-    from. Both halves of `at` are read in one renderer frame, so there is no pair
-    to get wrong.
+    This added the last offset main had been TOLD to the window's current bounds
+    — two facts from different messages, and `companion:body` writes that offset
+    too, so an offset computed against one window size could be paired with
+    another. Measured putting her 443px from a corner she had been 4px from.
+
+    The answer was to have the renderer send her screen position, both halves
+    read in one of its frames. The offset half was sound; the position half was
+    `window.screenX`, which is a cached rect Chromium does not reliably refresh
+    for a frameless transparent window moved by `setPosition` — it reported `0`
+    for a window sitting at 1957,1058, shown, on screen. So the fit moved her to
+    443,267 on every launch and she never came back to where she was left.
+
+    Now the renderer sends only the offset, which is the layout it is drawing and
+    cannot be wrong about, and `getBounds()` is read HERE, in the same handler.
+    One moment, two facts, and neither process is guessing at the other's.
   */
-  const at = readSides(request.at, ['x', 'y'], true)
-  if (at === null) return
-  const herOnScreen = { x: at['x'] ?? 0, y: at['y'] ?? 0 }
+  const was = readSides(request.was, ['left', 'top'], true)
+  if (was === null) return
+  /*
+    The renderer's reading, unless it CANNOT have one yet.
+
+    `at` is `window.screenX + herOffset`, read in one renderer frame. A window
+    that has never been shown has no screen position to report: Chromium answers
+    `screenX = 0`, honestly, because the widget has not been placed. Main had
+    already moved the window by then — `setPosition` works on a hidden window —
+    so the renderer's `0` and main's real origin described different windows,
+    and main believed the renderer.
+
+    That is how she stopped coming back to where she was left. Dropped at
+    2400,1325 and stored correctly, restored correctly to a window origin of
+    1957,1058, and then moved to 443,267 by the first fit — `fullPad`'s own
+    offsets from an origin of zero, which is exactly what an unshown window
+    reports. The position was never lost; it was overwritten a second later by
+    something that had no business being sure.
+
+    `isVisible()` is the condition, and it is not a threshold. There is no
+    "close enough" here: either the renderer has a screen position or it does
+    not, and main knows which because main is what shows the window.
+  */
+  const herOnScreen = herPositionFrom(companion.getBounds(), {
+    left: was['left'] ?? 0,
+    top: was['top'] ?? 0,
+  })
   const size = windowFitting(body, pad)
   const origin = originHolding(herOnScreen, pad)
   herBody = body
   companion.setBounds({ x: origin.x, y: origin.y, width: size.width, height: size.height })
+  showHerOnce('the first fit')
   /*
     A fit must never MOVE her, and this says so out loud rather than trusting it.
 
@@ -583,6 +903,34 @@ ipcMain.on('companion:grab', (_event, value: unknown) => {
 
 ipcMain.on('companion:drop', () => {
   stopDrag()
+  /**
+   * Where she was left, written down.
+   *
+   * On the DROP rather than on every tick: the drag repositions the window
+   * sixty times a second, and a write per frame is sixty file writes a second
+   * for an answer only the last of which is wanted.
+   *
+   * HER body on screen, not the window's origin. Her window is resized on every
+   * bubble and `originHolding` exists so those resizes do not move her — so the
+   * window's origin means a different thing depending on whether she happened
+   * to be speaking, and her body's corner is the fact that stays still. Her
+   * size travels with it because turning it back into an origin needs the pad
+   * above her, which is `FEET_FROM_TOP` minus her height.
+   */
+  if (companion === null || companion.isDestroyed()) return
+  const bounds = companion.getBounds()
+  try {
+    writeHerPlace(app.getPath('userData'), {
+      x: Math.round(bounds.x + herBody.left),
+      y: Math.round(bounds.y + herBody.top),
+      width: Math.round(herBody.width),
+      height: Math.round(herBody.height),
+    })
+  } catch (error: unknown) {
+    // Not fatal — she is where somebody put her for this run — but silence
+    // would present as "dragging her does not stick", with nothing to look at.
+    console.error('[window] could not remember where she was left:', error)
+  }
 })
 
 ipcMain.on('companion:wake', () => {
@@ -635,6 +983,17 @@ const ledger = createLedger({
   send: (frame: AnswerFrame) => {
     if (companion === null || companion.isDestroyed()) return
     companion.webContents.send('voice:send', frame)
+  },
+  /**
+   * Something is still running, so the bead keeps travelling her halo.
+   *
+   * A COUNT crossing rather than a boolean, and the renderer reduces it: two
+   * lookups in flight is one indicator, and the frame that settles the first of
+   * them must not turn it off. Sending the number is what makes that the
+   * receiver's arithmetic instead of this side's memory of what it last sent.
+   */
+  working: (outstanding: number) => {
+    tellCompanion({ type: '__mochi_working__', outstanding })
   },
 })
 
@@ -979,7 +1338,7 @@ ipcMain.handle('voice:config', () => {
         '— she cannot hear you, greet you, look anything up, or keep a note',
     )
   }
-  const mayDo = whatSheMayDo(resolved.persona, note, grants, registry.tools)
+  const mayDo = whatSheMayDo(resolved.persona, note, grants, registry.tools, readPrompt(userData))
   console.log(
     `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars, bubble ${resolved.persona.bubble ? 'on' : 'off'}`,
   )
@@ -989,10 +1348,23 @@ ipcMain.handle('voice:config', () => {
     instructions: mayDo.instructions,
     voice: resolved.persona.voice,
     bubble: resolved.persona.bubble,
-    // Null rather than an empty instruction: the renderer must not ask for the
-    // turn at all, and "say nothing on waking" is a decision made here.
-    greeting: grants.speak_first ? greetingFor(resolved.persona) : null,
-    microphone: grants.microphone,
+    /*
+      Null rather than an empty instruction: the renderer must not ask for the
+      turn at all, and "say nothing on waking" is a decision made here.
+
+      TWO reasons for that null now, and they are not the same reason. The grant
+      is a permission somebody withheld; rest is a state she is in. Only the
+      first was consulted, so a session opened while she was resting greeted the
+      room out loud — with her eyes shut, because `blink: 1` is held for the
+      whole of `asleep`. That is reachable on every hourly reconnect (§53), and
+      the fix belongs here rather than in the renderer: whether she may speak
+      first is a decision, and decisions are main's.
+
+      `setAsleep` now closes the session outright, so this is nearly unreachable
+      — and it stays, because "nearly" is not a guarantee and because the two
+      conditions are genuinely independent.
+    */
+    greeting: grants.speak_first && !resting.asleep ? greetingFor(resolved.persona) : null,
     face: avatar.face,
     problems: problems.count(),
     bubbleSide: readBubbleSide(userData),
@@ -1053,17 +1425,38 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
       `[voice] session expires in ${event.expiresAt - Date.now() / 1000}s; reconnect in ${Math.round(ms / 1000)}s`,
     )
     reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      /*
+        Checked AT THE FIRING, not only when it was set.
+
+        An hour is long enough for her to have been put to rest since — by the
+        key, the menu, or the idle timeout — and `setAsleep` clears this timer,
+        so the two agree. Checking again costs one comparison and closes the
+        window between "the timer is about to fire" and "the clear arrives".
+      */
+      if (resting.asleep) {
+        console.log('[voice] reconnect due, and she is resting; nothing opened')
+        return
+      }
       console.log('[voice] reconnect due')
-      companion?.webContents.send('voice:send', { type: '__mochi_reconnect__' })
+      tellCompanion({ type: '__mochi_reconnect__' })
     }, ms)
     return
   }
   if (event?.kind === 'heard') {
     console.log(`[voice] heard: ${event.transcript}`)
     conversation().file('you', event.transcript)
+    // Somebody is talking to her, so the silence being counted starts again.
+    // Filed turns rather than frames: a reconnect produces plenty of frames
+    // with nobody in the room, which is the case the timeout exists for.
+    stirred()
     return
   }
   if (event?.kind === 'said') {
+    // HER turns count too, and this is the line that stops a long answer being
+    // timed out from underneath: `heard` arrives when they finish speaking and
+    // this arrives when she does, which on a lookup can be half a minute later.
+    stirred()
     if (event.heard === null) {
       // She finished: everything generated was spoken.
       console.log(`[voice] said: ${event.transcript}`)
@@ -1091,7 +1484,24 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
     companion?.setIgnoreMouseEvents(!event.onHer, { forward: true })
     return
   }
-  if (event?.kind === 'state') console.log(`[voice] ${event.state}`)
+  if (event?.kind === 'state') {
+    console.log(`[voice] ${event.state}`)
+    /*
+      The one fact the TRAY carries, from the one place that knows it.
+
+      Her window computes `!asleep && session !== null` for the halo and reports
+      the same boolean here, so the ring on her head and the mark in the menu bar
+      cannot disagree — which they would the moment main tried to infer this from
+      `resting.asleep`, because that says nothing about whether a session
+      actually negotiated.
+
+      This is what makes the halo a preference rather than a promise. It is also
+      what makes `setHidden` honest: hiding her window leaves the session open on
+      purpose, so until the menu bar said so, one click from the tray produced a
+      live microphone with nothing on screen at all.
+    */
+    setListening(event.state === 'listening')
+  }
   if (event?.kind === 'note') console.log(`[voice] ${event.text}`)
 })
 
@@ -1218,12 +1628,15 @@ ipcMain.handle('settings:read', (): SettingsView => {
         const name = currentProfile()
         return name === null ? null : profileFile(codexHome(process.env, app.getPath('home')), name)
       })(),
-      // Null means genuinely absent, and without it she cannot look anything up
-      // — so the group carrying these controls can mark itself rather than
-      // showing three settings for something that cannot run.
-      codexFound: codexPath !== null,
+      // Seven states rather than "was a file found": the one that actually
+      // fails is a token Codex is content with and this app cannot use.
+      codex: codexForWindow(),
     }),
-    screen: listScreen(readBubbleSide(userData), BUBBLE_SIDES),
+    screen: listScreen(readBubbleSide(userData), BUBBLE_SIDES, {
+      halo: readHaloWhen(userData),
+      shoulderChip: readShoulderChip(userData),
+      sleepAfterMinutes: readSleepAfterMinutes(userData),
+    }),
     keys: listKeys(claimed),
     about: {
       name: app.getName(),
@@ -1287,6 +1700,10 @@ ipcMain.handle('shelf:read', (): ShelfView => {
   const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
   const worn = activePersona(catalog, readWornPersonaId(userData)).persona
   const note = recall(userData, worn.id)
+  // Read once and used twice: the pane shows the document it edits AND the
+  // string that document produces, and reading it twice would let the two
+  // disagree by whatever happened between them.
+  const prompt = readPrompt(userData)
   return {
     face: resolveFaceFor(
       avatarsRoot(userData),
@@ -1296,11 +1713,9 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     ).face,
     pronoun: worn.pronoun,
     // Her state, for the strip across the top. `resting` is held in this
-    // process because three things change it; the grant is read from disk
-    // because one window changes it and this is another.
+    // process because three things change it.
     state: {
       asleep: resting.asleep,
-      microphone: readGrants(userData).microphone,
       restKey: claimed.find((one) => one.id === 'rest')?.refused === null ? SHORTCUTS.rest : null,
     },
     wornId: worn.id,
@@ -1316,6 +1731,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     ),
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],
+    recommendedVoices: [...RECOMMENDED_VOICES],
     // Where it actually RESOLVED to, not where it was asked to look. A line
     // showing the requested name for a file that fell back to the built-in is
     // the "the app ignored my file" failure with a label on it.
@@ -1325,7 +1741,8 @@ ipcMain.handle('shelf:read', (): ShelfView => {
       worn.avatarId,
       worn.theme,
     ).source,
-    assembled: whatSheMayDo(worn, note, readGrants(userData), registry.tools).instructions,
+    assembled: whatSheMayDo(worn, note, readGrants(userData), registry.tools, prompt).instructions,
+    prompt: { text: prompt, path: promptFile(userData), slots: [...PROMPT_SLOTS] },
     note: { text: note, previous: previousNote(userData, worn.id) },
   }
 })
@@ -1638,8 +2055,10 @@ ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
  * while she is speaking is refused, and refused intermittently. She reads the
  * change when she next answers, which is exactly what "on her next turn" means.
  *
- * The microphone travels separately because it is not a tool — it is the track,
- * and only the renderer holds it.
+ * Every grant left is a TOOL, which is what makes one mechanism enough. The
+ * microphone used to travel separately in this frame because it was the track
+ * rather than a tool, and only the renderer held it; `@shared/grants` records
+ * why that switch is gone.
  */
 ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
@@ -1663,8 +2082,7 @@ ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
    * Told, or said so. The permission is on disk either way.
    *
    * A window reporting "in force now" over a frame that never went out would be
-   * lying about the one thing this panel promises — and for the microphone it
-   * would be lying while the device stayed open. So the answer carries what
+   * lying about the one thing this panel promises. So the answer carries what
    * actually happened: saved, and whether she knows yet.
    */
   let told: boolean
@@ -1712,10 +2130,15 @@ function tellTheSession(): boolean {
   // and the next wake resolves somebody who exists.
   if (persona === undefined) return false
   const grants = readGrants(userData)
-  const mayDo = whatSheMayDo(persona, recall(userData, live), grants, registry.tools)
+  const mayDo = whatSheMayDo(
+    persona,
+    recall(userData, live),
+    grants,
+    registry.tools,
+    readPrompt(userData),
+  )
   companion.webContents.send('voice:send', {
     type: '__mochi_grants__',
-    microphone: grants.microphone,
     instructions: mayDo.instructions,
     tools: mayDo.tools,
   })
@@ -1732,14 +2155,156 @@ function tellTheSession(): boolean {
  * two entry points safe — and it ANSWERS, so this window is never told a write
  * landed when it did not.
  */
+/**
+ * Store the system prompt, and tell a live session about it.
+ *
+ * ## It takes effect on her NEXT WAKE, and says so
+ *
+ * Unlike a grant, which `tellTheSession` pushes at once because the whole point
+ * of a standing switch is that it works while somebody is looking at it. The
+ * prompt is different in kind: `session.update` CAN carry new instructions, and
+ * replacing who she is mid-sentence is a character switch without the reconnect
+ * that a character switch gets — §21 locks the voice for the same reason. So
+ * this writes the file and the pane says when it lands.
+ *
+ * Empty is a real answer and is stored as one. The default IS empty, so
+ * refusing it would make the one state a fresh install ships in unreachable
+ * once anybody had typed anything.
+ */
+/**
+ * Try an expression on, from the grid that decides which she may choose.
+ *
+ * ## Nothing is stored
+ *
+ * Not a setting — a look. It ends at the same `__mochi_face__` frame
+ * `set_expression` sends, so what somebody sees here is exactly what she does
+ * when she wears it herself, at the size she is on the desktop rather than at
+ * 56px on a tile. The face then lives the life the tool's manifest describes:
+ * it stays until she changes it or until she is asked to rest.
+ *
+ * ## Deliberately NOT gated on her `faces`
+ *
+ * The grant and the character's `faces` constrain what SHE may reach for. A
+ * person clicking a tile in their own settings window is not her reaching for
+ * anything — and gating this on the switch beside it would mean you could never
+ * look at an expression before deciding whether to enable it, which is the one
+ * thing somebody standing at that grid wants to do.
+ *
+ * `EMOTIONS` is still the bound. This ends at `wearExpression`, which is one
+ * enum wide on purpose, and a window does not get to widen it.
+ */
+ipcMain.handle('shelf:wear-face', (_event, face: unknown): SettingsWrite => {
+  if (typeof face !== 'string' || !(EMOTIONS as readonly string[]).includes(face)) {
+    return refuse('There is no expression called that.')
+  }
+  if (companion === null || companion.isDestroyed()) {
+    // The same answer the capability gives, for the same reason: a success
+    // reported over a window that is not there is a face nobody can see.
+    return refuse('She is not on screen just now, so there is nothing to put a face on.')
+  }
+  companion.webContents.send('voice:send', { type: '__mochi_face__', face })
+  console.log(`[face] trying ${face} on from the shelf`)
+  return { ok: true }
+})
+
+ipcMain.handle('shelf:prompt', (_event, text: unknown): SettingsWrite => {
+  const checked = checkPrompt(text)
+  if (!checked.ok) return refuse(checked.why)
+  try {
+    writePrompt(app.getPath('userData'), checked.text)
+  } catch (error: unknown) {
+    // Where somebody can see it. A Save that silently did nothing is the
+    // failure this whole surface exists to avoid — they would keep typing into
+    // a box that is not being kept.
+    console.error('[prompt] could not be written:', error)
+    problems.note(
+      'settings',
+      promptFile(app.getPath('userData')),
+      `could not be written: ${String(error)}`,
+    )
+    return refuse(`That could not be saved: ${String(error)}`)
+  }
+  console.log(`[prompt] ${checked.text.length} chars`)
+  return { ok: true }
+})
+
 ipcMain.handle('settings:screen', (_event, change: unknown): SettingsWrite => {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
   const asked = applyScreen(change, BUBBLE_SIDES)
   if (!asked.ok) return refuse(asked.why)
-  if (asked.change.bubbleSide === undefined) return { ok: true }
-  const written = setBubbleSide(asked.change.bubbleSide)
-  if (!written.ok) console.error(`[settings] could not set the bubble side: ${written.why}`)
-  return written
+
+  if (asked.change.bubbleSide !== undefined) {
+    const written = setBubbleSide(asked.change.bubbleSide)
+    if (!written.ok) {
+      console.error(`[settings] could not set the bubble side: ${written.why}`)
+      return written
+    }
+  }
+
+  if (asked.change.halo !== undefined) {
+    const when = asked.change.halo
+    try {
+      writeHaloWhen(app.getPath('userData'), when)
+    } catch (error: unknown) {
+      return refuse(`That could not be saved: ${String(error)}`)
+    }
+    // Straight through to her window, because she is on screen while somebody
+    // operates this control — the same argument the bubble's side makes.
+    tellCompanion({ type: '__mochi_halo__', when })
+    console.log(`[screen] halo drawn ${when}`)
+  }
+
+  if (asked.change.shoulderChip !== undefined) {
+    const shown = asked.change.shoulderChip
+    try {
+      writeShoulderChip(app.getPath('userData'), shown)
+    } catch (error: unknown) {
+      return refuse(`That could not be saved: ${String(error)}`)
+    }
+    // Straight through to her window, like the halo: somebody operating this
+    // switch is looking at her, and a control that waits for a relaunch to
+    // disappear reads as a switch that did nothing.
+    tellCompanion({ type: '__mochi_chip__', shown })
+    console.log(`[screen] shoulder chip ${shown ? 'shown' : 'hidden'}`)
+  }
+
+  if (asked.change.sleepAfterMinutes !== undefined) {
+    const minutes = asked.change.sleepAfterMinutes
+    try {
+      writeSleepAfterMinutes(app.getPath('userData'), minutes)
+    } catch (error: unknown) {
+      return refuse(`That could not be saved: ${String(error)}`)
+    }
+    // Re-armed against the NEW value rather than left to expire on the old one.
+    // Without this, shortening the timeout takes effect one timeout later,
+    // which is the one moment somebody is watching for it to work.
+    armIdleSleep()
+    console.log(`[rest] resting after ${minutes === 0 ? 'never' : `${String(minutes)} min`}`)
+  }
+
+  return { ok: true }
+})
+
+/**
+ * Ask this machine about Codex again, and answer with what it found.
+ *
+ * The only settings handler that is not a write, and the only one that can take
+ * a second or two: it spawns `codex --version` and `codex login status`, each
+ * with a deadline. `invoke` rather than a send, so the window can disable its
+ * button for exactly as long as the check is outstanding.
+ *
+ * It exists because every remedy is applied OUTSIDE this application — install
+ * the CLI, run `codex` to sign in, or let a busy machine settle — so somebody
+ * who has just done one of those is standing in front of a window telling them
+ * to do it, with no way to clear it but quitting the app they were told to fix
+ * something for.
+ *
+ * No refusal path and no `SettingsWrite`: nothing is saved, so there is nothing
+ * that can fail to save. A check that throws rejects, and the window says so.
+ */
+ipcMain.handle('settings:codex-recheck', async (): Promise<SettingsCodex> => {
+  console.log('[codex] re-checking on request')
+  return await checkCodexNow()
 })
 
 ipcMain.on('settings:reveal', (_event, what: unknown) => {
@@ -1822,7 +2387,29 @@ const startup = app.whenReady().then(
       )
     }
 
+    /*
+      The system prompt document, put there once so somebody can find it.
+
+      EMPTY, and seeded anyway — the same argument `seedProfile` makes: a file
+      nobody can see the shape of is not one, and a folder with nothing in it
+      does not tell anybody they may put something there. It sets nothing, so
+      it changes nothing until it is edited, and it is never overwritten.
+    */
+    seedPrompt(app.getPath('userData'))
+
     companion = createCompanionWindow()
+    /*
+      The backstop. See `SHOW_ANYWAY_MS`.
+
+      Armed at creation rather than after the load, so a renderer that never
+      reaches its first frame is covered by the same timer as one that never
+      sends a fit. `showHerOnce` is idempotent, so the ordinary path — the first
+      fit, a few hundred milliseconds from now — simply gets there first and
+      this fires into a no-op.
+    */
+    setTimeout(() => {
+      showHerOnce('the backstop, so a renderer that never fitted cannot hide her')
+    }, SHOW_ANYWAY_MS)
 
     /**
      * The menu bar item, created AFTER her window, because it is the way out of
@@ -1837,6 +2424,73 @@ const startup = app.whenReady().then(
      */
     resting = readResting(app.getPath('userData'))
     if (resting.hidden) companion.hide()
+
+    /**
+     * The first session is opened by MAIN, not by the renderer.
+     *
+     * `companion/main.ts` ended in a bare `void open()`, so a session was
+     * negotiated on every launch before anything had asked for one — including
+     * a launch into a stored `asleep: true`, where the whole point of the state
+     * is that she is not participating. Whether to open one is a decision about
+     * what this machine does on somebody's behalf, and `session.ts`'s own header
+     * says where those live: *"all of it is main's"*. The renderer holds the
+     * peer and the microphone and should have the least authority over when
+     * they exist.
+     *
+     * `did-finish-load` rather than `dom-ready`, and the difference matters:
+     * this fires on the window's `load` event, which is after the module script
+     * has executed, so the listener that receives this frame is already
+     * registered. It also fires again on a reload, which is what makes a
+     * development refresh reconnect instead of sitting there mute.
+     *
+     * Said out loud in both directions. A companion that never opens a session
+     * looks exactly like one whose session failed, and only one of those has
+     * anything to fix.
+     */
+    companion.webContents.on('did-finish-load', () => {
+      /*
+        WHETHER SHE IS ASLEEP, first, and this was missing.
+
+        The branch below returns early when she was left resting, so on that
+        launch the renderer was told the halo preference and the shoulder
+        control and never told the one fact both of them are read against. It
+        starts `asleep = false` and the rig starts `hearing = true`, so
+        `haloFor` answered `open` — a filled ring, in her colour, meaning THE
+        MICROPHONE IS LIVE — over a companion holding no session at all.
+
+        That is the failure `halo.ts` exists to prevent, running backwards: not
+        an open microphone with nothing on screen saying so, but a claim of one
+        where there was none. It is also why the halo switch looked dead. The
+        switch governs the RESTING hairline and nothing else, by design; on a
+        launch where she had been left resting the ring being drawn was `open`,
+        which the switch does not touch and must not — so it did nothing in
+        either position, on exactly the launch somebody would go looking.
+
+        One frame, before the two preferences, because they decide how a state
+        is drawn and this decides which state it is.
+      */
+      tellCompanion({ type: '__mochi_asleep__', asleep: resting.asleep })
+      // The halo preference, before she is drawn doing anything: it decides
+      // whether the resting ring is painted at all, and arriving a tick late
+      // means one frame of a ring somebody switched off.
+      tellCompanion({
+        type: '__mochi_halo__',
+        when: readHaloWhen(app.getPath('userData')),
+      })
+      // And the shoulder control, for the same reason and at the same moment:
+      // arriving a tick late is one frame of a button somebody switched off.
+      tellCompanion({
+        type: '__mochi_chip__',
+        shown: readShoulderChip(app.getPath('userData')),
+      })
+      if (resting.asleep) {
+        console.log('[voice] she was left resting; no session opened')
+        return
+      }
+      console.log('[voice] opening the first session')
+      tellCompanion({ type: '__mochi_reconnect__' })
+      armIdleSleep()
+    })
 
     /**
      * The two global keys.
@@ -1957,40 +2611,31 @@ const startup = app.whenReady().then(
       problems.note('codex', seeded.path, `the settings file could not be written: ${seeded.why}`)
     }
 
-    void locateCodex({
-      platform: process.platform,
-      env: process.env,
-      home: app.getPath('home'),
-      exists: async (path) => {
-        try {
-          const info = await stat(path)
-          return info.isFile()
-        } catch {
-          return false
-        }
-      },
-      list: async (directory) => {
-        try {
-          return await readdir(directory)
-        } catch {
-          return []
-        }
-      },
-    }).then((found) => {
-      if (isLocated(found)) {
-        codexPath = found.path
-        console.log(`[codex] ${found.path}`)
-        return
-      }
-      // Loud, and reported. Without the CLI she cannot look anything up, and
-      // the failure otherwise presents as her declining to help.
-      console.error(`[codex] not found; looked in ${String(found.searched.length)} places`)
-      problems.note(
-        'codex',
-        null,
-        'the Codex CLI could not be found, so she cannot look anything up',
-      )
-    }, undefined)
+    /*
+      Three questions, not one, and none of them blocks the window.
+
+      This was a bare `locateCodex`: is there a file called `codex` somewhere on
+      this machine. That is the first of the three that decide whether she can
+      speak at all — installed, runs, and is its login usable BY US — and it is
+      the one that fails least often. The third is the one that actually bites:
+      Codex reports itself signed in while holding an expired access token,
+      because it owns a refresh token and renews on its next run, and this app
+      cannot renew because the JWT's `client_id` is Codex's. A machine in that
+      state passed the old check and then failed with a bare 401 the moment
+      somebody spoke to her.
+
+      `void`, exactly as before: it spawns two child processes with a deadline
+      each, and nothing here waits for them. `codexForWindow` answers
+      `timed-out` — the one state whose remedy is "ask again" — for the second
+      or two before the first answer lands, which is honest rather than
+      convenient.
+    */
+    void checkCodexNow().then(undefined, (error: unknown) => {
+      // Not fatal, and not silent. A check that threw would otherwise leave the
+      // status on its "not finished yet" answer for the life of the process.
+      console.error('[codex] the readiness check could not be run:', error)
+      problems.note('codex', null, `Codex could not be checked: ${String(error)}`)
+    })
 
     tray = createTray(menuModel, menuHandlers)
 

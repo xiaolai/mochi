@@ -13,16 +13,21 @@ import {
 } from './grants'
 
 describe('the four', () => {
-  it('is 5b’s four, plus the face she wears, and no more', () => {
+  it('is 5b’s three, plus the face she wears, and no more', () => {
     // The plugin sandbox and the grant broker are struck, so a grant is not a
     // fence around somebody else's code — it is what this machine lets her do.
+    //
+    // `microphone` was here and is not: macOS owns that permission and resting
+    // already hands the device back, so the switch could only produce a state —
+    // awake, connected, deaf — that nobody wants. It was deleted rather than
+    // hidden; `grants.ts` carries the argument, and this list is the assertion
+    // that it does not quietly come back.
     expect([...GRANTS]).toEqual([
-      'microphone',
       'speak_first',
       'ask_workspace',
       'remember_this',
-      // The fifth. `set_expression` reaches the RENDERER rather than the disk or
-      // the network, which is why it is a grant at all: the other four are about
+      // The fourth. `set_expression` reaches the RENDERER rather than the disk
+      // or the network, which is why it is a grant at all: the others are about
       // what she may read and say, and this is about what she may show.
       'set_expression',
     ])
@@ -57,11 +62,10 @@ describe('the four', () => {
 })
 
 describe('what an installation that has never been asked gets', () => {
-  it('is everything, because a companion that cannot hear you is broken', () => {
+  it('is everything, because a companion that arrives unable to greet you is broken', () => {
     // The switch exists so somebody can say no, not so the app can say it for
     // them.
     expect(DEFAULT_GRANTS).toEqual({
-      microphone: true,
       speak_first: true,
       ask_workspace: true,
       remember_this: true,
@@ -90,23 +94,23 @@ describe('reading what was stored', () => {
 
   it('withholds a value that is PRESENT and is not a boolean', () => {
     // This asserted the opposite until an audit pointed at it, and the old
-    // behaviour was a real widening: `{ microphone: null }` — corruption, a
+    // behaviour was a real widening: `{ speak_first: null }` — corruption, a
     // half-written file, a hand edit — came back ALLOWED. A present value that
     // cannot be read as permission is not permission.
-    expect(parseGrants({ microphone: 'no' }).microphone).toBe(false)
-    expect(parseGrants({ microphone: 0 }).microphone).toBe(false)
-    expect(parseGrants({ microphone: null }).microphone).toBe(false)
+    expect(parseGrants({ speak_first: 'no' }).speak_first).toBe(false)
+    expect(parseGrants({ speak_first: 0 }).speak_first).toBe(false)
+    expect(parseGrants({ speak_first: null }).speak_first).toBe(false)
   })
 
   it('still allows a grant nobody has said anything about', () => {
     // The other half, and it has to stay: a key ABSENT is nobody saying no, and
     // an installation that has never opened the panel must still work.
-    expect(parseGrants({ ask_workspace: false }).microphone).toBe(true)
-    expect(parseGrants({}).microphone).toBe(true)
+    expect(parseGrants({ ask_workspace: false }).speak_first).toBe(true)
+    expect(parseGrants({}).speak_first).toBe(true)
   })
 
   it('takes an explicit true', () => {
-    expect(parseGrants({ microphone: true }).microphone).toBe(true)
+    expect(parseGrants({ speak_first: true }).speak_first).toBe(true)
   })
 
   it('falls back to everything only when the key is genuinely ABSENT', () => {
@@ -125,7 +129,11 @@ describe('reading what was stored', () => {
   })
 
   it('answers for a grant name, and refuses anything else', () => {
-    expect(isGrant('microphone')).toBe(true)
+    expect(isGrant('speak_first')).toBe(true)
+    // The one that was removed. A stored `preferences.json` from an older build
+    // still has the key, and it must read as "there is no such permission"
+    // rather than as one nothing enforces.
+    expect(isGrant('microphone')).toBe(false)
     expect(isGrant('recall_conversations')).toBe(false)
     expect(isGrant(7)).toBe(false)
   })
@@ -194,7 +202,6 @@ describe('what applies when a stored answer cannot be read', () => {
     // resolving THAT as allowed is the one direction that lets her do something
     // they may have said she may not.
     expect(WITHHELD_GRANTS).toEqual({
-      microphone: false,
       speak_first: false,
       ask_workspace: false,
       remember_this: false,

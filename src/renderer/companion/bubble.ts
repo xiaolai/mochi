@@ -157,6 +157,13 @@ export interface Bubble {
    * Read rather than pushed, so nothing is computed for a menu that is not
    * open. Null until it has drawn once.
    */
+  /**
+   * Where the bubble on screen actually went, and what else it could have.
+   *
+   * NOT what the tray menu is built from any more — see `sidesForTheMenu` in
+   * `face.ts`. That question is about her NEXT words and has to be answerable
+   * while she is silent; this one describes the drawing that exists.
+   */
   offered(): { readonly available: readonly Side[]; readonly using: Side } | null
   /** Where its controls are, so the caller can route the mouse to them. */
   controls(): { readonly copy: Rect; readonly close: Rect; readonly history: Rect } | null
@@ -255,6 +262,28 @@ const CONTROLS_W = BUTTON + 8
 const CONTROLS_H = BUTTON * 3 + BUTTON_GAP * 2 + 8
 
 /**
+ * The biggest box a bubble can ever be, and why the MENU needs it.
+ *
+ * The tray's list of sides is a question about where her NEXT words can go, not
+ * where the last ones went. Measured from the box she happened to say, a short
+ * reply and a long one give different answers at the same spot — and until now
+ * the list was computed only on a frame that actually drew a bubble, so it
+ * froze at her last utterance and stopped tracking her when she moved.
+ *
+ * So the menu asks about the widest and tallest bubble that can exist. A side
+ * offered on that basis can hold anything she goes on to say, which is what an
+ * answer to "put her words on the left" has to mean.
+ *
+ * Derived from the same three numbers the drawing uses — `TEXT_W`, the padding
+ * and the control column — rather than restated, because a second copy of this
+ * arithmetic is a menu that offers a side the drawing then refuses.
+ */
+export const WIDEST_BUBBLE = { w: TEXT_W + 10 * 2 + CONTROLS_W, h: LINES * 18 + 10 * 2 }
+
+/** The gap the bubble keeps from her, tail included. See `GAP` and `TAIL`. */
+export const BUBBLE_REACH = 26
+
+/**
  * The reading rail: how much more there is, and where in it the reader is.
  *
  * Three pixels wide and inset five from the right edge, which puts it clear of
@@ -287,7 +316,7 @@ export function createBubble(): Bubble {
    */
   let scrolledTo: number | null = null
   /** What the last frame worked out about where the bubble may go. */
-  let offered: { available: readonly Side[]; using: Side } | null = null
+  let offered: ReturnType<Bubble['offered']> = null
   /** Where the page would be if nobody had scrolled. `scrollBy` starts here. */
   let followingLine = 0
   /**
@@ -494,9 +523,15 @@ export function createBubble(): Bubble {
        * second; see `place.ts`.
        */
       const placed = placeBubble(her, { w: boxWidth, h: boxHeight }, room, GAP + TAIL, prefer)
-      // What the menu may offer. Reported by the caller, from the same call
-      // that did the placing, so the menu cannot list a side that would not be
-      // honoured if it were picked.
+      /*
+        Where this bubble went, and what else THIS box could have done.
+
+        No longer what the tray menu is built from. That question is about her
+        next words and has to be answerable while she is silent, so it moved to
+        `sidesForTheMenu` in `face.ts` — this froze at her last utterance,
+        because `draw` returns early when there is nothing to say and never
+        reached the assignment.
+      */
       offered = {
         available: sidesThatFit(her, { w: boxWidth, h: boxHeight }, room, GAP + TAIL),
         using: placed.side,

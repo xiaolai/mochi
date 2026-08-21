@@ -56,13 +56,29 @@ export interface TrayModel {
   }
   /** Whether she is asleep, and whether she is hidden. Two separate things. */
   readonly resting: { readonly asleep: boolean; readonly hidden: boolean }
+  /**
+   * Whether the microphone is open RIGHT NOW, which is a third thing again.
+   *
+   * Not `!resting.asleep`. A session that failed to negotiate leaves her awake
+   * with no device at all, and a menu bar marking itself in that state would be
+   * the lie the halo used to tell. Her window computes this and reports it; see
+   * `setListening` in `index.ts`.
+   */
+  readonly listening: boolean
   /** The keys, as claimed. A binding another application took is not shown. */
   readonly keys: { readonly rest: string | null; readonly hide: string | null }
 }
 
 export interface TrayHandlers {
-  readonly onShelf: () => void
-  readonly onSettings: () => void
+  /**
+   * Open the one window. ONE handler, because there is one window.
+   *
+   * It was two — `onShelf` and `onSettings` — and both called
+   * `showHistoryWindow`, the second following it with a `shell:show`. That was
+   * honest while settings was its own window and became two doors into one room
+   * when it stopped being one.
+   */
+  readonly onOpen: () => void
   readonly onWear: (id: string) => void
   readonly onBubbleSide: (side: string) => void
   readonly onRest: () => void
@@ -113,8 +129,20 @@ export function trayMenuTemplate(
       click: handlers.onHide,
     },
     { type: 'separator' },
-    { label: 'Shelf…', click: handlers.onShelf },
-    { label: 'Settings…', click: handlers.onSettings },
+    /**
+     * ONE item, named after the window rather than after a tab of it.
+     *
+     * "Shelf…" and "Settings…" stood here and both opened the same window; the
+     * second sent it to the Machine tab afterwards. Settings stopped being a
+     * window when the six groups became that tab, so the menu was offering two
+     * doors into one room and neither label named the room — the shelf is one
+     * of its three places, beside the archive and this machine.
+     *
+     * The deep link is NOT deleted with the item. `shell:show` still exists and
+     * the problems chip still uses it; what has gone is a second way to open a
+     * window that was already open at the top of the list.
+     */
+    { label: `${appName}…`, click: handlers.onOpen },
     { type: 'separator' },
     ...(model.personas.length > 1
       ? ([
@@ -187,9 +215,10 @@ const SIDE_NAMES: Readonly<Record<string, ByPronoun>> = {
 /**
  * The four labels that are about HER rather than about the app.
  *
- * "Shelf…" and "Settings…" are not here and should not be: they name windows,
- * and writing them three times would put the same word in three slots and
- * invite somebody to change one of them.
+ * The item that opens the window is not here and should not be: it names the
+ * application, which `app.getName()` already answers, and writing it three
+ * times would put the same word in three slots and invite somebody to change
+ * one of them.
  */
 const WAKE: ByPronoun = { she: 'Wake her', he: 'Wake him', it: 'Wake it' }
 const REST: ByPronoun = { she: 'Let her rest', he: 'Let him rest', it: 'Let it rest' }
@@ -313,6 +342,46 @@ export interface TrayHandle {
 }
 
 /**
+ * The mark beside the icon while the microphone is open.
+ *
+ * ## Why the TRAY carries this
+ *
+ * `halo.ts` exists because an open microphone with nothing on screen saying so
+ * is the worst thing this application can do, and until this existed the halo
+ * over her head was the only surface saying it. That made the halo a promise
+ * rather than a preference — an off switch for it was an off switch for the
+ * promise — and it left a state where the promise was already broken:
+ * `setHidden` hides her window without touching the session, deliberately, so
+ * one click from this very menu produced a live microphone and an empty screen.
+ *
+ * This item cannot be hidden, cannot be dragged off a display, and is the only
+ * way to quit the application. It is the right place for a fact that must not
+ * be switchable off.
+ *
+ * ## A TITLE rather than a second icon
+ *
+ * `setTitle` costs no artwork and follows the menu bar's own colour, which a
+ * second PNG cannot: the macOS assets here are template images — pure alpha,
+ * tinted by the system — so a "lit" variant could differ in SHAPE but never in
+ * colour, and would need six hand-drawn files with no generator to make them.
+ *
+ * macOS only, and the guard is explicit rather than relying on `setTitle` being
+ * a silent no-op elsewhere: a Windows or Linux build says nothing here yet, and
+ * the settings pane's note is written to be true on those platforms too —
+ * macOS's own orange dot is what it points at, and that is a macOS fact.
+ */
+const LISTENING_MARK = '●'
+
+function markListening(item: Tray, on: boolean): void {
+  if (process.platform !== 'darwin') return
+  item.setTitle(on ? LISTENING_MARK : '')
+  // The hover text says it in words, on every platform, for the same reason the
+  // shelf's microphone mark keeps an off-screen label: a mark is a shape, and a
+  // shape alone is only a statement to somebody who can see it.
+  item.setToolTip(on ? `${app.getName()} — listening` : app.getName())
+}
+
+/**
  * Kept in a module-level variable, and that is load-bearing rather than style:
  * a `Tray` that goes out of scope is garbage collected, and the item vanishes
  * from the menu bar some seconds after launch.
@@ -324,10 +393,11 @@ export function createTray(model: () => TrayModel, handlers: TrayHandlers): Tray
   const item = tray
 
   const refresh = (): void => {
-    item.setContextMenu(Menu.buildFromTemplate(trayMenuTemplate(model(), handlers, app.getName())))
+    const now = model()
+    item.setContextMenu(Menu.buildFromTemplate(trayMenuTemplate(now, handlers, app.getName())))
+    markListening(item, now.listening)
   }
   refresh()
-  item.setToolTip(app.getName())
   /**
    * Said out loud, because "no error" is not evidence that this worked.
    *

@@ -82,9 +82,17 @@ export function whatSheMayDo(
   note: string,
   grants: Grants,
   tools: readonly WireTool[],
+  /**
+   * The system prompt document, as the user wrote it. See `store/prompt.ts`.
+   *
+   * DEFAULTED, so the tests here — which are about tools and grants — say
+   * nothing about it. The two callers that matter read it from disk; the third
+   * is the shelf, which draws the same string back.
+   */
+  template: string = '',
 ): WhatSheMayDo {
   const notice = grantsNotice(grants)
-  const instructions = instructionsFor(persona, note)
+  const instructions = instructionsFor(persona, note, '', template)
   return {
     instructions: notice === '' ? instructions : `${instructions}\n\n${notice}`,
     // NOT OFFERED, rather than offered and refused. A description she cannot

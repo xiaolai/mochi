@@ -21,6 +21,7 @@ import { PANES, type PaneHandlers } from '../settings/panes'
 import { MochiAvatar } from '../companion/rig/mochi'
 import { byDay, clockLabel, dayLabel, highlight, interruptions, lengthLabel } from './format'
 import { drawCentred } from './centre'
+import { CUT, fact, RAN_FOR, TURNS } from './glyph'
 import {
   dayHeadingLabel,
   dayKey,
@@ -32,11 +33,23 @@ import {
 } from './month'
 import {
   assembledPanel,
+  castActions,
   characterCards,
   characterSheet,
   faceTile,
   type ShelfHandlers,
 } from './shelf'
+import { installLogStamp } from '@shared/log'
+
+/*
+  A wall clock on every line this window prints, installed before it prints one.
+
+  The three processes interleave on one stream and none of them used to stamp
+  anything, so a settings write here and a refusal in main could not be ordered
+  against each other. See `shared/log.ts`; the same call is the first statement
+  in main and in the companion.
+*/
+installLogStamp()
 
 declare global {
   interface Window {
@@ -97,6 +110,7 @@ const micLabelEl = need('mic-label', HTMLElement)
 const countEl = need('count', HTMLElement)
 const charactersEl = need('characters', HTMLElement)
 const charactersCountEl = need('characters-count', HTMLElement)
+const castEl = need('cast-actions', HTMLElement)
 const paneEl = need('pane', HTMLElement)
 const wakeEl = need('panel-wake', HTMLElement)
 const talkEl = need('talk', HTMLElement)
@@ -170,6 +184,7 @@ function hush(): void {
   saidTimer = null
   saidEl.hidden = true
   saidWhatEl.textContent = ''
+  saidWhatEl.title = ''
 }
 
 function say(text: string, bad = false): void {
@@ -177,6 +192,11 @@ function say(text: string, bad = false): void {
   saidEl.classList.toggle('bad', bad)
   saidEl.hidden = false
   saidWhatEl.textContent = text
+  // The drawer is one line tall, so a long message is ellipsed — and a message
+  // that is only half available is a message somebody has to guess at. The
+  // tooltip carries the rest; the live region still announces the whole thing,
+  // because that reads `textContent` rather than what is painted.
+  saidWhatEl.title = text
   saidTimer = window.setTimeout(hush, SAID_FOR_MS)
 }
 
@@ -209,13 +229,14 @@ function marked(text: string, term: string): DocumentFragment {
 /**
  * The strip the handoff puts first, and the reason it is first.
  *
- * Two facts and no more: whether she is awake, and whether the microphone is
- * open. They are separate — asleep is her attention, the grant is what this
- * machine permits — and either one alone closes it, so the pill answers for
- * both rather than for one.
+ * One fact, where there were two. Whether she is awake IS whether the
+ * microphone is open now: the `microphone` grant was the other half — what this
+ * machine permitted, as against where she was left — and it is gone, because
+ * macOS already owns that answer and resting already hands the device back.
+ * `@shared/grants` carries the argument.
  */
 function renderState(view: ShelfView): void {
-  const { asleep, microphone, restKey } = view.state
+  const { asleep, restKey } = view.state
   stateEl.textContent = asleep ? 'asleep' : 'awake'
   stateHowEl.textContent =
     restKey === null
@@ -223,24 +244,16 @@ function renderState(view: ShelfView): void {
       : `${restKey} to ${asleep ? 'wake' : 'rest'}`
 
   /*
-    THREE states on the mark, where the pill had two.
+    TWO states on the mark, where there were three.
 
-    `open` and `closed` are her attention; `off` is a grant this machine
-    withholds, and it is the one that must not read as "she happens to be
-    resting". The mark says it with a line through the microphone, which is a
-    shape rather than a colour — see the stylesheet.
+    The third was `off` — a grant this machine withheld, drawn with a line
+    through the microphone so that a decision somebody made could not read as
+    "she happens to be resting". With that grant gone, her attention is the
+    whole of it: open or closed, and nothing else can close it.
   */
-  const listening = !asleep && microphone
-  const state = listening ? 'open' : microphone ? 'closed' : 'off'
-  micEl.classList.toggle('open', state === 'open')
-  micEl.classList.toggle('off', state === 'off')
+  micEl.classList.toggle('open', !asleep)
 
-  const words =
-    state === 'open'
-      ? 'microphone open'
-      : state === 'closed'
-        ? 'microphone closed'
-        : 'microphone not allowed'
+  const words = asleep ? 'microphone closed' : 'microphone open'
   // The words survive the pill. `#mic-label` is off-screen rather than deleted,
   // so a screen reader still gets the sentence; `title` is what a pointer gets.
   micLabelEl.textContent = words
@@ -264,6 +277,14 @@ function renderCards(): void {
   )
   const many = shelf.characters.length
   charactersCountEl.textContent = `${String(many)} ${many === 1 ? 'character' : 'characters'}`
+  /*
+    New, Duplicate and Delete, under the list they act on.
+
+    They were the last section of the character sheet, which put the control
+    that makes a second character below the fold of a long scroll — on the one
+    install that has exactly one. See `castActions`.
+  */
+  castEl.replaceChildren(...castActions(shelf, handlers))
 }
 
 /**
@@ -417,7 +438,7 @@ function renderPlaces(): void {
 
 function renderWake(): void {
   if (shelf === null) return
-  wakeEl.replaceChildren(...assembledPanel(shelf))
+  wakeEl.replaceChildren(...assembledPanel(shelf, handlers))
 }
 
 /* ---- doing things -------------------------------------------------------- */
@@ -522,6 +543,27 @@ const handlers: ShelfHandlers = {
   save: (change) => {
     void write(() => window.mochiHistory.saveCharacter(change), forPronoun(SAYS.saved, saying()))
   },
+  tryFace: (face) => {
+    /*
+      NOT through `write`, and the difference is the reload.
+
+      `write` re-reads the whole shelf after every outcome, because the controls
+      are drawn from the last read and a refused change would otherwise leave a
+      switch showing a value nothing took. Nothing is stored here — this is a
+      look, not a change — so there is no stale control to correct, and a reload
+      would rebuild the grid under the pointer that just clicked it.
+    */
+    void (async () => {
+      try {
+        const result = await window.mochiHistory.wearFace(face)
+        // Named, so the status line says which face went on. "Done" over eight
+        // tiles that look alike at 56px says nothing anybody can check.
+        say(result.ok ? `${face} — look at her.` : result.why, !result.ok)
+      } catch (error: unknown) {
+        say(String(error), true)
+      }
+    })()
+  },
   persona: (action) => {
     void write(
       () => window.mochiHistory.character(action),
@@ -536,6 +578,18 @@ const handlers: ShelfHandlers = {
     void write(
       () => window.mochiHistory.memory(action),
       action.kind === 'restore' ? 'Put back as it was.' : 'Forgotten.',
+    )
+  },
+  prompt: (text) => {
+    void write(
+      () => window.mochiHistory.prompt(text),
+      // What actually happens, rather than "Saved". It is stored now and she
+      // is handed it on her next wake — `session.update` could carry it, and
+      // replacing who she is mid-sentence is a character switch without the
+      // reconnect a character switch gets.
+      text.trim() === ''
+        ? 'The system prompt is empty. She is still told her character.'
+        : forPronoun(SAYS.saved, saying()),
     )
   },
   say,
@@ -614,7 +668,16 @@ async function readShelf(): Promise<void> {
  */
 function row(
   label: string,
-  detail: string,
+  /**
+   * What follows the clock: a phrase, or facts drawn as glyphs.
+   *
+   * NODES rather than a string, because the archive's own two facts are now a
+   * speech-bubble glyph and a clock glyph with numbers beside them, and a
+   * search hit's is still a phrase. Building the separator here keeps that one
+   * decision in one place — the alternative was every caller remembering the
+   * middle dot, which is how one of them comes to be missing it.
+   */
+  detail: string | readonly Node[],
   token: string,
   snippet: { text: string; term: string } | null,
 ): HTMLButtonElement {
@@ -625,7 +688,14 @@ function row(
 
   const when = document.createElement('div')
   when.className = 'when'
-  when.textContent = detail === '' ? label : `${label} · ${detail}`
+  const stamp = document.createElement('span')
+  stamp.textContent = label
+  when.append(stamp)
+  if (typeof detail === 'string') {
+    if (detail !== '') when.append(` · ${detail}`)
+  } else {
+    for (const fact of detail) when.append(fact)
+  }
   button.append(when)
 
   if (snippet !== null) {
@@ -760,17 +830,28 @@ function transcriptHead(turns: readonly HistoryTurn[]): HTMLElement {
   title.className = 'talk-when'
   title.textContent = `${dayLabel(first, Date.now())}, ${clockLabel(first)}`
 
-  const facts: string[] = [`${String(turns.length)} ${turns.length === 1 ? 'turn' : 'turns'}`]
-  // The last turn's timestamp, which is what `ended_at` is — see `lengthLabel`,
-  // which is deliberate about not pretending to seconds for the same reason.
-  const length = lengthLabel(first, last)
-  if (length !== null) facts.push(length)
+  /*
+    The SAME function the list beside this calls, and that is the point.
+
+    These two facts were built as strings here and again over there, so a change
+    to one of them was a change to one of them. The third fact is this header's
+    alone: an interruption count is about the conversation being read, and the
+    list is a column of six rows where a third mark on each would be noise.
+
+    The last turn's timestamp is what `ended_at` is — see `lengthLabel`, which
+    is deliberate about not pretending to seconds for the same reason.
+  */
+  const said: Node[] = [...facts(turns.length, lengthLabel(first, last))]
   const cut = interruptions(turns)
-  if (cut > 0) facts.push(`${String(cut)} ${cut === 1 ? 'interruption' : 'interruptions'}`)
+  if (cut > 0) {
+    said.push(
+      fact(CUT, String(cut), `${String(cut)} ${cut === 1 ? 'interruption' : 'interruptions'}`),
+    )
+  }
 
   const meta = document.createElement('div')
   meta.className = 'talk-facts'
-  meta.textContent = facts.join(' · ')
+  meta.append(...said)
 
   head.append(title, meta)
   return head
@@ -1044,17 +1125,51 @@ function renderList(now: number): void {
 
   listEl.replaceChildren(
     head,
-    ...mine.map((one) => {
-      const length = lengthLabel(one.startedAt, one.endedAt)
-      const turns = `${String(one.turns)} ${one.turns === 1 ? 'turn' : 'turns'}`
-      return row(
+    ...mine.map((one) =>
+      row(
         clockLabel(one.startedAt),
-        length === null ? turns : `${turns} · ${length}`,
+        facts(one.turns, lengthLabel(one.startedAt, one.endedAt)),
         one.token,
         null,
-      )
-    }),
+      ),
+    ),
   )
+}
+
+/**
+ * How many turns, and how long — as glyphs, in the two places that draw them.
+ *
+ * ## Why not the words
+ *
+ * `14 turns · 7 min` on every row of a day's list is the same two nouns down
+ * the whole column, and the numbers are what somebody is actually comparing.
+ * The glyph carries the noun once, in a shape, and the sentence survives as the
+ * accessible name — see `glyph.ts`, which states the rule the microphone in the
+ * top strip already follows.
+ *
+ * ## The mark is per ROW, not per format
+ *
+ * The first version tested whether the label started with a digit, which left
+ * `under a minute` — the one phrase `lengthLabel` used to return — bare, on the
+ * grounds that a glyph belongs beside a number. A photograph of the column
+ * settled it the other way: one row without the mark its six neighbours carry
+ * reads as a row missing something, and the clock is not a unit — it is the
+ * word "for". That phrase is gone and every answer is now `7 min` or `1 h 20
+ * min`, so the case cannot recur; the rule it settled is what is kept.
+ *
+ * ## One function, called from both places
+ *
+ * These two facts were built as strings in the list and again in the transcript
+ * header, so a change to one of them was a change to one of them.
+ */
+function facts(turns: number, length: string | null): readonly Node[] {
+  const said: Node[] = [
+    fact(TURNS, String(turns), `${String(turns)} ${turns === 1 ? 'turn' : 'turns'}`),
+  ]
+  // Null while she is still awake in it — see `lengthLabel`, which refuses to
+  // answer at all rather than reporting a backwards span as a real duration.
+  if (length !== null) said.push(fact(RAN_FOR, length, `ran for ${length}`))
+  return said
 }
 
 interface HitGroup {
@@ -1142,7 +1257,10 @@ async function readConversations(): Promise<void> {
     // with. The cards say "Loki"; a title bar saying `loki` beside them would
     // be two names for one character in one window.
     const name = shelf?.characters.find((one) => one.id === answer.persona)?.name
-    document.title = `Shelf · ${name ?? answer.persona}`
+    // "Mochi", not "Shelf". The shelf is one of this window's three places —
+    // the archive and this machine are the other two — and the tray's single
+    // item names the application for the same reason.
+    document.title = `Mochi · ${name ?? answer.persona}`
     const many = conversations.length
     countEl.textContent = `${String(many)} ${many === 1 ? 'conversation' : 'conversations'}`
     /*
@@ -1291,6 +1409,20 @@ const machineHandlers: PaneHandlers = {
   },
   grant: (change) => {
     void writeMachine(() => window.mochiSettings.grant(change), 'Saved.')
+  },
+  recheckCodex: async () => {
+    const found = await window.mochiSettings.recheckCodex()
+    /*
+      RE-READ, not patched in place.
+
+      The status decides three things on this pane — the block itself, the
+      attention dot in the nav, and whether the rest of the group is
+      configuration for something that can run — and writing the new value into
+      the held view would leave whichever of those nobody remembered to redraw
+      showing the old answer. Main is one read away and it is the only source.
+    */
+    await loadMachine()
+    return found
   },
   reveal: (what) => {
     window.mochiSettings.reveal(what)
@@ -1544,7 +1676,7 @@ window.mochiHistory.onShow((asked) => {
 /**
  * The characters FIRST, then the conversations. Sequenced, not raced.
  *
- * The title is "Shelf · <her name>", and the name comes from the character
+ * The title is "Mochi · <her name>", and the name comes from the character
  * half — run in parallel, the title lost the race about half the time and
  * settled on her id, which is the one string the cards beside it never show.
  *

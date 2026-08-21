@@ -51,6 +51,23 @@ export interface Palette {
   readonly alarm: string
   /** Her colour, filled — the open halo's ring. Follows the worn character. */
   readonly her: string
+  /**
+   * Her colour taken deep enough to carry white — the shoulder chip's glyph.
+   *
+   * `--her` itself is her BODY, which is a fill meant to be seen at two hundred
+   * pixels against her own outline. A fourteen-pixel mark in it, alone on
+   * somebody's desktop, is a pale smudge. `accent.ts` derives this by a fixed
+   * darkening of the same colour, so it is unmistakably hers and legible at the
+   * size a glyph is actually drawn.
+   */
+  readonly herDeep: string
+  /**
+   * White, and the only reason it is read from the sheet rather than written
+   * here is that this file's whole argument is that there is no second table of
+   * colours. What makes it safe is `contrastFailures`, which refuses a hue
+   * `--her-deep` is not dark enough for at load.
+   */
+  readonly herDeepInk: string
   /** Her colour as a film — the open halo's interior. */
   readonly herVeil: string
   /** Paper at low alpha: the closed ring, over a desktop of unknown colour. */
@@ -74,6 +91,12 @@ const READ = [
     re-read when she is worn, not only when the scheme flips.
   */
   { key: 'her', token: '--her', property: 'border-right-color' },
+  /*
+    The chip's two. Plain colour properties, like the six above: they only have
+    to be colour-valued and distinct, and nothing is ever painted with them.
+  */
+  { key: 'herDeep', token: '--her-deep', property: 'text-decoration-color' },
+  { key: 'herDeepInk', token: '--her-deep-ink', property: 'column-rule-color' },
   { key: 'herVeil', token: '--her-veil', property: 'border-bottom-color' },
   { key: 'quiet', token: '--ring-thinking', property: 'border-left-color' },
 ] as const satisfies readonly { key: keyof Palette; token: string; property: string }[]

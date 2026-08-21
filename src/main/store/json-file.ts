@@ -28,6 +28,22 @@ import { dirname } from 'node:path'
  * transcripts.
  */
 export function writeJsonAtomically(path: string, value: unknown): void {
+  writeTextAtomically(path, `${JSON.stringify(value, null, 2)}\n`)
+}
+
+/**
+ * The same write, for a file that is not JSON.
+ *
+ * Extracted rather than copied, which is this file's own opening argument: the
+ * symlink reasoning below is careful and there must be exactly one of it. The
+ * system prompt is a markdown document read on every wake, so it wants the same
+ * rename — a half-written one is a session configured with half a sentence.
+ *
+ * EXACTLY the text it is given, with no trailing newline added. What is stored
+ * is what somebody typed, and `readPrompt` trims on the way back out, so an
+ * appended newline would be a byte nobody wrote that nothing can see.
+ */
+export function writeTextAtomically(path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true })
   // UNPREDICTABLE, and refused if it already exists.
   //
@@ -39,7 +55,7 @@ export function writeJsonAtomically(path: string, value: unknown): void {
   // failure rather than a follow if the guess lands anyway.
   const temporary = `${path}.${randomUUID()}.tmp`
   try {
-    writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: 'wx' })
+    writeFileSync(temporary, text, { mode: 0o600, flag: 'wx' })
     renameSync(temporary, path)
   } catch (error: unknown) {
     // Never leave the scratch file behind. Unlike the fixed name it replaced,

@@ -77,7 +77,28 @@ describe('what she is told', () => {
   it('carries her prompt and the note, as `instructionsFor` assembles them', () => {
     const { instructions } = whatSheMayDo(DEFAULT_PERSONA, NOTE, DEFAULT_GRANTS, TOOLS)
     expect(instructions).toContain(NOTE)
-    expect(instructions).toContain(DEFAULT_PERSONA.name)
+    // Her STYLE, not her name. Nothing is compiled in that names her since the
+    // system prompt became a document, so a name only appears where a `{name}`
+    // slot asks for one — see `PROMPT_SLOTS`.
+    expect(instructions).toContain(DEFAULT_PERSONA.style)
+  })
+
+  it('carries the system prompt document, which is the whole reason it takes one', () => {
+    // Defaulted to empty here and read from disk by main. Without this the
+    // parameter could be dropped from every call site and every test would
+    // still pass, which is the shape of an argument that quietly stops being
+    // passed.
+    const { instructions } = whatSheMayDo(
+      DEFAULT_PERSONA,
+      NOTE,
+      DEFAULT_GRANTS,
+      TOOLS,
+      'You are a lighthouse keeper.',
+    )
+    expect(instructions).toContain('You are a lighthouse keeper.')
+    expect(whatSheMayDo(DEFAULT_PERSONA, NOTE, DEFAULT_GRANTS, TOOLS).instructions).not.toContain(
+      'lighthouse',
+    )
   })
 
   it('adds nothing at all while she may do everything', () => {

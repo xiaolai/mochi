@@ -14,12 +14,87 @@ import {
   clampSizePercent,
   fitToCanvas,
   fullPad,
+  herPositionFrom,
   layoutFor,
   originHolding,
   windowFitting,
   worstCaseUnits,
 } from './avatar-layout'
 import { LOOKS } from '../renderer/companion/rig/looks'
+
+/**
+ * Which side is allowed to say where she is, and when.
+ *
+ * ## The bug, with its numbers
+ *
+ * Dropped at 2400,1325 and stored correctly. Restored correctly: `fullPad` gives
+ * 443,267, so `originHolding` puts the window at 1957,1058 and her body lands
+ * back at 2400,1325. Then the first `companion:fit` moved her to 443,267 — which
+ * is `fullPad`'s own offsets from an origin of ZERO.
+ *
+ * `setPosition` works on a window that has not been shown; `window.screenX` does
+ * not. Chromium answers `0` because the widget has no screen position yet, and
+ * it is not lying — it has nothing to report. Main believed it, and the position
+ * was not lost so much as overwritten a second later by a window describing
+ * somewhere it had never been.
+ *
+ * ## Why the condition is `visible` and not a tolerance
+ *
+ * "Is this reading plausible" needs a threshold, and any threshold is wrong at
+ * some window size or during a drag, where the renderer legitimately lags main
+ * by a frame. Whether the window has been shown is not a matter of degree, and
+ * main is the thing that shows it.
+ */
+describe('where her body is, when two answers exist', () => {
+  const BOUNDS = { x: 1957, y: 1058 }
+  const BODY = { left: 443, top: 267 }
+
+  it('is the window’s own origin plus the offset it was sent', () => {
+    // Each side gives the half it holds. Main reads `getBounds()` in the handler
+    // that receives the offset, so there is no pair of facts from two moments.
+    expect(herPositionFrom(BOUNDS, BODY)).toEqual({ x: 2400, y: 1325 })
+  })
+
+  it('does not depend on anything the renderer had to infer', () => {
+    /*
+      The regression this replaces. The renderer used to send her SCREEN
+      position, `window.screenX + offset` — and `screenX` is a cached rect
+      Chromium does not reliably refresh for a frameless transparent window
+      moved by `setPosition`. It answered 0 for a window at 1957,1058, shown and
+      on screen, so main planted her at the pad's own offsets from an origin
+      nobody had ever seen.
+
+      Nothing in this signature can carry that mistake: there is no screen
+      coordinate coming from the renderer to be wrong.
+    */
+    const asIfScreenXWereZero = herPositionFrom({ x: 0, y: 0 }, BODY)
+    expect(asIfScreenXWereZero).toEqual({ x: 443, y: 267 })
+    // And with the real origin, the same offset gives the real answer — which is
+    // the point: the offset was never the broken half.
+    expect(herPositionFrom(BOUNDS, BODY)).toEqual({ x: 2400, y: 1325 })
+  })
+
+  it('round-trips: restore, then the first fit, leaves her where she was left', () => {
+    /*
+      The whole failure in four lines, which is the only way to see it — every
+      step is right on its own and the fault is in what they agree to believe.
+    */
+    const left = { x: 2400, y: 1325 }
+    const pad = fullPad({ width: 94, height: 73 })
+    const origin = originHolding(left, pad)
+    expect(origin).toEqual({ x: 1957, y: 1058 })
+
+    // The first fit: the renderer sends the offset it is drawing, main pairs it
+    // with the origin it just set. No screen coordinate crosses at all.
+    const her = herPositionFrom(origin, pad)
+    expect(her).toEqual(left)
+
+    // And the fit that follows holds her there rather than moving her.
+    const small = { left: 26, top: 26, right: 26, bottom: 26 }
+    const after = originHolding(her, small)
+    expect({ x: after.x + small.left, y: after.y + small.top }).toEqual(left)
+  })
+})
 
 describe('layoutFor', () => {
   it('makes her body the fixed thing and the window the derived one', () => {

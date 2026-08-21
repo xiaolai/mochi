@@ -48,30 +48,6 @@ export interface Session {
   readonly bubbleSide: string
   /** Whether she was left asleep. See `SessionConfig`. */
   readonly asleep: boolean
-  /** Whether the microphone may open at all — 5b's grant, not her state. */
-  readonly microphone: boolean
-  /**
-   * Whether this session HAS one right now, which is a different question.
-   *
-   * A METHOD, not a field: a session opened while the grant was off never asked
-   * for the device, and one whose grant is taken away mid-session gives it back
-   * — so the answer changes while the session lives. Either way there is no
-   * track and no way to add one to an offer that is already answered, so
-   * turning the grant back on needs a NEW session, and this is how the caller
-   * knows to open one.
-   */
-  hasMicrophone(): boolean
-  /**
-   * Give the device back, because the grant went away.
-   *
-   * `listen(false)` mutes the track; this ENDS it. The two are different in the
-   * only way somebody can see from outside the app: a muted track keeps the
-   * microphone open and the indicator lit, and a switch marked "Hear you" that
-   * leaves the light on is a switch nobody believes.
-   *
-   * One-way for this session, on purpose — see `hasMicrophone`.
-   */
-  closeMicrophone(): void
   /**
    * A standing grant changed while this session was up.
    *
@@ -404,13 +380,19 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   // SETTLED, not raced — see point 2.
   const [minted, captured] = await Promise.allSettled([
     window.mochi.open(),
-    config.microphone
-      ? navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        })
-      : // Not asked for at all. `null` rather than a rejection: a permission
-        // somebody chose is not a failure to report.
-        Promise.resolve(null),
+    /*
+      ALWAYS asked for now, and a refusal is a failure.
+
+      It used to be conditional on the `microphone` grant, which could leave her
+      awake with no device and a `recvonly` transceiver — able to speak and
+      unable to hear. That switch is gone (`@shared/grants` records why) and the
+      permission it duplicated belongs to macOS, which answers this call. So a
+      refusal is what it looks like: the session cannot do its job, and it says
+      so rather than opening a deaf one.
+    */
+    navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    }),
   ])
   /**
    * The capture is held FIRST, before anything can fail.
@@ -426,13 +408,12 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   if (minted.status === 'fulfilled' && !minted.value.ok) fail(minted.value.why)
 
   micTrack = media?.getAudioTracks()[0] ?? null
-  // Only when she was ALLOWED one. Without the grant no device was opened, so
-  // there is nothing to have produced a track and that is not a failure.
-  if (config.microphone && (micTrack === null || media === null)) {
-    fail('the microphone produced no audio track')
-  }
+  // A device that opened and produced nothing. `getUserMedia` resolving with no
+  // audio track is not a permission answer — it is a device fault, and the
+  // session cannot run on it.
+  if (micTrack === null || media === null) fail('the microphone produced no audio track')
 
-  if (micTrack !== null && media !== null) {
+  {
     const granted = micTrack.getSettings()
     // What the device ACTUALLY did, not what was asked for. The two differ, and
     // echo cancellation silently absent is §17 arriving as "she interrupts
@@ -445,16 +426,6 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     micTrack.enabled = false
     peer.addTrack(micTrack, media)
     callbacks.onMicrophone(media)
-  } else {
-    /**
-     * No microphone, and she still has to be able to SPEAK.
-     *
-     * Without a transceiver the offer describes no audio at all, so the answer
-     * carries none either and she is mute as well as deaf. `recvonly` says the
-     * true thing: nothing to send, everything to receive.
-     */
-    peer.addTransceiver('audio', { direction: 'recvonly' })
-    window.mochi.report({ kind: 'note', text: 'the microphone is not allowed; none was opened' })
   }
 
   /**
@@ -533,24 +504,16 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     problems: config.problems,
     bubbleSide: config.bubbleSide,
     asleep: config.asleep,
-    microphone: config.microphone,
-    hasMicrophone: () => micTrack !== null,
-    closeMicrophone() {
-      if (micTrack === null) return
-      micTrack.stop()
-      // Cleared as well as stopped, so `hasMicrophone` tells the truth: an
-      // ended track cannot be revived and the caller has to open a new session.
-      micTrack = null
-      window.mochi.report({ kind: 'state', state: 'muted' })
-      window.mochi.report({ kind: 'note', text: 'the microphone was closed; the grant went away' })
-    },
     mayDo(change) {
       mayDo = { instructions: change.instructions, tools: change.tools }
       put(sessionUpdate())
     },
     listen(on: boolean) {
-      // Nothing to enable when she was never allowed one. Reported as muted
-      // rather than not at all, so the log never claims she is listening.
+      // Nothing to enable after `shutdown`, which stops the track and clears
+      // it. Reported as muted rather than not at all, so the log never claims
+      // she is listening — this used to also cover a session that was never
+      // allowed a device, which cannot happen now that opening one is not
+      // optional.
       if (micTrack === null) {
         window.mochi.report({ kind: 'state', state: 'muted' })
         return

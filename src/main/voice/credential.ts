@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import wire from '@shared/realtime-wire.json'
+import { readTokenState } from '../codex/auth'
 import { DEFAULT_REALTIME_MODEL, type RealtimeModel } from '@shared/realtime-model'
 
 /**
@@ -32,6 +33,14 @@ import { DEFAULT_REALTIME_MODEL, type RealtimeModel } from '@shared/realtime-mod
  * "Logged out" and "logged in, token stale" are different problems with
  * different remedies, and the file exists and parses in both cases. So a `401`
  * on the mint is reported as its own kind, with the fix in it.
+ *
+ * ## Staleness is now caught BEFORE the mint, and the 401 path stays anyway
+ *
+ * The token carries its own `exp`, so the common case — a machine nobody has
+ * opened Codex on for a fortnight — is answered from the file rather than from
+ * a rejected request. The 401 branch below is not redundant: a token can be
+ * revoked, or the account changed, while the claim it carries is still in the
+ * future, and only the service knows that.
  */
 
 const AUTH_FILE = 'auth.json'
@@ -102,6 +111,31 @@ export function readBearer(
     return { ok: false, problem: { kind: 'no-token' } }
   }
   const lastRefresh = typeof record.last_refresh === 'string' ? record.last_refresh : null
+
+  /*
+    The token's OWN expiry, read before it is used rather than after it fails.
+
+    §51 is the whole of this file's header: the stored `access_token` goes stale
+    somewhere between 5 and 17 days, nothing refreshes it except running the
+    CLI, and the failure arrived as a bare 401 at the moment a session opened —
+    the least informative place to discover it. That path is still below and
+    still needed, because a token can be revoked while perfectly unexpired.
+
+    What is new is that the ordinary case no longer has to reach it. The `exp`
+    claim is in the token, `codex/auth.ts` reads it, and a credential that will
+    not survive the next two minutes is reported here — before the mint, before
+    the peer, before she opens her mouth. Same problem, same remedy, several
+    seconds and one network round trip earlier.
+
+    `readTokenState` rather than a second decoder: `codex/status.ts` asks the
+    same question for the settings window, and two answers to "is this token
+    alive" would disagree the first time either changed.
+  */
+  const state = readTokenState(parsed, Date.now())
+  if (state.kind === 'expired') {
+    return { ok: false, problem: { kind: 'stale-token', lastRefresh } }
+  }
+
   return { ok: true, value: { token, lastRefresh } }
 }
 

@@ -1,8 +1,10 @@
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, nativeTheme, screen } from 'electron'
-import { FEET_FROM_TOP, WINDOW_H, WINDOW_W } from '@shared/avatar-layout'
-import { KEEP_ON_SCREEN } from './drag'
+import { app, BrowserWindow, nativeImage, nativeTheme, screen } from 'electron'
+import { FEET_FROM_TOP, WINDOW_H, WINDOW_W, fullPad, originHolding } from '@shared/avatar-layout'
+import { containToWorkArea, KEEP_ON_SCREEN } from './drag'
 import { letDevToolsInspect } from './inspect'
+import { readHerPlace, readShelfPlace, writeShelfPlace, type Place } from './store/worn'
 
 /**
  * Her window: a shape on the desktop, not a rectangle with her inside it.
@@ -56,6 +58,50 @@ const MARGIN = KEEP_ON_SCREEN
  * will notice and which one drag corrects for good.
  */
 const NOMINAL = { width: 94, height: 73 }
+
+/**
+ * Where to put her WINDOW so that SHE lands where she was left.
+ *
+ * ## What is remembered is her, not the window
+ *
+ * Her window is resized constantly — `companion:fit` grows it when a bubble is
+ * up and shrinks it when one is not — and `originHolding` exists precisely so
+ * that those resizes do not move her. Remembering the window's origin would
+ * therefore remember a number that means something different depending on
+ * whether she happened to be speaking when it was written. Her body's top-left
+ * on screen is the fact that stays still, so that is what is stored, and this
+ * turns it back into an origin against the nominal pad the window is born with.
+ *
+ * ## Nothing stored is trusted
+ *
+ * The display it was written against may be gone — an external monitor
+ * unplugged, a resolution changed — so a value that was right when written can
+ * be off every screen when read. `containToWorkArea` is the same clamp the drag
+ * uses, and it picks the display nearest HER rather than nearest her window,
+ * which matters because most of the window hangs off the display on purpose.
+ *
+ * ## The default is the same arithmetic, not a second copy of it
+ *
+ * Bottom right, her inset by `MARGIN`. Written as a place rather than as an
+ * origin so that the stored and the default path cannot drift — they were two
+ * expressions of the same corner, and only one of them would have been fixed.
+ */
+function herWindowOrigin(stored: Place | null): { x: number; y: number } {
+  const work = screen.getPrimaryDisplay().workArea
+  const body = stored === null ? NOMINAL : { width: stored.width, height: stored.height }
+  const pad = fullPad(body)
+  const place = stored ?? {
+    x: Math.round(work.x + work.width - MARGIN - NOMINAL.width),
+    y: Math.round(work.y + work.height - MARGIN - NOMINAL.height),
+  }
+  const origin = originHolding(place, pad)
+  return containToWorkArea(
+    origin.x,
+    origin.y,
+    { left: pad.left, top: pad.top, width: body.width, height: body.height },
+    KEEP_ON_SCREEN,
+  )
+}
 
 /**
  * Load a renderer, from the dev server or from disk, and SAY SO if it fails.
@@ -150,14 +196,27 @@ export function createCompanionWindow(): BrowserWindow {
   })
 
   /**
-   * Where she actually starts: bottom right, HER inset by a margin, with the
-   * window's overhang hanging off the display. See the note on the size above
-   * for why this is a move rather than a position.
+   * Where she actually starts: where she was left, or bottom right.
+   *
+   * See the note on the size above for why this is a move rather than a
+   * position. `herWindowOrigin` is the whole of the arithmetic and is shared
+   * with the fit path, so "where she is" has one definition.
    */
-  window.setPosition(
-    Math.round(display.x + display.width - MARGIN - (WINDOW_W + NOMINAL.width) / 2),
-    Math.round(display.y + display.height - MARGIN - FEET_FROM_TOP),
+  /*
+    Said out loud, because "she is not where I left her" has two causes and they
+    need different fixes: nothing was ever stored, or something was stored and
+    the clamp moved it. Reading the log used to answer neither — the line below
+    reports the window's birth corner, which is never where she ends up.
+  */
+  const stored = readHerPlace(app.getPath('userData'))
+  const origin = herWindowOrigin(stored)
+  console.log(
+    stored === null
+      ? '[window] nothing stored about where she sits; the default corner it is'
+      : `[window] she was left at ${String(stored.x)},${String(stored.y)}; ` +
+          `window origin ${String(origin.x)},${String(origin.y)}`,
   )
+  window.setPosition(origin.x, origin.y)
   /*
     Born at the worst-case size and shrunk on the renderer's first frame.
 
@@ -193,11 +252,49 @@ export function createCompanionWindow(): BrowserWindow {
   // `forward` keeps `mousemove` arriving so it can tell.
   window.setIgnoreMouseEvents(true, { forward: true })
 
-  // Show once there is something to show, so a launch is never a white rectangle
-  // that then repaints into the real thing.
-  window.once('ready-to-show', () => {
-    window.show()
-  })
+  /*
+    NOT shown here. `companion:fit` shows her, once she is the size she will be.
+
+    ## What was measured
+
+    macOS CLAMPS a window onto the display the first time it is shown. Probed
+    against this exact configuration:
+
+    ```
+    afterSetPosition: 1957,1058    setPosition on a hidden window works
+    afterLoad:        1957,1058    and survives the load
+    afterShow:        1580, 880    show() moved it
+    ```
+
+    1957 + 980 = 2937, which is 377 past a 2560-wide display; 1058 + 560 = 1618,
+    which is 178 past 1440. It came back 377 left and 178 up — exactly the
+    overhang, on both axes.
+
+    ## Why this window can never be shown at this size
+
+    She is 443px in from the left of a 980-wide window and 267 down from its top.
+    Putting her body in the bottom-right corner therefore REQUIRES the window to
+    hang off two edges, and the clamp refuses. The size exists so a speech bubble
+    has somewhere to go, and the window is transparent everywhere she is not —
+    but macOS does not know that, and it is not going to.
+    
+    This is why she kept coming back somewhere else, and it is not what any of
+    the three previous fixes were about: they were all about which process
+    reported her position, while the position was being changed after it was set
+    and nothing re-applied it.
+
+    ## Waiting is safe, and that was measured too
+
+    `ready-to-show` fires for a HIDDEN window in an accessory app here — she is
+    `alwaysOnTop` at screen-saver level and visible on every workspace, which is
+    what keeps her composited whatever has focus, and is exactly the argument
+    `bringForward` makes for why the OTHER windows cannot do this. Probed: it
+    fired while hidden, with no `show()` anywhere.
+
+    Once she is visible, growing the window back over the display edge is
+    honoured — the clamp is a first-show behaviour, not a standing one. So the
+    bubble still gets its room the moment she has something to say.
+  */
 
   // Right-click to inspect, in development only. Reaches her painted pixels and
   // nothing else, because the rest of this window is click-through.
@@ -295,11 +392,100 @@ function bringForward(window: BrowserWindow): void {
  */
 const ordinary = new Set<BrowserWindow>()
 
+/**
+ * Where a shipped icon lives — ONE path, decided by whether this is packaged.
+ *
+ * The tray's rule, applied to the other folder in `extraResources`. Guessing at
+ * runtime hides exactly the failure that matters: a packaging mistake leaving
+ * the asset out of the bundle is invisible while a development copy is still
+ * findable, so it only appears on somebody else's machine.
+ */
+function iconPath(file: string): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'icons', file)
+    : join(app.getAppPath(), 'resources/icons', file)
+}
+
+/**
+ * Her face on the Dock tile, and the reason there was an Electron logo there.
+ *
+ * `resources/icons/dock.png` has been in this repository the whole time. It is
+ * shipped by `extraResources`, and `shipped-icons.test.ts` measures it against
+ * the rig that draws her — an asset verified against the artwork and consumed
+ * by nothing at all. The tile it was drawn for showed the generic Electron logo
+ * every time a real window opened under `pnpm dev`.
+ *
+ * ## Only unpackaged, and that is not laziness
+ *
+ * A packaged app takes its tile from the bundle: `electron-builder.yml` points
+ * `mac.icon` at the 1024px source and the `.icns` is derived from it, so
+ * calling `setIcon` there would replace a correct icon with a second copy of
+ * the same drawing at lower resolution. `electron .` has no bundle to read.
+ *
+ * ## The PRE-MASKED tile, not the full-bleed square
+ *
+ * An image handed to `dock.setIcon` is not promised the system's squircle crop
+ * — that is applied to a bundle's icon, not to a `NativeImage` set at runtime —
+ * so the full-bleed 1024 square meant for the `.icns` would appear as a square
+ * among rounded neighbours. `dock.png` is the version already carrying its own
+ * rounded plate, which is why it exists as a separate asset.
+ *
+ * Absent is not fatal, unlike the tray: a missing Dock tile falls back to
+ * Electron's own, while a missing tray icon is an app nobody can quit.
+ */
+function dockIcon(): Electron.NativeImage | null {
+  if (app.isPackaged) return null
+  const path = iconPath('dock.png')
+  if (!existsSync(path)) {
+    console.warn(`[window] no dock icon at ${path}`)
+    return null
+  }
+  const image = nativeImage.createFromPath(path)
+  if (image.isEmpty()) {
+    console.warn(`[window] the dock icon at ${path} could not be decoded`)
+    return null
+  }
+  return image
+}
+
+/**
+ * The taskbar icon, for the platforms that take one from the WINDOW.
+ *
+ * Windows draws it from `BrowserWindow`'s `icon` and falls back to the
+ * executable's when none is given, which is why an unpackaged run shows
+ * Electron's logo beside a window called Mochi. Her own window never showed it
+ * because it is `skipTaskbar`.
+ *
+ * A different asset from either macOS one, deliberately: Windows applies no
+ * mask, so the full-bleed square meant for the bundle would render as a solid
+ * colour block beside neighbours that are all logos on transparency. `null` on
+ * macOS, which takes its icon from the application rather than the window.
+ */
+function windowIcon(): string | null {
+  if (process.platform === 'darwin') return null
+  const path = iconPath('window-256.png')
+  if (!existsSync(path)) {
+    console.warn(`[window] no taskbar icon at ${path}`)
+    return null
+  }
+  return path
+}
+
 function becomeOrdinary(window: BrowserWindow): void {
   if (process.platform !== 'darwin') return
   if (ordinary.has(window)) return
   ordinary.add(window)
   app.setActivationPolicy('regular')
+  /*
+    EVERY time, not once at startup.
+
+    `accessory` has no tile to put an icon on, so a call made before the first
+    switch to `regular` is silently accepted and discarded — which is the shape
+    of bug this whole file keeps finding: something that runs, returns, and did
+    nothing. Setting it here means it is set at the one moment there is a tile.
+  */
+  const icon = dockIcon()
+  if (icon !== null) app.dock?.setIcon(icon)
   window.on('closed', () => {
     ordinary.delete(window)
     // Furniture again, the moment the last real window is gone.
@@ -326,15 +512,54 @@ export function showHistoryWindow(): BrowserWindow {
    * what fits is the honest version of the same outcome.
    */
   const work = screen.getPrimaryDisplay().workArea
+  /**
+   * Where it was left, or the handoff's size clamped to this display.
+   *
+   * The same rule her own window now follows, and the same reason: a size and a
+   * position that quietly reset on relaunch make closing a window a way to undo
+   * a resize. Clamped through `containToWorkArea` with a zero-inset body, which
+   * for an ordinary window is exactly "keep it on a display that exists" — the
+   * overhang argument that makes hers different does not apply here.
+   */
+  const stored = readShelfPlace(app.getPath('userData'))
+  const size =
+    stored === null
+      ? { width: Math.min(1440, work.width), height: Math.min(900, work.height) }
+      : {
+          // Still clamped to the display. A window restored from a 27" monitor
+          // onto a laptop would otherwise be created too large and silently
+          // SHRUNK by macOS, which is the behaviour this whole block avoids.
+          width: Math.min(stored.width, work.width),
+          height: Math.min(stored.height, work.height),
+        }
+  const at =
+    stored === null
+      ? null
+      : containToWorkArea(stored.x, stored.y, { left: 0, top: 0, ...size }, KEEP_ON_SCREEN)
+  /*
+    Named before the options, because `icon` cannot be spread conditionally
+    under `exactOptionalPropertyTypes`: `icon: undefined` is not the same as an
+    absent `icon`, and the second is what macOS wants.
+  */
+  const taskbarIcon = windowIcon()
   const window = new BrowserWindow({
-    width: Math.min(1440, work.width),
-    height: Math.min(900, work.height),
+    ...size,
+    ...(at === null ? {} : { x: at.x, y: at.y }),
+    ...(taskbarIcon === null ? {} : { icon: taskbarIcon }),
     minWidth: 900,
     minHeight: 560,
     // Shown from the start — see `bringForward` for why waiting for the first
     // paint never returns here. The colour is what `ready-to-show` was for.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1d1a' : '#f7f6f1',
-    title: 'Shelf',
+    /*
+      Named for the application, not for one of its three places.
+
+      It was "Shelf", which is the Cast tab's own subject — the archive and this
+      machine are the other two and neither is a shelf. The tray used to carry
+      "Shelf…" and "Settings…" as separate items for the same reason, and both
+      halves of that confusion are settled together.
+    */
+    title: app.getName(),
     // Her window hides from this; this one belongs in it.
     skipTaskbar: false,
     webPreferences: {
@@ -346,6 +571,40 @@ export function showHistoryWindow(): BrowserWindow {
     },
   })
   history = window
+  /*
+    Written when it MOVES, not when it closes.
+
+    A `closed` handler cannot read bounds — the window is already gone — and a
+    `close` one runs on quit, which is exactly when an application is least
+    reliable about finishing a write. `moved` and `resized` fire while it is
+    plainly alive, and `writeJsonAtomically` underneath makes a torn file
+    impossible even at a bad moment.
+
+    Not while MINIMIZED or full screen: both report bounds that are about a
+    temporary state rather than about where somebody put the window, and
+    restoring into either is the failure this is meant to avoid.
+  */
+  const remember = (): void => {
+    if (window.isDestroyed() || window.isMinimized() || window.isFullScreen()) return
+    const bounds = window.getBounds()
+    try {
+      writeShelfPlace(app.getPath('userData'), {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+      })
+    } catch (error: unknown) {
+      // Not fatal — the window is where somebody put it for this run — but this
+      // is a `moved` handler, so an uncaught throw here would come out of an
+      // event listener with nothing above it. `writePlaceKey` refuses a place
+      // it cannot store, and a refusal nobody can see is the failure that
+      // presents as "it does not remember".
+      console.error('[window] could not remember where the shelf was left:', error)
+    }
+  }
+  window.on('moved', remember)
+  window.on('resized', remember)
   window.on('closed', () => {
     history = null
   })

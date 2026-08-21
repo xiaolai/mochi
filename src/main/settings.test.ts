@@ -17,7 +17,8 @@ import {
   listLookup,
   listScreen,
 } from './settings'
-import { DEFAULT_GRANTS, GRANTS } from '@shared/grants'
+import { DEFAULT_GRANTS, GRANTS, GRANT_SPECS } from '@shared/grants'
+import { HALO_WHEN } from '@shared/ipc'
 import type { Usage } from './store/usage'
 import { createRegistry } from '@shared/capability/registry'
 import { parseManifest } from '@shared/capability/manifest'
@@ -189,7 +190,7 @@ describe('how a lookup runs', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: null,
-      codexFound: true,
+      codex: READY,
     })
     expect(shown.workspaceIsDefault).toBe(true)
     expect(
@@ -199,7 +200,7 @@ describe('how a lookup runs', () => {
         webSearch: 'follow',
         profile: null,
         profilePath: null,
-        codexFound: true,
+        codex: READY,
       }).workspaceIsDefault,
     ).toBe(false)
   })
@@ -214,7 +215,7 @@ describe('how a lookup runs', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: null,
-      codexFound: true,
+      codex: READY,
     })
     expect(shown.webSearchModes).toEqual([...WEB_SEARCH_MODES])
   })
@@ -227,7 +228,7 @@ describe('how a lookup runs', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: '/somewhere/mochi.config.toml',
-      codexFound: true,
+      codex: READY,
     })
     expect(shown.profilePath).toBeNull()
   })
@@ -300,13 +301,20 @@ describe('the four standing grants, as the window draws them', () => {
     })
   })
 
-  it('does NOT claim a last use for the two nothing records', () => {
-    // 5b's acceptance: real, or the row does not claim it. "Never used" about a
-    // microphone somebody has been talking into all morning would be a claim,
-    // and it is a different answer from "nothing writes this down".
+  it('does NOT claim a last use for the row nothing records', () => {
+    // 5b's acceptance: real, or the row does not claim it. "Never used" about
+    // something the ledger does not write down would be a claim, and it is a
+    // different answer from "nothing writes this down".
+    //
+    // One row rather than two: `microphone` was the other, and it is gone.
+    // Derived from the specs rather than named, so a grant that stops being a
+    // tool call is covered without anybody remembering to add it here.
     const rows = listGrants(DEFAULT_GRANTS, readable())
-    expect(rows.find((one) => one.id === 'microphone')?.lastUsed).toEqual({ kind: 'not-recorded' })
-    expect(rows.find((one) => one.id === 'speak_first')?.lastUsed).toEqual({ kind: 'not-recorded' })
+    const untracked = GRANT_SPECS.filter((one) => one.capability === null).map((one) => one.id)
+    expect(untracked).not.toEqual([])
+    for (const id of untracked) {
+      expect(rows.find((one) => one.id === id)?.lastUsed).toEqual({ kind: 'not-recorded' })
+    }
   })
 
   it('ignores a recorded time for something that is not one of the four', () => {
@@ -342,12 +350,25 @@ describe('the two global keys, as the window shows them', () => {
   })
 })
 
+/**
+ * The two Codex answers these fixtures need, named once.
+ *
+ * `listLookup` does not compute this — main holds the last check and hands it
+ * in, because probing spawns child processes with a deadline each and this runs
+ * on every redraw of the window.
+ */
+const READY = { readiness: 'ready', remedy: null } as const
+const MISSING = { readiness: 'not-installed', remedy: 'install' } as const
+
 describe('what she looks like on the desktop', () => {
+  /** The two rest settings that travel with the bubble's side. */
+  const REST = { halo: 'always', shoulderChip: true, sleepAfterMinutes: 15 } as const
+
   it('offers every side that can be CHOSEN, not every side that fits now', () => {
     // What fits shrinks as she is dragged into a corner, and that is the
     // renderer's answer. A settings window whose options changed when somebody
     // moved her would be describing this moment instead of a setting.
-    const shown = listScreen('above', ['auto', 'above', 'below', 'left', 'right'])
+    const shown = listScreen('above', ['auto', 'above', 'below', 'left', 'right'], REST)
     expect(shown.bubbleSide).toBe('above')
     expect(shown.sides).toEqual(['auto', 'above', 'below', 'left', 'right'])
   })
@@ -369,6 +390,72 @@ describe('what she looks like on the desktop', () => {
   it('changes nothing when nothing was asked for', () => {
     expect(applyScreen({}, ['auto'])).toEqual({ ok: true, change: {} })
   })
+
+  it('carries both rest settings, so the pane can draw them', () => {
+    const shown = listScreen('auto', ['auto'], {
+      halo: 'never' as const,
+      shoulderChip: false,
+      sleepAfterMinutes: 30,
+    })
+    expect(shown.halo).toBe('never')
+    // Offered by main rather than held by the page, like `sides` and the sleep
+    // choices: two lists is two answers to what may be chosen, and only one of
+    // them is checked on the way back.
+    expect(shown.haloChoices).toEqual([...HALO_WHEN])
+    expect(shown.shoulderChip).toBe(false)
+    expect(shown.sleepAfterMinutes).toBe(30)
+    // Offered by main rather than held by the page, for the same reason
+    // `sides` is: two lists is two answers to what may be chosen, and only
+    // one of them is checked on the way back.
+    expect(shown.sleepAfterChoices).toContain(0)
+  })
+
+  it('takes a halo answer only from the three it offers', () => {
+    for (const when of HALO_WHEN) {
+      expect(applyScreen({ halo: when }, ['auto'])).toEqual({ ok: true, change: { halo: when } })
+    }
+    /*
+      It crosses a bridge, and this one decides whether an indicator is drawn.
+
+      `true` is the value that would arrive from the control this replaced — a
+      checkbox — and it must not be read as "yes, draw it": the grammar is three
+      words now, and a value this side cannot read is not one it may act on.
+    */
+    expect(applyScreen({ halo: 'sometimes' }, ['auto']).ok).toBe(false)
+    expect(applyScreen({ halo: true as unknown as string }, ['auto']).ok).toBe(false)
+  })
+
+  it('takes the shoulder control the same way, and refuses a string', () => {
+    // The second switch on this pane, and the second chance to accept a
+    // truthy string. `'false'` is the value that would arrive from a form and
+    // turn a control ON while reading as off.
+    expect(applyScreen({ shoulderChip: false }, ['auto'])).toEqual({
+      ok: true,
+      change: { shoulderChip: false },
+    })
+    expect(applyScreen({ shoulderChip: 'false' as unknown as boolean }, ['auto']).ok).toBe(false)
+  })
+
+  it('refuses an idle timeout that is not one of the offered choices', () => {
+    // Narrower than the store's own grammar, deliberately: the store takes any
+    // whole minute up to an hour, which is right for a hand-edited file and
+    // wrong for a page — 47 is a value no control here can express or show back.
+    const refused = applyScreen({ sleepAfterMinutes: 47 }, ['auto'])
+    expect(refused.ok).toBe(false)
+    if (refused.ok) return
+    expect(refused.why).toContain('47')
+    expect(applyScreen({ sleepAfterMinutes: 0 }, ['auto'])).toEqual({
+      ok: true,
+      change: { sleepAfterMinutes: 0 },
+    })
+  })
+
+  it('folds several changes in one message rather than taking only the first', () => {
+    expect(applyScreen({ bubbleSide: 'auto', halo: 'listening' }, ['auto'])).toEqual({
+      ok: true,
+      change: { bubbleSide: 'auto', halo: 'listening' },
+    })
+  })
 })
 
 describe('whether she can look anything up at all', () => {
@@ -381,9 +468,9 @@ describe('whether she can look anything up at all', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: null,
-      codexFound: false,
+      codex: MISSING,
     })
-    expect(shown.codexFound).toBe(false)
+    expect(shown.codex).toEqual(MISSING)
   })
 })
 
@@ -399,8 +486,8 @@ describe('a record of use that could not be read', () => {
   it('still says whether each one is allowed', () => {
     // The switch is on disk in a different file. Losing the record of use must
     // not lose the permission beside it.
-    const rows = listGrants({ ...DEFAULT_GRANTS, microphone: false }, { ok: false, why: 'gone' })
-    expect(rows.find((one) => one.id === 'microphone')?.allowed).toBe(false)
+    const rows = listGrants({ ...DEFAULT_GRANTS, speak_first: false }, { ok: false, why: 'gone' })
+    expect(rows.find((one) => one.id === 'speak_first')?.allowed).toBe(false)
   })
 })
 

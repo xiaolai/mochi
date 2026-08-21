@@ -20,14 +20,21 @@ import type { Body } from './place'
  * - `open` — filled, HER colour. The microphone is live.
  * - `closed` — a hairline. She is resting; the grant is intact and it comes back
  *   when she wakes.
- * - `off` — nothing at all. The grant is withheld, and an outline promising a
- *   microphone that cannot open is worse than no outline.
+ * - `off` — nothing at all. There is no session, so there is nothing that comes
+ *   back, and an outline promising a microphone that cannot open is worse than
+ *   no outline.
  *
- * `off` versus `closed` is not decoration. `face.hears()` is one boolean and
- * conflates them — main computes it as `!asleep && mayHear` — so the two are
- * told apart here from `resting`, which the rig already holds. Withheld and
- * resting look identical to the microphone and must not look identical to a
- * person: one is a decision somebody made and the other is a state that ends.
+ * `off` versus `closed` is not decoration, and what it distinguishes has
+ * changed once. It used to mean the `microphone` grant was withheld — a
+ * decision somebody made, as against a state that ends. That grant is gone
+ * (`@shared/grants` says why), and deleting the state with it would have left
+ * the ring drawing `closed` over a session that failed to negotiate: a hairline
+ * promising a microphone that comes back when she wakes, on a window holding no
+ * peer at all. So `off` kept its shape and took the truer meaning.
+ *
+ * `face.hears()` is one boolean and still conflates two causes — main computes
+ * it as `!asleep && session !== null` — so the two are told apart here from
+ * `resting`, which the rig already holds.
  *
  * ## The bead is a clock, not a spinner
  *
@@ -53,7 +60,8 @@ export type Halo = 'off' | 'closed' | 'open'
  * A function rather than three lines inside the render closure, because this is
  * the whole semantic content of the halo and it deserves to be checkable without
  * a canvas. `hearing` conflates two causes — main computes it as
- * `!asleep && mayHear` — so `resting` is what tells resting apart from withheld.
+ * `!asleep && session !== null` — so `resting` is what tells "she is resting"
+ * apart from "there is no session to rest".
  */
 export function haloFor(hearing: boolean, resting: boolean): Halo {
   if (hearing) return 'open'
@@ -67,6 +75,27 @@ export interface HaloColours {
   readonly veil: string
   /** Paper at low alpha: the closed ring, over a desktop of unknown colour. */
   readonly quiet: string
+  /**
+   * The travelling bead, and it is NOT the colour of the ring it runs on.
+   *
+   * It was `her` — exactly the value the open ring is stroked in — so a 6px dot
+   * rode a 2.5px stroke of its own colour around a 16px-tall ellipse for the
+   * second and a half a beat lasts. Drawn correctly on every frame, and
+   * invisible. The clock this whole mechanism exists to show could not be read.
+   *
+   * `--her-deep` is her hue taken dark enough to carry white, so it is plainly
+   * still hers and plainly not the ring.
+   */
+  readonly bead: string
+  /**
+   * A hairline around it, for the reason the problems dot on her chip has one.
+   *
+   * Her deep against her light measures 2.99:1 — under the 3.00 floor for a
+   * non-text mark, and that is before the halo overhangs her head onto a
+   * desktop nobody chose. The edge is what makes the bead a dot rather than a
+   * coincidence of whatever is behind it.
+   */
+  readonly beadEdge: string
 }
 
 export interface HaloRect {
@@ -128,8 +157,14 @@ export function beadAngle(heldFor: number): number {
   return (heldFor % 1) * Math.PI * 2
 }
 
-/** The bead's own radius. Small enough to read as travelling ON the ring. */
-const BEAD = 3
+/**
+ * The bead's own radius. Small enough to read as travelling ON the ring.
+ *
+ * 3.5 rather than 3. The extra half pixel is not taste — the edge added below
+ * takes one of them, so a bead the old size would have carried less colour than
+ * the version nobody could see.
+ */
+const BEAD = 3.5
 
 /**
  * Draw it.
@@ -179,8 +214,20 @@ export function drawHalo(
     const angle = beadAngle(heldFor)
     ctx.beginPath()
     ctx.arc(Math.cos(angle) * ring.rx, Math.sin(angle) * ring.ry, BEAD, 0, Math.PI * 2)
-    ctx.fillStyle = state === 'open' ? colours.her : colours.quiet
+    /*
+      Its OWN colour, and an edge, in both states.
+
+      One rule rather than a branch on `state`: the closed ring took `quiet` and
+      the bead took `quiet` too, which is the same invisibility one shade down.
+      That path is unreachable — she cannot be waiting on an answer while she is
+      resting — and an unreachable branch that reproduces the bug next to the
+      fix is worth deleting rather than keeping symmetrical.
+    */
+    ctx.fillStyle = colours.bead
     ctx.fill()
+    ctx.strokeStyle = colours.beadEdge
+    ctx.lineWidth = 1
+    ctx.stroke()
   }
 
   ctx.restore()

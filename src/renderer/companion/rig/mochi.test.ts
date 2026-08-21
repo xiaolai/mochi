@@ -145,6 +145,52 @@ function paintedBox(
   return { width: maxX - minX + 1, bottom: maxY + 1 }
 }
 
+/**
+ * Where she is PAINTED and where the window says she is, as one number.
+ *
+ * The failure this pins, measured off a screenshot: the halo sat 241px above
+ * her head, the speech bubble pointed at empty desktop, and her face was alone
+ * in the middle of the window. Nothing had crashed. Her standing height is held
+ * twice — here, and as `feet` in `face.ts` — and one update reached only this
+ * copy, so `herBox()` measured a body at `pad.top` (26) while the rig drew one
+ * at `FEET_FROM_TOP - bodyHeight` (267).
+ *
+ * The setter's silence is what made it absurd rather than obviously broken: a
+ * refused value left the two describing different bodies and said nothing.
+ */
+describe('her standing height', () => {
+  it('refuses a value that is not a length, and SAYS so', () => {
+    const { avatar } = rig()
+    const warned: unknown[] = []
+    const before = console.warn
+    console.warn = (...args: unknown[]) => warned.push(args[0])
+    try {
+      avatar.setFeet(Number.NaN)
+      avatar.setFeet(0)
+      avatar.setFeet(-40)
+    } finally {
+      console.warn = before
+    }
+    // Three refusals, three lines. A guard that returns quietly is a guard that
+    // desynchronises two copies of a number with nothing anywhere to read.
+    expect(warned).toHaveLength(3)
+    for (const line of warned) expect(String(line)).toContain('standing height')
+  })
+
+  it('takes an ordinary one', () => {
+    const { avatar } = rig()
+    const warned: unknown[] = []
+    const before = console.warn
+    console.warn = (...args: unknown[]) => warned.push(args[0])
+    try {
+      avatar.setFeet(100)
+    } finally {
+      console.warn = before
+    }
+    expect(warned).toEqual([])
+  })
+})
+
 describe('her drawn size follows the layout main sized the window from', () => {
   const draw = (percent: number, resizeTo?: number) => {
     const first = layoutFor(MOCHI, percent)
@@ -536,6 +582,41 @@ describe('MochiAvatar', () => {
     expect(mouthInk('sleepy', 0)).toBe(0)
   })
 
+  it('opens her eyes the instant she makes a sound, even asleep', () => {
+    /*
+      She cannot talk with her eyes shut, and this is the property rather than
+      the cause.
+
+      `setAsleep` held `blink: 1` for the whole of the state, and there were
+      live paths to her speaking inside it: `voice:config` handed back a
+      greeting whenever the `speak_first` grant was on without consulting rest,
+      and a session is re-opened every hour (§53) — each one a NEW session, so
+      each one greeted. Nobody saw it because it happened to an empty room.
+
+      Main no longer asks for a greeting while she rests, which is the cause.
+      This is what makes the picture impossible for any path anybody adds later.
+
+      Measured ABOVE the mouth line the two tests around this one use, so the
+      mouth cannot be what moved the count.
+    */
+    const eyeInk = (speaking: boolean): number => {
+      const { ctx, avatar } = rig()
+      avatar.setIdle(false)
+      avatar.setAsleep(true)
+      avatar.setSpeaking(speaking)
+      avatar.render(0)
+      const { data } = ctx.getImageData(0, 0, WIDTH, 155)
+      let count = 0
+      for (let i = 0; i < data.length; i += 4) {
+        if ((data[i + 3] ?? 0) > 200 && (data[i + 1] ?? 255) < 110) count++
+      }
+      return count
+    }
+    // A held blink is a hairline; open eyes are two whole shapes. The direction
+    // is what matters, and it inverts if `setSpeaking` stops being consulted.
+    expect(eyeInk(true)).toBeGreaterThan(eyeInk(false))
+  })
+
   it('gives the mouth back the instant she makes a sound, even asleep', () => {
     // No layer above the mouth may overwrite it, because a
     // look that held her jaw shut while audio was playing would read as broken.
@@ -726,22 +807,41 @@ describe('a motion that loops, and the only thing that ends it', () => {
     expect(at(LEANING + 3800 * 8)).toBeGreaterThan(0)
   })
 
-  it('settles back to exactly what she would look like having never played it', () => {
-    // THE assertion `stopMotion` exists for. Without it the beat's sway played
-    // from the first turn to the end of the session, and a state whose
-    // animation outlives it has stopped meaning anything.
-    const { moving, at } = pair()
-    at(0)
-    moving.avatar.playMotion('sway')
-    at(LATCH)
-    expect(at(LEANING)).toBeGreaterThan(0)
+  /*
+    TIMED EXPLICITLY, because the cost is real and the five-second default is
+    not a property of anything.
 
-    moving.avatar.stopMotion()
-    // Springs carry her back rather than snapping, so this is given time.
-    let differ = -1
-    for (let ms = LEANING + 16; ms <= LEANING + 3000; ms += 16) differ = at(ms)
-    expect(differ).toBe(0)
-  })
+    This renders about 190 frames on each of two rigs and compares the pixels
+    every step — the loop runs to three full seconds of clock because springs
+    carry her back rather than snapping, and stopping at the first zero would
+    stop asserting that she STAYS there. It is deterministic and it is heavy,
+    and it went red once under the parallel load of a full run rather than
+    because anything moved.
+
+    Same treatment `shipped-icons.test.ts` gives its per-asset case, and for the
+    same reason: a slow test that is near the default is a red gate waiting for
+    a busier machine.
+  */
+  it(
+    'settles back to exactly what she would look like having never played it',
+    { timeout: 30_000 },
+    () => {
+      // THE assertion `stopMotion` exists for. Without it the beat's sway played
+      // from the first turn to the end of the session, and a state whose
+      // animation outlives it has stopped meaning anything.
+      const { moving, at } = pair()
+      at(0)
+      moving.avatar.playMotion('sway')
+      at(LATCH)
+      expect(at(LEANING)).toBeGreaterThan(0)
+
+      moving.avatar.stopMotion()
+      // Springs carry her back rather than snapping, so this is given time.
+      let differ = -1
+      for (let ms = LEANING + 16; ms <= LEANING + 3000; ms += 16) differ = at(ms)
+      expect(differ).toBe(0)
+    },
+  )
 
   it('is safe to stop when nothing is playing', () => {
     const { avatar } = rig()

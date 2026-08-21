@@ -111,6 +111,8 @@ export class MochiAvatar implements AvatarBackend {
   private feetFromTop = FEET_FROM_TOP
   /** Eyes shut and not listening. See `setAsleep`. */
   private asleep = false
+  /** Whether a voice is coming out of her right now. See `setSpeaking`. */
+  private speaking = false
   private pixelRatio = 1
   private disposed = false
 
@@ -181,7 +183,26 @@ export class MochiAvatar implements AvatarBackend {
    * rise no further, so she rises inside it instead. See `dragTo`.
    */
   setFeet(feetFromTop: number): void {
-    if (!Number.isFinite(feetFromTop) || feetFromTop <= 0) return
+    /*
+      Refused OUT LOUD, because a refusal here is invisible and enormous.
+
+      This returned silently. The value it guards is where she is painted, and
+      every other thing in her window — the halo, the bubble's anchor, the chip,
+      the rectangle that decides whether a click reaches her — is measured from
+      a SEPARATE copy of the same number in `face.ts`. So a refused update did
+      not fail: it left the two copies describing bodies hundreds of pixels
+      apart, and the window went on drawing, cheerfully, with her face in one
+      place and everything about her in another.
+
+      Warned rather than thrown: this is reached from the render loop, and an
+      exception there stops the loop rather than reporting it. Once per bad
+      value is not once per frame — the caller only sets this when the layout
+      changes.
+    */
+    if (!Number.isFinite(feetFromTop) || feetFromTop <= 0) {
+      console.warn(`[rig] refusing a standing height of ${String(feetFromTop)}`)
+      return
+    }
     this.feetFromTop = feetFromTop
   }
 
@@ -309,6 +330,34 @@ export class MochiAvatar implements AvatarBackend {
     if (on) this.gazeTarget = { x: 0, y: 0 }
   }
 
+  /**
+   * Whether sound is actually coming out of her — the analyser's answer.
+   *
+   * ## Why the rig needs to know
+   *
+   * So that she cannot talk with her eyes shut. `asleep` held `blink: 1` for the
+   * whole of the state, and there were real paths to her speaking inside it:
+   * `voice:config` handed back a greeting whenever the `speak_first` grant was
+   * on, without consulting rest, and a session is re-opened every hour (§53) —
+   * each one a NEW session, so each one greeted. Nobody saw it because it
+   * happened to an empty room.
+   *
+   * Both halves are fixed and both are needed. Main no longer asks for the
+   * greeting while she rests, which is the cause; this is the property, and it
+   * holds for any path anybody adds later. A mouth moving under closed eyes is
+   * the thing to make impossible, not the thing to remember to avoid.
+   *
+   * ## The analyser, not a frame
+   *
+   * `face.ts` passes `envelope.speaking`, which is measured from her own audio.
+   * `output_audio_buffer.started` is a promise of audio and §64 measured it
+   * arriving followed by silence, so it would open her eyes on a turn where
+   * nothing was ever said.
+   */
+  setSpeaking(on: boolean): void {
+    this.speaking = on
+  }
+
   setIdle(on: boolean): void {
     if (on === this.idle) return
     this.idle = on
@@ -390,8 +439,21 @@ export class MochiAvatar implements AvatarBackend {
      * companion who stops moving altogether reads as a crash — which is the one
      * thing this state must not look like, since the whole point of it is that
      * she is fine and simply not listening.
+     *
+     * ## Unless she is SPEAKING, in which case her eyes open first
+     *
+     * A held blink for the whole of `asleep` meant a voice could come out of a
+     * face with its eyes shut, and there were live paths to exactly that — see
+     * `setSpeaking`. The eyes are the first thing to move, so the ordinary
+     * blink schedule is what she gets while there is sound, and the shut lids
+     * come back the moment there is not.
+     *
+     * She is still `asleep` while this happens, and deliberately so: this does
+     * not wake her, mute anything, or change what the halo says. It refuses one
+     * specific impossible picture and nothing else.
      */
-    const pose = this.asleep
+    const shutEyes = this.asleep && !this.speaking
+    const pose = shutEyes
       ? { blink: 1, breath: this.idleLayer.pose(now).breath }
       : this.idle
         ? this.idleLayer.pose(now)

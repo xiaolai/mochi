@@ -29,12 +29,14 @@ import {
   type Persona,
   type VoiceName,
 } from '@shared/persona'
+import { HALO_WHEN, isHaloWhen, type HaloWhen } from '@shared/ipc'
 import type {
   GrantUse,
   LookupChange,
   ScreenChange,
   SettingsGrant,
   SettingsKey,
+  SettingsCodex,
   SettingsLookup,
   SettingsScreen,
   PersonaChange,
@@ -45,6 +47,7 @@ import type {
   SettingsWrite,
 } from '@shared/ipc'
 import { GRANT_SPECS, type Grants } from '@shared/grants'
+
 import type { Usage } from './store/usage'
 import { WEB_SEARCH_MODES, isWebSearchMode, type WebSearchMode } from '@shared/delegation'
 import type { Registry } from '@shared/capability/registry'
@@ -173,7 +176,16 @@ export function listLookup(input: {
   readonly webSearch: string
   readonly profile: string | null
   readonly profilePath: string | null
-  readonly codexFound: boolean
+  /**
+   * How ready Codex is, already reduced to what a window may hear.
+   *
+   * Handed in rather than checked here, because the check spawns processes with
+   * a deadline and this function is called on every `settings:read` — a status
+   * that re-probed the machine each time the window redrew would put two child
+   * processes behind a tab change. Main holds the last answer and refreshes it
+   * on demand; see `settings:codex-recheck`.
+   */
+  readonly codex: SettingsCodex
 }): SettingsLookup {
   return {
     workspace: input.workspace,
@@ -182,7 +194,7 @@ export function listLookup(input: {
     webSearchModes: [...WEB_SEARCH_MODES],
     profile: input.profile,
     profilePath: input.profile === null ? null : input.profilePath,
-    codexFound: input.codexFound,
+    codex: input.codex,
   }
 }
 
@@ -222,9 +234,43 @@ export function listKeys(
  * renderer's answer rather than main's. A settings window whose options changed
  * when somebody moved her would be describing this moment instead of a setting.
  */
-export function listScreen(bubbleSide: string, sides: readonly string[]): SettingsScreen {
-  return { bubbleSide, sides: [...sides] }
+export function listScreen(
+  bubbleSide: string,
+  sides: readonly string[],
+  rest: {
+    readonly halo: HaloWhen
+    readonly shoulderChip: boolean
+    readonly sleepAfterMinutes: number
+  },
+): SettingsScreen {
+  return {
+    bubbleSide,
+    sides: [...sides],
+    halo: rest.halo,
+    // Offered by main rather than held by the page, for the same reason `sides`
+    // is: two lists is two answers to what may be chosen, and only one of them
+    // is checked on the way back.
+    haloChoices: [...HALO_WHEN],
+    shoulderChip: rest.shoulderChip,
+    sleepAfterMinutes: rest.sleepAfterMinutes,
+    // Sent rather than written into the pane, for the same reason `sides` is:
+    // a page that held its own list would be a second answer to what may be
+    // chosen, and only one of the two is checked on the way back.
+    sleepAfterChoices: [...SLEEP_AFTER_CHOICES],
+  }
 }
+
+/**
+ * The idle timeouts the pane offers. `0` is never, and is first because it is
+ * the one answer that is a decision rather than a duration.
+ *
+ * A fixed list rather than a number field: this is a preference somebody sets
+ * once, the useful range is small, and a free-text minute count invites the
+ * value that reads as reasonable and is not — 0.5, or 600. `readSleepAfter-
+ * Minutes` still validates whatever is on disk, because the file is
+ * hand-editable and this list is not the only way in.
+ */
+export const SLEEP_AFTER_CHOICES: readonly number[] = [0, 5, 10, 15, 30, 60]
 
 /**
  * Fold a page's request about the screen into calls main will make.
@@ -232,17 +278,68 @@ export function listScreen(bubbleSide: string, sides: readonly string[]): Settin
  * The same shape as `applyLookup`, and for the same reason: a spread would let
  * a page set whatever the type happens to allow today.
  */
+export interface CheckedScreen {
+  readonly bubbleSide?: string
+  readonly halo?: HaloWhen
+  readonly shoulderChip?: boolean
+  readonly sleepAfterMinutes?: number
+}
+
 export function applyScreen(
   change: ScreenChange,
   sides: readonly string[],
 ):
-  | { readonly ok: true; readonly change: { readonly bubbleSide?: string } }
+  | { readonly ok: true; readonly change: CheckedScreen }
   | { readonly ok: false; readonly why: string } {
-  if (change.bubbleSide === undefined) return { ok: true, change: {} }
-  if (!sides.includes(change.bubbleSide)) {
-    return { ok: false, why: `The bubble cannot sit ${String(change.bubbleSide)}.` }
+  const checked: {
+    bubbleSide?: string
+    halo?: HaloWhen
+    shoulderChip?: boolean
+    sleepAfterMinutes?: number
+  } = {}
+
+  if (change.bubbleSide !== undefined) {
+    if (!sides.includes(change.bubbleSide)) {
+      return { ok: false, why: `The bubble cannot sit ${String(change.bubbleSide)}.` }
+    }
+    checked.bubbleSide = change.bubbleSide
   }
-  return { ok: true, change: { bubbleSide: change.bubbleSide } }
+
+  if (change.halo !== undefined) {
+    // Against the OFFERED list, not merely "is a string". This decides whether
+    // an indicator is drawn, and a value this side cannot read is not one it
+    // may act on — the same rule the grants frame states.
+    // The GUARD, not `includes` plus a cast: a cast is a promise the compiler
+    // takes on trust, and this is the one place an arbitrary wire value becomes
+    // a value main will act on.
+    if (!isHaloWhen(change.halo)) {
+      return { ok: false, why: `The halo cannot be drawn ${String(change.halo)}.` }
+    }
+    checked.halo = change.halo
+  }
+
+  if (change.shoulderChip !== undefined) {
+    // An explicit boolean, for the reason the halo states two lines up: a value
+    // this side cannot read is not one it may act on. Truthiness would let a
+    // page send the string "false" and turn the control off.
+    if (typeof change.shoulderChip !== 'boolean') {
+      return { ok: false, why: 'That is not a yes or a no.' }
+    }
+    checked.shoulderChip = change.shoulderChip
+  }
+
+  if (change.sleepAfterMinutes !== undefined) {
+    // Checked against the OFFERED list rather than only against the store's
+    // grammar. The store accepts any whole minute up to an hour, which is right
+    // for a hand-edited file and wrong for a page: a renderer sending 47 would
+    // be setting a value no control here can express or show back.
+    if (!SLEEP_AFTER_CHOICES.includes(change.sleepAfterMinutes)) {
+      return { ok: false, why: `${String(change.sleepAfterMinutes)} is not one of the choices.` }
+    }
+    checked.sleepAfterMinutes = change.sleepAfterMinutes
+  }
+
+  return { ok: true, change: checked }
 }
 
 /**
