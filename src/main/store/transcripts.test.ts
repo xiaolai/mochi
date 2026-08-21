@@ -11,7 +11,7 @@ import { existsSync, mkdtempSync, readFileSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ARCHIVE_FORMAT,
   createTranscripts,
@@ -1209,5 +1209,116 @@ describe('the store as a bag of functions', () => {
     t.end(live, 1_020)
     const { exportFor } = t
     expect(exportFor('ada').sessions[0]?.turns).toHaveLength(1)
+  })
+})
+
+/**
+ * Deleted words do not linger in the write-ahead log.
+ *
+ * `secure_delete` scrubs a freed page in the FILE. In WAL mode the delete lands
+ * in the log first, and the log still holds the frames that carried the text.
+ * So the checkpoint is the deletion, as far as the bytes on disk are concerned
+ * -- and until this work item, the only retry for a checkpoint a reader held
+ * off was `close()`, which nothing called.
+ */
+describe('a scrub a reader held off comes back on its own', () => {
+  it('clears the log without waiting for the app to quit', async () => {
+    /*
+      The defect this fixes. A failed checkpoint used to be retried only by the
+      next destructive call, or by `close()` -- which nothing called. So a
+      conversation deleted this morning could still be readable from
+      `transcripts.db-wal` at midnight, while the app reported it gone.
+
+      Timers are faked, and the store is NOT closed: closing folds the log
+      anyway, which is what makes the close-path version of this test unable to
+      tell the fix from its absence.
+    */
+    vi.useFakeTimers()
+    try {
+      const t = store()
+      const home = homes.get(t) ?? ''
+      const token = t.begin('ada', 1_000)
+      if (token === null) throw new Error('that instant was already taken')
+      t.say(token, 'you', 'CANARY-retried-away', 1_010)
+      t.end(token, 2_000)
+
+      const inTheLog = (): boolean => {
+        try {
+          return readFileSync(join(home, 'transcripts.db-wal'), 'latin1').includes(
+            'CANARY-retried-away',
+          )
+        } catch {
+          return false
+        }
+      }
+
+      const reader = new DatabaseSync(join(home, 'transcripts.db'))
+      reader.exec('BEGIN')
+      reader.prepare('SELECT count(*) FROM session').get()
+
+      expect(t.forgetSession('ada', token)).toBe(true)
+      expect(inTheLog(), 'the reader should have held the checkpoint off').toBe(true)
+
+      // The reader lets go, and nothing else destructive happens.
+      reader.exec('COMMIT')
+      reader.close()
+      expect(inTheLog()).toBe(true)
+
+      vi.advanceTimersByTime(5_000)
+      expect(inTheLog(), 'nothing came back for it').toBe(false)
+
+      t.close()
+      open.splice(open.indexOf(t), 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('deleted text leaves the write-ahead log', () => {
+  it('is gone from the files once the store is closed', () => {
+    const t = store()
+    const home = homes.get(t) ?? ''
+    // `begin` directly, not the helper: the helper ENDS the conversation, and a
+    // turn filed after that is refused -- correctly, and loudly.
+    const token = t.begin('ada', 1_000)
+    if (token === null) throw new Error('that instant was already taken')
+    t.say(token, 'you', 'CANARY-must-not-survive-deletion', 1_010)
+    t.end(token, 2_000)
+
+    // Present somewhere before the delete, or the test proves nothing.
+    const anywhere = (): string =>
+      ['transcripts.db', 'transcripts.db-wal', 'transcripts.db-shm']
+        .map((name) => {
+          try {
+            return readFileSync(join(home, name), 'latin1')
+          } catch {
+            return ''
+          }
+        })
+        .join('')
+    expect(anywhere()).toContain('CANARY-must-not-survive-deletion')
+
+    /*
+      With a reader HOLDING the log, which is the case the retry exists for.
+      Without one the delete's own checkpoint succeeds immediately and the
+      close path is never exercised -- the test would pass with `close()`
+      gutted, which is exactly the defect being fixed.
+    */
+    const reader = new DatabaseSync(join(home, 'transcripts.db'))
+    reader.exec('BEGIN')
+    reader.prepare('SELECT count(*) FROM session').get()
+
+    expect(t.forgetSession('ada', token)).toBe(true)
+    // Held off, so the words are still in the log.
+    expect(anywhere()).toContain('CANARY-must-not-survive-deletion')
+
+    reader.exec('COMMIT')
+    reader.close()
+
+    t.close()
+    open.splice(open.indexOf(t), 1)
+
+    expect(anywhere()).not.toContain('CANARY-must-not-survive-deletion')
   })
 })

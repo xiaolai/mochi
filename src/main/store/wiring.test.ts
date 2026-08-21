@@ -115,8 +115,6 @@ const KNOWN_DEBT: readonly string[] = [
   // nothing asks -- which is why deleting the live conversation was able to
   // become defect A-4 unnoticed.
   'conversation.ts: isLive',
-  // WI-4.
-  'transcripts.ts: close',
   // WI-7.
   'transcripts.ts: forgetEverything',
   // WI-5 and WI-6.

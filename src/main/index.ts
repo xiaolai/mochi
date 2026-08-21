@@ -2871,6 +2871,7 @@ const startup = app.whenReady().then(
     // Fail loud. A main process that dies quietly during startup looks exactly
     // like one that is still working on it.
     console.error('[main] startup failed', error)
+    shutDownCleanly('startup failed')
     app.exit(1)
   },
 )
@@ -2886,6 +2887,7 @@ const startup = app.whenReady().then(
 */
 void startup.catch((error: unknown) => {
   console.error('[main] startup threw', error)
+  shutDownCleanly('startup threw')
   app.exit(1)
 })
 
@@ -2893,9 +2895,52 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-// The last chance to close the conversation cleanly. `before-quit` rather than
-// `will-quit`, because the database has to still be usable when it runs.
-app.on('before-quit', () => conversation().end())
+/**
+ * Put the archive down cleanly, exactly once, however the app is ending.
+ *
+ * ## Why not `before-quit`, which is where the end used to live
+ *
+ * `before-quit` fires before windows run their unload handlers, and a window
+ * can CANCEL the quit. Closing there would leave a running app holding a closed
+ * database -- every later read and every later turn failing, with no way back
+ * except a restart. Ending the conversation there was harmless; closing is not,
+ * and the two belong together.
+ *
+ * `will-quit` only fires once the quit is actually going ahead. The database is
+ * fully usable at that point: the process has not begun to exit, and Electron
+ * waits for a synchronous handler to return.
+ *
+ * ## Why the exit paths call it too
+ *
+ * `app.exit()` emits NEITHER quit event. Both startup failure paths take it, so
+ * without this the archive is never closed on the one kind of shutdown where
+ * something has already gone wrong.
+ *
+ * ## Why `finally`
+ *
+ * The close is what flushes deleted text out of the write-ahead log. If ending
+ * the conversation throws, skipping the close would leave that text on disk --
+ * the failure ordering that matters most, and the one nobody would see.
+ */
+let shutDown = false
+
+function shutDownCleanly(why: string): void {
+  if (shutDown) return
+  shutDown = true
+  console.log(`[main] closing the archive (${why})`)
+  try {
+    conversation().end()
+  } catch (error: unknown) {
+    console.error('[main] the conversation could not be ended:', error)
+  } finally {
+    try {
+      archive?.close()
+      archive = null
+    } catch (error: unknown) {
+      console.error('[main] the archive could not be closed:', error)
+    }
+  }
+}
 
 /**
  * Give the keys back.
@@ -2904,4 +2949,7 @@ app.on('before-quit', () => conversation().end())
  * during development finds its own keys already taken — by itself, from the
  * previous run — and reports them as refused.
  */
-app.on('will-quit', releaseShortcuts)
+app.on('will-quit', () => {
+  shutDownCleanly('quit')
+  releaseShortcuts()
+})

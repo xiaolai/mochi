@@ -492,6 +492,49 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
    * so a failed scrub is recorded and retried by the next destructive call and
    * again on `close()`, rather than reported as done.
    */
+  /**
+   * How many times to come back for a scrub a reader held off, and how long to
+   * wait between attempts.
+   *
+   * Bounded, because the retry is a best effort and an unbounded timer that
+   * never succeeds is a process that never idles. Contention here is a reader
+   * inside this same app finishing a query, so the first retry usually wins.
+   */
+  const SCRUB_TRIES = 5
+  const SCRUB_BACKOFF_MS = 250
+
+  let scrubRetry: NodeJS.Timeout | null = null
+  let scrubsLeft = 0
+
+  /**
+   * Come back for it once the reader has let go.
+   *
+   * ## Why waiting for the next delete or for quit is not enough
+   *
+   * That is what it did. A failed scrub was retried by the next destructive
+   * call, and on `close()` -- and `close()` was never called by anything. So a
+   * delete that raced a reader left the deleted words in `transcripts.db-wal`
+   * for the entire run: a conversation deleted this morning could still be
+   * recoverable from the log at midnight, while the app reported it gone.
+   *
+   * Deletion is the one place in this app where "eventually" is not a
+   * synonym for "yes".
+   */
+  function retryScrubSoon(): void {
+    if (scrubRetry !== null || scrubsLeft <= 0) return
+    scrubRetry = setTimeout(
+      () => {
+        scrubRetry = null
+        scrubsLeft -= 1
+        if (pendingScrub) scrub()
+      },
+      SCRUB_BACKOFF_MS * (SCRUB_TRIES - scrubsLeft + 1),
+    )
+    // Never a reason to hold the process open. If the app is otherwise done,
+    // `close()` runs the last attempt with the connection still in hand.
+    scrubRetry.unref()
+  }
+
   function scrub(): void {
     try {
       const row = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
@@ -503,10 +546,12 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         console.warn(
           '[transcripts] a reader held the write-ahead log open; deleted text is still in it',
         )
+        retryScrubSoon()
       }
     } catch (error: unknown) {
       pendingScrub = true
       console.warn('[transcripts] could not truncate the write-ahead log after a delete:', error)
+      retryScrubSoon()
     }
   }
 
@@ -787,6 +832,7 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         // that somebody else's conversation exists.
         return Number(stmt.dropSession.run(token, personaId).changes) === 1
       })
+      scrubsLeft = SCRUB_TRIES
       scrub()
       return gone
     },
@@ -798,6 +844,7 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         db.exec('DELETE FROM turn_fts')
         db.exec('DELETE FROM session')
       })
+      scrubsLeft = SCRUB_TRIES
       scrub()
     },
     forget(personaId) {
@@ -810,11 +857,17 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         stmt.forgetIndex.run(personaId)
         stmt.forget.run(personaId)
       })
+      scrubsLeft = SCRUB_TRIES
       scrub()
     },
     close() {
-      // One last attempt at a truncation a reader held off, while there is
-      // still a connection to do it with. See `scrub`.
+      if (scrubRetry !== null) {
+        clearTimeout(scrubRetry)
+        scrubRetry = null
+      }
+      // One LAST attempt at a truncation a reader held off, while there is
+      // still a connection to do it with -- the retries above are the ones that
+      // usually win. See `scrub`.
       if (pendingScrub) scrub()
       // Released AFTER a successful close, which is the only order that keeps
       // the registry's claim true. Releasing first meant a failing close let

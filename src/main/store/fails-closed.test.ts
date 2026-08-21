@@ -169,7 +169,7 @@ describe('main re-reads the catalogue after the v1 import', () => {
     expect(refreshAt, 'nothing re-reads the catalogue after the v1 import').toBeGreaterThan(
       importedAt,
     )
-    // And before the app starts filing turns.
-    expect(refreshAt).toBeLessThan(main.indexOf("app.on('before-quit'"))
+    // And while the app is still starting, not on the way out.
+    expect(refreshAt).toBeLessThan(main.indexOf("app.on('will-quit'"))
   })
 })
