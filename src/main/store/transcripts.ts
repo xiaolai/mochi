@@ -217,16 +217,15 @@ export interface Transcripts {
    * situations somebody reaches for it.
    */
   forgetEverything(): void
-  /**
-   * Drop HER sessions that ended before this moment. Returns how many went.
-   *
-   * Scoped to one persona because the policy that drives it is: how
-   * long to keep is a thing two characters must be able to disagree about. A
-   * global cutoff driven by whoever happens to be worn would let a persona set
-   * to keep a week quietly erase the archive of one set to keep everything --
-   * and it would look like the data was never there.
-   */
-  pruneBefore(personaId: string, cutoff: number): number
+  /*
+    `pruneBefore` was here: drop her sessions that ended before a cutoff.
+
+    Correct, transactional, secure-scrubbed, tested, and called by nothing --
+    the policy field that would have driven it was never read either. Removed
+    with `Policy.keepDays` rather than finished, because conversations are kept
+    until somebody deletes them now. `forgetSession` and `forgetEverything`
+    above are the mechanism; they are the two that get controls.
+  */
   close(): void
 }
 
@@ -397,12 +396,17 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
     db.exec('ALTER TABLE turn ADD COLUMN cut INTEGER NOT NULL DEFAULT 0')
   }
 
-  // A session an unclean quit left open is never pruned: retention only
-  // considers sessions that ENDED, so a persona set to keep a week keeps that
-  // one forever while the pane reports it dropped. Anything still open when
-  // the file is OPENED belongs to a previous run -- one session is live at a
-  // time and this connection is the only writer -- so it is closed at the last
-  // thing said in it, the last moment it is known to have existed.
+  // A session an unclean quit left open has no end, and therefore no length to
+  // show: the archive reports `null` while she is still awake in one, so an
+  // abandoned conversation would sit in the list for ever claiming to be live.
+  // Anything still open when the file is OPENED belongs to a previous run --
+  // one session is live at a time and this connection is the only writer -- so
+  // it is closed at the last thing said in it, the last moment it is known to
+  // have existed.
+  //
+  // This used to reason about retention, which never ran: the prune it
+  // described was implemented, tested, and called by nothing. See the note
+  // where `pruneBefore` was declared.
   db.exec(`
     UPDATE session
     SET ended_at = coalesce((SELECT max(at) FROM turn WHERE session_id = session.id), started_at)
@@ -439,9 +443,6 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
     `),
     forget: db.prepare('DELETE FROM session WHERE persona_id = ?'),
     forgetIndex: db.prepare('DELETE FROM turn_fts WHERE persona_id = ?'),
-    stale: db.prepare(
-      'SELECT token FROM session WHERE persona_id = ? AND ended_at IS NOT NULL AND ended_at < ?',
-    ),
     // Both scoped to the persona IN the statement rather than behind a check
     // that ran first. A read-then-write pair decides ownership at a different
     // moment from the one that acts on it, and `changes` is the only answer
@@ -745,8 +746,8 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
               //
               // Importing the same archive twice was not idempotent when it
               // held an open conversation: the first import closes it at its
-              // last turn -- it must, or the conversation goes on living on this
-              // machine and retention never reaches it -- and the second import
+              // last turn -- it must, or the conversation goes on claiming to be
+              // live on this machine -- and the second import
               // then compared that stored end against an incoming `null`,
               // decided they disagreed, and reported a conflict for a file it
               // had already stored perfectly.
@@ -811,21 +812,6 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       })
       scrub()
     },
-    pruneBefore(personaId, cutoff) {
-      const stale = stmt.stale.all(personaId, cutoff).map((row) => String(row['token']))
-      atomically(() => {
-        for (const token of stale) {
-          stmt.dropIndexFor.run(token, personaId)
-          stmt.dropSession.run(token, personaId)
-        }
-      })
-      // Retention deletes conversations like anything else here, so the log
-      // holding their words is truncated like anywhere else here. This is the
-      // path that runs unattended, on every wake -- the one where a copy left
-      // behind survives longest.
-      if (stale.length > 0) scrub()
-      return stale.length
-    },
     close() {
       // One last attempt at a truncation a reader held off, while there is
       // still a connection to do it with. See `scrub`.
@@ -851,8 +837,8 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
  *
  * CLOSED, always. An archive may legitimately hold a conversation that was
  * still running when it was exported, but importing it as still running makes
- * it live on THIS machine: retention only prunes conversations that ended, so
- * it would never expire, and the app would hold two open conversations at once.
+ * it live on THIS machine: it would sit in the archive claiming to be
+ * happening now, and the app would hold two open conversations at once.
  * Ended at the last thing said in it, or at its start when it holds nothing --
  * the same rule an unclean quit gets.
  *

@@ -765,7 +765,7 @@ export type VoiceReport =
    * What the user said, as ASR settled it.
    *
    * Structured rather than folded into a log line, because main files it. The
-   * text is a person's words: whether it reaches disk is the retention setting's
+   * text is a person's words: whether it reaches disk is the saving setting's
    * decision, made in main, and the renderer neither knows it nor should.
    */
   | { readonly kind: 'heard'; readonly transcript: string }

@@ -42,15 +42,32 @@ export interface Policy {
    * mistake the tray and the pane made in words the user could read.
    */
   readonly keeps: boolean
-  /**
-   * How many days of it to keep. `null` keeps everything.
-   *
-   * Separate from `keeps` rather than folded in as a zero: "keep nothing" is
-   * already said by the switch, and a duration that can also mean "off" is one
-   * that turns itself off when somebody drags it too far.
-   */
-  readonly keepDays: number | null
 }
+
+/*
+  `keepDays` was here, and is gone.
+
+  A number of days to keep, separate from the switch. It was validated,
+  defaulted, filed per character and seeded from v1 personas — and read by
+  nothing in `src/main`, ever. `Transcripts.pruneBefore` was the other half:
+  implemented, transactional, secure-scrubbed, tested, and called by no one.
+
+  Two comments in `transcripts.ts` reasoned carefully about how retention would
+  behave, and the website told people their conversations were "kept for as long
+  as you say". A feature that exists at every level except the one that runs it
+  is the defect `dev-docs/plan-storage.md` is about; this was its largest
+  instance.
+
+  `KEEP_DAYS`, `KeepChoice` and `KeepDays` went with it — the durations a pane
+  would have offered, placed here so a "message table keyed by them" could not
+  drift. No such table was ever written, and no pane ever read the tuple. The
+  precaution outlived the thing it was guarding, which is the same shape one
+  level up.
+
+  It is removed rather than finished by decision: conversations are kept until
+  somebody deletes them. That makes deleting them by hand the whole mechanism
+  rather than a promise on top of one, which is why it is being built.
+*/
 
 /**
  * What applies when nobody has chosen.
@@ -61,21 +78,7 @@ export interface Policy {
  * including a persona that came from somewhere else; that is deliberately not
  * split, and the cost is carried elsewhere.
  */
-/**
- * How long a conversation may be kept, as the values the pane offers.
- *
- * In `shared/` beside the policy rather than in the renderer, because the
- * message table is keyed by them: the two lists were written out separately,
- * so adding a duration meant remembering a file that has no other reason to be
- * opened -- and a translation missing for it is a blank option rather than an
- * error. `forever` is the absence of a limit, expressed as `keepDays: null`.
- */
-export const KEEP_DAYS = ['7', '30', '90', 'forever'] as const
-export type KeepChoice = (typeof KEEP_DAYS)[number]
-/** The numbered ones, which are what the message table has to translate. */
-export type KeepDays = Exclude<KeepChoice, 'forever'>
-
-export const DEFAULT_POLICY: Policy = { keeps: true, keepDays: null }
+export const DEFAULT_POLICY: Policy = { keeps: true }
 
 /**
  * What applies when a choice EXISTS and cannot be read.
@@ -86,7 +89,7 @@ export const DEFAULT_POLICY: Policy = { keeps: true, keepDays: null }
  * unreadable privacy choice in the one direction that produces data they may
  * have asked not to have.
  */
-export const UNREADABLE_POLICY: Policy = { keeps: false, keepDays: null }
+export const UNREADABLE_POLICY: Policy = { keeps: false }
 
 /**
  * The two fields somebody wrote, if they are the two fields this understands.
@@ -100,10 +103,13 @@ export function parsePolicy(value: unknown): Policy | null {
   const source = value as Record<string, unknown>
   const keeps = source['keeps']
   if (typeof keeps !== 'boolean') return null
-  const keepDays = source['keepDays']
-  const daysOk =
-    keepDays === null ||
-    (typeof keepDays === 'number' && Number.isInteger(keepDays) && keepDays >= 1)
-  if (!daysOk) return null
-  return { keeps, keepDays }
+  /*
+    A stored `keepDays` is IGNORED rather than refused.
+
+    Files written before it was removed carry one, and refusing them would turn
+    every existing policy unreadable — which `UNREADABLE_POLICY` resolves as
+    "record nothing", so a tidy-up would silently stop saving anybody's
+    conversations. An unknown key is not a broken file.
+  */
+  return { keeps }
 }

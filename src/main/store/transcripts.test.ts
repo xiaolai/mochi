@@ -52,17 +52,6 @@ function count(t: Transcripts, sql: string, ...args: readonly (string | number)[
   }
 }
 
-/** Close the file and open it again, which is what a restart does. */
-function reopen(t: Transcripts): Transcripts {
-  const home = homes.get(t) ?? ''
-  t.close()
-  open.splice(open.indexOf(t), 1)
-  const made = createTranscripts(home)
-  homes.set(made, home)
-  open.push(made)
-  return made
-}
-
 /** Reach into the database to arrange a failure the API cannot ask for. */
 function exec(t: Transcripts, sql: string): void {
   const probe = new DatabaseSync(join(homes.get(t) ?? '', TRANSCRIPTS_FILE))
@@ -493,78 +482,42 @@ describe('forgetting everything on this machine', () => {
   })
 })
 
-describe('retention', () => {
-  it('drops sessions that ended before the cutoff', () => {
-    const t = store()
-    conversation(t, 'ada', 1000)
-    conversation(t, 'ada', 90_000)
+/*
+  The `retention` suite lived here — six cases over `pruneBefore`. It went with
+  the method, and with `Policy.keepDays`, which was its other half and was read
+  by nothing either. Conversations are kept until somebody deletes them now.
 
-    expect(t.pruneBefore('ada', 50_000)).toBe(1)
-    expect(t.sessions('ada').map((s) => s.startedAt)).toEqual([90_000])
-    expect(t.search('ada', '苹果')).toHaveLength(1)
-  })
-
-  it('closes a session an unclean quit left open, so retention can reach it', () => {
-    // Pruning only considers sessions that ENDED. A crash or a kill leaves one
-    // open forever, so a persona set to keep a week keeps that conversation
-    // permanently while the pane reports it dropped -- the retention promise
-    // failing in the direction nobody checks.
-    const before = store()
-    const id = before.begin('ada', 1000)
-    before.say(id!, 'you', '今天我想吃苹果', 1010)
-
-    const t = reopen(before)
-
-    // At the last thing said in it, not at the moment of reopening: the file
-    // may be opened months later, and dating the session then would make it
-    // outlive the retention window it was already past.
-    expect(t.sessions('ada')[0]?.endedAt).toBe(1010)
-    expect(t.pruneBefore('ada', 50_000)).toBe(1)
-  })
-
-  it('never drops a session still in progress', () => {
-    // Pruning by START time would delete the conversation somebody is having
-    // if the app had been open long enough.
-    const t = store()
-    t.begin('ada', 1000)
-    expect(t.pruneBefore('ada', 50_000)).toBe(0)
-    expect(t.sessions('ada')).toHaveLength(1)
-  })
-
-  it('leaves everything exactly as it was when a delete fails partway', () => {
-    // The reason all three delete paths run inside one transaction. Without
-    // it, the loop deletes the first session, hits the failure on the second,
-    // and stops -- a prune that reports failure and half happened, with no
-    // way to tell which half.
+  One case did NOT go: its own comment said it was "the reason all three delete
+  paths run inside one transaction", and two of those three survive. Deleting
+  the only test of a property that still holds is how a guarantee quietly stops
+  being one, so it is retargeted below rather than dropped.
+*/
+describe('a delete that fails partway', () => {
+  it('leaves everything exactly as it was', () => {
+    // Without one transaction, the index rows go, the drop then fails, and
+    // the conversation is left listed with nothing findable inside it — a
+    // delete that reports failure and half happened, with no way to tell
+    // which half.
     const t = store()
     conversation(t, 'ada', 1000)
     conversation(t, 'ada', 9000)
+    const [newer] = t.sessions('ada')
+    if (!newer) throw new Error('the conversation to delete should be there')
     exec(
       t,
+      // On the SECOND step. `forgetSession` clears the index rows first and
+      // drops the session after, so refusing the drop is a failure with the
+      // index already gone — the exact partway state one transaction exists to
+      // undo. (`turn_fts` cannot carry a trigger; it is a virtual table.)
       `CREATE TRIGGER refuse BEFORE DELETE ON session WHEN old.started_at = 9000
        BEGIN SELECT raise(ABORT, 'refused'); END`,
     )
 
-    expect(() => t.pruneBefore('ada', 50_000)).toThrow()
+    expect(() => t.forgetSession('ada', newer.token)).toThrow()
 
     exec(t, 'DROP TRIGGER refuse')
-    expect(t.sessions('ada').map((s) => s.startedAt)).toEqual([9000, 1000])
-    expect(count(t, "SELECT count(*) AS n FROM turn_fts WHERE persona_id = 'ada'")).toBe(4)
+    expect(t.sessions('ada').map((one) => one.startedAt)).toEqual([9000, 1000])
     expect(t.search('ada', '苹果')).toHaveLength(2)
-  })
-
-  it("leaves another persona's history alone", () => {
-    // How long to keep is HERS, so pruning must be too. A cutoff
-    // driven by whoever happens to be worn, applied to the whole file, would
-    // let a persona set to keep a week erase the archive of one set to keep
-    // everything -- and it would present as the data never having been there.
-    const t = store()
-    conversation(t, 'ada', 1000)
-    conversation(t, 'coach', 1000)
-
-    expect(t.pruneBefore('ada', 50_000)).toBe(1)
-    expect(t.sessions('ada')).toHaveLength(0)
-    expect(t.sessions('coach')).toHaveLength(1)
   })
 })
 
@@ -650,9 +603,10 @@ describe('export and import', () => {
 
   it('never imports a conversation as still running', () => {
     // An archive can legitimately hold one that was open when it was exported.
-    // Storing it open makes it live on THIS machine: retention only prunes
-    // what ended, so it would never expire, and the app would be holding two
-    // open conversations at once.
+    // Storing it open makes it live on THIS machine: the archive reports a
+    // conversation with no end as one she is still awake in, so an imported
+    // one would sit in the list claiming to be live and the app would appear
+    // to hold two at once.
     const t = store()
     const result = t.importInto('ada', {
       version: ARCHIVE_FORMAT,
@@ -678,8 +632,8 @@ describe('export and import', () => {
         .map((one) => one.endedAt)
         .sort((a, b) => (a ?? 0) - (b ?? 0)),
     ).toEqual([1010, 4000])
-    // Which means retention can reach them.
-    expect(t.pruneBefore('ada', 50_000)).toBe(2)
+    // Which means both have a length to show, and neither reads as live.
+    expect(t.sessions('ada').every((one) => one.endedAt !== null)).toBe(true)
   })
 
   it('does not call an open conversation the same as a finished one', () => {

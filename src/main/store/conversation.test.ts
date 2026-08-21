@@ -157,10 +157,10 @@ describe('the instant a conversation begins on', () => {
 })
 
 describe('ending it', () => {
-  it('closes the conversation so retention can ever prune it', () => {
-    // Retention only considers sessions that ENDED. One left open is kept
-    // forever by a persona set to keep a week, while every surface reports it
-    // dropped.
+  it('closes the conversation, so it stops claiming to be happening', () => {
+    // A session with no `ended_at` reads as one she is still awake in: no
+    // length to show, and listed as live. Left by an exit, that is a
+    // conversation that says it is happening now, forever.
     const talk = conversation()
     talk.wear('mochi')
     talk.file('you', 'hello')

@@ -551,8 +551,9 @@ export function loadPersonas(
    * machine where the app has never started there is nothing of the user's to
    * carry across -- so a manifest claiming to predate the move can only have
    * been placed there from outside, and migrating it would let a package
-   * choose somebody's retention on their first launch. `keepDays: 1` is a
-   * package quietly binning the user's history of itself after a day.
+   * choose somebody's retention on their first launch. `keeps: false` is a
+   * package deciding, in a field nobody reads before installing, that this
+   * character's conversations are never written down.
    *
    * REQUIRED, with no default. It defaulted to `true`, which is the permissive
    * answer on a privacy gate: any future caller that forgot the argument would

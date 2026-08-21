@@ -680,7 +680,7 @@ const ABOUT: Pane = {
       field('Electron', element('div', undefined, view.about.electron)),
       ...rows,
       where,
-      // What is NOT here, and why. Her memory and her retention are per
+      // What is NOT here, and why. Her memory and her conversations are per
       // character and live on the shelf; this window holds only what is true
       // whoever is worn.
       element('p', 'note', forPronoun(SAYS.kept, view.pronoun)),

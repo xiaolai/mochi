@@ -59,8 +59,8 @@ describe('reading a policy', () => {
 
   it('reads back what was written', () => {
     const dir = workspace()
-    writePolicy(dir, 'ada', { keeps: false, keepDays: 7 })
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false, keepDays: 7 })
+    writePolicy(dir, 'ada', { keeps: false })
+    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false })
   })
 
   it('keeps two personas apart', () => {
@@ -68,10 +68,10 @@ describe('reading a policy', () => {
     // keeps nothing and a tutor keeps everything" is the case made
     // personas plural for, not an edge case.
     const dir = workspace()
-    writePolicy(dir, 'ada', { keeps: false, keepDays: null })
-    writePolicy(dir, 'coach', { keeps: true, keepDays: 30 })
+    writePolicy(dir, 'ada', { keeps: false })
+    writePolicy(dir, 'coach', { keeps: true })
     expect(readPolicy(dir, 'ada').keeps).toBe(false)
-    expect(readPolicy(dir, 'coach').keepDays).toBe(30)
+    expect(readPolicy(dir, 'coach').keeps).toBe(true)
   })
 
   it('refuses to turn an id that is not one into a path', () => {
@@ -84,20 +84,29 @@ describe('reading a policy', () => {
 
 describe('what counts as a policy', () => {
   it('accepts the two shapes that mean something', () => {
-    expect(parsePolicy({ keeps: true, keepDays: null })).toEqual({ keeps: true, keepDays: null })
-    expect(parsePolicy({ keeps: false, keepDays: 7 })).toEqual({ keeps: false, keepDays: 7 })
+    expect(parsePolicy({ keeps: true })).toEqual({ keeps: true })
+    expect(parsePolicy({ keeps: false })).toEqual({ keeps: false })
   })
 
-  it('refuses a duration that is not a count of days', () => {
-    // Zero would be a second way to say "keep nothing", which the switch
-    // already says -- and a duration that can mean off is one that turns
-    // itself off when somebody drags it too far.
-    for (const days of [0, -1, 1.5, Infinity, '7']) {
-      expect(parsePolicy({ keeps: true, keepDays: days }), JSON.stringify(days)).toBeNull()
+  it('IGNORES a stored keepDays rather than refusing the file', () => {
+    /*
+      Every policy written before the field was removed carries one, and
+      `UNREADABLE_POLICY` resolves a refusal as "record nothing" — so refusing
+      them would silently stop saving anybody's conversations as a side effect
+      of tidying up. An unknown key is not a broken file.
+
+      The field was a number of days to keep, validated here and enforced
+      nowhere: `Transcripts.pruneBefore` was its other half and had no caller
+      either. See `@shared/policy`.
+    */
+    for (const days of [7, 0, -1, 1.5, 'seven', null]) {
+      expect(parsePolicy({ keeps: true, keepDays: days }), JSON.stringify(days)).toEqual({
+        keeps: true,
+      })
     }
   })
 
-  it('refuses anything that is not an object with both fields', () => {
+  it('refuses anything that is not an object carrying the switch', () => {
     for (const value of [null, 42, [], 'off', {}, { keepDays: 7 }]) {
       expect(parsePolicy(value), JSON.stringify(value)).toBeNull()
     }
@@ -107,7 +116,7 @@ describe('what counts as a policy', () => {
 describe('forgetting a policy', () => {
   it('removes it, so a later persona with the same id does not inherit it', () => {
     const dir = workspace()
-    writePolicy(dir, 'ada', { keeps: false, keepDays: 7 })
+    writePolicy(dir, 'ada', { keeps: false })
     forgetPolicy(dir, 'ada')
     expect(existsSync(join(policyRoot(dir), 'ada.json'))).toBe(false)
     expect(readPolicy(dir, 'ada')).toEqual(DEFAULT_POLICY)
@@ -126,7 +135,7 @@ describe('whether a setting exists at all', () => {
     // exists, and re-seeding over it would silently undo it.
     const dir = workspace()
     expect(hasPolicy(dir, 'ada')).toBe(false)
-    writePolicy(dir, 'ada', { keeps: false, keepDays: null })
+    writePolicy(dir, 'ada', { keeps: false })
     expect(hasPolicy(dir, 'ada')).toBe(true)
     plant(dir, 'coach', 'not json at all')
     expect(hasPolicy(dir, 'coach')).toBe(true)

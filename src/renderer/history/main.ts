@@ -498,9 +498,9 @@ const SAYS = {
     it: 'interrupted before it got a word out',
   },
   noTalks: {
-    she: 'Nothing has been kept yet. Conversations appear here once she has been awake and retention is on.',
-    he: 'Nothing has been kept yet. Conversations appear here once he has been awake and retention is on.',
-    it: 'Nothing has been kept yet. Conversations appear here once it has been awake and retention is on.',
+    she: 'Nothing has been kept yet. Conversations appear here once she has been awake and her conversations are being saved.',
+    he: 'Nothing has been kept yet. Conversations appear here once he has been awake and his conversations are being saved.',
+    it: 'Nothing has been kept yet. Conversations appear here once it has been awake and its conversations are being saved.',
   },
   machineIsFor: {
     she: 'Who she is is on the Cast tab. This holds only what is true whoever is worn.',

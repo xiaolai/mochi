@@ -439,8 +439,10 @@ export function writeSleepAfterMinutes(userData: string, minutes: number): void 
  *   noisy, and it is the one that promises nothing.
  * - `never` — nothing on her at all.
  *
- * A preference rather than a persona field, for `bubbleSide`'s reason: it is a
- * fact about this screen and this desk, not about who is being worn.
+ * A preference rather than a persona field: it is a fact about this screen and
+ * this desk, not about who is being worn. The bubble's side once made the same
+ * argument from here and lost it — that one turned out to be about her, and
+ * moved to `Persona.bubbleSide`.
  */
 export function readHaloWhen(userData: string): HaloWhen {
   const read = readBounded(join(userData, PREFERENCES))

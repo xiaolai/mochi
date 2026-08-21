@@ -563,14 +563,14 @@ describe('migrating the single persona.json', () => {
    */
   it('parks her retention in her package and still retires the legacy file', () => {
     const dir = workspace()
-    legacy(dir, { ...tutor, version: 1, keeps: false, keepDays: 7 })
+    legacy(dir, { ...tutor, version: 1, keeps: false })
     mkdirSync(policyRoot(dir), { recursive: true })
     chmodSync(policyRoot(dir), 0o500)
 
     const result = migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
     expect(result.kind).toBe('imported')
     // Handed back, so the caller enforces it for this run...
-    expect(result.kind === 'imported' && result.carried).toEqual({ keeps: false, keepDays: 7 })
+    expect(result.kind === 'imported' && result.carried).toEqual({ keeps: false })
     // ...parked, so the NEXT run can still find it...
     expect(existsSync(join(personasRoot(dir), 'tutor', 'pending-policy.json'))).toBe(true)
     // ...and the legacy source is gone, so she cannot be re-imported.
@@ -579,7 +579,7 @@ describe('migrating the single persona.json', () => {
 
   it('settles the parked retention on a later launch, once the disk allows', () => {
     const dir = workspace()
-    legacy(dir, { ...tutor, version: 1, keeps: false, keepDays: 7 })
+    legacy(dir, { ...tutor, version: 1, keeps: false })
     mkdirSync(policyRoot(dir), { recursive: true })
     chmodSync(policyRoot(dir), 0o500)
     migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
@@ -589,7 +589,7 @@ describe('migrating the single persona.json', () => {
     chmodSync(policyRoot(dir), 0o700)
     const catalog = loadPersonas(dir, {}, true)
 
-    expect(readPolicy(dir, 'tutor')).toEqual({ keeps: false, keepDays: 7 })
+    expect(readPolicy(dir, 'tutor')).toEqual({ keeps: false })
     expect(catalog.carriedPolicies.size, 'still outstanding after it landed').toBe(0)
     // Settled, so the record is cleared rather than retried forever.
     expect(existsSync(join(personasRoot(dir), 'tutor', 'pending-policy.json'))).toBe(false)
@@ -601,7 +601,7 @@ describe('migrating the single persona.json', () => {
    */
   it('takes the parked record with her when she is deleted', () => {
     const dir = workspace()
-    legacy(dir, { ...tutor, version: 1, keeps: false, keepDays: 7 })
+    legacy(dir, { ...tutor, version: 1, keeps: false })
     mkdirSync(policyRoot(dir), { recursive: true })
     chmodSync(policyRoot(dir), 0o500)
     migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
@@ -623,7 +623,7 @@ describe('migrating the single persona.json', () => {
    */
   it('does not copy a parked retention onto a new persona', () => {
     const dir = workspace()
-    legacy(dir, { ...tutor, version: 1, keeps: false, keepDays: 7 })
+    legacy(dir, { ...tutor, version: 1, keeps: false })
     mkdirSync(policyRoot(dir), { recursive: true })
     chmodSync(policyRoot(dir), 0o500)
     migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
@@ -644,7 +644,7 @@ describe('migrating the single persona.json', () => {
     write(dir, 'coach', { ...tutor, id: 'coach', name: 'Coach' })
     writeFileSync(
       join(personasRoot(dir), 'coach', 'pending-policy.json'),
-      JSON.stringify({ id: 'someone-else', keeps: false, keepDays: 7 }),
+      JSON.stringify({ id: 'someone-else', keeps: false }),
     )
 
     const catalog = loadPersonas(dir, {}, true)
@@ -676,13 +676,15 @@ describe('migrating the single persona.json', () => {
   it('carries retention even when the legacy persona matches one already there', () => {
     const dir = workspace()
     write(dir, 'twin', { ...tutor, id: 'twin' })
+    // With the `keepDays` a real v1 file would have carried, to pin that the
+    // number is DROPPED on the way in rather than refused. Refusing would fail
+    // the parse, and a failed policy parse reads as "record nothing".
     legacy(dir, { ...tutor, version: 1, keeps: false, keepDays: 7 })
 
     const result = migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
     expect(result.kind).toBe('already')
     expect(readPolicy(dir, 'twin'), 'her opt-out went with the retired file').toEqual({
       keeps: false,
-      keepDays: 7,
     })
   })
 
@@ -877,7 +879,7 @@ describe('deleting a persona takes her notes with her', () => {
     // keep -- so she would carry on recording without the opt-out she chose.
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
-    writePolicy(dir, 'ada', { keeps: false, keepDays: 7 })
+    writePolicy(dir, 'ada', { keeps: false })
     const catalog = loadPersonas(dir, {}, true)
     // A personas folder that cannot be written to, so the removal fails.
     chmodSync(personasRoot(dir), 0o500)
@@ -890,7 +892,7 @@ describe('deleting a persona takes her notes with her', () => {
     // package half-removed -- worth knowing, and a separate problem from this
     // one. What must not happen is her surviving in ANY form with the opt-out
     // silently replaced by the keep-everything default.
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false, keepDays: 7 })
+    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false })
   })
 
   it('refuses when her folder has moved since the catalog was read', async () => {
@@ -1074,7 +1076,7 @@ describe('the retention setting is hers, not her package’s', () => {
     // reverse just as easily.
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
-    writePolicy(dir, 'ada', { keeps: false, keepDays: 7 })
+    writePolicy(dir, 'ada', { keeps: false })
 
     const made = copyPersonaTo(
       dir,
@@ -1086,7 +1088,7 @@ describe('the retention setting is hers, not her package’s', () => {
     expect(hasPolicy(dir, made.id)).toBe(false)
     expect(readPolicy(dir, made.id)).toEqual(DEFAULT_POLICY)
     // Hers is untouched.
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false, keepDays: 7 })
+    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false })
   })
 
   it('survives putting the built-in back to how she ships', () => {
@@ -1094,17 +1096,17 @@ describe('the retention setting is hers, not her package’s', () => {
     // wording back" also turned transcript storage back on -- an undo of the
     // prose is not a request to start recording.
     const dir = workspace()
-    writePolicy(dir, BUILT_IN_ID, { keeps: false, keepDays: 7 })
+    writePolicy(dir, BUILT_IN_ID, { keeps: false })
 
     restoreBuiltIn(dir)
 
-    expect(readPolicy(dir, BUILT_IN_ID)).toEqual({ keeps: false, keepDays: 7 })
+    expect(readPolicy(dir, BUILT_IN_ID)).toEqual({ keeps: false })
   })
 
   it('goes when she does, so the next persona of that name does not inherit it', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
-    writePolicy(dir, 'ada', { keeps: false, keepDays: 7 })
+    writePolicy(dir, 'ada', { keeps: false })
 
     deletePersona(dir, loadPersonas(dir, {}, true), 'ada', history)
 
@@ -1216,12 +1218,12 @@ describe('moving loose files into packages', () => {
 describe('carrying retention out of an old manifest', () => {
   it('migrates it for a persona who is actually loaded', () => {
     const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false, keepDays: 7 })
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
 
     const catalog = loadPersonas(dir, {}, true)
 
     expect(catalog.personas.has('ada')).toBe(true)
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false, keepDays: 7 })
+    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false })
     // The manifest fields are gone from the persona itself.
     expect('keeps' in (catalog.personas.get('ada') as object)).toBe(false)
   })
@@ -1232,9 +1234,9 @@ describe('carrying retention out of an old manifest', () => {
     // became a persona still left a setting filed under that id -- waiting for
     // whoever legitimately gets the name later.
     const dir = workspace()
-    write(dir, 'a', { ...tutor, id: 'twin', name: 'Twin', version: 1, keeps: false, keepDays: 7 })
-    write(dir, 'b', { ...tutor, id: 'twin', name: 'Other', version: 1, keeps: false, keepDays: 7 })
-    write(dir, 'imposter', { ...tutor, id: BUILT_IN_ID, version: 1, keeps: false, keepDays: 7 })
+    write(dir, 'a', { ...tutor, id: 'twin', name: 'Twin', version: 1, keeps: false })
+    write(dir, 'b', { ...tutor, id: 'twin', name: 'Other', version: 1, keeps: false })
+    write(dir, 'imposter', { ...tutor, id: BUILT_IN_ID, version: 1, keeps: false })
 
     const catalog = loadPersonas(dir, {}, true)
 
@@ -1250,7 +1252,7 @@ describe('carrying retention out of an old manifest', () => {
     // author deciding, in a field nobody reads before installing, whether a
     // stranger's conversations are written down.
     const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', keeps: false, keepDays: 7 })
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', keeps: false })
 
     const catalog = loadPersonas(dir, {}, true)
 
@@ -1267,15 +1269,20 @@ describe('carrying retention out of an old manifest', () => {
     // The hole the marker alone did not close. On a first launch the marker
     // does not exist yet, so a package placed there beforehand would be
     // migrated -- and a package choosing somebody's retention is exactly what
-    // the gate exists to prevent. `keepDays: 1` is a package quietly binning
-    // the user's history of itself after a day.
+    // the gate exists to prevent. The `keeps` here is what still bites: a
+    // package deciding whether this character is recorded at all. (`keepDays`
+    // rides along because a real planted v1 file would have carried one, and
+    // the gate has to tolerate it to reach the field beside it.)
     const dir = workspace()
     write(dir, 'planted', {
       ...tutor,
       id: 'planted',
       name: 'Planted',
       version: 1,
-      keeps: true,
+      // `false`, so the leak would be VISIBLE. With `keeps: true` the policy a
+      // leak wrote would be identical to the default, and `readPolicy` below
+      // would answer the same either way.
+      keeps: false,
       keepDays: 1,
     })
 
@@ -1295,9 +1302,9 @@ describe('carrying retention out of an old manifest', () => {
     // careless one. Carrying them across is a one-time event for an install
     // that predates the move.
     const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false, keepDays: 7 })
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
     loadPersonas(dir, {}, true)
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false, keepDays: 7 })
+    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false })
 
     // A package installed AFTER that pass, claiming to be old.
     write(dir, 'later', {
@@ -1339,12 +1346,12 @@ describe('carrying retention out of an old manifest', () => {
 
   it('does not re-seed over a setting she has since changed', () => {
     const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false, keepDays: 7 })
-    writePolicy(dir, 'ada', { keeps: true, keepDays: 30 })
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
+    writePolicy(dir, 'ada', { keeps: true })
 
     loadPersonas(dir, {}, true)
 
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: true, keepDays: 30 })
+    expect(readPolicy(dir, 'ada')).toEqual({ keeps: true })
   })
 
   it('holds the value in memory when it cannot be written', () => {
@@ -1352,7 +1359,7 @@ describe('carrying retention out of an old manifest', () => {
     // migrating would have turned a stored opt-out into recording -- silently,
     // and permanently once the old manifest is rewritten without the field.
     const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false, keepDays: 7 })
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
     // A policies folder that cannot be written to. The file itself is still
     // absent -- so this is a genuine write failure, not the different case
     // where a setting exists and cannot be read.
@@ -1362,7 +1369,7 @@ describe('carrying retention out of an old manifest', () => {
     const catalog = loadPersonas(dir, {}, true)
 
     expect(catalog.personas.has('ada')).toBe(true)
-    expect(catalog.carriedPolicies.get('ada')).toEqual({ keeps: false, keepDays: 7 })
+    expect(catalog.carriedPolicies.get('ada')).toEqual({ keeps: false })
     chmodSync(policyRoot(dir), 0o700)
   })
 })

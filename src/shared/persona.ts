@@ -1256,14 +1256,24 @@ export function parsePersona(value: unknown): PersonaParse {
   // them is an author setting policy, and falls through to the unknown-field
   // check below like any other field that is not ours.
   const rawKeeps = retired('keeps', version) ? source['keeps'] : undefined
+  /*
+    `keepDays` is still READ here, and no longer carried.
+
+    A v1 manifest can hold one, and it stays retired so the unknown-field check
+    below does not report it — but the policy it seeds has no such field any
+    more, so the number is dropped. Nothing was enforcing it: see the note in
+    `@shared/policy` for why a correct, tested, uncalled implementation of
+    time-based retention was removed rather than finished.
+
+    Its PRESENCE still counts, immediately below, because a manifest that set
+    only `keepDays` was still a manifest whose author said something about
+    retention — and `keeps` defaults to true, which is what they got.
+  */
   const rawKeepDays = retired('keepDays', version) ? source['keepDays'] : undefined
   const legacy =
     rawKeeps === undefined && rawKeepDays === undefined
       ? null
-      : parsePolicy({
-          keeps: rawKeeps === undefined ? DEFAULT_POLICY.keeps : rawKeeps,
-          keepDays: rawKeepDays === undefined ? DEFAULT_POLICY.keepDays : rawKeepDays,
-        })
+      : parsePolicy({ keeps: rawKeeps === undefined ? DEFAULT_POLICY.keeps : rawKeeps })
 
   // Unknown keys are REPORTED, not dropped. Same rule as `parseFaceSpec`, and
   // the same reason: a persona file is hand-editable, and `styel` silently

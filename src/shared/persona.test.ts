@@ -1073,9 +1073,11 @@ describe('each retired field carries the format it stopped being ours at', () =>
   })
 
   it('migrates retention out of a v1 manifest, which predates the move', () => {
-    const result = parsePersona(at(1, { keeps: false }))
+    const result = parsePersona(at(1, { keeps: false, keepDays: 7 }))
     expect(result.ok).toBe(true)
-    if (result.ok) expect(result.legacy).toStrictEqual({ keeps: false, keepDays: null })
+    // `keepDays` is tolerated by the gate and then dropped: the policy it
+    // seeds has no such field, and nothing was ever enforcing the number.
+    if (result.ok) expect(result.legacy).toStrictEqual({ keeps: false })
   })
 
   it('refuses retention from a v2 manifest, which is an author setting policy', () => {

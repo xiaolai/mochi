@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { readJsonFile, writeJsonAtomically } from './json-file'
+import { writeJsonAtomically } from './json-file'
 
 // Real files, not a mocked filesystem. Everything this module exists for is a
 // property of an actual write — that a rename replaces atomically, that a
@@ -48,43 +48,10 @@ describe('writeJsonAtomically', () => {
   })
 })
 
-describe('readJsonFile', () => {
-  it('reports a missing file as absent, which is nobody’s problem', () => {
-    const result = readJsonFile(join(workspace(), 'nope.json'))
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.problem.kind).toBe('absent')
-  })
-
-  it('distinguishes malformed from absent', () => {
-    // The distinction the callers are built on. Collapsing the two is how a
-    // corrupt file presents as "you have not customised anything", and the next
-    // save writes straight over it.
-    const path = join(workspace(), 'broken.json')
-    writeFileSync(path, '{ not json')
-    const result = readJsonFile(path)
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.problem.kind).toBe('malformed')
-  })
-
-  it('distinguishes unreadable from absent', () => {
-    // A directory where a file should be. ENOTDIR/EISDIR is not ENOENT, and
-    // saying "you have no preferences" about a path that cannot be read leaves
-    // somebody watching their settings reset with nothing to point at.
-    const dir = workspace()
-    mkdirSync(join(dir, 'itsafolder'))
-    const result = readJsonFile(join(dir, 'itsafolder'))
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.problem.kind).toBe('unreadable')
-  })
-
-  it('returns the parsed value when the file is good', () => {
-    const path = join(workspace(), 'good.json')
-    writeJsonAtomically(path, { sizePercent: 120 })
-    const result = readJsonFile(path)
-    expect(result.ok).toBe(true)
-    if (result.ok) expect(result.value).toEqual({ sizePercent: 120 })
-  })
-})
+// `readJsonFile`'s block lived here — five cases distinguishing absent,
+// unreadable, malformed and ok. It went with the function, which every store
+// had already stopped calling in favour of `readBounded`. The cases were
+// correct; there was nothing left for them to be correct about.
 
 // A third block lived here: "the two stores that share this", four cases
 // round-tripping a real `preferences.ts` and a real `persona.ts` through these

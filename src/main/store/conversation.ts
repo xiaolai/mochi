@@ -20,13 +20,14 @@ import type { Speaker, Transcripts } from './transcripts'
  * archive is a row saying somebody was there and said nothing, which is untrue
  * and useless, and it would be the most common row in the file.
  *
- * ## Ended on purpose, because retention only prunes what ended
+ * ## Ended on purpose, because an open one is a lie about the present
  *
- * A session left open is never pruned: retention considers sessions that have
- * ENDED, so a persona set to keep a week would keep that one forever while
- * every surface reports it dropped. `transcripts.ts` closes sessions left open
- * by an unclean quit the next time the file opens, which covers a crash; this
- * covers every ordinary exit, and the reconnect — which happens hourly (§53).
+ * A session with no `ended_at` reads as one she is still awake in: it has no
+ * length to show, and the archive lists it as live. Left behind by an exit,
+ * that is a conversation claiming to be happening now, forever.
+ * `transcripts.ts` closes sessions left open by an unclean quit the next time
+ * the file opens, which covers a crash; this covers every ordinary exit, and
+ * the reconnect — which happens hourly (§53).
  */
 export interface Conversation {
   /** Wear a persona. Ends whatever was being written for the last one. */

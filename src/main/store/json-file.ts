@@ -13,7 +13,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 /**
@@ -76,29 +76,14 @@ export type JsonRead =
   | { readonly ok: true; readonly value: unknown }
   | { readonly ok: false; readonly problem: ReadProblem }
 
-/**
- * Read and parse, distinguishing THREE outcomes rather than two.
- *
- * "No file yet" is the ordinary state of a machine nobody has customised and
- * deserves no report. A permission error, a directory where a file should be,
- * or a truncated write are all situations where her state is unreachable for a
- * reason worth saying out loud — and collapsing them into "use the defaults"
- * leaves somebody with a broken setup no clue at all, watching their settings
- * silently reset on every launch.
- */
-export function readJsonFile(path: string): JsonRead {
-  let raw: string
-  try {
-    raw = readFileSync(path, 'utf8')
-  } catch (error: unknown) {
-    const code = (error as NodeJS.ErrnoException).code
-    return code === 'ENOENT'
-      ? { ok: false, problem: { kind: 'absent' } }
-      : { ok: false, problem: { kind: 'unreadable', detail: String(error) } }
-  }
-  try {
-    return { ok: true, value: JSON.parse(raw) }
-  } catch (error: unknown) {
-    return { ok: false, problem: { kind: 'malformed', detail: String(error) } }
-  }
-}
+/*
+  `readJsonFile` was here, and every store uses `readBounded` instead.
+
+  Exported, documented, and covered by seven tests that all passed — with no
+  caller anywhere. `readBounded` answers the same three outcomes AND caps the
+  read, which is why it won; this one simply outlived the migration.
+
+  `JsonRead` and `ReadProblem` stay: `readBounded` answers in the same shape,
+  and two vocabularies for "absent, unreadable, malformed" is how the next
+  reader comes to disagree with this one about what a missing file means.
+*/
