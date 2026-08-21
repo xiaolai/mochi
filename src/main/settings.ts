@@ -23,11 +23,13 @@ import { isPronoun } from '@shared/pronoun'
 import { isThemeId, type Theme } from '@shared/theme'
 import { join } from 'node:path'
 import {
+  BUBBLE_SIDES,
   PERSONA_LIMITS,
   VOICE_NAMES,
   isPersonaId,
   type Persona,
   type VoiceName,
+  type BubbleSide,
 } from '@shared/persona'
 import { HALO_WHEN, isHaloWhen, type HaloWhen } from '@shared/ipc'
 import type {
@@ -88,6 +90,13 @@ export function listAvatars(avatarsFolder: string): readonly SettingsAvatar[] {
 export function listPersonas(
   catalog: PersonaCatalog,
   faceFor: (persona: { id: string; avatarId: string | null; theme: Theme }) => FaceSpec,
+  /**
+   * Her side, already resolved. `Persona.bubbleSide` is null for anybody nobody
+   * has asked, and deciding what that should show is main's — see `sideFor`.
+   * A page that had to know about the null would be a second place the
+   * fallback lives.
+   */
+  sideFor: (persona: Persona) => string,
 ): readonly SettingsPersona[] {
   return [...catalog.personas.values()]
     .map((persona) => ({
@@ -95,6 +104,8 @@ export function listPersonas(
       name: persona.name,
       voice: persona.voice,
       bubble: persona.bubble,
+      bubbleSide: sideFor(persona),
+      bubbleSides: [...BUBBLE_SIDES],
       avatarId: persona.avatarId,
       source: catalog.sources.get(persona.id) ?? null,
       // Injected rather than resolved here: resolution needs the avatars root
@@ -234,28 +245,20 @@ export function listKeys(
  * renderer's answer rather than main's. A settings window whose options changed
  * when somebody moved her would be describing this moment instead of a setting.
  */
-export function listScreen(
-  bubbleSide: string,
-  sides: readonly string[],
-  rest: {
-    readonly halo: HaloWhen
-    readonly shoulderChip: boolean
-    readonly sleepAfterMinutes: number
-  },
-): SettingsScreen {
+export function listScreen(rest: {
+  readonly halo: HaloWhen
+  readonly shoulderChip: boolean
+  readonly sleepAfterMinutes: number
+}): SettingsScreen {
   return {
-    bubbleSide,
-    sides: [...sides],
     halo: rest.halo,
-    // Offered by main rather than held by the page, for the same reason `sides`
-    // is: two lists is two answers to what may be chosen, and only one of them
-    // is checked on the way back.
+    // Offered by main rather than held by the page: two lists is two answers to
+    // what may be chosen, and only one of them is checked on the way back.
     haloChoices: [...HALO_WHEN],
     shoulderChip: rest.shoulderChip,
     sleepAfterMinutes: rest.sleepAfterMinutes,
-    // Sent rather than written into the pane, for the same reason `sides` is:
-    // a page that held its own list would be a second answer to what may be
-    // chosen, and only one of the two is checked on the way back.
+    // Sent rather than written into the pane: a page holding its own list would
+    // be a second answer to what may be chosen, and only one is checked back.
     sleepAfterChoices: [...SLEEP_AFTER_CHOICES],
   }
 }
@@ -279,7 +282,6 @@ export const SLEEP_AFTER_CHOICES: readonly number[] = [0, 5, 10, 15, 30, 60]
  * a page set whatever the type happens to allow today.
  */
 export interface CheckedScreen {
-  readonly bubbleSide?: string
   readonly halo?: HaloWhen
   readonly shoulderChip?: boolean
   readonly sleepAfterMinutes?: number
@@ -287,23 +289,14 @@ export interface CheckedScreen {
 
 export function applyScreen(
   change: ScreenChange,
-  sides: readonly string[],
 ):
   | { readonly ok: true; readonly change: CheckedScreen }
   | { readonly ok: false; readonly why: string } {
   const checked: {
-    bubbleSide?: string
     halo?: HaloWhen
     shoulderChip?: boolean
     sleepAfterMinutes?: number
   } = {}
-
-  if (change.bubbleSide !== undefined) {
-    if (!sides.includes(change.bubbleSide)) {
-      return { ok: false, why: `The bubble cannot sit ${String(change.bubbleSide)}.` }
-    }
-    checked.bubbleSide = change.bubbleSide
-  }
 
   if (change.halo !== undefined) {
     // Against the OFFERED list, not merely "is a string". This decides whether
@@ -529,6 +522,22 @@ export function applyChange(
     // control offers it; overwriting it from a field that cannot express it
     // would silently discard something a manifest author wrote.
     next = { ...next, [moment]: { ...next[moment], instruction: line } }
+  }
+
+  if (change.bubbleSide !== undefined) {
+    /*
+      Against the OFFERED list, and stored as given — `auto` included.
+
+      `auto` is a real answer here rather than the absence of one. `null` is the
+      absence, and only main writes that (it never does): a persona that has
+      never been asked keeps `null` so `sideFor` may fall back to the app-level
+      value this field replaced. Storing `auto` the moment anybody opens the
+      control would erase that distinction on the first save.
+    */
+    if (!(BUBBLE_SIDES as readonly string[]).includes(change.bubbleSide)) {
+      return { ok: false, why: `The bubble cannot sit ${String(change.bubbleSide)}.` }
+    }
+    next = { ...next, bubbleSide: change.bubbleSide as BubbleSide }
   }
 
   if (change.faces !== undefined) {

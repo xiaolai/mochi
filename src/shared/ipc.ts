@@ -333,14 +333,12 @@ export function isHaloWhen(value: unknown): value is HaloWhen {
 /**
  * What she looks like on the desktop, as the settings window draws it.
  *
- * `sides` is every side that can be CHOSEN, which is not the same as every side
- * the bubble can currently reach — that shrinks as she is dragged into a corner
- * and is the renderer's answer, not main's. A window offering only what fits
- * right now would change its own options when somebody moved her.
+ * The bubble's SIDE used to live here. It is a persona field now — see
+ * `Persona.bubbleSide` — because whether she shows words was already hers, and
+ * splitting one feature across two tabs left a live side control on this pane
+ * governing something a character with the bubble off could not display.
  */
 export interface SettingsScreen {
-  readonly bubbleSide: string
-  readonly sides: readonly string[]
   /**
    * When the halo over her head is drawn. See `HALO_WHEN`.
    *
@@ -370,7 +368,6 @@ export interface SettingsScreen {
 
 /** What may be changed about the screen. Absent means unchanged. */
 export interface ScreenChange {
-  readonly bubbleSide?: string
   /** A `HaloWhen`, unchecked — this is the WIRE shape. `applyScreen` decides. */
   readonly halo?: string
   readonly shoulderChip?: boolean
@@ -423,6 +420,16 @@ export interface SettingsPersona {
   readonly name: string
   readonly voice: string
   readonly bubble: boolean
+  /**
+   * Which side her words sit on, already resolved for the sheet to draw.
+   *
+   * Never null here, unlike the persona field: `sideFor` in main has already
+   * decided what a character nobody has asked should show, so the control does
+   * not need to know that "nobody has said" and "auto" are different answers.
+   */
+  readonly bubbleSide: string
+  /** Every side that may be CHOSEN. From main, so the page holds no second list. */
+  readonly bubbleSides: readonly string[]
   readonly avatarId: string | null
   /** Where she came from, or null for the built-in. Shown, never sent back. */
   readonly source: string | null
@@ -636,6 +643,8 @@ export interface PersonaChange {
   readonly name?: string
   readonly voice?: string
   readonly bubble?: boolean
+  /** A `BubbleSide`, unchecked — the WIRE shape. `applyChange` decides. */
+  readonly bubbleSide?: string
   readonly avatarId?: string | null
   /*
     The six the Cast pane can now change, and could not before.

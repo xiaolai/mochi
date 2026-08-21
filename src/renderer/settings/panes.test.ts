@@ -34,8 +34,6 @@ function settled(): SettingsView {
       codex: { readiness: 'ready', remedy: null },
     },
     screen: {
-      bubbleSide: 'auto',
-      sides: ['auto', 'above'],
       halo: 'always',
       haloChoices: ['always', 'listening', 'never'],
       shoulderChip: true,

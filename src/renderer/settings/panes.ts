@@ -95,17 +95,6 @@ const SAYS = {
       'The Codex CLI could not be found on this machine, so nothing here has anything to ' +
       'run. It says so out loud rather than answering from memory.',
   },
-  sides: {
-    she:
-      'A side that will not fit is not honoured — dragged into a corner she puts her words ' +
-      'wherever there is room. Whether she shows them at all is per character, on the shelf.',
-    he:
-      'A side that will not fit is not honoured — dragged into a corner he puts his words ' +
-      'wherever there is room. Whether he shows them at all is per character, on the shelf.',
-    it:
-      'A side that will not fit is not honoured — dragged into a corner it puts its words ' +
-      'wherever there is room. Whether it shows them at all is per character, on the shelf.',
-  },
   halo: {
     she:
       'The ring over her head. Hiding it hides nothing you need: the menu bar item marks ' +
@@ -514,19 +503,6 @@ const ON_SCREEN: Pane = {
   label: 'On screen',
   attention: () => null,
   render(view, handlers) {
-    const side = document.createElement('select')
-    options(
-      side,
-      view.screen.sides.map((one) => ({
-        value: one,
-        label: one === 'auto' ? 'wherever there is room' : one,
-      })),
-      view.screen.bubbleSide,
-    )
-    side.addEventListener('change', () => {
-      handlers.screen({ bubbleSide: side.value })
-    })
-
     /*
       THREE answers, so a select rather than a switch.
 
@@ -596,8 +572,6 @@ const ON_SCREEN: Pane = {
     })
 
     return [
-      field('Speech bubble', side),
-      element('p', 'note', forPronoun(SAYS.sides, view.pronoun)),
       field('Halo', halo),
       element('p', 'note', forPronoun(SAYS.halo, view.pronoun)),
       field('Shoulder button', chipSwitch),

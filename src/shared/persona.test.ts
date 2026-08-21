@@ -40,6 +40,7 @@ const tutor: Persona = {
   // ON here, and off in the built-in. A fixture that matched the default would
   // pass every test that never reads the field.
   bubble: true,
+  bubbleSide: null,
   // A second persona with a DIFFERENT pronoun, deliberately: the whole reason
   // the pronoun lives here rather than in app settings is that switching
   // persona has to switch it too.

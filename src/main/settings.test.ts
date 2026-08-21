@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PERSONA, PERSONA_LIMITS } from '@shared/persona'
+import { BUBBLE_SIDES, DEFAULT_PERSONA, PERSONA_LIMITS, type Persona } from '@shared/persona'
 import { REVEALABLE } from '@shared/ipc'
 import { WEB_SEARCH_MODES } from '@shared/delegation'
 import {
@@ -360,43 +360,89 @@ describe('the two global keys, as the window shows them', () => {
 const READY = { readiness: 'ready', remedy: null } as const
 const MISSING = { readiness: 'not-installed', remedy: 'install' } as const
 
+/**
+ * Which side her words sit on, now that it is HERS.
+ *
+ * It was app-level, in `preferences.json`. Whether she shows words was already
+ * the character's, so holding where they go on the machine split one feature
+ * across two tabs — and left a live side control on the settings pane for a
+ * character whose bubble was switched off.
+ *
+ * The subtlety worth pinning is `null`. "Nobody has been asked" and "somebody
+ * chose auto" are different answers, and only the first may fall back to the
+ * app-level value this replaced. Collapsing them would take a side deliberately
+ * set to `auto` and quietly overwrite it with whatever the old file held.
+ */
+describe('which side her words sit on', () => {
+  const HERS: Persona = { ...DEFAULT_PERSONA, id: 'loki', bubbleSide: null }
+
+  it('starts as null, which is not `auto`', () => {
+    // A persona written before the field existed has no answer. `sideFor` in
+    // main is what decides what that should show.
+    expect(DEFAULT_PERSONA.bubbleSide).toBeNull()
+  })
+
+  it.each([...BUBBLE_SIDES])('takes %s', (side) => {
+    const out = applyChange(HERS, { id: 'loki', bubbleSide: side }, [])
+    expect(out.ok).toBe(true)
+    if (!out.ok) return
+    expect(out.persona.bubbleSide).toBe(side)
+  })
+
+  it('stores `auto` as a real answer rather than as the absence of one', () => {
+    // The line that keeps the fallback honest: once somebody has picked `auto`
+    // for this character, the legacy app-level value must stop being consulted.
+    const out = applyChange(HERS, { id: 'loki', bubbleSide: 'auto' }, [])
+    expect(out.ok).toBe(true)
+    if (!out.ok) return
+    expect(out.persona.bubbleSide).toBe('auto')
+    expect(out.persona.bubbleSide).not.toBeNull()
+  })
+
+  it('refuses a side nothing can honour, with a sentence naming it', () => {
+    const out = applyChange(HERS, { id: 'loki', bubbleSide: 'diagonally' }, [])
+    expect(out.ok).toBe(false)
+    if (out.ok) return
+    expect(out.why).toContain('diagonally')
+  })
+
+  it('leaves every other field alone', () => {
+    // One field per branch. `applyChange` rebuilds the persona, so a branch that
+    // spread the wrong thing would quietly reset her name or her voice.
+    const out = applyChange(
+      { ...HERS, name: 'Loki', bubble: true },
+      { id: 'loki', bubbleSide: 'left' },
+      [],
+    )
+    expect(out.ok).toBe(true)
+    if (!out.ok) return
+    expect(out.persona.name).toBe('Loki')
+    expect(out.persona.bubble).toBe(true)
+  })
+})
+
 describe('what she looks like on the desktop', () => {
   /** The two rest settings that travel with the bubble's side. */
   const REST = { halo: 'always', shoulderChip: true, sleepAfterMinutes: 15 } as const
 
-  it('offers every side that can be CHOSEN, not every side that fits now', () => {
-    // What fits shrinks as she is dragged into a corner, and that is the
-    // renderer's answer. A settings window whose options changed when somebody
-    // moved her would be describing this moment instead of a setting.
-    const shown = listScreen('above', ['auto', 'above', 'below', 'left', 'right'], REST)
-    expect(shown.bubbleSide).toBe('above')
-    expect(shown.sides).toEqual(['auto', 'above', 'below', 'left', 'right'])
-  })
-
-  it('takes a side it knows', () => {
-    expect(applyScreen({ bubbleSide: 'left' }, ['auto', 'left'])).toEqual({
-      ok: true,
-      change: { bubbleSide: 'left' },
-    })
-  })
-
-  it('refuses a side nothing can honour, with a sentence', () => {
-    const refused = applyScreen({ bubbleSide: 'diagonally' }, ['auto', 'left'])
-    expect(refused.ok).toBe(false)
-    if (refused.ok) return
-    expect(refused.why).toContain('diagonally')
+  it('no longer carries the bubble’s side, which is hers', () => {
+    /*
+      It moved to `Persona.bubbleSide`. Whether she shows words was already the
+      character's, and holding WHERE they go on this pane split one feature
+      across two tabs — leaving a live side control here on a machine wearing a
+      character with the bubble switched off.
+    */
+    const shown = listScreen(REST) as unknown as Record<string, unknown>
+    expect(shown['bubbleSide']).toBeUndefined()
+    expect(shown['sides']).toBeUndefined()
   })
 
   it('changes nothing when nothing was asked for', () => {
-    expect(applyScreen({}, ['auto'])).toEqual({ ok: true, change: {} })
+    expect(applyScreen({})).toEqual({ ok: true, change: {} })
   })
 
   it('carries both rest settings, so the pane can draw them', () => {
-    const shown = listScreen('auto', ['auto'], {
-      halo: 'never' as const,
-      shoulderChip: false,
-      sleepAfterMinutes: 30,
-    })
+    const shown = listScreen({ halo: 'never' as const, shoulderChip: false, sleepAfterMinutes: 30 })
     expect(shown.halo).toBe('never')
     // Offered by main rather than held by the page, like `sides` and the sleep
     // choices: two lists is two answers to what may be chosen, and only one of
@@ -404,15 +450,12 @@ describe('what she looks like on the desktop', () => {
     expect(shown.haloChoices).toEqual([...HALO_WHEN])
     expect(shown.shoulderChip).toBe(false)
     expect(shown.sleepAfterMinutes).toBe(30)
-    // Offered by main rather than held by the page, for the same reason
-    // `sides` is: two lists is two answers to what may be chosen, and only
-    // one of them is checked on the way back.
     expect(shown.sleepAfterChoices).toContain(0)
   })
 
   it('takes a halo answer only from the three it offers', () => {
     for (const when of HALO_WHEN) {
-      expect(applyScreen({ halo: when }, ['auto'])).toEqual({ ok: true, change: { halo: when } })
+      expect(applyScreen({ halo: when })).toEqual({ ok: true, change: { halo: when } })
     }
     /*
       It crosses a bridge, and this one decides whether an indicator is drawn.
@@ -421,39 +464,39 @@ describe('what she looks like on the desktop', () => {
       checkbox — and it must not be read as "yes, draw it": the grammar is three
       words now, and a value this side cannot read is not one it may act on.
     */
-    expect(applyScreen({ halo: 'sometimes' }, ['auto']).ok).toBe(false)
-    expect(applyScreen({ halo: true as unknown as string }, ['auto']).ok).toBe(false)
+    expect(applyScreen({ halo: 'sometimes' }).ok).toBe(false)
+    expect(applyScreen({ halo: true as unknown as string }).ok).toBe(false)
   })
 
   it('takes the shoulder control the same way, and refuses a string', () => {
     // The second switch on this pane, and the second chance to accept a
     // truthy string. `'false'` is the value that would arrive from a form and
     // turn a control ON while reading as off.
-    expect(applyScreen({ shoulderChip: false }, ['auto'])).toEqual({
+    expect(applyScreen({ shoulderChip: false })).toEqual({
       ok: true,
       change: { shoulderChip: false },
     })
-    expect(applyScreen({ shoulderChip: 'false' as unknown as boolean }, ['auto']).ok).toBe(false)
+    expect(applyScreen({ shoulderChip: 'false' as unknown as boolean }).ok).toBe(false)
   })
 
   it('refuses an idle timeout that is not one of the offered choices', () => {
     // Narrower than the store's own grammar, deliberately: the store takes any
     // whole minute up to an hour, which is right for a hand-edited file and
     // wrong for a page — 47 is a value no control here can express or show back.
-    const refused = applyScreen({ sleepAfterMinutes: 47 }, ['auto'])
+    const refused = applyScreen({ sleepAfterMinutes: 47 })
     expect(refused.ok).toBe(false)
     if (refused.ok) return
     expect(refused.why).toContain('47')
-    expect(applyScreen({ sleepAfterMinutes: 0 }, ['auto'])).toEqual({
+    expect(applyScreen({ sleepAfterMinutes: 0 })).toEqual({
       ok: true,
       change: { sleepAfterMinutes: 0 },
     })
   })
 
   it('folds several changes in one message rather than taking only the first', () => {
-    expect(applyScreen({ bubbleSide: 'auto', halo: 'listening' }, ['auto'])).toEqual({
+    expect(applyScreen({ halo: 'listening', shoulderChip: false })).toEqual({
       ok: true,
-      change: { bubbleSide: 'auto', halo: 'listening' },
+      change: { halo: 'listening', shoulderChip: false },
     })
   })
 })

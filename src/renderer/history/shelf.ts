@@ -33,9 +33,22 @@ const SAYS = {
     it: 'ten · a change is a reconnect, so it lands on its next wake',
   },
   bubble: {
-    she: 'Show her words above her head while she speaks',
-    he: 'Show his words above his head while he speaks',
-    it: 'Show its words above it while it speaks',
+    /*
+      "Beside her", not "above her head".
+
+      The side has been choosable for a long time — above, below, left, right,
+      or wherever there is room — and this label went on naming one of the five
+      as though it were the only one. It is directly above the control that
+      picks it now, which made the disagreement impossible to miss.
+    */
+    she: 'Show her words beside her while she speaks',
+    he: 'Show his words beside him while he speaks',
+    it: 'Show its words beside it while it speaks',
+  },
+  bubbleSide: {
+    she: 'A side that will not fit is not honoured — dragged into a corner she puts her words wherever there is room.',
+    he: 'A side that will not fit is not honoured — dragged into a corner he puts his words wherever there is room.',
+    it: 'A side that will not fit is not honoured — dragged into a corner it puts its words wherever there is room.',
   },
   moods: {
     she: 'eight drawn · she picks one per reply',
@@ -733,6 +746,36 @@ function voiceSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHand
   row.append(bubble, label)
 
   /*
+    WHERE those words go, beside the switch that turns them on.
+
+    This was on the Machine tab, under "On screen", and app-level: one feature
+    split across two tabs, with the half that says WHETHER filed under the
+    character and the half that says WHERE filed under the desk. So a character
+    with the bubble off still had a live side control governing something
+    nothing could display, and turning it on here meant going to another tab to
+    find out where the words would land.
+
+    Both halves are hers now — see `Persona.bubbleSide`. The tray menu still
+    offers the same choice and still writes through the same one function, so
+    two entry points cannot drift.
+  */
+  const side = document.createElement('select')
+  for (const one of worn.bubbleSides) {
+    const option = document.createElement('option')
+    option.value = one
+    // `auto` is the absence of a choice among the four, so it is named for what
+    // it does rather than left as a word nobody outside this code uses.
+    option.textContent = one === 'auto' ? 'wherever there is room' : one
+    option.selected = one === worn.bubbleSide
+    side.append(option)
+  }
+  side.addEventListener('change', () => {
+    handlers.save({ id: worn.id, bubbleSide: side.value })
+  })
+  const where = element('div', 'field')
+  where.append(element('label', undefined, 'Which side'), side)
+
+  /*
     What the dot means, said once under the row rather than in ten tooltips.
 
     Careful about whose claim it is. §25's "What is NOT established" is explicit
@@ -752,7 +795,7 @@ function voiceSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHand
   // Only when there is something to explain. A legend for a mark that is not on
   // screen is a sentence about nothing, and this list comes from main.
   if (view.recommendedVoices.length > 0) body.push(marked)
-  body.push(row)
+  body.push(row, where, element('p', 'note', forPronoun(SAYS.bubbleSide, view.pronoun)))
   return section('Voice', forPronoun(SAYS.nextWake, view.pronoun), ...body)
 }
 

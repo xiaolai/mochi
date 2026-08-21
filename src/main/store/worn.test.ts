@@ -4,10 +4,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { HALO_WHEN } from '@shared/ipc'
 import {
-  readBubbleSide,
+  readLegacyBubbleSide,
   readResting,
   readWornPersonaId,
-  writeBubbleSide,
   writeResting,
   writeWornPersonaId,
   isProfileName,
@@ -130,25 +129,23 @@ describe('which side the bubble sits on', () => {
     // Also what a missing file, a broken file, and an unrecognised value mean:
     // there is exactly one answer for "nobody has chosen", and it is the one
     // that works everywhere.
-    expect(readBubbleSide(userData)).toBe('auto')
+    expect(readLegacyBubbleSide(userData)).toBe('auto')
     writeFileSync(join(userData, 'preferences.json'), '{ not json')
-    expect(readBubbleSide(userData)).toBe('auto')
+    expect(readLegacyBubbleSide(userData)).toBe('auto')
     writeFileSync(join(userData, 'preferences.json'), JSON.stringify({ bubbleSide: 'sideways' }))
-    expect(readBubbleSide(userData)).toBe('auto')
+    expect(readLegacyBubbleSide(userData)).toBe('auto')
   })
 
-  it('remembers a side, and keeps the worn persona while doing it', () => {
-    // Two writers into one file. A second that wrote only its own key would
-    // silently drop the first one's — which is somebody's persona.
-    writeWornPersonaId(userData, 'loki')
-    writeBubbleSide(userData, 'left')
-    expect(readBubbleSide(userData)).toBe('left')
-    expect(readWornPersonaId(userData)).toBe('loki')
-  })
-
-  it('refuses a side that is not one', () => {
-    expect(() => writeBubbleSide(userData, 'diagonally' as never)).toThrow()
-    expect(readBubbleSide(userData)).toBe('auto')
+  it('still reads a side somebody set before it became hers', () => {
+    /*
+      READ-ONLY now. The side is a persona field — see `Persona.bubbleSide` —
+      and nothing writes this key any more. It is still read because dropping
+      it would silently discard a choice somebody made: `sideFor` uses it for a
+      character that has never been asked, and stops consulting it for that
+      character the moment anybody picks a side on her sheet.
+    */
+    writeFileSync(join(userData, 'preferences.json'), JSON.stringify({ bubbleSide: 'left' }))
+    expect(readLegacyBubbleSide(userData)).toBe('left')
   })
 })
 
@@ -175,12 +172,14 @@ describe('how she was left', () => {
     expect(readResting(userData)).toEqual({ asleep: false, hidden: true })
   })
 
-  it('keeps the worn persona and the bubble side while doing it', () => {
+  it('keeps every other key in the file while doing it', () => {
+    // Two writers into one file. A second that wrote only its own key would
+    // silently drop the first one's — which is somebody's persona.
     writeWornPersonaId(userData, 'loki')
-    writeBubbleSide(userData, 'left')
+    writeShoulderChip(userData, false)
     writeResting(userData, { asleep: true })
     expect(readWornPersonaId(userData)).toBe('loki')
-    expect(readBubbleSide(userData)).toBe('left')
+    expect(readShoulderChip(userData)).toBe(false)
   })
 })
 
@@ -237,7 +236,9 @@ describe('what she may do while nobody is watching', () => {
     writePreferences({ activePersonaId: 'loki', bubbleSide: 'left' })
     writeGrant(userData, 'speak_first', false)
     expect(readWornPersonaId(userData)).toBe('loki')
-    expect(readBubbleSide(userData)).toBe('left')
+    // The legacy key survives a write it knows nothing about. Nothing writes it
+    // any more, and `sideFor` still reads it for a persona nobody has asked.
+    expect(readLegacyBubbleSide(userData)).toBe('left')
     expect(readGrants(userData).speak_first).toBe(false)
   })
 

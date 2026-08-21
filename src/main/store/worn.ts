@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { isPersonaId } from '@shared/persona'
 import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
+import { BUBBLE_SIDES, type BubbleSide } from '@shared/persona'
 import { isHaloWhen, type HaloWhen } from '@shared/ipc'
 import {
   DEFAULT_GRANTS,
@@ -121,39 +122,31 @@ function writeMerged(userData: string, changes: Record<string, unknown>): void {
 }
 
 /**
- * Which side of her the bubble is asked to sit on.
+ * The side her words used to sit on, app-level, kept only to be MIGRATED.
  *
- * In `preferences.json` beside the worn persona rather than in the persona
- * itself: it is a fact about this screen and this desk, not about who she is.
- * Wearing somebody else should not move her speech to the other side.
+ * This was the setting. It is a persona field now — see `Persona.bubbleSide`
+ * for why the argument that used to stand here was overruled — and nothing
+ * writes this key any more.
+ *
+ * Read, because dropping it would silently discard a choice somebody made.
+ * `sideFor` in `index.ts` uses it for a persona that has never been asked, and
+ * the first time anybody picks a side on her sheet it stops being consulted for
+ * that character.
  */
-export type BubbleSide = 'auto' | 'above' | 'below' | 'left' | 'right'
-
-/**
- * Every side that can be CHOSEN, exported because two surfaces offer the
- * choice — the tray menu and the settings window. A second list would be a
- * second answer to what may be picked, and only one of them would be checked.
- */
-export const BUBBLE_SIDES: readonly string[] = ['auto', 'above', 'below', 'left', 'right']
-const SIDES = BUBBLE_SIDES
-
-export function readBubbleSide(userData: string): BubbleSide {
+export function readLegacyBubbleSide(userData: string): BubbleSide {
   const read = readBounded(join(userData, PREFERENCES))
   if (!read.ok) return 'auto'
   try {
     const value: unknown = JSON.parse(read.text)
     const found = (value as { bubbleSide?: unknown } | null)?.bubbleSide
-    return typeof found === 'string' && SIDES.includes(found) ? (found as BubbleSide) : 'auto'
+    return typeof found === 'string' && (BUBBLE_SIDES as readonly string[]).includes(found)
+      ? (found as BubbleSide)
+      : 'auto'
   } catch {
     // The reader for the persona id already says so on this file; a second
     // warning for the same broken JSON is noise.
     return 'auto'
   }
-}
-
-export function writeBubbleSide(userData: string, side: BubbleSide): void {
-  if (!SIDES.includes(side)) throw new Error(`not a side the bubble can sit on: ${side}`)
-  writeMerged(userData, { bubbleSide: side })
 }
 
 /**

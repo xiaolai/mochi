@@ -266,6 +266,29 @@ export interface Persona {
    */
   readonly bubble: boolean
   /**
+   * Which side of her those words sit on, or `null` for "nobody has said".
+   *
+   * ## It moved here from `preferences.json`, and the old argument is overruled
+   *
+   * `readBubbleSide` used to hold it app-level, on the grounds that it is "a
+   * fact about this screen and this desk, not about who she is. Wearing
+   * somebody else should not move her speech to the other side." That reads
+   * well and it splits one feature across two tabs: WHETHER she shows words is
+   * this character's (`bubble`, directly above), and WHERE they went was
+   * everybody's — so a character with the bubble off still had a live side
+   * control governing nothing anybody could see.
+   *
+   * One feature, one place. The two now sit together on her sheet.
+   *
+   * ## Null, rather than defaulting to `auto`
+   *
+   * "Nobody has chosen" and "somebody chose `auto`" are different answers, and
+   * only the first may fall back to the app-level value a previous version
+   * stored. Collapsing them would take a side somebody had deliberately set to
+   * `auto` and quietly replace it with the legacy preference.
+   */
+  readonly bubbleSide: BubbleSide | null
+  /**
    * Character and manner, sent as `session.instructions`.
    *
    * Two constraints belong here that text chat never needs: no emoji and no
@@ -329,6 +352,8 @@ export const DEFAULT_PERSONA: Persona = {
   // Off, per the design. `PERSONA_FIELDS` is derived from this object, so
   // adding it here is also what stops `bubble` reading as an unknown field.
   bubble: false,
+  // Nobody has said. See the field: this is NOT the same as `'auto'`.
+  bubbleSide: null,
   pronoun: 'she',
   theme: DEFAULT_THEME,
   // Character only -- and the speech rules are part of that character rather
@@ -1188,6 +1213,7 @@ export function parsePersona(value: unknown): PersonaParse {
   // real thing to want, and the closest this app comes to an unshaped session.
   const style = readText(problems, source, 'style', true)
   const avatarId = readAvatarId(problems, source)
+  const bubbleSide = readBubbleSide(problems, source)
   const pronoun = readPronoun(problems, source)
   const theme = readTheme(problems, source)
   const voice = readVoice(problems, source)
@@ -1259,6 +1285,7 @@ export function parsePersona(value: unknown): PersonaParse {
       bubble,
       style,
       avatarId,
+      bubbleSide,
       faces,
       greeting,
       farewell,
@@ -1359,6 +1386,41 @@ function readBubble(problems: SaveProblem[], source: Record<string, unknown>): b
   problems.push({ kind: 'unknown-value', field: 'bubble', allowed: 'true, false' })
   return DEFAULT_PERSONA.bubble
 }
+
+/**
+ * Which side her words sit on, and `null` when she has never been asked.
+ *
+ * The absent case is not a default. A persona written before this field existed
+ * has no answer, and main is what decides that an old app-level preference is
+ * the better guess than `auto` — see `sideFor`. Storing `auto` here would erase
+ * that distinction on the first save.
+ */
+function readBubbleSide(
+  problems: SaveProblem[],
+  source: Record<string, unknown>,
+): BubbleSide | null {
+  const raw = source['bubbleSide']
+  if (raw === undefined || raw === null) return null
+  if (typeof raw === 'string' && (BUBBLE_SIDES as readonly string[]).includes(raw)) {
+    return raw as BubbleSide
+  }
+  problems.push({ kind: 'unknown-value', field: 'bubbleSide', allowed: BUBBLE_SIDES.join(', ') })
+  return null
+}
+
+/**
+ * Every side her words can be asked to sit on.
+ *
+ * Here rather than in `store/worn.ts`, which is main-only: this is a persona
+ * field now, and her sheet in the renderer draws the choice.
+ *
+ * `auto` is the ABSENCE of a preference among the four, not a fifth place — a
+ * side that will not fit is never honoured, so `auto` is what everything falls
+ * back to anyway. It is in the list because somebody has to be able to choose
+ * it back.
+ */
+export const BUBBLE_SIDES = ['auto', 'above', 'below', 'left', 'right'] as const
+export type BubbleSide = (typeof BUBBLE_SIDES)[number]
 
 /** Which voice the service is asked for. A closed set the service owns. */
 function readVoice(problems: SaveProblem[], source: Record<string, unknown>): VoiceName {

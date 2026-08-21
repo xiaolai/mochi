@@ -2,12 +2,15 @@ import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import {
+  BUBBLE_SIDES,
   BUILT_IN_ID,
   greetingFor,
   PERSONA_LIMITS,
   PROMPT_SLOTS,
   RECOMMENDED_VOICES,
   VOICE_NAMES,
+  type BubbleSide,
+  type Persona,
 } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
 import { heardPortion } from './heard'
@@ -51,7 +54,7 @@ import {
 import { readPolicy } from './store/policy'
 import { checkPrompt, promptFile, readPrompt, seedPrompt, writePrompt } from './store/prompt'
 import {
-  readBubbleSide,
+  readLegacyBubbleSide,
   readResting,
   readWebSearch,
   readWorkspace,
@@ -62,12 +65,10 @@ import {
   isProfileName,
   WORKSPACE_DIR,
   guardStopAt,
-  BUBBLE_SIDES,
   readGrants,
   readGrantsState,
   readWornPersonaId,
   writeGrant,
-  writeBubbleSide,
   writeResting,
   writeWornPersonaId,
   readSleepAfterMinutes,
@@ -77,7 +78,6 @@ import {
   readShoulderChip,
   writeShoulderChip,
   writeHerPlace,
-  type BubbleSide,
   type Resting,
 } from './store/worn'
 import { claimShortcuts, releaseShortcuts, type ShortcutOutcome } from './shortcuts'
@@ -327,7 +327,10 @@ function menuModel(): TrayModel {
     personas: [...catalog.personas.values()].map((one) => ({ id: one.id, name: one.name })),
     wornId: activePersona(catalog, readWornPersonaId(userData)).persona.id,
     pronoun: activePersona(catalog, readWornPersonaId(userData)).persona.pronoun,
-    bubble: { ...bubbleSides, asked: readBubbleSide(userData) },
+    bubble: {
+      ...bubbleSides,
+      asked: sideFor(activePersona(catalog, readWornPersonaId(userData)).persona),
+    },
     resting,
     listening,
     keys: {
@@ -591,11 +594,46 @@ const menuHandlers = {
  * reporting success over a write that did not happen is the exact failure that
  * window exists to remove.
  */
+/**
+ * Which side HER words sit on, with the setting this replaced as the fallback.
+ *
+ * `null` on a persona means nobody has ever been asked — a character written
+ * before the field existed, or the built-in. That is not the same as somebody
+ * choosing `auto`, and only the first may fall back: collapsing the two would
+ * take a side deliberately set to `auto` and quietly replace it with whatever
+ * `preferences.json` happened to hold.
+ *
+ * The fallback stops being consulted for a character the moment anybody picks a
+ * side on her sheet, so this is a migration that finishes itself rather than a
+ * branch that lives for ever.
+ */
+function sideFor(persona: Persona): BubbleSide {
+  return persona.bubbleSide ?? readLegacyBubbleSide(app.getPath('userData'))
+}
+
+/**
+ * Put her words on a side, on HER file rather than on the machine's.
+ *
+ * Still one writer, which is what makes two entry points safe — the tray menu
+ * and her sheet both arrive here. What changed is where it lands: this used to
+ * write `bubbleSide` into `preferences.json`, which meant the setting followed
+ * the desk rather than the character, and left half a feature on a different
+ * tab from the switch that turns it on.
+ *
+ * `applyChange` does the validating, exactly as it does when the same field is
+ * edited on her sheet. A second grammar for one field is how the two come to
+ * disagree about what a side is.
+ */
 function setBubbleSide(side: string): SettingsWrite {
+  const userData = app.getPath('userData')
+  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const worn = activePersona(catalog, readWornPersonaId(userData)).persona
+  const changed = applyChange(worn, { id: worn.id, bubbleSide: side }, [])
+  if (!changed.ok) return refuse(changed.why)
   try {
-    writeBubbleSide(app.getPath('userData'), side as BubbleSide)
+    savePersonaTo(userData, catalog, changed.persona)
   } catch (error: unknown) {
-    problems.note('settings', null, `the bubble side could not be saved: ${String(error)}`)
+    problems.note('persona', worn.id, `the bubble side could not be saved: ${String(error)}`)
     return refuse(String(error))
   }
   // Straight to the renderer as well as to disk: the file is read on the next
@@ -1367,7 +1405,7 @@ ipcMain.handle('voice:config', () => {
     greeting: grants.speak_first && !resting.asleep ? greetingFor(resolved.persona) : null,
     face: avatar.face,
     problems: problems.count(),
-    bubbleSide: readBubbleSide(userData),
+    bubbleSide: sideFor(resolved.persona),
     asleep: resting.asleep,
     tools: mayDo.tools,
   }
@@ -1632,7 +1670,7 @@ ipcMain.handle('settings:read', (): SettingsView => {
       // fails is a token Codex is content with and this app cannot use.
       codex: codexForWindow(),
     }),
-    screen: listScreen(readBubbleSide(userData), BUBBLE_SIDES, {
+    screen: listScreen({
       halo: readHaloWhen(userData),
       shoulderChip: readShoulderChip(userData),
       sleepAfterMinutes: readSleepAfterMinutes(userData),
@@ -1728,6 +1766,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
           one.avatarId,
           one.theme,
         ).face,
+      sideFor,
     ),
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],
@@ -2230,16 +2269,8 @@ ipcMain.handle('shelf:prompt', (_event, text: unknown): SettingsWrite => {
 
 ipcMain.handle('settings:screen', (_event, change: unknown): SettingsWrite => {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
-  const asked = applyScreen(change, BUBBLE_SIDES)
+  const asked = applyScreen(change)
   if (!asked.ok) return refuse(asked.why)
-
-  if (asked.change.bubbleSide !== undefined) {
-    const written = setBubbleSide(asked.change.bubbleSide)
-    if (!written.ok) {
-      console.error(`[settings] could not set the bubble side: ${written.why}`)
-      return written
-    }
-  }
 
   if (asked.change.halo !== undefined) {
     const when = asked.change.halo
