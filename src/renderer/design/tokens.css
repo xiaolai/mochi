@@ -431,6 +431,26 @@ button.btn:disabled {
   color: var(--ink-3);
   background: transparent;
 }
+/*
+  The one that destroys something.
+
+  Outlined rather than filled, and that is deliberate: a filled red button is
+  the most attention-grabbing thing on a surface, which is exactly wrong for an
+  action nobody should be drawn towards. It has to be findable and legible, not
+  inviting. The fill arrives only on hover, once the pointer is already on it.
+*/
+button.btn.bad {
+  color: var(--red);
+  border-color: color-mix(in oklab, var(--red) 40%, var(--rule));
+}
+button.btn.bad:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--red) 12%, var(--paper));
+  border-color: var(--red);
+}
+button.btn.bad:disabled {
+  color: var(--ink-3);
+  border-color: var(--rule);
+}
 /* The one that commits something. Her colour, filled, as the artifact draws it. */
 button.btn.primary {
   background: var(--her-wash);

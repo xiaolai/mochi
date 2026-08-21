@@ -54,6 +54,16 @@ const DOCUMENTS: readonly {
     // Both halves: the character cards and the conversations that were here
     // first, plus the strip every write says what happened in.
     ids: [
+      // The archive's deletion controls and the surface that confirms them.
+      'pick',
+      'pick-off',
+      'drop-some',
+      'drop-hers',
+      'sure',
+      'sure-what',
+      'sure-why',
+      'sure-no',
+      'sure-yes',
       'mark',
       'state',
       'state-how',

@@ -198,6 +198,15 @@ export interface PaneHandlers {
   readonly recheckCodex: () => Promise<SettingsCodex>
   readonly screen: (change: ScreenChange) => void
   readonly grant: (change: { id: string; allowed: boolean }) => void
+  /**
+   * Ask about deleting every conversation there is.
+   *
+   * ASK. The pane raises the question and the confirmation surface answers it;
+   * nothing is deleted by the time this returns. Handing the pane a function
+   * that deleted would put the irreversible action one click from a list of
+   * folder paths.
+   */
+  readonly forgetEveryTalk: () => void
   readonly reveal: (what: Revealable) => void
   readonly say: (text: string, bad?: boolean) => void
 }
@@ -651,6 +660,49 @@ const KEYS: Pane = {
  * the other says which of her things are deliberately not in this window at
  * all. A note that comes before what it qualifies is a note read twice.
  */
+/**
+ * The hatch that empties the archive for EVERY character.
+ *
+ * ## Why it is here and not in the archive
+ *
+ * The archive is scoped to whoever is worn, and its own delete controls say
+ * "hers" because the surrounding page makes that legible. This one is not about
+ * a character at all -- it reaches rows belonging to characters that were
+ * deleted by hand, packages that have gone unreadable, and ids that were
+ * refused as duplicates, none of which are in the catalogue to be named. Put
+ * among per-character controls it would read as one more of them, and its
+ * label would be false in exactly the situations somebody reaches for it.
+ *
+ * About is where this window keeps what is true whoever is worn. This is that.
+ *
+ * ## Why it looks like nothing much
+ *
+ * On purpose. It is placed last, under the notes rather than above them, and
+ * carries no colour until the pointer is on it. Nobody should arrive here by
+ * following the most prominent thing on the pane.
+ */
+function everything(handlers: PaneHandlers): HTMLElement {
+  const wrap = element('div', 'folder')
+  const left = element('div')
+  left.append(
+    element('div', undefined, 'Every conversation, every character'),
+    element(
+      'code',
+      undefined,
+      'Characters, voices and looks are untouched. This cannot be undone.',
+    ),
+  )
+  const go = element('button', 'btn bad', 'Delete…')
+  go.type = 'button'
+  // It only ASKS. The confirmation is a separate surface, and the deletion
+  // happens there or not at all.
+  go.addEventListener('click', () => {
+    handlers.forgetEveryTalk()
+  })
+  wrap.append(left, go)
+  return wrap
+}
+
 const ABOUT: Pane = {
   id: 'about',
   label: 'About',
@@ -685,6 +737,7 @@ const ABOUT: Pane = {
       // whoever is worn.
       element('p', 'note', forPronoun(SAYS.kept, view.pronoun)),
       element('p', 'note', forPronoun(SAYS.whoSheIs, view.pronoun)),
+      everything(handlers),
     ]
   },
 }

@@ -125,12 +125,176 @@ const calEl = need('calendar', HTMLElement)
 const troublesEl = need('troubles', HTMLButtonElement)
 const troublesLabelEl = need('troubles-label', HTMLElement)
 const exportEl = need('export', HTMLButtonElement)
+const pickEl = need('pick', HTMLButtonElement)
+const pickOffEl = need('pick-off', HTMLButtonElement)
+const dropSomeEl = need('drop-some', HTMLButtonElement)
+const dropHersEl = need('drop-hers', HTMLButtonElement)
+const sureEl = need('sure', HTMLDialogElement)
+const sureWhatEl = need('sure-what', HTMLElement)
+const sureWhyEl = need('sure-why', HTMLElement)
+const sureNoEl = need('sure-no', HTMLButtonElement)
+const sureYesEl = need('sure-yes', HTMLButtonElement)
 const saidEl = need('said', HTMLElement)
 const saidWhatEl = need('said-what', HTMLElement)
 const saidShutEl = need('said-shut', HTMLButtonElement)
 
 /** Which conversation is open, so re-rendering the list does not lose it. */
 let open: string | null = null
+
+/* ---- choosing what to delete --------------------------------------------- */
+
+/**
+ * Whether the list is being used to CHOOSE rather than to read.
+ *
+ * A mode, rather than a delete control on every row. The list is meant to be
+ * read; a destructive affordance on each line while reading is noise and a
+ * misclick surface at once. It is entered deliberately, cleared on leaving, and
+ * changes nothing else about the page.
+ */
+let picking = false
+
+/** The conversations chosen so far, by token. */
+const chosen = new Set<string>()
+
+/**
+ * What the confirmation was opened ABOUT, frozen at that moment.
+ *
+ * The whole reason the confirmation is a separate surface. Re-reading `chosen`
+ * and the worn character when the second button is pressed means whatever
+ * changed in between is silently what gets deleted -- and both can change,
+ * because the tray can switch character and the list is still live underneath.
+ * A confirmation that can target moving state is not a confirmation.
+ */
+type Doomed =
+  | { readonly kind: 'some'; readonly id: string; readonly tokens: readonly string[] }
+  | { readonly kind: 'hers'; readonly id: string; readonly who: string }
+  | { readonly kind: 'everything' }
+
+let doomed: Doomed | null = null
+
+/** Put the drawer's controls in the state the mode says they should be in. */
+function showPicking(): void {
+  const here = place === 'archive'
+  pickEl.hidden = !here || picking
+  pickOffEl.hidden = !here || !picking
+  dropSomeEl.hidden = !here || !picking
+  dropHersEl.hidden = !here || picking
+  dropSomeEl.disabled = chosen.size === 0
+  dropSomeEl.textContent = chosen.size === 0 ? 'Delete' : `Delete ${String(chosen.size)}`
+  listEl.classList.toggle('picking', picking)
+}
+
+function stopPicking(): void {
+  picking = false
+  chosen.clear()
+  showPicking()
+  renderList(Date.now())
+}
+
+/**
+ * Ask, on a surface of its own.
+ *
+ * Not the arming pattern used elsewhere here -- click once to arm, again to
+ * act. That is defeated by a double-click, has no Escape, and re-reads live
+ * state on the second click. For the only irreversible action in the app, none
+ * of those are acceptable.
+ */
+function askFirst(about: Doomed, what: string, why: string): void {
+  doomed = about
+  sureWhatEl.textContent = what
+  sureWhyEl.textContent = why
+  sureEl.showModal()
+}
+
+pickEl.addEventListener('click', () => {
+  picking = true
+  showPicking()
+  renderList(Date.now())
+})
+
+pickOffEl.addEventListener('click', () => {
+  stopPicking()
+})
+
+dropSomeEl.addEventListener('click', () => {
+  if (chosen.size === 0) return
+  // The snapshot: this set, this character, as they are NOW.
+  const id = shelf?.wornId
+  if (id === undefined) return
+  const tokens = [...chosen]
+  askFirst(
+    { kind: 'some', id, tokens },
+    tokens.length === 1
+      ? 'Delete this conversation?'
+      : `Delete ${String(tokens.length)} conversations?`,
+    'What was said in them is removed from this machine. This cannot be undone.',
+  )
+})
+
+dropHersEl.addEventListener('click', () => {
+  const id = shelf?.wornId
+  if (id === undefined) return
+  askFirst(
+    { kind: 'hers', id, who: forPronoun(SAYS.droppedHers, saying()) },
+    forPronoun(SAYS.dropHers, saying()),
+    forPronoun(SAYS.dropHersWhy, saying()),
+  )
+})
+
+sureNoEl.addEventListener('click', () => {
+  doomed = null
+  sureEl.close()
+})
+
+// Escape closes a `<dialog>` without any of this running, so the snapshot is
+// dropped here too rather than left to be acted on by a later confirmation.
+sureEl.addEventListener('close', () => {
+  doomed = null
+})
+
+sureYesEl.addEventListener('click', () => {
+  const about = doomed
+  doomed = null
+  sureEl.close()
+  if (about === null) return
+  void deleteThem(about)
+})
+
+/** Say what happened, in the terms the store answered in. */
+function saidOf(result: { gone: number; pending: boolean }, about: Doomed): string {
+  const many = about.kind === 'some' ? `${String(result.gone)} conversations` : 'conversations'
+  const scrubbing = result.pending
+    ? ' They are still being cleared from the file, which finishes on its own.'
+    : ''
+  if (about.kind === 'some') {
+    return `${result.gone === 1 ? 'One conversation' : many} deleted.${scrubbing}`
+  }
+  if (about.kind === 'hers') return `${about.who}${scrubbing}`
+  return `Every conversation deleted.${scrubbing}`
+}
+
+async function deleteThem(about: Doomed): Promise<void> {
+  const result = await window.mochiHistory.forget(
+    about.kind === 'some'
+      ? { kind: 'some', id: about.id, tokens: about.tokens }
+      : about.kind === 'hers'
+        ? { kind: 'hers', id: about.id }
+        : { kind: 'everything' },
+  )
+  if (!result.ok) {
+    say(result.why ?? 'They could not be deleted.', true)
+    return
+  }
+  // The transcript on screen may be one of the deleted, in which case leaving
+  // it there is the page showing something that no longer exists.
+  if (open !== null && (about.kind !== 'some' || about.tokens.includes(open))) {
+    open = null
+    talkEl.replaceChildren()
+  }
+  stopPicking()
+  say(saidOf(result, about), false)
+  await reload()
+}
 let conversations: readonly HistoryConversation[] = []
 /** The character half, re-read on every change. Null until the first read. */
 let shelf: ShelfView | null = null
@@ -379,6 +543,17 @@ function showPlace(next: Place): void {
   // emptied, so what is typed in it survives a trip to Cast and back.
   contextEl.hidden = place !== 'archive'
   /*
+    And so do the deletion controls, for the same reason.
+
+    They act on conversations. Leaving them visible on the character sheet or on
+    Machine would put "Delete all" under a heading that says something else,
+    which is how a control's scope gets misread in the one direction that
+    cannot be undone. Leaving the archive also LEAVES select mode: a selection
+    the user can no longer see is one they have stopped agreeing to.
+  */
+  if (place !== 'archive' && picking) stopPicking()
+  else showPicking()
+  /*
     Cast repaints the open character on arrival.
 
     `showingCharacter` is turned OFF when a transcript or a problem report is
@@ -465,6 +640,21 @@ const SAYS = {
     she: 'Saved. It takes effect on her next wake.',
     he: 'Saved. It takes effect on his next wake.',
     it: 'Saved. It takes effect on its next wake.',
+  },
+  dropHers: {
+    she: 'Delete every conversation with her?',
+    he: 'Delete every conversation with him?',
+    it: 'Delete every conversation with it?',
+  },
+  dropHersWhy: {
+    she: 'Everything she has been told, and everything she said, is removed from this machine. Who she is, her voice and her look are untouched. This cannot be undone.',
+    he: 'Everything he has been told, and everything he said, is removed from this machine. Who he is, his voice and his look are untouched. This cannot be undone.',
+    it: 'Everything it has been told, and everything it said, is removed from this machine. Who it is, its voice and its look are untouched. This cannot be undone.',
+  },
+  droppedHers: {
+    she: 'Every conversation with her is deleted.',
+    he: 'Every conversation with him is deleted.',
+    it: 'Every conversation with it is deleted.',
   },
   deleted: {
     she: 'Deleted, with her notes and her conversations. The built-in is worn now.',
@@ -682,12 +872,21 @@ function row(
   snippet: { text: string; term: string } | null,
 ): HTMLButtonElement {
   const button = document.createElement('button')
-  button.className = 'entry'
+  button.className = chosen.has(token) ? 'entry picked' : 'entry'
   button.type = 'button'
   button.setAttribute('aria-current', String(token === open))
+  if (picking) button.setAttribute('aria-pressed', String(chosen.has(token)))
 
   const when = document.createElement('div')
   when.className = 'when'
+  // Shown only in select mode, and it carries the state without relying on the
+  // wash behind the row -- which a colour-blind reader may not separate from an
+  // ordinary hover.
+  const tick = document.createElement('span')
+  tick.className = 'tick'
+  tick.textContent = chosen.has(token) ? '☑' : '☐'
+  tick.setAttribute('aria-hidden', 'true')
+  when.append(tick)
   const stamp = document.createElement('span')
   stamp.textContent = label
   when.append(stamp)
@@ -706,6 +905,16 @@ function row(
   }
 
   button.addEventListener('click', () => {
+    if (picking) {
+      // Choosing, not reading. The transcript is deliberately NOT opened: the
+      // point of the mode is that a click means "this one", and a click that
+      // also navigated would make the two impossible to tell apart.
+      if (chosen.has(token)) chosen.delete(token)
+      else chosen.add(token)
+      showPicking()
+      renderList(Date.now())
+      return
+    }
     open = token
     showingCharacter = false
     generation += 1
@@ -1401,6 +1610,13 @@ let machine: SettingsView | null = null
 let openGroup = PANES[0]?.id ?? ''
 
 const machineHandlers: PaneHandlers = {
+  forgetEveryTalk: () => {
+    askFirst(
+      { kind: 'everything' },
+      'Delete every conversation, for every character?',
+      'Every conversation this app has stored is removed from this machine, including any belonging to characters that are no longer here. Characters, voices and looks are untouched. This cannot be undone.',
+    )
+  },
   lookup: (change) => {
     void writeMachine(() => window.mochiSettings.lookup(change), 'Saved.')
   },

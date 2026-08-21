@@ -447,6 +447,59 @@
       .archive-side > .list .day + .entry {
         border-top: 0;
       }
+      /*
+        A conversation marked for deletion.
+
+        Her colour rather than red: the row is SELECTED, which is a neutral
+        state — the red belongs on the button that acts, not on everything the
+        button might reach. Marking three rows red before anybody has decided
+        reads as though the deletion has already happened.
+      */
+      .entry.picked {
+        background: var(--her-wash);
+        box-shadow: inset 2px 0 0 var(--her);
+      }
+      /* The tick, which is what makes "selected" legible without colour. */
+      .entry .tick {
+        display: none;
+        margin-right: var(--s2);
+        color: var(--her);
+        font-variant-numeric: tabular-nums;
+      }
+      .picking .entry .tick {
+        display: inline;
+      }
+      /*
+        The confirmation. Centred, narrow, and quiet — the backdrop does the
+        work of saying "answer this first", so the box itself does not need to
+        shout.
+      */
+      #sure {
+        max-width: 42ch;
+        padding: var(--s6);
+        border: 1px solid var(--rule);
+        border-radius: var(--r3);
+        background: var(--paper);
+        color: var(--ink);
+      }
+      #sure::backdrop {
+        background: color-mix(in oklab, var(--ink) 32%, transparent);
+      }
+      #sure h2 {
+        margin: 0 0 var(--s3);
+        font-size: var(--t-md);
+      }
+      #sure p {
+        margin: 0 0 var(--s6);
+        color: var(--ink-2);
+        font-size: var(--t-sm);
+        line-height: 1.5;
+      }
+      .sure-do {
+        display: flex;
+        gap: var(--s3);
+        justify-content: flex-end;
+      }
       /* The transcript column: its own scroll, clear of the drawer's hairline. */
       #talk {
         min-height: 0;
@@ -2247,9 +2300,39 @@
           </button>
         </p>
         <span class="grow"></span>
+        <!--
+          Only while the archive is on screen: they act on conversations, and a
+          delete control visible from the character sheet is one whose scope the
+          surrounding page contradicts.
+        -->
+        <button class="btn" id="pick" type="button" hidden>Select…</button>
+        <button class="btn" id="pick-off" type="button" hidden>Cancel</button>
+        <button class="btn bad" id="drop-some" type="button" hidden disabled>Delete</button>
+        <button class="btn bad" id="drop-hers" type="button" hidden>Delete all…</button>
         <button class="btn" id="export" type="button">Export…</button>
       </div>
     </div>
+    <!--
+      A SEPARATE surface, not a button that arms itself.
+
+      The arming pattern used elsewhere here — click once to arm, again to do
+      it — is defeated by a double-click, has no Escape, and re-reads live state
+      on the second click, so a selection or a character that changed in between
+      is silently what gets deleted. None of that is acceptable for the only
+      irreversible action in the app.
+
+      `<dialog>` is modal, traps focus, and closes on Escape without any of it
+      being written here. What it says is a SNAPSHOT taken when it opened; the
+      deletion uses that snapshot and nothing else.
+    -->
+    <dialog id="sure">
+      <h2 id="sure-what"></h2>
+      <p id="sure-why"></p>
+      <div class="sure-do">
+        <button class="btn" id="sure-no" type="button" autofocus>Keep them</button>
+        <button class="btn bad" id="sure-yes" type="button">Delete</button>
+      </div>
+    </dialog>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
