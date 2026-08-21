@@ -42,6 +42,7 @@ import {
   deletePersona,
   discardWrite,
   loadPersonas,
+  readEdits,
   migrateLegacyPersona,
   migrateLooseFiles,
   personasRoot,
@@ -49,6 +50,7 @@ import {
   savePersonaTo,
   sweepDeletions,
 } from './store/personas'
+import type { PersonaCatalog } from './store/personas'
 import { readPolicy } from './store/policy'
 import { checkPrompt, promptFile, readPrompt, seedPrompt, writePrompt } from './store/prompt'
 import {
@@ -322,7 +324,7 @@ let tray: TrayHandle | null = null
  */
 function menuModel(): TrayModel {
   const userData = app.getPath('userData')
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   return {
     personas: [...catalog.personas.values()].map((one) => ({ id: one.id, name: one.name })),
     wornId: activePersona(catalog, readWornPersonaId(userData)).persona.id,
@@ -445,6 +447,35 @@ function conversationFlushed(): void {
   clearTimeout(awaitingFlush)
   awaitingFlush = null
   conversation().end()
+}
+
+/**
+ * The catalogue, WITH the built-in's edits applied.
+ *
+ * ## The defect this replaces
+ *
+ * There were sixteen calls to `loadPersonas` in this file and every one of them
+ * passed `{}` for the edits. `readEdits` had no caller at all. So renaming the
+ * built-in Mochi, or re-theming her, wrote `edits.json` and then ignored it on
+ * every subsequent load -- written, stored, never read, which is this
+ * repository's recurring defect stated exactly.
+ *
+ * Sixteen call sites passing the same literal is the mechanism that allowed it:
+ * there was no single place where "load the characters" meant "load the
+ * characters". One function is the fix; the seventeenth call site is the reason
+ * it is enforced by a test rather than by intention.
+ *
+ * An unreadable edits file is reported and does not stop the load -- her
+ * defaults are a working character, and refusing to start because a rename
+ * could not be read would be a worse failure than starting un-renamed.
+ */
+function catalogue(userData: string): PersonaCatalog {
+  const { edits, problem } = readEdits(userData)
+  if (problem !== null) {
+    console.error(`[persona] her own edits could not be read: ${problem}`)
+    problems.note('persona', null, `her own edits could not be read: ${problem}`)
+  }
+  return loadPersonas(userData, edits, existsSync(personasRoot(userData)))
 }
 
 function setAsleep(asleep: boolean): void {
@@ -722,7 +753,7 @@ function migrateBubbleSide(): void {
     console.log('[persona] bubble side: nothing to carry over')
     return
   }
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   let carried = 0
   for (const persona of catalog.personas.values()) {
     const changed = applyChange(persona, { id: persona.id, bubbleSide: legacy }, [])
@@ -741,7 +772,7 @@ function migrateBubbleSide(): void {
 
 function setBubbleSide(side: string): SettingsWrite {
   const userData = app.getPath('userData')
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   const worn = activePersona(catalog, readWornPersonaId(userData)).persona
   const changed = applyChange(worn, { id: worn.id, bubbleSide: side }, [])
   if (!changed.ok) return refuse(changed.why)
@@ -1234,12 +1265,12 @@ let sessionPersona: string | null = null
  * the persona in hand, settings has only a path.
  */
 function wornPronoun(userData: string): Pronoun {
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   return activePersona(catalog, readWornPersonaId(userData)).persona.pronoun
 }
 
 function wornFace(userData: string): FaceSpec {
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   const worn = activePersona(catalog, readWornPersonaId(userData)).persona
   return resolveFaceFor(
     avatarsRoot(userData),
@@ -1263,7 +1294,7 @@ function wornFace(userData: string): FaceSpec {
  */
 function wornId(): string {
   const userData = app.getPath('userData')
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   return activePersona(catalog, readWornPersonaId(userData)).persona.id
 }
 
@@ -1321,7 +1352,7 @@ const capabilityDeps: CapabilityDeps = {
    */
   facesSheMayWear: () => {
     const userData = app.getPath('userData')
-    const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+    const catalog = catalogue(userData)
     return activePersona(catalog, readWornPersonaId(userData)).persona.faces
   },
   /**
@@ -1351,7 +1382,7 @@ const capabilityDeps: CapabilityDeps = {
    */
   otherPersonaIds: () => {
     const userData = app.getPath('userData')
-    const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+    const catalog = catalogue(userData)
     const ids = new Set(catalog.personas.keys())
     if (sessionPersona !== null) ids.delete(sessionPersona)
     return ids
@@ -1420,8 +1451,7 @@ ipcMain.handle('voice:config', () => {
   // Whether this installation has run before decides whether a one-time
   // retention migration may run at all — a permissive default there would let a
   // hand-placed package choose somebody's retention on a first launch.
-  const ranBefore = existsSync(personasRoot(userData))
-  const catalog = loadPersonas(userData, {}, ranBefore)
+  const catalog = catalogue(userData)
   for (const problem of catalog.problems) {
     console.error(`[persona] ${problem.kind}`)
     problems.note('persona', null, problem.kind)
@@ -1828,7 +1858,7 @@ ipcMain.handle('settings:read', (): SettingsView => {
 function wearPersona(id: unknown): SettingsWrite {
   if (typeof id !== 'string') return refuse('That is not a persona.')
   const userData = app.getPath('userData')
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   if (!catalog.personas.has(id)) return refuse(`There is no persona called ${id}.`)
   try {
     writeWornPersonaId(userData, id)
@@ -1854,7 +1884,7 @@ ipcMain.handle('shelf:wear', (_event, id: unknown): SettingsWrite => wearPersona
  */
 ipcMain.handle('shelf:read', (): ShelfView => {
   const userData = app.getPath('userData')
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   const worn = activePersona(catalog, readWornPersonaId(userData)).persona
   const note = recall(userData, worn.id)
   // Read once and used twice: the pane shows the document it edits AND the
@@ -1918,7 +1948,7 @@ ipcMain.handle('shelf:save', (_event, change: unknown): SettingsWrite => {
   if (typeof asked.id !== 'string') return refuse('That change does not name a persona.')
 
   const userData = app.getPath('userData')
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   const persona = catalog.personas.get(asked.id)
   if (persona === undefined) return refuse(`There is no persona called ${asked.id}.`)
 
@@ -1996,7 +2026,7 @@ ipcMain.handle('shelf:memory', (_event, action: unknown): SettingsWrite => {
   if (kind !== 'restore' && kind !== 'clear') return refuse('That is not something to do.')
 
   const userData = app.getPath('userData')
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   const worn = activePersona(catalog, readWornPersonaId(userData)).persona.id
   /**
    * The character the page was SHOWING when the button was pressed.
@@ -2093,7 +2123,7 @@ ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
   if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
   const asked = action as PersonaAction
   const userData = app.getPath('userData')
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
 
   if (asked.kind === 'restore-built-in') {
     try {
@@ -2281,7 +2311,7 @@ function tellTheSession(): boolean {
    */
   const live = sessionPersona
   if (live === null) return false
-  const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+  const catalog = catalogue(userData)
   const persona = catalog.personas.get(live)
   // She was deleted while her own session was up. There is nothing to re-tell,
   // and the next wake resolves somebody who exists.
@@ -2718,7 +2748,7 @@ const startup = app.whenReady().then(
     }
     {
       const userData = app.getPath('userData')
-      const catalog = loadPersonas(userData, {}, existsSync(personasRoot(userData)))
+      const catalog = catalogue(userData)
       const migration = migrateLegacyPersona(userData, catalog)
       if (migration.kind === 'imported') {
         console.log(`[persona] v1's persona imported as ${migration.id}`)
