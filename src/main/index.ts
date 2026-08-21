@@ -431,9 +431,13 @@ function endWhenFlushed(): void {
   if (awaitingFlush !== null) clearTimeout(awaitingFlush)
   awaitingFlush = setTimeout(() => {
     awaitingFlush = null
+    if (shutDown) return
     console.warn('[rest] her window never said it had finished; ending the conversation anyway')
     conversation().end()
   }, FLUSH_GRACE_MS)
+  // Never a reason to hold the app open. If everything else is done, the
+  // shutdown coordinator ends the conversation anyway, and sooner.
+  awaitingFlush.unref()
 }
 
 /**
@@ -1234,14 +1238,19 @@ problems.watch((count) => {
  * to the same database is a second writer, and this one is the only writer.
  */
 let archive: Transcripts | null = null
+
+/** Whether the archive has been put down for good. See `shutDownCleanly`. */
+let shutDown = false
 let talk: Conversation | null = null
 
 function conversation(): Conversation {
   if (talk === null) {
     const userData = app.getPath('userData')
-    archive ??= createTranscripts(userData)
+    // Through `transcripts()`, not its own `archive ??=`. Two places opening
+    // the archive is two places that have to remember it must not be opened
+    // during a quit -- and the second one would not have.
     talk = createConversation({
-      transcripts: archive,
+      transcripts: transcripts(),
       // Read per turn, inside the module. Turning saving off has to take effect
       // on the next thing said, not on the next wake.
       keeps: (personaId) => keepsFor(userData, personaId, carriedPolicies),
@@ -1321,6 +1330,20 @@ function wornId(): string {
  * begin one.
  */
 function transcripts(): Transcripts {
+  /*
+    Never AFTER the shutdown coordinator has run.
+
+    `shutDownCleanly` closes the archive and drops the handle, and `??=` would
+    quietly build a new one -- opening the database, registering its path, and
+    starting a fresh write-ahead log during a quit that is already underway.
+    The handle would then never be closed, because the coordinator only runs
+    once, so the last thing the app did before exiting would be to leave an
+    unflushed log behind. The failure it is meant to prevent, caused by it.
+
+    Loud rather than silent: nothing should want the archive at this point, so
+    something asking is a bug worth seeing rather than serving.
+  */
+  if (shutDown) throw new Error('the archive is closed; the app is quitting')
   const userData = app.getPath('userData')
   archive ??= createTranscripts(userData)
   return archive
@@ -3029,14 +3052,17 @@ app.on('window-all-closed', () => {
  * the conversation throws, skipping the close would leave that text on disk --
  * the failure ordering that matters most, and the one nobody would see.
  */
-let shutDown = false
-
 function shutDownCleanly(why: string): void {
   if (shutDown) return
   shutDown = true
   console.log(`[main] closing the archive (${why})`)
   try {
-    conversation().end()
+    /*
+      Only one that EXISTS. `conversation()` builds the archive on demand, and
+      `shutDown` is already true by now -- so asking for one that was never
+      needed would throw on the way out of an app that had nothing to end.
+    */
+    if (talk !== null) talk.end()
   } catch (error: unknown) {
     console.error('[main] the conversation could not be ended:', error)
   } finally {

@@ -95,3 +95,43 @@ describe('a scrub a reader held off', () => {
     expect(body).toContain('clearTimeout(scrubRetry)')
   })
 })
+
+describe('once the archive is down it stays down', () => {
+  it('has exactly one door to opening it', () => {
+    /*
+      Found in the plan audit: `transcripts()` refused to reopen during a quit,
+      and `conversation()` had its own `archive ??= createTranscripts(...)` that
+      did not. Two places opening the archive is two places that have to
+      remember the rule, and the second one had not.
+
+      The count is the fix. A third door would pass a behaviour test of the
+      first two and reintroduce the defect.
+    */
+    const doors = [...MAIN.matchAll(/archive \?\?= createTranscripts/g)]
+    expect(doors, 'a second place opens the archive').toHaveLength(1)
+    const opener = MAIN.slice(MAIN.indexOf('function transcripts(): Transcripts {'))
+    expect(opener.slice(0, opener.indexOf('\n}'))).toContain('archive ??= createTranscripts')
+  })
+
+  it('refuses to reopen it while the app is quitting', () => {
+    // `??=` would quietly build a new handle: opening the database, registering
+    // its path and starting a fresh write-ahead log during a quit already under
+    // way -- and the coordinator only runs once, so it would never be closed.
+    const opener = MAIN.slice(MAIN.indexOf('function transcripts(): Transcripts {'))
+    const body = opener.slice(0, opener.indexOf('\n}'))
+    expect(body).toContain('if (shutDown) throw')
+    expect(body.indexOf('if (shutDown) throw')).toBeLessThan(body.indexOf('archive ??='))
+  })
+
+  it('does not build a conversation just to end one that never existed', () => {
+    const fn = MAIN.slice(MAIN.indexOf('function shutDownCleanly'))
+    expect(fn.slice(0, fn.indexOf('\n}\n'))).toContain('if (talk !== null) talk.end()')
+  })
+
+  it('does not let the flush timer outlive the app', () => {
+    const fn = MAIN.slice(MAIN.indexOf('function endWhenFlushed'))
+    const body = fn.slice(0, fn.indexOf('\n}'))
+    expect(body).toContain('awaitingFlush.unref()')
+    expect(body).toContain('if (shutDown) return')
+  })
+})
