@@ -151,3 +151,38 @@ export function forgetPolicy(userData: string, id: string): void {
     throw error
   }
 }
+
+/**
+ * Whether this character's conversations are written down, honouring a carry
+ * that could not reach disk.
+ *
+ * ## The direction that must never be guessed
+ *
+ * `readPolicy` answers `DEFAULT_POLICY` for a character with no policy file,
+ * and that default is to KEEP. So a migration that could not write -- a full
+ * disk, a read-only directory, a permissions change -- resolved a `keeps:false`
+ * that somebody actually chose into recording. The one direction that must not
+ * be guessed, guessed the wrong way.
+ *
+ * `loadPersonas` already parks that policy in `carriedPolicies` and retries it
+ * on every read, so the information was never lost. It simply had no consumer:
+ * the map was built, filled, returned, and read by nothing. `UNREADABLE_POLICY`
+ * makes exactly this argument one step later, for a policy that exists and
+ * cannot be parsed.
+ *
+ * ## Why the store still wins
+ *
+ * A parked entry is a policy that has not landed yet, not an override. Once the
+ * disk accepts the write, `hasPolicy` is true and the file is authoritative --
+ * which also makes a stale carry harmless, since it is only consulted where
+ * there is nothing better.
+ */
+export function keepsFor(
+  userData: string,
+  personaId: string,
+  carried: ReadonlyMap<string, Policy>,
+): boolean {
+  if (hasPolicy(userData, personaId)) return readPolicy(userData, personaId).keeps
+  const parked = carried.get(personaId)
+  return parked === undefined ? readPolicy(userData, personaId).keeps : parked.keeps
+}

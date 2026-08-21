@@ -51,7 +51,8 @@ import {
   sweepDeletions,
 } from './store/personas'
 import type { PersonaCatalog } from './store/personas'
-import { readPolicy } from './store/policy'
+import { keepsFor } from './store/policy'
+import type { Policy } from '@shared/policy'
 import { checkPrompt, promptFile, readPrompt, seedPrompt, writePrompt } from './store/prompt'
 import {
   readResting,
@@ -469,13 +470,26 @@ function conversationFlushed(): void {
  * defaults are a working character, and refusing to start because a rename
  * could not be read would be a worse failure than starting un-renamed.
  */
+/**
+ * Policies that could not be written, from the last load.
+ *
+ * Kept here because `keeps` is asked on every turn and loading the whole
+ * catalogue to answer it would read every package off disk per utterance. It is
+ * refreshed by the one function that loads them, so it cannot drift from the
+ * catalogue the app is actually using -- and a stale entry is harmless anyway,
+ * because `keepsFor` prefers the policy store whenever it has an answer.
+ */
+let carriedPolicies: ReadonlyMap<string, Policy> = new Map()
+
 function catalogue(userData: string): PersonaCatalog {
   const { edits, problem } = readEdits(userData)
   if (problem !== null) {
     console.error(`[persona] her own edits could not be read: ${problem}`)
     problems.note('persona', null, `her own edits could not be read: ${problem}`)
   }
-  return loadPersonas(userData, edits, existsSync(personasRoot(userData)))
+  const loaded = loadPersonas(userData, edits, existsSync(personasRoot(userData)))
+  carriedPolicies = loaded.carriedPolicies
+  return loaded
 }
 
 function setAsleep(asleep: boolean): void {
@@ -1230,7 +1244,7 @@ function conversation(): Conversation {
       transcripts: archive,
       // Read per turn, inside the module. Turning saving off has to take effect
       // on the next thing said, not on the next wake.
-      keeps: (personaId) => readPolicy(userData, personaId).keeps,
+      keeps: (personaId) => keepsFor(userData, personaId, carriedPolicies),
       log: (text) => console.log(`[archive] ${text}`),
     })
   }
@@ -2786,6 +2800,22 @@ const startup = app.whenReady().then(
       can remove ones it would otherwise write to and resurrect. Running before
       either would migrate a catalog that is not yet the catalog.
     */
+    /*
+      The v1 import can hand back a retention choice it could not file, and
+      until this line nothing read it.
+
+      `migrateLegacyPersona` returns `carried` for exactly the case the policy
+      store refused the write, and main used only `kind`. The choice was parked
+      in her package as `pending-policy.json` and would have been picked up by
+      the NEXT load -- so re-reading the catalogue here is enough, and is better
+      than threading the value by hand, because it uses the durable record
+      rather than a second copy of it that can disagree.
+
+      Without it the window is one whole run: she is imported having asked not
+      to be recorded, and is recorded until the app is restarted.
+    */
+    catalogue(app.getPath('userData'))
+
     try {
       migrateBubbleSide()
     } catch (error: unknown) {
