@@ -797,6 +797,26 @@ export type VoiceReport =
    * the rig both fills and hit-tests.
    */
   | { readonly kind: 'pointer'; readonly onHer: boolean }
+  /**
+   * Everything this session owed main has been sent. Nothing more is coming.
+   *
+   * ## Why the conversation cannot simply end when main says sleep
+   *
+   * Main puts her to rest by sending `__mochi_close__`. The renderer's shutdown
+   * flushes a turn she was cut off in -- through `report`, which is
+   * asynchronous. Main ending the conversation on the way out of `setAsleep`
+   * therefore ends it BEFORE those turns arrive, and a late one begins a fresh
+   * conversation behind her closed eyes: a live, empty session she is not awake
+   * for, which is worse than the wrong `ended_at` this was meant to fix.
+   *
+   * ## Why it rides this channel and not its own
+   *
+   * Ordering. Both travel on `voice:report`, so a frame sent after the flush is
+   * DELIVERED after the flush. A dedicated channel would race the very turns it
+   * is acknowledging, and the race would be invisible in ordinary use -- it
+   * needs an interrupted utterance and a sleep in the same instant.
+   */
+  | { readonly kind: 'flushed' }
   /** A lifecycle change worth a line in the log. */
   | { readonly kind: 'state'; readonly state: string }
   /** Anything else worth saying once. */

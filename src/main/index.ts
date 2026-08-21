@@ -390,6 +390,63 @@ function tellCompanion(frame: Record<string, unknown>): void {
  * system microphone light on is the app disagreeing with the platform about
  * something a person can see.
  */
+/**
+ * How long to wait for the renderer to say it has finished sending.
+ *
+ * Generous, because the cost of being early is a conversation that starts
+ * itself behind her closed eyes, and the cost of being late is a stored
+ * `ended_at` a few seconds past the truth.
+ */
+const FLUSH_GRACE_MS = 3000
+
+let awaitingFlush: NodeJS.Timeout | null = null
+
+/**
+ * End the conversation once the renderer has sent everything it owes.
+ *
+ * ## Why sleep ends it at all
+ *
+ * It did not, before. Rest was written, her window was told and the peer was
+ * closed, and the archive session stayed open until the next wake or until
+ * quit -- so a conversation slept at 10:00 and quit at 18:00 was stored as
+ * eight hours long and the archive listed it that way. Every deletion control
+ * shows that number, and a confirmation that misstates what it is about to
+ * delete is worse than none.
+ *
+ * ## Why it waits
+ *
+ * A turn she was cut off in is flushed by the renderer's shutdown, over an
+ * asynchronous channel. Ending on the way out of `setAsleep` ends the
+ * conversation first and lets the late turn open a NEW one while she is
+ * resting. So main asks, and waits to be told.
+ *
+ * The grace period is the answer to a renderer that died before it could say
+ * anything: without it the conversation would stay open exactly as before, with
+ * a mechanism in place that looks like it fixed the problem.
+ */
+function endWhenFlushed(): void {
+  if (awaitingFlush !== null) clearTimeout(awaitingFlush)
+  awaitingFlush = setTimeout(() => {
+    awaitingFlush = null
+    console.warn('[rest] her window never said it had finished; ending the conversation anyway')
+    conversation().end()
+  }, FLUSH_GRACE_MS)
+}
+
+/**
+ * The acknowledgement arrived, or something that looks like one did.
+ *
+ * Ignored unless a close is actually outstanding. `shutdown` runs on every
+ * teardown path and may run twice, and a second acknowledgement arriving after
+ * she has woken would otherwise end the conversation she is having now.
+ */
+function conversationFlushed(): void {
+  if (awaitingFlush === null) return
+  clearTimeout(awaitingFlush)
+  awaitingFlush = null
+  conversation().end()
+}
+
 function setAsleep(asleep: boolean): void {
   if (asleep === resting.asleep) return
   resting = { ...resting, asleep }
@@ -405,7 +462,21 @@ function setAsleep(asleep: boolean): void {
     reconnectTimer = null
     stopIdleSleep()
     tellCompanion({ type: '__mochi_close__' })
+    endWhenFlushed()
   } else {
+    /*
+      A close still waiting to be acknowledged is abandoned, not honoured.
+
+      She can be woken inside the grace period -- by the key, the tray, or a
+      click -- and the timer would then end the conversation she is having NOW,
+      seconds after it began. The turns it was waiting for either arrived
+      already or died with the old session; neither is worth ending a live
+      conversation over.
+    */
+    if (awaitingFlush !== null) {
+      clearTimeout(awaitingFlush)
+      awaitingFlush = null
+    }
     // The same frame the hourly reconnect sends. One open path, not two.
     tellCompanion({ type: '__mochi_reconnect__' })
     armIdleSleep()
@@ -1493,6 +1564,10 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
 
 ipcMain.on('voice:report', (_event, report: unknown) => {
   const event = report as VoiceReport
+  if (event?.kind === 'flushed') {
+    conversationFlushed()
+    return
+  }
   if (event?.kind === 'expiry') {
     const schedule = whenToReconnect({ expiresAt: event.expiresAt, now: Date.now() })
     if (reconnectTimer !== null) clearTimeout(reconnectTimer)

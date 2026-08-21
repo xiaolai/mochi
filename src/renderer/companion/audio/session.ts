@@ -134,6 +134,16 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     // A turn she began and was cut off in, whose transcript never arrived, is
     // still a fact. Filed as an empty `cut` marker rather than lost.
     for (const spoken of pending.flush()) file(spoken)
+    /*
+      AFTER the flush and on the SAME channel, which is what makes it an
+      acknowledgement rather than a guess. Main holds the conversation open
+      until this arrives; see `VoiceReport`'s `flushed`.
+
+      Sent on every teardown including the failure paths, because "nothing more
+      is coming" is true of those too -- and main waiting out its grace period
+      for a session that has already died is a delay with no purpose.
+    */
+    window.mochi.report({ kind: 'flushed' })
 
     // OFF the channel, and above the guard for the same reason the tracks are:
     // this runs on every teardown including the failure paths, and a
