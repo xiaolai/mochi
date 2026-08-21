@@ -90,6 +90,14 @@ export function listAvatars(avatarsFolder: string): readonly SettingsAvatar[] {
 export function listPersonas(
   catalog: PersonaCatalog,
   faceFor: (persona: { id: string; avatarId: string | null; theme: Theme }) => FaceSpec,
+  /**
+   * Whether her conversations are being written down.
+   *
+   * Passed in rather than read here for the same reason `faceFor` is: this
+   * module is the shape of a page, and the answer needs the policy store and
+   * the carried-policy map that a failed migration parks its choice in.
+   */
+  keepsFor: (personaId: string) => boolean,
 ): readonly SettingsPersona[] {
   return [...catalog.personas.values()]
     .map((persona) => ({
@@ -99,6 +107,7 @@ export function listPersonas(
       bubble: persona.bubble,
       bubbleSide: persona.bubbleSide,
       bubbleSides: [...BUBBLE_SIDES],
+      keeps: keepsFor(persona.id),
       avatarId: persona.avatarId,
       source: catalog.sources.get(persona.id) ?? null,
       // Injected rather than resolved here: resolution needs the avatars root

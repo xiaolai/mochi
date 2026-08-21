@@ -430,6 +430,15 @@ export interface SettingsPersona {
    * not need to know that "nobody has said" and "auto" are different answers.
    */
   readonly bubbleSide: string
+  /**
+   * Whether NEW conversations with this character are written down.
+   *
+   * Not on her manifest, and deliberately: it lives in the policy store, filed
+   * under her id, so a package cannot arrive having decided that the person
+   * installing it is never recorded. It rides the sheet because that is where
+   * she is, not because it is one of her properties.
+   */
+  readonly keeps: boolean
   /** Every side that may be CHOSEN. From main, so the page holds no second list. */
   readonly bubbleSides: readonly string[]
   readonly avatarId: string | null
@@ -693,6 +702,15 @@ export interface PersonaChange {
   readonly bubble?: boolean
   /** A `BubbleSide`, unchecked — the WIRE shape. `applyChange` decides. */
   readonly bubbleSide?: string
+  /**
+   * Turn the recording of NEW conversations on or off for this character.
+   *
+   * Handled apart from the rest of a change: everything else here is written to
+   * her manifest, and this is written to the policy store. The channel is
+   * shared because the control is on the same sheet and a second one would be
+   * two round trips for one switch.
+   */
+  readonly keeps?: boolean
   readonly avatarId?: string | null
   /*
     The six the Cast pane can now change, and could not before.

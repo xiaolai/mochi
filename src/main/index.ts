@@ -51,7 +51,7 @@ import {
   sweepDeletions,
 } from './store/personas'
 import type { PersonaCatalog } from './store/personas'
-import { keepsFor } from './store/policy'
+import { keepsFor, writePolicy } from './store/policy'
 import type { Policy } from '@shared/policy'
 import { checkPrompt, promptFile, readPrompt, seedPrompt, writePrompt } from './store/prompt'
 import {
@@ -1929,6 +1929,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
           one.avatarId,
           one.theme,
         ).face,
+      (id) => keepsFor(userData, id, carriedPolicies),
     ),
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],
@@ -1965,6 +1966,33 @@ ipcMain.handle('shelf:save', (_event, change: unknown): SettingsWrite => {
   const catalog = catalogue(userData)
   const persona = catalog.personas.get(asked.id)
   if (persona === undefined) return refuse(`There is no persona called ${asked.id}.`)
+
+  /*
+    Written FIRST and separately, because it does not live on her manifest.
+
+    A retention choice on a persona file would mean a package could arrive
+    having decided that whoever installs it is never recorded, in a field
+    nobody reads before installing. It lives in the policy store, filed under
+    her id, and `Policy`'s own comments carry the rest of that argument.
+
+    Before the manifest write, so that a manifest write which fails cannot
+    leave the switch showing one thing and the store holding another. The
+    reverse order fails the safer way round only for a change that carries
+    both, and this one usually carries only the switch.
+  */
+  if (typeof asked.keeps === 'boolean') {
+    try {
+      writePolicy(userData, asked.id, { keeps: asked.keeps })
+      console.log(`[policy] ${asked.id} keeps: ${String(asked.keeps)}`)
+    } catch (error: unknown) {
+      problems.note(
+        'persona',
+        asked.id,
+        `the saving setting could not be written: ${String(error)}`,
+      )
+      return refuse(String(error))
+    }
+  }
 
   const avatars = listAvatars(avatarsRoot(userData))
     .map((one) => one.id)

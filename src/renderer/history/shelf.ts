@@ -38,6 +38,16 @@ const SAYS = {
     he: 'off by default · the switch lands on his next wake, a side moves them now',
     it: 'off by default · the switch lands on its next wake, a side moves them now',
   },
+  keeps: {
+    she: 'What she is told and what she says are written to this machine, and stay there until you delete them.',
+    he: 'What he is told and what he says are written to this machine, and stay there until you delete them.',
+    it: 'What it is told and what it says are written to this machine, and stay there until you delete them.',
+  },
+  keptAlready: {
+    she: 'Turning this off stops NEW conversations being written. It does not delete the ones already here — the Archive is where those are removed.',
+    he: 'Turning this off stops NEW conversations being written. It does not delete the ones already here — the Archive is where those are removed.',
+    it: 'Turning this off stops NEW conversations being written. It does not delete the ones already here — the Archive is where those are removed.',
+  },
   bubbleSide: {
     she: 'A side that will not fit is not honoured — dragged into a corner she puts her words wherever there is room.',
     he: 'A side that will not fit is not honoured — dragged into a corner he puts his words wherever there is room.',
@@ -434,6 +444,7 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
     moodSection(view, worn, handlers),
     voiceSection(view, worn, handlers),
     bubbleSection(view, worn, handlers),
+    savingSection(view, worn, handlers),
     fileSection(view, worn, handlers),
     promptSection(view, worn, handlers),
     memorySection(view, handlers),
@@ -774,6 +785,49 @@ function voiceSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHand
  * does. That is the shape every other control in these windows already has,
  * and with no pronoun left in it the label stops being a three-way table.
  */
+/**
+ * Whether anything she says is written down at all.
+ *
+ * ## The name is the feature
+ *
+ * It says "Save NEW conversations", and the note underneath says plainly that
+ * turning it off leaves the existing ones alone and points at where they are
+ * removed. Calling this "retention" is what let the old website sentence lie
+ * for months: a privacy switch whose scope has to be inferred will be inferred
+ * in the unsafe direction, and the person doing the inferring will be somebody
+ * who wanted their words gone.
+ *
+ * ## Per character, and on her sheet
+ *
+ * The policy is filed per character, so the control is where the character is.
+ * It is NOT on her manifest -- see `SettingsPersona.keeps` -- so a package
+ * cannot arrive having decided this for whoever installs it.
+ */
+function savingSection(
+  view: ShelfView,
+  worn: ShelfCharacter,
+  handlers: ShelfHandlers,
+): HTMLElement {
+  const keeps = element('input')
+  keeps.type = 'checkbox'
+  keeps.checked = worn.keeps
+  keeps.id = 'keeps'
+  keeps.addEventListener('change', () => {
+    handlers.save({ id: worn.id, keeps: keeps.checked })
+  })
+  const label = element('label', undefined, 'Save new conversations')
+  label.htmlFor = keeps.id
+  const row = element('div', 'row')
+  row.append(keeps, label)
+
+  return section(
+    'Conversations',
+    forPronoun(SAYS.keeps, view.pronoun),
+    row,
+    element('p', 'note', forPronoun(SAYS.keptAlready, view.pronoun)),
+  )
+}
+
 function bubbleSection(
   view: ShelfView,
   worn: ShelfCharacter,
