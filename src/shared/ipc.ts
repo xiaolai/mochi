@@ -629,7 +629,17 @@ export type ForgetTalk =
  */
 export interface Forgotten {
   readonly ok: boolean
-  readonly gone: number
+  /**
+   * How many conversations went, or null when that was not counted.
+   *
+   * Null for "all of hers" and "everything", and the type says so rather than
+   * a comment: those delete by predicate in one statement, so a count would be
+   * a second query run only to fill a field. It first returned `1` for them,
+   * which was a number that would have been believed -- 1, after deleting four
+   * hundred. A shape that cannot express the lie is better than a note asking
+   * people not to tell it.
+   */
+  readonly gone: number | null
   readonly pending: boolean
   readonly why: string | null
 }

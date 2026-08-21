@@ -261,13 +261,16 @@ sureYesEl.addEventListener('click', () => {
 })
 
 /** Say what happened, in the terms the store answered in. */
-function saidOf(result: { gone: number; pending: boolean }, about: Doomed): string {
-  const many = about.kind === 'some' ? `${String(result.gone)} conversations` : 'conversations'
+function saidOf(result: { gone: number | null; pending: boolean }, about: Doomed): string {
   const scrubbing = result.pending
     ? ' They are still being cleared from the file, which finishes on its own.'
     : ''
   if (about.kind === 'some') {
-    return `${result.gone === 1 ? 'One conversation' : many} deleted.${scrubbing}`
+    // The count main really removed, which is not always the number chosen: a
+    // conversation can have gone in another window since. Saying "3 deleted"
+    // when 2 went would be a small lie in the one place people check.
+    const gone = result.gone ?? about.tokens.length
+    return `${gone === 1 ? 'One conversation' : `${String(gone)} conversations`} deleted.${scrubbing}`
   }
   if (about.kind === 'hers') return `${about.who}${scrubbing}`
   return `Every conversation deleted.${scrubbing}`
@@ -1461,6 +1464,19 @@ async function readConversations(): Promise<void> {
       listed = answer.persona
       picked = null
       onMonth = null
+      /*
+        And the SELECTION, which is about conversations rather than about the
+        view of them.
+
+        Without this, choosing three and then switching character left the
+        drawer offering to delete three against a list belonging to somebody
+        else. Nothing of the first character's could actually be deleted --
+        `forgetSessions` is scoped by persona in main, so the tokens simply
+        match nothing -- but the user would be told "0 conversations deleted"
+        after confirming a deletion of three, which is the worst way to learn
+        that a control was talking about the wrong thing.
+      */
+      if (picking) stopPicking()
     }
     // Her NAME, from the shelf, falling back to the id `history:list` answers
     // with. The cards say "Loki"; a title bar saying `loki` beside them would

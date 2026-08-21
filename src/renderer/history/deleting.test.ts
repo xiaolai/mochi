@@ -92,6 +92,22 @@ describe('choosing what to delete', () => {
     )
   })
 
+  it('drops the selection when the character changes', () => {
+    /*
+      Found in the plan audit. The list resets its calendar day on a character
+      switch and did not reset the selection, so choosing three and switching
+      left the drawer offering to delete three against somebody else's list.
+      Nothing of the first character's could have been deleted -- the store
+      scopes by persona -- but confirming a deletion of three and being told
+      "0 conversations deleted" is the worst way to find that out.
+    */
+    const read = MAIN.slice(MAIN.indexOf('async function readConversations'))
+    const body = read.slice(0, read.indexOf('\n}'))
+    expect(body).toContain('answer.persona !== listed')
+    const onChange = body.slice(body.indexOf('answer.persona !== listed'))
+    expect(onChange.slice(0, onChange.indexOf('    }'))).toContain('stopPicking()')
+  })
+
   it('keeps the controls off every other place', () => {
     // "Delete all" under a heading that says something else is how a control's
     // scope gets misread, in the one direction that cannot be undone.

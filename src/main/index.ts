@@ -2595,7 +2595,7 @@ ipcMain.on('settings:reveal', (_event, what: unknown) => {
  * promise the disk has not kept.
  */
 ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
-  const no = (why: string): Forgotten => ({ ok: false, gone: 0, pending: false, why })
+  const no = (why: string): Forgotten => ({ ok: false, gone: null, pending: false, why })
   const kind = (action as { kind?: unknown } | null)?.kind
   if (kind !== 'some' && kind !== 'hers' && kind !== 'everything') {
     return no('That is not something to delete.')
@@ -2612,7 +2612,7 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
 
   const archive = transcripts()
   const live = conversation().liveToken()
-  let gone = 0
+  let gone: number | null = null
   try {
     if (kind === 'some') {
       const tokens = (action as { tokens?: unknown }).tokens
@@ -2625,11 +2625,9 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
     } else if (kind === 'hers') {
       archive.forget(worn)
       if (live !== null) conversation().forget(live)
-      gone = 1
     } else {
       archive.forgetEverything()
       if (live !== null) conversation().forget(live)
-      gone = 1
     }
   } catch (error: unknown) {
     // Said, not swallowed. A deletion that failed and reported success is the
@@ -2638,7 +2636,7 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
     problems.note('history', worn, `conversations could not be deleted: ${String(error)}`)
     return no('They could not be deleted. Nothing was removed.')
   }
-  console.log(`[transcripts] deleted (${kind}): ${String(gone)}`)
+  console.log(`[transcripts] deleted (${kind}): ${gone === null ? 'all matching' : String(gone)}`)
   return { ok: true, gone, pending: archive.scrubPending(), why: null }
 })
 

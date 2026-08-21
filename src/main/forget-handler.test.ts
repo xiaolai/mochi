@@ -72,6 +72,22 @@ describe('before it deletes anything', () => {
     expect(HANDLER).toContain('wanted.includes(live)')
   })
 
+  it('never reports a count it did not count', () => {
+    /*
+      It first answered `gone: 1` for "all of hers" and for "everything" --
+      a number that would have been believed, saying 1 after deleting four
+      hundred. Nothing read it at those scopes, which is what makes it the kind
+      of lie that survives until something does.
+
+      Null now, and the type says `number | null`, so the shape cannot express
+      it. Those two scopes delete by predicate in one statement; a count would
+      be a second query run only to fill a field.
+    */
+    expect(HANDLER).toContain('let gone: number | null = null')
+    const coarse = HANDLER.slice(HANDLER.indexOf('archive.forget(worn)'))
+    expect(coarse.slice(0, coarse.indexOf('} catch'))).not.toContain('gone = 1')
+  })
+
   it('reports a failure instead of reporting success', () => {
     // A deletion that failed and said it worked is the one outcome here that
     // nobody can check for themselves.
