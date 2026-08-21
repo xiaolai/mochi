@@ -698,9 +698,44 @@ describe('an archive is checked, not trusted', () => {
     if (!result.ok) expect(result.problems.join(' ')).toContain('newer mochi')
   })
 
-  it('names every problem at once', () => {
+  it('refuses one from an older build rather than half-reading it', () => {
+    // The same answer as a newer build gets, for the same reason. An older
+    // format is not a malformed file: it made different promises, and this
+    // parser can only judge it by the promises of this one.
+    const result = parseArchive({ ...good, version: ARCHIVE_FORMAT - 1 })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.problems.join(' ')).toContain('older mochi')
+  })
+
+  it('says the version is wrong, and ONLY that, about a real format-1 file', () => {
+    // The whole reason the version returns early, checked against a file of
+    // the shape it actually protects against: format 1 had no `cut`, so
+    // reading these sessions on format-2 terms would add "cut must be true or
+    // false" for every turn -- a list of complaints about a file that is not
+    // malformed at all, burying the one problem that is true.
     const result = parseArchive({
       version: 1,
+      personaId: 'ada',
+      exportedAt: 1_500,
+      sessions: [
+        {
+          startedAt: 1_000,
+          endedAt: 1_100,
+          turns: [
+            { at: 1_010, who: 'you', text: 'from an older mochi' },
+            { at: 1_020, who: 'her', text: 'that no longer exists' },
+          ],
+        },
+      ],
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok)
+      expect(result.problems).toEqual(['this archive was written by an older mochi (format 1)'])
+  })
+
+  it('names every problem at once', () => {
+    const result = parseArchive({
+      version: ARCHIVE_FORMAT,
       sessions: [
         { startedAt: 'soon', turns: [] },
         { startedAt: 2, turns: 'no' },
@@ -713,7 +748,11 @@ describe('an archive is checked, not trusted', () => {
   it('refuses a speaker it does not know', () => {
     const result = parseArchive({
       ...good,
-      sessions: [{ startedAt: 1, endedAt: null, turns: [{ at: 1, who: 'someone', text: 'x' }] }],
+      // Whole in every other respect, so the speaker is the only thing left to
+      // refuse it for.
+      sessions: [
+        { startedAt: 1, endedAt: null, turns: [{ at: 1, who: 'someone', text: 'x', cut: false }] },
+      ],
     })
     expect(result.ok).toBe(false)
   })
@@ -751,7 +790,10 @@ describe('an archive is checked, not trusted', () => {
 
   it('reports problems rather than importing a partial archive', () => {
     const t = store()
-    const result = t.importInto('ada', { version: 1, sessions: [{ startedAt: 'no', turns: [] }] })
+    const result = t.importInto('ada', {
+      version: ARCHIVE_FORMAT,
+      sessions: [{ startedAt: 'no', turns: [] }],
+    })
     expect(result.ok).toBe(false)
     // Nothing landed. A half-imported history is worse than a refused one:
     // there is no way to tell which half is missing.
@@ -871,32 +913,6 @@ describe('a cut turn through export and import', () => {
       { at: 1_010, who: 'her', text: 'I was expl', cut: true },
       { at: 1_020, who: 'you', text: 'never mind', cut: false },
     ])
-  })
-
-  it('reads a format-1 archive, where no turn knew about being cut', () => {
-    // Every archive anybody has already exported. Refusing them, or failing to
-    // default the missing field, would make this change lose old history.
-    const v1 = {
-      version: 1,
-      personaId: 'ada',
-      exportedAt: 1_500,
-      sessions: [
-        {
-          startedAt: 1_000,
-          endedAt: 1_100,
-          turns: [{ at: 1_010, who: 'you', text: 'from an older mochi' }],
-        },
-      ],
-    }
-    const parsed = parseArchive(v1)
-    expect(parsed.ok).toBe(true)
-    if (!parsed.ok) return
-    expect(parsed.archive.sessions[0]?.turns[0]).toEqual({
-      at: 1_010,
-      who: 'you',
-      text: 'from an older mochi',
-      cut: false,
-    })
   })
 })
 
@@ -1137,13 +1153,14 @@ describe('a conversation whose last turn is at -1', () => {
 })
 
 /**
- * The two formats make different promises about `cut`, and `cut === true`
- * treated them identically — so a malformed format-2 archive turned an
- * interrupted fragment into an apparently complete statement.
+ * When two formats made different promises about `cut`, `cut === true` treated
+ * them identically — so a malformed archive turned an interrupted fragment
+ * into an apparently complete statement. One format, one promise, is the
+ * shape that cannot do that.
  */
-describe('the cut field, by format', () => {
-  const withCut = (version: number, cut: unknown): unknown => ({
-    version,
+describe('the cut field', () => {
+  const withCut = (cut: unknown): unknown => ({
+    version: ARCHIVE_FORMAT,
     personaId: 'ada',
     exportedAt: 1,
     sessions: [
@@ -1155,19 +1172,18 @@ describe('the cut field, by format', () => {
     ],
   })
 
-  it('is required, and must be a boolean, in format 2', () => {
-    expect(parseArchive(withCut(2, undefined)).ok).toBe(false)
-    expect(parseArchive(withCut(2, 'true')).ok).toBe(false)
-    expect(parseArchive(withCut(2, 1)).ok).toBe(false)
-    expect(parseArchive(withCut(2, true)).ok).toBe(true)
-  })
-
-  it('may be absent in format 1, because nothing written then knew about it', () => {
-    expect(parseArchive(withCut(1, undefined)).ok).toBe(true)
-  })
-
-  it('is still refused in format 1 when it is present and not a boolean', () => {
-    expect(parseArchive(withCut(1, 'true')).ok).toBe(false)
+  it('is required, and must be a boolean', () => {
+    // ABSENT is a refusal, not a false. It was a false while format 1 was
+    // readable, and defaulting it is the one way a fragment reaches the store
+    // dressed as a finished sentence.
+    const missing = parseArchive(withCut(undefined))
+    expect(missing.ok).toBe(false)
+    if (!missing.ok) expect(missing.problems.join(' ')).toContain('cut must be true or false')
+    expect(parseArchive(withCut('true')).ok).toBe(false)
+    expect(parseArchive(withCut(1)).ok).toBe(false)
+    expect(parseArchive(withCut(null)).ok).toBe(false)
+    expect(parseArchive(withCut(true)).ok).toBe(true)
+    expect(parseArchive(withCut(false)).ok).toBe(true)
   })
 })
 

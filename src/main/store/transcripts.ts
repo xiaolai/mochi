@@ -109,7 +109,6 @@ export interface Hit {
   readonly cut: boolean
 }
 
-/** What an export contains. Versioned for the reason the persona format is. */
 /**
  * The most conversations one confirmed deletion may carry.
  *
@@ -119,10 +118,30 @@ export interface Hit {
  */
 const MOST_AT_ONCE = 1000
 
+/**
+ * The one format read, and the one written. Not the newest of several.
+ *
+ * Format 1 was the pre-rewrite application's, and no build has ever handed one
+ * to a person: the store could export from the day it was written, and the way
+ * out of the application only arrived here. So the leniency the parser carried
+ * for those files was for an archive nobody could hold -- paid for with a
+ * second set of rules for `cut`, sitting in the one place where a fragment
+ * turns into a finished sentence if the rules are applied to the wrong file.
+ *
+ * A LATER format is a different question. Reading one written before it is a
+ * migration whose data actually exists, and this constant is where that starts:
+ * bump it, and decide then which older numbers `parseArchive` accepts.
+ */
 export const ARCHIVE_FORMAT = 2
 
+/** What an export contains. Versioned for the reason the persona format is. */
 export interface Archive {
-  readonly version: number
+  /**
+   * Always `ARCHIVE_FORMAT`. A parsed archive cannot say anything else --
+   * every other number is refused rather than adapted to -- so nothing
+   * downstream of the parser branches on it.
+   */
+  readonly version: typeof ARCHIVE_FORMAT
   /** Whose history this was. Informational — the IMPORTER chooses the target. */
   readonly personaId: string
   readonly exportedAt: number
@@ -952,11 +971,10 @@ function endFor(session: Archive['sessions'][number]): number {
  * Whether two conversations are the same one, said the same way.
  *
  * Compared by content because that is the only thing an archive carries that
- * can answer it: a v1 archive has no portable identifier for a session, so
- * "the same conversation" has to mean "the same words in the same order at the
- * same moments". Format 2 added `cut` and still carries no source id, so this
- * is still the only answer available; a FUTURE format could carry one and this can
- * become an equality rather than a comparison.
+ * can answer it: the format has no portable identifier for a session, so "the
+ * same conversation" has to mean "the same words in the same order at the same
+ * moments". A FUTURE format could carry one, and this can become an equality
+ * rather than a comparison on the day it does.
  */
 function sameConversation(
   here: readonly Turn[],
@@ -1023,20 +1041,13 @@ export type ArchiveParse =
   | { readonly ok: false; readonly problems: readonly string[] }
 
 /**
- * Turn a file somebody chose into an archive, or say what is wrong with it.
- *
- * A boundary, and treated like every other one here: every problem at once
- * rather than the first, a version checked before anything is read on its
- * terms, and a newer one refused rather than half-read.
- */
-/**
  * One turn of an archive, or the problems with it.
  *
  * Extracted because `parseArchive` had grown past a hundred lines with session
  * parsing, turn parsing, validation and normalisation nested inside each other
  * -- and the `cut` rule is exactly the kind of thing that gets lost in there.
  */
-function parseTurn(raw: unknown, version: number, where: string): Turn | readonly string[] {
+function parseTurn(raw: unknown, where: string): Turn | readonly string[] {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     return [`${where} must be an object`]
   }
@@ -1047,31 +1058,19 @@ function parseTurn(raw: unknown, version: number, where: string): Turn | readonl
   if (typeof turn['at'] !== 'number' || !Number.isFinite(turn['at'])) {
     return [`${where}.at must be a timestamp`]
   }
-  // VERSION-AWARE, because the two formats make different promises about this
-  // field and `cut === true` treated them identically. Absent in a format-1
-  // archive is FALSE and not an error -- nothing written before the field
-  // existed knew whether a turn had been interrupted, and refusing those files
-  // would make every archive anybody already exported unimportable.
-  //
-  // In a format-2 archive it is REQUIRED and must be a boolean. Coercing
-  // `cut: "true"` or a missing field to `false` there turns an interrupted
-  // fragment into an apparently complete statement, which is the one thing the
-  // whole column exists to keep straight.
+  // REQUIRED, and a boolean. Coercing `cut: "true"` or a missing field to
+  // `false` turns an interrupted fragment into an apparently complete
+  // statement, which is the one thing the whole column exists to keep
+  // straight. There is no longer a format that promises less about this field,
+  // and that is most of why there is no longer a second format.
   const cut = turn['cut']
-  if (version >= 2) {
-    if (typeof cut !== 'boolean') return [`${where}.cut must be true or false`]
-    return { at: turn['at'], who, text: turn['text'], cut }
-  }
-  if (cut !== undefined && typeof cut !== 'boolean') {
-    return [`${where}.cut must be true or false`]
-  }
-  return { at: turn['at'], who, text: turn['text'], cut: cut === true }
+  if (typeof cut !== 'boolean') return [`${where}.cut must be true or false`]
+  return { at: turn['at'], who, text: turn['text'], cut }
 }
 
 /** One conversation of an archive, or the problems with it. */
 function parseSession(
   raw: unknown,
-  version: number,
   where: string,
 ): Archive['sessions'][number] | readonly string[] {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
@@ -1092,7 +1091,7 @@ function parseSession(
   const problems: string[] = []
   const turns: Turn[] = []
   for (const [index, rawTurn] of rawTurns.entries()) {
-    const parsed = parseTurn(rawTurn, version, `${where}.turns[${String(index)}]`)
+    const parsed = parseTurn(rawTurn, `${where}.turns[${String(index)}]`)
     if (Array.isArray(parsed)) problems.push(...parsed)
     else turns.push(parsed as Turn)
   }
@@ -1114,6 +1113,13 @@ function parseSession(
   return { startedAt, endedAt: ends, turns }
 }
 
+/**
+ * Turn a file somebody chose into an archive, or say what is wrong with it.
+ *
+ * A boundary, and treated like every other one here: every problem at once
+ * rather than the first, and the version settled before a single session is
+ * read, so nothing is ever half-read on the wrong format's terms.
+ */
 export function parseArchive(value: unknown): ArchiveParse {
   const problems: string[] = []
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -1126,13 +1132,16 @@ export function parseArchive(value: unknown): ArchiveParse {
     problems.push('version must be a whole number')
   } else if (version > ARCHIVE_FORMAT) {
     problems.push(`this archive was written by a newer mochi (format ${String(version)})`)
+  } else if (version < ARCHIVE_FORMAT) {
+    problems.push(`this archive was written by an older mochi (format ${String(version)})`)
   }
-  // A version that did not parse cannot decide the version-aware rules below,
-  // and reading the rest of the file on a guess is how a format-2 archive gets
-  // format-1 leniency applied to it. Refused here, with the problem already
-  // collected above.
+  // The WRONG FORMAT is refused before anything else is read, and refused
+  // alone. Everything below judges the file by this format's rules, so
+  // reporting what those rules make of another format's file describes a
+  // document nobody wrote: an archive missing a field that did not exist when
+  // it was written is not malformed, it is simply not this. One accurate
+  // problem beats that list.
   if (problems.length > 0) return { ok: false, problems }
-  const format = version as number
 
   const rawSessions = source['sessions']
   if (!Array.isArray(rawSessions)) {
@@ -1142,7 +1151,7 @@ export function parseArchive(value: unknown): ArchiveParse {
 
   const sessions: Archive['sessions'][number][] = []
   for (const [index, raw] of rawSessions.entries()) {
-    const parsed = parseSession(raw, format, `sessions[${String(index)}]`)
+    const parsed = parseSession(raw, `sessions[${String(index)}]`)
     if (Array.isArray(parsed)) problems.push(...parsed)
     else sessions.push(parsed as Archive['sessions'][number])
   }
@@ -1151,7 +1160,7 @@ export function parseArchive(value: unknown): ArchiveParse {
   return {
     ok: true,
     archive: {
-      version: format,
+      version: ARCHIVE_FORMAT,
       personaId: typeof source['personaId'] === 'string' ? source['personaId'] : '',
       exportedAt: typeof source['exportedAt'] === 'number' ? source['exportedAt'] : 0,
       sessions,
