@@ -90,13 +90,6 @@ export function listAvatars(avatarsFolder: string): readonly SettingsAvatar[] {
 export function listPersonas(
   catalog: PersonaCatalog,
   faceFor: (persona: { id: string; avatarId: string | null; theme: Theme }) => FaceSpec,
-  /**
-   * Her side, already resolved. `Persona.bubbleSide` is null for anybody nobody
-   * has asked, and deciding what that should show is main's — see `sideFor`.
-   * A page that had to know about the null would be a second place the
-   * fallback lives.
-   */
-  sideFor: (persona: Persona) => string,
 ): readonly SettingsPersona[] {
   return [...catalog.personas.values()]
     .map((persona) => ({
@@ -104,7 +97,7 @@ export function listPersonas(
       name: persona.name,
       voice: persona.voice,
       bubble: persona.bubble,
-      bubbleSide: sideFor(persona),
+      bubbleSide: persona.bubbleSide,
       bubbleSides: [...BUBBLE_SIDES],
       avatarId: persona.avatarId,
       source: catalog.sources.get(persona.id) ?? null,
@@ -526,13 +519,12 @@ export function applyChange(
 
   if (change.bubbleSide !== undefined) {
     /*
-      Against the OFFERED list, and stored as given — `auto` included.
+      Against the OFFERED list, and stored as given.
 
-      `auto` is a real answer here rather than the absence of one. `null` is the
-      absence, and only main writes that (it never does): a persona that has
-      never been asked keeps `null` so `sideFor` may fall back to the app-level
-      value this field replaced. Storing `auto` the moment anybody opens the
-      control would erase that distinction on the first save.
+      There is no "unset" to protect here any more. `auto` is one of the five
+      answers rather than the absence of one — see `Persona.bubbleSide` for why
+      an invisible third state was worse than the app-level default it was
+      guarding.
     */
     if (!(BUBBLE_SIDES as readonly string[]).includes(change.bubbleSide)) {
       return { ok: false, why: `The bubble cannot sit ${String(change.bubbleSide)}.` }

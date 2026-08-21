@@ -2,7 +2,14 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { BUBBLE_SIDES, DEFAULT_PERSONA, PERSONA_LIMITS, type Persona } from '@shared/persona'
+import {
+  BUBBLE_SIDES,
+  DEFAULT_PERSONA,
+  PERSONA_LIMITS,
+  SIDE_NAMES,
+  type Persona,
+} from '@shared/persona'
+import { forPronoun } from '@shared/pronoun'
 import { REVEALABLE } from '@shared/ipc'
 import { WEB_SEARCH_MODES } from '@shared/delegation'
 import {
@@ -374,12 +381,19 @@ const MISSING = { readiness: 'not-installed', remedy: 'install' } as const
  * set to `auto` and quietly overwrite it with whatever the old file held.
  */
 describe('which side her words sit on', () => {
-  const HERS: Persona = { ...DEFAULT_PERSONA, id: 'loki', bubbleSide: null }
+  const HERS: Persona = { ...DEFAULT_PERSONA, id: 'loki' }
 
-  it('starts as null, which is not `auto`', () => {
-    // A persona written before the field existed has no answer. `sideFor` in
-    // main is what decides what that should show.
-    expect(DEFAULT_PERSONA.bubbleSide).toBeNull()
+  it('starts at `auto`, which is a real answer and not an absence', () => {
+    /*
+      It was `null` for one commit, so a character nobody had touched could fall
+      back to the app-level setting this field replaced. That made the control
+      lie: every untouched persona showed the same inherited side, so a setting
+      advertised as per-character behaved globally until somebody changed it.
+
+      One state. A control shows a value somebody could have set, and it is the
+      value in force.
+    */
+    expect(DEFAULT_PERSONA.bubbleSide).toBe('auto')
   })
 
   it.each([...BUBBLE_SIDES])('takes %s', (side) => {
@@ -389,14 +403,20 @@ describe('which side her words sit on', () => {
     expect(out.persona.bubbleSide).toBe(side)
   })
 
-  it('stores `auto` as a real answer rather than as the absence of one', () => {
-    // The line that keeps the fallback honest: once somebody has picked `auto`
-    // for this character, the legacy app-level value must stop being consulted.
-    const out = applyChange(HERS, { id: 'loki', bubbleSide: 'auto' }, [])
-    expect(out.ok).toBe(true)
-    if (!out.ok) return
-    expect(out.persona.bubbleSide).toBe('auto')
-    expect(out.persona.bubbleSide).not.toBeNull()
+  it('is named the same way here as it is in the menu bar', () => {
+    /*
+      One vocabulary. Her sheet grew this control with its own blunter words —
+      `above`, `left`, `wherever there is room` — for a setting the tray already
+      had names for, so picking "To her left" from the menu and then opening her
+      sheet showed "left" and left somebody deciding whether those matched.
+    */
+    for (const side of BUBBLE_SIDES) {
+      expect(SIDE_NAMES[side], side).toBeDefined()
+      expect(forPronoun(SIDE_NAMES[side], 'she').trim().length).toBeGreaterThan(0)
+    }
+    expect(forPronoun(SIDE_NAMES.left, 'he')).toBe('To his left')
+    // `auto` reads as a sentence, because it is not a fifth direction.
+    expect(forPronoun(SIDE_NAMES.auto, 'it')).toBe('Wherever it fits')
   })
 
   it('refuses a side nothing can honour, with a sentence naming it', () => {

@@ -31,7 +31,14 @@
 import { EMOTIONS, type Emotion } from './avatar'
 import type { SaveProblem } from './save-problem'
 import { DEFAULT_POLICY, parsePolicy, type Policy } from './policy'
-import { DEFAULT_PRONOUN, PRONOUNS, isPronoun, isRetiredPronoun, type Pronoun } from './pronoun'
+import {
+  DEFAULT_PRONOUN,
+  PRONOUNS,
+  isPronoun,
+  isRetiredPronoun,
+  type Pronoun,
+  type ByPronoun,
+} from './pronoun'
 import { looksEmpty, oneLine } from './text'
 import { DEFAULT_THEME, THEME_IDS, isTheme, type Theme } from './theme'
 
@@ -266,28 +273,33 @@ export interface Persona {
    */
   readonly bubble: boolean
   /**
-   * Which side of her those words sit on, or `null` for "nobody has said".
+   * Which side of her those words sit on. `auto` is "wherever it fits".
    *
    * ## It moved here from `preferences.json`, and the old argument is overruled
    *
    * `readBubbleSide` used to hold it app-level, on the grounds that it is "a
    * fact about this screen and this desk, not about who she is. Wearing
    * somebody else should not move her speech to the other side." That reads
-   * well and it splits one feature across two tabs: WHETHER she shows words is
+   * well and it split one feature across two tabs: WHETHER she shows words is
    * this character's (`bubble`, directly above), and WHERE they went was
    * everybody's — so a character with the bubble off still had a live side
    * control governing nothing anybody could see.
    *
-   * One feature, one place. The two now sit together on her sheet.
+   * ## There is no "nobody has been asked", and there was for one commit
    *
-   * ## Null, rather than defaulting to `auto`
+   * This was `BubbleSide | null`, so a character nobody had touched could fall
+   * back to the app-level value the field replaced. It made the control lie:
+   * every untouched persona showed the same inherited side, so a setting
+   * advertised as per-character behaved globally until somebody changed it —
+   * which is the behaviour the move was meant to end, reintroduced invisibly.
    *
-   * "Nobody has chosen" and "somebody chose `auto`" are different answers, and
-   * only the first may fall back to the app-level value a previous version
-   * stored. Collapsing them would take a side somebody had deliberately set to
-   * `auto` and quietly replace it with the legacy preference.
+   * A control has to show a value somebody could have set, and that value has
+   * to be the one in force. Three states where a person can perceive one is not
+   * a model, it is a place for them to be wrong. So: one state, defaulting to
+   * `auto`, which is what almost everybody wants and what the setting it
+   * replaces was already set to.
    */
-  readonly bubbleSide: BubbleSide | null
+  readonly bubbleSide: BubbleSide
   /**
    * Character and manner, sent as `session.instructions`.
    *
@@ -352,8 +364,7 @@ export const DEFAULT_PERSONA: Persona = {
   // Off, per the design. `PERSONA_FIELDS` is derived from this object, so
   // adding it here is also what stops `bubble` reading as an unknown field.
   bubble: false,
-  // Nobody has said. See the field: this is NOT the same as `'auto'`.
-  bubbleSide: null,
+  bubbleSide: 'auto',
   pronoun: 'she',
   theme: DEFAULT_THEME,
   // Character only -- and the speech rules are part of that character rather
@@ -1388,24 +1399,21 @@ function readBubble(problems: SaveProblem[], source: Record<string, unknown>): b
 }
 
 /**
- * Which side her words sit on, and `null` when she has never been asked.
+ * Which side her words sit on. Absent means `auto`, like every other field here.
  *
- * The absent case is not a default. A persona written before this field existed
- * has no answer, and main is what decides that an old app-level preference is
- * the better guess than `auto` — see `sideFor`. Storing `auto` here would erase
- * that distinction on the first save.
+ * No "unset" state. A persona written before this field existed gets the same
+ * answer as one written today and never touched, because those are the same
+ * thing to whoever is looking at the control — see the field for why an
+ * invisible third state was worse than losing an app-level default.
  */
-function readBubbleSide(
-  problems: SaveProblem[],
-  source: Record<string, unknown>,
-): BubbleSide | null {
+function readBubbleSide(problems: SaveProblem[], source: Record<string, unknown>): BubbleSide {
   const raw = source['bubbleSide']
-  if (raw === undefined || raw === null) return null
+  if (raw === undefined) return DEFAULT_PERSONA.bubbleSide
   if (typeof raw === 'string' && (BUBBLE_SIDES as readonly string[]).includes(raw)) {
     return raw as BubbleSide
   }
   problems.push({ kind: 'unknown-value', field: 'bubbleSide', allowed: BUBBLE_SIDES.join(', ') })
-  return null
+  return DEFAULT_PERSONA.bubbleSide
 }
 
 /**
@@ -1421,6 +1429,26 @@ function readBubbleSide(
  */
 export const BUBBLE_SIDES = ['auto', 'above', 'below', 'left', 'right'] as const
 export type BubbleSide = (typeof BUBBLE_SIDES)[number]
+
+/**
+ * What the sides are called to a person, in the ONE place both surfaces read.
+ *
+ * "Above her" rather than "above", because the choice is about where she speaks
+ * from and not about a corner of a box. The tray menu has said it this way for
+ * a long time; her sheet invented a blunter set — `above`, `left` — the moment
+ * it grew the same control, so one setting was named two ways in two places.
+ *
+ * `auto` is a sentence rather than a word for the same reason: it is not a
+ * fifth direction, it is the absence of a preference among the four, and
+ * "wherever it fits" says that where "auto" leaves somebody guessing.
+ */
+export const SIDE_NAMES: Readonly<Record<BubbleSide, ByPronoun>> = {
+  auto: { she: 'Wherever it fits', he: 'Wherever it fits', it: 'Wherever it fits' },
+  above: { she: 'Above her', he: 'Above him', it: 'Above it' },
+  below: { she: 'Below her', he: 'Below him', it: 'Below it' },
+  left: { she: 'To her left', he: 'To his left', it: 'To its left' },
+  right: { she: 'To her right', he: 'To his right', it: 'To its right' },
+}
 
 /** Which voice the service is asked for. A closed set the service owns. */
 function readVoice(problems: SaveProblem[], source: Record<string, unknown>): VoiceName {

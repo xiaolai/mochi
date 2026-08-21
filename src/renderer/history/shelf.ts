@@ -6,6 +6,7 @@ import type {
   ShelfView,
 } from '@shared/ipc'
 import { forPronoun, PRONOUNS, type ByPronoun, type Pronoun } from '@shared/pronoun'
+import { SIDE_NAMES } from '@shared/persona'
 import { EMOTIONS, type Emotion } from '@shared/avatar'
 import type { FaceSpec } from '@shared/avatar-spec'
 import { applyTheme, THEME_IDS } from '@shared/theme'
@@ -763,9 +764,19 @@ function voiceSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHand
   for (const one of worn.bubbleSides) {
     const option = document.createElement('option')
     option.value = one
-    // `auto` is the absence of a choice among the four, so it is named for what
-    // it does rather than left as a word nobody outside this code uses.
-    option.textContent = one === 'auto' ? 'wherever there is room' : one
+    /*
+      The names the TRAY uses, from the one table both read.
+
+      This drew `above`, `left`, `wherever there is room` — a second vocabulary
+      for a setting the menu bar already had words for. Somebody who picked
+      "To her left" from the tray and then opened her sheet found "left", and
+      had to decide whether those were the same thing.
+    */
+    // `?? auto` keeps a side this table has no name for readable rather than
+    // blank — the tray's own submenu makes the same allowance for the same
+    // reason: `bubbleSides` crosses the wire as strings.
+    const named = (SIDE_NAMES as Record<string, ByPronoun>)[one] ?? SIDE_NAMES.auto
+    option.textContent = forPronoun(named, view.pronoun)
     option.selected = one === worn.bubbleSide
     side.append(option)
   }

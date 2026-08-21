@@ -9,7 +9,10 @@
  * last is the strongest position an instruction can occupy.
  */
 
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { PRONOUNS } from './pronoun'
 import { EMOTIONS } from './avatar'
 import { DEFAULT_PRONOUN } from './pronoun'
 import {
@@ -29,6 +32,8 @@ import {
   instructionsFor,
   parsePersona,
   type Persona,
+  BUBBLE_SIDES,
+  SIDE_NAMES,
 } from './persona'
 
 const tutor: Persona = {
@@ -40,7 +45,7 @@ const tutor: Persona = {
   // ON here, and off in the built-in. A fixture that matched the default would
   // pass every test that never reads the field.
   bubble: true,
-  bubbleSide: null,
+  bubbleSide: 'auto',
   // A second persona with a DIFFERENT pronoun, deliberately: the whole reason
   // the pronoun lives here rather than in app settings is that switching
   // persona has to switch it too.
@@ -1410,5 +1415,45 @@ describe('the document as prose, for a goodbye', () => {
   it('answers empty for an empty document', () => {
     expect(promptProse('', DEFAULT_PERSONA)).toBe('')
     expect(promptProse('   \n  ', DEFAULT_PERSONA)).toBe('')
+  })
+})
+
+/**
+ * One table of side names, read by both surfaces that offer the choice.
+ *
+ * The tray menu has said "Above her" and "To her left" for a long time. Her
+ * sheet grew the same control and invented a blunter set — `above`, `left`,
+ * `wherever there is room` — so somebody who picked "To her left" from the menu
+ * bar and then opened her sheet saw "left" and had to decide whether those were
+ * the same thing.
+ *
+ * The check that the table is well-formed does NOT catch that: it passes
+ * perfectly while a surface ignores it, which is exactly what happened. So this
+ * reads the two files and requires them to use it.
+ */
+describe('what the sides are called', () => {
+  const source = (relative: string): string =>
+    readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+
+  it('has a name for every side, in every form', () => {
+    for (const side of BUBBLE_SIDES) {
+      for (const pronoun of PRONOUNS) {
+        expect(SIDE_NAMES[side][pronoun].trim().length, `${side}.${pronoun}`).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('is read by the tray and by her sheet, and neither writes its own', () => {
+    for (const file of ['../main/tray.ts', '../renderer/history/shelf.ts']) {
+      const text = source(file)
+      expect(text, `${file} reads the shared names`).toContain('SIDE_NAMES')
+      // The words themselves, spelled out in a surface, would be a second table
+      // — which is the shape this replaced.
+      expect(text, `${file} does not spell a side out itself`).not.toMatch(
+        /'(Above|Below|To her|Wherever)/,
+      )
+    }
   })
 })

@@ -1,7 +1,6 @@
 import { join } from 'node:path'
 import { isPersonaId } from '@shared/persona'
 import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
-import { BUBBLE_SIDES, type BubbleSide } from '@shared/persona'
 import { isHaloWhen, type HaloWhen } from '@shared/ipc'
 import {
   DEFAULT_GRANTS,
@@ -119,34 +118,6 @@ function writeMerged(userData: string, changes: Record<string, unknown>): void {
   }
 
   writeJsonAtomically(join(userData, PREFERENCES), { ...existing, ...changes })
-}
-
-/**
- * The side her words used to sit on, app-level, kept only to be MIGRATED.
- *
- * This was the setting. It is a persona field now — see `Persona.bubbleSide`
- * for why the argument that used to stand here was overruled — and nothing
- * writes this key any more.
- *
- * Read, because dropping it would silently discard a choice somebody made.
- * `sideFor` in `index.ts` uses it for a persona that has never been asked, and
- * the first time anybody picks a side on her sheet it stops being consulted for
- * that character.
- */
-export function readLegacyBubbleSide(userData: string): BubbleSide {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return 'auto'
-  try {
-    const value: unknown = JSON.parse(read.text)
-    const found = (value as { bubbleSide?: unknown } | null)?.bubbleSide
-    return typeof found === 'string' && (BUBBLE_SIDES as readonly string[]).includes(found)
-      ? (found as BubbleSide)
-      : 'auto'
-  } catch {
-    // The reader for the persona id already says so on this file; a second
-    // warning for the same broken JSON is noise.
-    return 'auto'
-  }
 }
 
 /**

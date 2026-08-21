@@ -9,8 +9,6 @@ import {
   PROMPT_SLOTS,
   RECOMMENDED_VOICES,
   VOICE_NAMES,
-  type BubbleSide,
-  type Persona,
 } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
 import { heardPortion } from './heard'
@@ -54,7 +52,6 @@ import {
 import { readPolicy } from './store/policy'
 import { checkPrompt, promptFile, readPrompt, seedPrompt, writePrompt } from './store/prompt'
 import {
-  readLegacyBubbleSide,
   readResting,
   readWebSearch,
   readWorkspace,
@@ -329,7 +326,7 @@ function menuModel(): TrayModel {
     pronoun: activePersona(catalog, readWornPersonaId(userData)).persona.pronoun,
     bubble: {
       ...bubbleSides,
-      asked: sideFor(activePersona(catalog, readWornPersonaId(userData)).persona),
+      asked: activePersona(catalog, readWornPersonaId(userData)).persona.bubbleSide,
     },
     resting,
     listening,
@@ -594,23 +591,6 @@ const menuHandlers = {
  * reporting success over a write that did not happen is the exact failure that
  * window exists to remove.
  */
-/**
- * Which side HER words sit on, with the setting this replaced as the fallback.
- *
- * `null` on a persona means nobody has ever been asked — a character written
- * before the field existed, or the built-in. That is not the same as somebody
- * choosing `auto`, and only the first may fall back: collapsing the two would
- * take a side deliberately set to `auto` and quietly replace it with whatever
- * `preferences.json` happened to hold.
- *
- * The fallback stops being consulted for a character the moment anybody picks a
- * side on her sheet, so this is a migration that finishes itself rather than a
- * branch that lives for ever.
- */
-function sideFor(persona: Persona): BubbleSide {
-  return persona.bubbleSide ?? readLegacyBubbleSide(app.getPath('userData'))
-}
-
 /**
  * Put her words on a side, on HER file rather than on the machine's.
  *
@@ -1405,7 +1385,7 @@ ipcMain.handle('voice:config', () => {
     greeting: grants.speak_first && !resting.asleep ? greetingFor(resolved.persona) : null,
     face: avatar.face,
     problems: problems.count(),
-    bubbleSide: sideFor(resolved.persona),
+    bubbleSide: resolved.persona.bubbleSide,
     asleep: resting.asleep,
     tools: mayDo.tools,
   }
@@ -1766,7 +1746,6 @@ ipcMain.handle('shelf:read', (): ShelfView => {
           one.avatarId,
           one.theme,
         ).face,
-      sideFor,
     ),
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],

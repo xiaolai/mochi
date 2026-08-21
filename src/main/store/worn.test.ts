@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { HALO_WHEN } from '@shared/ipc'
 import {
-  readLegacyBubbleSide,
   readResting,
   readWornPersonaId,
   writeResting,
@@ -124,31 +123,6 @@ describe('remembering who is worn', () => {
   })
 })
 
-describe('which side the bubble sits on', () => {
-  it('is auto until somebody says otherwise', () => {
-    // Also what a missing file, a broken file, and an unrecognised value mean:
-    // there is exactly one answer for "nobody has chosen", and it is the one
-    // that works everywhere.
-    expect(readLegacyBubbleSide(userData)).toBe('auto')
-    writeFileSync(join(userData, 'preferences.json'), '{ not json')
-    expect(readLegacyBubbleSide(userData)).toBe('auto')
-    writeFileSync(join(userData, 'preferences.json'), JSON.stringify({ bubbleSide: 'sideways' }))
-    expect(readLegacyBubbleSide(userData)).toBe('auto')
-  })
-
-  it('still reads a side somebody set before it became hers', () => {
-    /*
-      READ-ONLY now. The side is a persona field — see `Persona.bubbleSide` —
-      and nothing writes this key any more. It is still read because dropping
-      it would silently discard a choice somebody made: `sideFor` uses it for a
-      character that has never been asked, and stops consulting it for that
-      character the moment anybody picks a side on her sheet.
-    */
-    writeFileSync(join(userData, 'preferences.json'), JSON.stringify({ bubbleSide: 'left' }))
-    expect(readLegacyBubbleSide(userData)).toBe('left')
-  })
-})
-
 describe('how she was left', () => {
   it('is awake and visible until told otherwise', () => {
     // The direction a wrong guess should fail in: a companion that is present
@@ -236,9 +210,6 @@ describe('what she may do while nobody is watching', () => {
     writePreferences({ activePersonaId: 'loki', bubbleSide: 'left' })
     writeGrant(userData, 'speak_first', false)
     expect(readWornPersonaId(userData)).toBe('loki')
-    // The legacy key survives a write it knows nothing about. Nothing writes it
-    // any more, and `sideFor` still reads it for a persona nobody has asked.
-    expect(readLegacyBubbleSide(userData)).toBe('left')
     expect(readGrants(userData).speak_first).toBe(false)
   })
 

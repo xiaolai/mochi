@@ -27,6 +27,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { Menu, Tray, app, nativeImage } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
+import { SIDE_NAMES } from '@shared/persona'
 import { forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
 
 export interface TrayModel {
@@ -162,7 +163,7 @@ export function trayMenuTemplate(
       label: 'Speech bubble',
       submenu: [
         {
-          label: 'Wherever it fits',
+          label: forPronoun(SIDE_NAMES.auto, model.pronoun),
           type: 'radio',
           checked: model.bubble.asked === 'auto',
           click: () => {
@@ -181,7 +182,7 @@ export function trayMenuTemplate(
           // `?? side` keeps a side this menu has no name for readable rather
           // than blank -- the raw key is at least true.
           label: (() => {
-            const named = SIDE_NAMES[side]
+            const named = (SIDE_NAMES as Record<string, ByPronoun>)[side]
             return named === undefined ? side : forPronoun(named, model.pronoun)
           })(),
           type: 'radio',
@@ -197,19 +198,6 @@ export function trayMenuTemplate(
     // an accessory app has no application menu to carry it.
     { label: `Quit ${appName}`, accelerator: 'Command+Q', click: handlers.onQuit },
   ]
-}
-
-/**
- * What the sides are called to a person.
- *
- * "Above her" rather than "Top", because the menu is about where she speaks
- * from, not about a corner of a box.
- */
-const SIDE_NAMES: Readonly<Record<string, ByPronoun>> = {
-  above: { she: 'Above her', he: 'Above him', it: 'Above it' },
-  below: { she: 'Below her', he: 'Below him', it: 'Below it' },
-  left: { she: 'To her left', he: 'To his left', it: 'To its left' },
-  right: { she: 'To her right', he: 'To his right', it: 'To its right' },
 }
 
 /**
