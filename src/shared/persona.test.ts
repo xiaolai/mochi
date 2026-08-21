@@ -1457,3 +1457,37 @@ describe('what the sides are called', () => {
     }
   })
 })
+
+/**
+ * A section's hint promises something about everything under it.
+ *
+ * The speech bubble's two controls lived in Voice, whose hint reads "a change
+ * is a reconnect, so it lands on its next wake". True of a voice, true of the
+ * switch — and false of the side, which `setBubbleSide` pushes straight to her
+ * window because somebody who picks one wants to see her words move now.
+ *
+ * One control disobeying a hint is the section being wrong rather than the
+ * control, which is why they got a heading of their own. This is the assertion
+ * that keeps them from drifting back: the two timings differ, and any section
+ * that claims to hold both has to say so.
+ */
+describe('when a change to her bubble lands', () => {
+  const source = (relative: string): string =>
+    readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8')
+
+  it('is a reconnect for the switch and immediate for the side', () => {
+    // The switch is read once, out of the session config, when a session opens.
+    expect(source('../renderer/companion/main.ts')).toMatch(/face\.showWords\(next\.bubble\)/)
+    // The side has its own frame, sent the moment it is chosen.
+    expect(source('../main/index.ts')).toMatch(/__mochi_bubble_side__/)
+    expect(source('../renderer/companion/main.ts')).toMatch(/__mochi_bubble_side__/)
+  })
+
+  it('is said by the section that holds them, not by the one about her voice', () => {
+    const shelf = source('../renderer/history/shelf.ts')
+    // Its own heading, so the hint above it can cover both halves honestly.
+    expect(shelf).toContain("section(\n    'Speech bubble',")
+    // And Voice keeps its own, which is true of everything left in it.
+    expect(shelf).toMatch(/section\('Voice', forPronoun\(SAYS\.nextWake/)
+  })
+})

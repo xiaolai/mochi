@@ -33,18 +33,10 @@ const SAYS = {
     he: 'ten · a change is a reconnect, so it lands on his next wake',
     it: 'ten · a change is a reconnect, so it lands on its next wake',
   },
-  bubble: {
-    /*
-      "Beside her", not "above her head".
-
-      The side has been choosable for a long time — above, below, left, right,
-      or wherever there is room — and this label went on naming one of the five
-      as though it were the only one. It is directly above the control that
-      picks it now, which made the disagreement impossible to miss.
-    */
-    she: 'Show her words beside her while she speaks',
-    he: 'Show his words beside him while he speaks',
-    it: 'Show its words beside it while it speaks',
+  bubbleWhen: {
+    she: 'off by default · the switch lands on her next wake, a side moves them now',
+    he: 'off by default · the switch lands on his next wake, a side moves them now',
+    it: 'off by default · the switch lands on its next wake, a side moves them now',
   },
   bubbleSide: {
     she: 'A side that will not fit is not honoured — dragged into a corner she puts her words wherever there is room.',
@@ -441,6 +433,7 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
     colourSection(view, worn, handlers),
     moodSection(view, worn, handlers),
     voiceSection(view, worn, handlers),
+    bubbleSection(view, worn, handlers),
     fileSection(view, worn, handlers),
     promptSection(view, worn, handlers),
     memorySection(view, handlers),
@@ -734,6 +727,58 @@ function voiceSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHand
     },
   )
 
+  /*
+    What the dot means, said once under the row rather than in ten tooltips.
+
+    Careful about whose claim it is. §25's "What is NOT established" is explicit
+    that latency and quality are entirely unmeasured here — nobody in this
+    project has listened to ten voices and ranked them — so this points at
+    somebody else's recommendation instead of making one. The one fact measured
+    on this machine is in §24 §3: the service's own default output voice is
+    `marin`, which is one of the two.
+  */
+  const marked = element('p', 'note')
+  const dot = element('span', 'dot')
+  dot.setAttribute('aria-hidden', 'true')
+  marked.append(dot, ` ${view.recommendedVoices.join(' and ')} are the two OpenAI recommends `)
+  marked.append('for realtime. The rest all work; nothing here has measured how they sound.')
+
+  const body: HTMLElement[] = [pills]
+  // Only when there is something to explain. A legend for a mark that is not on
+  // screen is a sentence about nothing, and this list comes from main.
+  if (view.recommendedVoices.length > 0) body.push(marked)
+  return section('Voice', forPronoun(SAYS.nextWake, view.pronoun), ...body)
+}
+
+/**
+ * Her words on your desktop: whether they are drawn, and where.
+ *
+ * ## A section of its own, and the hint is why
+ *
+ * Both halves lived in Voice — the switch because it had always been there, the
+ * side because it moved off the Machine tab to join it. That section's hint
+ * says "a change is a reconnect, so it lands on its next wake", which is true
+ * of a voice and of the switch and NOT of the side: `setBubbleSide` pushes
+ * straight to her window, deliberately, because somebody who picks a side wants
+ * to see her words move now.
+ *
+ * A hint makes a promise about everything under it. One control disobeying it
+ * is the section being wrong rather than the control, so the two that belong
+ * together got a heading and a hint that covers both honestly.
+ *
+ * ## "Show it", not a sentence
+ *
+ * The switch read *"Show her words beside her while she speaks"* — prose in a
+ * column of controls, and it carried its own location claim next to the control
+ * that sets the location. The heading names the thing; the switch says what it
+ * does. That is the shape every other control in these windows already has,
+ * and with no pronoun left in it the label stops being a three-way table.
+ */
+function bubbleSection(
+  view: ShelfView,
+  worn: ShelfCharacter,
+  handlers: ShelfHandlers,
+): HTMLElement {
   const bubble = element('input')
   bubble.type = 'checkbox'
   bubble.checked = worn.bubble
@@ -741,25 +786,11 @@ function voiceSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHand
   bubble.addEventListener('change', () => {
     handlers.save({ id: worn.id, bubble: bubble.checked })
   })
-  const label = element('label', undefined, forPronoun(SAYS.bubble, view.pronoun))
+  const label = element('label', undefined, 'Show it')
   label.htmlFor = bubble.id
   const row = element('div', 'row')
   row.append(bubble, label)
 
-  /*
-    WHERE those words go, beside the switch that turns them on.
-
-    This was on the Machine tab, under "On screen", and app-level: one feature
-    split across two tabs, with the half that says WHETHER filed under the
-    character and the half that says WHERE filed under the desk. So a character
-    with the bubble off still had a live side control governing something
-    nothing could display, and turning it on here meant going to another tab to
-    find out where the words would land.
-
-    Both halves are hers now — see `Persona.bubbleSide`. The tray menu still
-    offers the same choice and still writes through the same one function, so
-    two entry points cannot drift.
-  */
   const side = document.createElement('select')
   for (const one of worn.bubbleSides) {
     const option = document.createElement('option')
@@ -786,28 +817,13 @@ function voiceSection(view: ShelfView, worn: ShelfCharacter, handlers: ShelfHand
   const where = element('div', 'field')
   where.append(element('label', undefined, 'Which side'), side)
 
-  /*
-    What the dot means, said once under the row rather than in ten tooltips.
-
-    Careful about whose claim it is. §25's "What is NOT established" is explicit
-    that latency and quality are entirely unmeasured here — nobody in this
-    project has listened to ten voices and ranked them — so this points at
-    somebody else's recommendation instead of making one. The one fact measured
-    on this machine is in §24 §3: the service's own default output voice is
-    `marin`, which is one of the two.
-  */
-  const marked = element('p', 'note')
-  const dot = element('span', 'dot')
-  dot.setAttribute('aria-hidden', 'true')
-  marked.append(dot, ` ${view.recommendedVoices.join(' and ')} are the two OpenAI recommends `)
-  marked.append('for realtime. The rest all work; nothing here has measured how they sound.')
-
-  const body: HTMLElement[] = [pills]
-  // Only when there is something to explain. A legend for a mark that is not on
-  // screen is a sentence about nothing, and this list comes from main.
-  if (view.recommendedVoices.length > 0) body.push(marked)
-  body.push(row, where, element('p', 'note', forPronoun(SAYS.bubbleSide, view.pronoun)))
-  return section('Voice', forPronoun(SAYS.nextWake, view.pronoun), ...body)
+  return section(
+    'Speech bubble',
+    forPronoun(SAYS.bubbleWhen, view.pronoun),
+    row,
+    where,
+    element('p', 'note', forPronoun(SAYS.bubbleSide, view.pronoun)),
+  )
 }
 
 /**
