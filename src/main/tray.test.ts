@@ -48,16 +48,36 @@ function labels(template: ReturnType<typeof trayMenuTemplate>): string[] {
  * undone — quietly, and the app goes on looking exactly the same.
  */
 describe('what the menu bar says about the microphone', () => {
+  /*
+    CODE only, comments stripped.
+
+    The assertions below forbid things, and a paragraph explaining why one was
+    removed contains the very string it forbids — which is how the first version
+    of the `setTitle` check failed on its own rationale. `lifecycle.test.ts` and
+    `first-show.test.ts` keep the same helper for the same reason.
+  */
   const source = readFileSync(fileURLToPath(new URL('./tray.ts', import.meta.url)), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
 
   it('takes the fact from the model and puts it on the item', () => {
     expect(source).toContain('readonly listening: boolean')
     expect(source).toMatch(/markListening\(item, now\.listening\)/)
-    expect(source).toMatch(/setTitle\(/)
-    // In words as well as in a shape. A mark alone is only a statement to
-    // somebody who can see it, which is the rule the shelf's own microphone
-    // already follows with its off-screen label.
     expect(source).toMatch(/setToolTip\(/)
+  })
+
+  it('does not draw a second dot beside the system’s own', () => {
+    /*
+      This asserted `setTitle(` — a `●` next to the icon while the device was
+      live. macOS already shows an orange dot in the menu bar whenever any app
+      has the microphone, and names the app in Control Center, so ours sat a few
+      pixels from the system's saying the same thing and cost menu bar width.
+
+      The promise `halo.ts` makes is unaffected and is now carried by the
+      stronger of the two: the system indicator cannot be switched off by this
+      application, hidden by a preference, or forgotten in a render loop.
+    */
+    expect(source).not.toMatch(/setTitle\(/)
   })
 
   it('is reachable from no preference at all', () => {

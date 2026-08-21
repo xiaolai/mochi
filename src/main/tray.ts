@@ -342,42 +342,29 @@ export interface TrayHandle {
 }
 
 /**
- * The mark beside the icon while the microphone is open.
+ * That the microphone is open, said in the hover text and nowhere else.
  *
- * ## Why the TRAY carries this
+ * ## The dot beside the icon is gone, and it was redundant
+ *
+ * This drew `setTitle('●')` while the device was live. macOS ALREADY shows an
+ * orange dot in the menu bar whenever any application has the microphone, and
+ * names the app in Control Center — so ours sat a few pixels away from the
+ * system's, saying the same thing, and cost menu bar width to do it.
+ *
+ * ## What that does to the promise, stated rather than assumed
  *
  * `halo.ts` exists because an open microphone with nothing on screen saying so
- * is the worst thing this application can do, and until this existed the halo
- * over her head was the only surface saying it. That made the halo a promise
- * rather than a preference — an off switch for it was an off switch for the
- * promise — and it left a state where the promise was already broken:
- * `setHidden` hides her window without touching the session, deliberately, so
- * one click from this very menu produced a live microphone and an empty screen.
+ * is the worst thing this application can do, and the halo's `never` option is
+ * only offerable because something else carries that. The something else is
+ * still there and is STRONGER than what was removed: the system indicator
+ * cannot be switched off by this app, cannot be hidden by a preference, and
+ * does not depend on us remembering to draw it. Ours could be all three.
  *
- * This item cannot be hidden, cannot be dragged off a display, and is the only
- * way to quit the application. It is the right place for a fact that must not
- * be switchable off.
- *
- * ## A TITLE rather than a second icon
- *
- * `setTitle` costs no artwork and follows the menu bar's own colour, which a
- * second PNG cannot: the macOS assets here are template images — pure alpha,
- * tinted by the system — so a "lit" variant could differ in SHAPE but never in
- * colour, and would need six hand-drawn files with no generator to make them.
- *
- * macOS only, and the guard is explicit rather than relying on `setTitle` being
- * a silent no-op elsewhere: a Windows or Linux build says nothing here yet, and
- * the settings pane's note is written to be true on those platforms too —
- * macOS's own orange dot is what it points at, and that is a macOS fact.
+ * The tooltip stays, on every platform, for the same reason the shelf's
+ * microphone mark keeps an off-screen label: it says in words what a shape
+ * says only to somebody looking straight at it.
  */
-const LISTENING_MARK = '●'
-
 function markListening(item: Tray, on: boolean): void {
-  if (process.platform !== 'darwin') return
-  item.setTitle(on ? LISTENING_MARK : '')
-  // The hover text says it in words, on every platform, for the same reason the
-  // shelf's microphone mark keeps an off-screen label: a mark is a shape, and a
-  // shape alone is only a statement to somebody who can see it.
   item.setToolTip(on ? `${app.getName()} — listening` : app.getName())
 }
 
