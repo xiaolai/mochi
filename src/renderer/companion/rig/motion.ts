@@ -123,13 +123,18 @@ export function progress(clip: MotionClip, elapsedMs: number): number | null {
 export function poseAt(clip: MotionClip, at: number): MotionPose {
   const pose: MotionPose = {}
   for (const channel of MOTION_CHANNELS) {
-    const value = channelAt(clip.keys, channel, at)
+    const value = channelAt(clip.keys, channel, at, clip.loop)
     if (value !== null) pose[channel] = value
   }
   return pose
 }
 
-function channelAt(keys: readonly MotionKey[], channel: MotionChannel, at: number): number | null {
+function channelAt(
+  keys: readonly MotionKey[],
+  channel: MotionChannel,
+  at: number,
+  loop: boolean,
+): number | null {
   const stated = keys.filter((key) => key[channel] !== undefined)
   if (stated.length === 0) return null
 
@@ -146,16 +151,116 @@ function channelAt(keys: readonly MotionKey[], channel: MotionChannel, at: numbe
     const before = stated[i - 1]
     const after = stated[i]
     if (before === undefined || after === undefined || after.t < at) continue
-    const span = after.t - before.t
-    const k = span === 0 ? 1 : (at - before.t) / span
-    const a = before[channel] ?? 0
-    const b = after[channel] ?? 0
-    // `a*(1-k) + b*k`, not `a + (b-a)*k`. The second gives 1.1000000000000001
-    // at k=1 -- the same defect `blendLook` was fixed for, and the same
-    // consequence: a tuned value never reaching the renderer exactly.
-    return a * (1 - k) + b * k
+    return hermite(stated, i, channel, at, loop)
   }
   return last[channel] ?? null
+}
+
+/**
+ * A cubic through the keys, rather than a straight line between them.
+ *
+ * ## What linear interpolation actually looks like
+ *
+ * It was `a*(1-k) + b*k`, which is exact and correct and moves like a machine.
+ * Every key is a VELOCITY DISCONTINUITY: she travels at a constant speed to the
+ * key, changes speed instantaneously, and travels at another constant speed
+ * away from it. Nothing physical does that, and the eye reads the corners
+ * immediately -- reported, in as many words, as the motions being crude.
+ *
+ * This is Catmull-Rom, expressed as a Hermite with finite-difference tangents:
+ * the speed at each key is estimated from its NEIGHBOURS, so velocity carries
+ * through a key instead of restarting at it. The curve still passes exactly
+ * through every authored value, which is what keeps a clip an authored thing
+ * rather than a suggestion.
+ *
+ * ## Why not ease each segment instead
+ *
+ * A smoothstep per segment is one line and is wrong for half the library. It
+ * forces velocity to ZERO at every key, so `sway` -- which crosses zero at its
+ * midpoint on the way from one extreme to the other -- would stop dead in the
+ * middle of a continuous lean. Easing is a property of a segment; smoothness is
+ * a property of the curve, and the complaint was about the curve.
+ *
+ * ## Time is NON-UNIFORM, so the tangents are scaled by it
+ *
+ * Keys are placed where the motion needs them, not on a grid: `hop` has eight
+ * keys with gaps from 0.12 to 0.16, and `wander` has eleven. The textbook
+ * uniform Catmull-Rom assumes even spacing and produces a visible surge either
+ * side of a short segment. Dividing each difference by the real time it spans
+ * is what makes the curve independent of where the keys happen to sit.
+ *
+ * ## Loops wrap; one-shots do not
+ *
+ * A looping clip takes its neighbours from the other end, so the seam is as
+ * smooth as everywhere else -- otherwise `sway` and `wander` would kink once
+ * per cycle, forever, which is the defect the loop-closure check exists to
+ * prevent in its cruder form. A one-shot uses a one-sided difference at its
+ * ends, so it starts and finishes without being dragged by a key that is not
+ * there.
+ *
+ * Overshoot between keys is possible and is deliberate: it is what gives a
+ * landing its weight. `squashed` clamps the body scale, so the one channel
+ * where an overshoot could be structural is already bounded.
+ */
+function hermite(
+  stated: readonly MotionKey[],
+  index: number,
+  channel: MotionChannel,
+  at: number,
+  loop: boolean,
+): number {
+  const n = stated.length
+  const value = (key: MotionKey | undefined): number => key?.[channel] ?? 0
+
+  const p1 = stated[index - 1]
+  const p2 = stated[index]
+  if (p1 === undefined || p2 === undefined) return value(p2 ?? p1)
+
+  const span = p2.t - p1.t
+  if (span <= 0) return value(p2)
+
+  /*
+    The neighbour outside the segment, and how far away in time it is.
+
+    For a loop that is the key at the other end, one period away — the first and
+    last keys hold the same value (the closure check enforces it), so the wrap
+    skips one of them to avoid a zero-length span that would make the tangent
+    infinite.
+  */
+  const before =
+    index >= 2
+      ? { key: stated[index - 2], dt: p1.t - (stated[index - 2]?.t ?? 0) }
+      : loop && n >= 3
+        ? { key: stated[n - 2], dt: p1.t + (1 - (stated[n - 2]?.t ?? 1)) }
+        : null
+  const after =
+    index + 1 < n
+      ? { key: stated[index + 1], dt: (stated[index + 1]?.t ?? 1) - p2.t }
+      : loop && n >= 3
+        ? { key: stated[1], dt: 1 - p2.t + (stated[1]?.t ?? 0) }
+        : null
+
+  // Finite differences over real time. With no neighbour the difference is
+  // one-sided, which is the segment's own slope — an end that neither
+  // accelerates into nothing nor is pulled by a key that does not exist.
+  const m1 =
+    before === null || before.dt <= 0
+      ? (value(p2) - value(p1)) / span
+      : (value(p2) - value(before.key)) / (span + before.dt)
+  const m2 =
+    after === null || after.dt <= 0
+      ? (value(p2) - value(p1)) / span
+      : (value(after.key) - value(p1)) / (span + after.dt)
+
+  const u = (at - p1.t) / span
+  const uu = u * u
+  const uuu = uu * u
+  return (
+    (2 * uuu - 3 * uu + 1) * value(p1) +
+    (uuu - 2 * uu + u) * span * m1 +
+    (-2 * uuu + 3 * uu) * value(p2) +
+    (uuu - uu) * span * m2
+  )
 }
 
 /**
@@ -209,16 +314,19 @@ export const BUILT_IN_MOTIONS: Readonly<Record<string, MotionClip>> = {
    * her window before she can use it.
    */
   hop: {
-    durationMs: 560,
+    // Quick. A jump is over before you have finished noticing it started, and
+    // 560ms of it read as her being hoisted rather than jumping.
+    durationMs: 420,
     loop: false,
     keys: [
       { t: 0, squash: 0, lift: 0 },
-      { t: 0.16, squash: 0.13, lift: 0 },
-      { t: 0.3, squash: -0.07, lift: 0.07 },
-      { t: 0.46, squash: -0.03, lift: 0.16 },
-      { t: 0.62, squash: 0.02, lift: 0.08 },
-      { t: 0.74, squash: 0.11, lift: 0 },
-      { t: 0.88, squash: -0.03, lift: 0 },
+      // The crouch is FAST and the launch is faster: most of the clip is air.
+      { t: 0.14, squash: 0.17, lift: 0 },
+      { t: 0.26, squash: -0.1, lift: 0.11 },
+      { t: 0.44, squash: -0.04, lift: 0.22 },
+      { t: 0.62, squash: 0.03, lift: 0.11 },
+      { t: 0.72, squash: 0.15, lift: 0 },
+      { t: 0.86, squash: -0.05, lift: 0 },
       { t: 1, squash: 0, lift: 0 },
     ],
   },
@@ -234,13 +342,13 @@ export const BUILT_IN_MOTIONS: Readonly<Record<string, MotionClip>> = {
    * from under its own head.
    */
   swing: {
-    durationMs: 2600,
+    durationMs: 2200,
     loop: true,
     keys: [
       { t: 0, lean: 0, shift: 0 },
-      { t: 0.25, lean: 0.085, shift: 0.12 },
+      { t: 0.25, lean: 0.095, shift: 0.17 },
       { t: 0.5, lean: 0, shift: 0 },
-      { t: 0.75, lean: -0.085, shift: -0.12 },
+      { t: 0.75, lean: -0.095, shift: -0.17 },
       { t: 1, lean: 0, shift: 0 },
     ],
   },
@@ -259,7 +367,9 @@ export const BUILT_IN_MOTIONS: Readonly<Record<string, MotionClip>> = {
    * that angle to make it worth looking at.
    */
   turn: {
-    durationMs: 1500,
+    // A head turn is quick and the RETURN is slower than the going, which is
+    // what makes it read as looking at something rather than as scanning.
+    durationMs: 950,
     loop: false,
     keys: [
       // Her face LEADS and TRAILS her body, which is how a head turn actually
@@ -269,9 +379,9 @@ export const BUILT_IN_MOTIONS: Readonly<Record<string, MotionClip>> = {
       // instant at which this channel can be measured on its own -- a clip
       // whose channels all move together can only ever be tested as a whole.
       { t: 0, turn: 0, lean: 0, gazeX: 0 },
-      { t: 0.14, turn: 0.34, lean: 0, gazeX: 0.1 },
-      { t: 0.3, turn: 0.62, lean: 0.05, gazeX: 0.3 },
-      { t: 0.6, turn: 0.6, lean: 0.06, gazeX: 0.32 },
+      { t: 0.12, turn: 0.4, lean: 0.02, gazeX: 0.16 },
+      { t: 0.26, turn: 0.72, lean: 0.06, gazeX: 0.34 },
+      { t: 0.58, turn: 0.7, lean: 0.07, gazeX: 0.36 },
       { t: 0.82, turn: 0.42, lean: 0, gazeX: 0 },
       { t: 1, turn: 0, lean: 0, gazeX: 0 },
     ],
@@ -295,7 +405,7 @@ export const BUILT_IN_MOTIONS: Readonly<Record<string, MotionClip>> = {
    * it at the end, which is what a body does when it starts and stops.
    */
   wander: {
-    durationMs: 11_000,
+    durationMs: 7_200,
     loop: true,
     keys: [
       { t: 0, shift: 0, lean: 0, lift: 0 },

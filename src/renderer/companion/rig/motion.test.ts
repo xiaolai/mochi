@@ -72,10 +72,63 @@ describe('poseAt', () => {
     }
   })
 
-  it('interpolates between the keys around a moment', () => {
+  it('moves between the keys, and past the straight line between them', () => {
+    /*
+      This used to assert the LINEAR midpoint — 0.03 at t=0.125, exactly half of
+      0.06 — and that was the whole problem: a straight line between keys makes
+      every key a velocity discontinuity, so a clip is a chain of segments with
+      corners in it. Reported as the motions being crude, and it was.
+
+      The curve passes through the authored values (above) and bulges between
+      them, which is what carrying velocity through a key looks like.
+    */
     const half = poseAt(sway, 0.125)
-    expect(half.lean).toBeCloseTo(0.03, 5)
-    expect(half.gazeX).toBeCloseTo(0.09, 5)
+    expect(half.lean).toBeGreaterThan(0.03)
+    expect(half.gazeX).toBeGreaterThan(0.09)
+    // Still bounded by the neighbouring keys' magnitude — a bulge, not a spike.
+    expect(half.lean).toBeLessThan(0.06)
+    expect(half.gazeX).toBeLessThan(0.18)
+  })
+
+  it('carries velocity THROUGH a key instead of restarting at it', () => {
+    /*
+      The property the complaint was about, measured rather than described.
+
+      Speed just before a key and just after it, on a channel that is plainly
+      still moving there: `sway` crosses zero at t=0.5 on its way from one
+      extreme to the other, so the velocity there should be at its largest and
+      the two sides should agree. Linear interpolation also agrees across THIS
+      key by luck of symmetry, so the test uses `wander`, whose keys are
+      unevenly spaced and unevenly valued.
+    */
+    const wander = BUILT_IN_MOTIONS['wander']!
+    const shift = (t: number): number => poseAt(wander, t).shift ?? 0
+    // ONE-SIDED, and taken right at the key rather than a few frames out. A
+    // central difference straddling a turning point measures the curvature of
+    // the segment as well as the joint, which is why an earlier version of this
+    // failed at `t = 0.84` — the one key where `shift` reverses.
+    const h = 1e-4
+    for (const key of wander.keys.slice(1, -1)) {
+      const before = (shift(key.t) - shift(key.t - h)) / h
+      const after = (shift(key.t + h) - shift(key.t)) / h
+      /*
+        Under linear interpolation these are two unrelated constants: at
+        `t = 0.84` they are -0.6 and +2.2, a gap of 2.8. Under a cubic through
+        the keys they agree to within the curvature over one step.
+      */
+      expect(Math.abs(after - before), `at t=${String(key.t)}`).toBeLessThan(0.05)
+    }
+  })
+
+  it('is smooth across the seam of a loop, not only inside it', () => {
+    // Otherwise it kinks once per cycle for as long as it plays -- the same
+    // failure the loop-closure check prevents in its cruder form, where the
+    // POSE jumps rather than the velocity.
+    const speed = (t: number, d = 0.001): number =>
+      ((poseAt(sway, t + d).lean ?? 0) - (poseAt(sway, t - d).lean ?? 0)) / (2 * d)
+    // Just after the start and just before the end are the same instant in a
+    // loop, so the speed at both has to match.
+    expect(speed(0.004)).toBeCloseTo(speed(0.996), 1)
   })
 
   it('holds outside the stated range rather than fading toward zero', () => {
@@ -228,8 +281,13 @@ describe("the built-ins are held to the standard a stranger's clip is", () => {
     // Derived rather than declared, so retiming a clip cannot leave the number
     // beside it stale. `up` only: she hops rather than sinking.
     expect(motionReach(BUILT_IN_MOTIONS['nod']!)).toEqual({ x: 0, up: 0 })
-    expect(motionReach(BUILT_IN_MOTIONS['hop']!)).toEqual({ x: 0, up: 0.16 })
-    expect(motionReach(BUILT_IN_MOTIONS['swing']!).x).toBeCloseTo(0.12)
+    expect(motionReach(BUILT_IN_MOTIONS['hop']!).up).toBeCloseTo(
+      Math.max(...BUILT_IN_MOTIONS['hop']!.keys.map((k) => k.lift ?? 0)),
+    )
+    expect(motionReach(BUILT_IN_MOTIONS['hop']!).x).toBe(0)
+    expect(motionReach(BUILT_IN_MOTIONS['swing']!).x).toBeCloseTo(
+      Math.max(...BUILT_IN_MOTIONS['swing']!.keys.map((k) => Math.abs(k.shift ?? 0))),
+    )
 
     const worst = builtInReach()
     for (const clip of Object.values(BUILT_IN_MOTIONS)) {

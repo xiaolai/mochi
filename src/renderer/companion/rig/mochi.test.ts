@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { EMOTIONS, type Emotion } from '@shared/avatar'
 import { FACE_BOUNDS, MOCHI } from '@shared/avatar-spec'
 import { MochiAvatar } from './mochi'
+import { BUILT_IN_MOTIONS } from './motion'
 import { BLINK_DURATION_MS, BREATH_PERIOD_MS, nextBlinkGap } from './idle'
 import { SIZE_PERCENT, layoutFor } from '@shared/avatar-layout'
 
@@ -964,8 +965,16 @@ describe('going somewhere', () => {
     return n === 0 ? 0 : sum / n
   }
 
-  /** Play `name` and render it at `at`, against a control with no motion. */
-  function at(name: string, ms: number): { moved: Rig; still: Rig } {
+  /**
+   * Play `name` and render it at a FRACTION of its own duration.
+   *
+   * A fraction rather than a millisecond count, because retuning a clip is
+   * ordinary and three tests silently reading past the end of one is not: when
+   * `turn` went from 1500ms to 950 these all rendered a finished clip and
+   * asserted against its resting pose.
+   */
+  function at(name: string, fraction: number): { moved: Rig; still: Rig } {
+    const ms = fraction * (BUILT_IN_MOTIONS[name]?.durationMs ?? 0)
     const moved = rig()
     moved.avatar.playMotion(name)
     moved.avatar.render(0)
@@ -1008,7 +1017,7 @@ describe('going somewhere', () => {
       `wander`'s 0.42 body widths walk her off the edge of it. In the app that
       room is reserved in the pad; here there is none to reserve.
     */
-    const { moved, still } = at('swing', 0.25 * 2600)
+    const { moved, still } = at('swing', 0.25)
     const a = extent(moved.ctx)
     const b = extent(still.ctx)
     if (a === null || b === null) throw new Error('nothing painted')
@@ -1022,8 +1031,8 @@ describe('going somewhere', () => {
   })
 
   it('takes her off the ground on `lift`', () => {
-    // `hop` is at its apex around t = 0.46 of 560ms.
-    const { moved, still } = at('hop', 0.46 * 560)
+    // `hop` is at its apex around t = 0.44.
+    const { moved, still } = at('hop', 0.44)
     const a = extent(moved.ctx)
     const b = extent(still.ctx)
     if (a === null || b === null) throw new Error('nothing painted')
@@ -1041,7 +1050,7 @@ describe('going somewhere', () => {
       visible pixels that `hitTest` calls empty desktop -- the click lands on
       whatever is behind her, and nothing looks wrong.
     */
-    const { moved, still } = at('wander', 0.38 * 11_000)
+    const { moved, still } = at('wander', 0.38)
     const a = extent(moved.ctx)
     const b = extent(still.ctx)
     if (a === null || b === null) throw new Error('nothing painted')
@@ -1058,7 +1067,7 @@ describe('going somewhere', () => {
     // Not a rotation and it cannot become one: there is one silhouette. What
     // turns is what is drawn ON her, and the clip to the outline is what makes
     // the far side pass out of sight rather than stick out.
-    const { moved, still } = at('turn', 0.82 * 1500)
+    const { moved, still } = at('turn', 0.82)
     const a = extent(moved.ctx)
     const b = extent(still.ctx)
     if (a === null || b === null) throw new Error('nothing painted')
