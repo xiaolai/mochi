@@ -9,6 +9,8 @@ import { SIZE_PERCENT, layoutFor } from '@shared/avatar-layout'
 
 const WIDTH = 240
 const HEIGHT = 220
+/** Wide enough that a travelling clip does not meet the edge. See `wide()`. */
+const WIDE_W = 620
 
 interface Rig {
   readonly canvas: Canvas
@@ -419,16 +421,39 @@ describe('MochiAvatar', () => {
   })
 
   it('does not blink on the very first frame', () => {
-    // idle.ts is explicit that seeding the blink schedule from zero puts the
-    // first blink in the past whenever startup outlasts the minimum gap. The
-    // layer was being constructed with 0 and only re-armed on a later toggle,
-    // so she blinked the instant she appeared.
+    /*
+      idle.ts is explicit that seeding the blink schedule from zero puts the
+      first blink in the past whenever startup outlasts the minimum gap. The
+      layer was being constructed with 0 and only re-armed on a later toggle,
+      so she blinked the instant she appeared.
+
+      This used to compare against `setIdle(false)` and expect the pixel counts
+      to be EQUAL. That stopped being a clean control when the idle layer grew
+      a drift: idle-off now means no blink AND no drift, so the two frames
+      differ by a couple of pixels of antialiasing whatever the eyes are doing.
+
+      So the tolerance is calibrated rather than chosen — a blink's own effect
+      on the ink is measured first, and the first frame has to be nowhere near
+      it. `idle.test.ts` owns the layer-level property; this owns the rig
+      remembering to seed it.
+    */
+    const seen: number[] = []
+    const sampler = rig()
+    for (let t = 0; t <= 12_000; t += 40) {
+      sampler.avatar.render(600_000 + t)
+      seen.push(inkPixels(sampler.ctx, 1))
+    }
+    const blinkDepth = Math.max(...seen) - Math.min(...seen)
+    // A blink shuts both eyes, which are the darkest pixels she has, so it has
+    // to move the count by a good deal more than a two-pixel shift does.
+    expect(blinkDepth).toBeGreaterThan(20)
+
     const first = rig()
     first.avatar.render(600_000)
     const open = rig()
     open.avatar.setIdle(false)
     open.avatar.render(600_000)
-    expect(inkPixels(first.ctx, 1)).toBe(inkPixels(open.ctx, 1))
+    expect(Math.abs(inkPixels(first.ctx, 1) - inkPixels(open.ctx, 1))).toBeLessThan(blinkDepth / 3)
   })
 
   it('wears the sleepy pose while asleep, whatever face she was carrying', () => {
@@ -927,18 +952,37 @@ describe('a motion that loops, and the only thing that ends it', () => {
  * that equal and leave only the travel.
  */
 describe('going somewhere', () => {
+  /**
+   * A WIDE rig, because travel needs somewhere to travel.
+   *
+   * `rig()` is square and `fit-canvas` fills it, so she has no horizontal slack
+   * and any shift walks her into the edge — where her extent stops growing and
+   * every assertion about having moved quietly stops discriminating. In the app
+   * that room is reserved in the pad; here it has to be the canvas.
+   */
+  function wide(): Rig {
+    const canvas = createCanvas(WIDE_W, HEIGHT)
+    const ctx = canvas.getContext('2d')
+    const avatar = new MochiAvatar(ctx as unknown as CanvasRenderingContext2D, {
+      size: 'fit-canvas',
+      random: () => 0.5,
+    })
+    avatar.resize(WIDE_W, HEIGHT, 1)
+    return { canvas, ctx, avatar }
+  }
+
   /** Her full painted extent, which `paintedBox` does not give. */
   function extent(
     ctx: SKRSContext2D,
   ): { left: number; right: number; top: number; bottom: number } | null {
-    const { data } = ctx.getImageData(0, 0, WIDTH, HEIGHT)
-    let left = WIDTH
+    const { data } = ctx.getImageData(0, 0, WIDE_W, HEIGHT)
+    let left = WIDE_W
     let right = -1
     let top = HEIGHT
     let bottom = -1
     for (let y = 0; y < HEIGHT; y++) {
-      for (let x = 0; x < WIDTH; x++) {
-        if ((data[(y * WIDTH + x) * 4 + 3] ?? 0) <= 128) continue
+      for (let x = 0; x < WIDE_W; x++) {
+        if ((data[(y * WIDE_W + x) * 4 + 3] ?? 0) <= 128) continue
         left = Math.min(left, x)
         right = Math.max(right, x)
         top = Math.min(top, y)
@@ -950,12 +994,12 @@ describe('going somewhere', () => {
 
   /** Where her ink sits horizontally, which is what a turn moves. */
   function inkCentroidX(ctx: SKRSContext2D): number {
-    const { data } = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+    const { data } = ctx.getImageData(0, 0, WIDE_W, HEIGHT)
     let sum = 0
     let n = 0
     for (let y = 0; y < HEIGHT; y++) {
-      for (let x = 0; x < WIDTH; x++) {
-        const i = (y * WIDTH + x) * 4
+      for (let x = 0; x < WIDE_W; x++) {
+        const i = (y * WIDE_W + x) * 4
         if ((data[i + 3] ?? 0) > 200 && (data[i + 1] ?? 255) < 110) {
           sum += x
           n += 1
@@ -975,12 +1019,12 @@ describe('going somewhere', () => {
    */
   function at(name: string, fraction: number): { moved: Rig; still: Rig } {
     const ms = fraction * (BUILT_IN_MOTIONS[name]?.durationMs ?? 0)
-    const moved = rig()
+    const moved = wide()
     moved.avatar.playMotion(name)
     moved.avatar.render(0)
     moved.avatar.render(ms)
 
-    const still = rig()
+    const still = wide()
     still.avatar.render(0)
     still.avatar.render(ms)
     return { moved, still }
@@ -997,11 +1041,11 @@ describe('going somewhere', () => {
    * assertion has to look at the one place a lean cannot reach.
    */
   function baseLeft(ctx: SKRSContext2D, bottom: number): number {
-    const { data } = ctx.getImageData(0, 0, WIDTH, HEIGHT)
-    let left = WIDTH
+    const { data } = ctx.getImageData(0, 0, WIDE_W, HEIGHT)
+    let left = WIDE_W
     for (let y = Math.max(0, bottom - 3); y <= bottom; y++) {
-      for (let x = 0; x < WIDTH; x++) {
-        if ((data[(y * WIDTH + x) * 4 + 3] ?? 0) > 128) {
+      for (let x = 0; x < WIDE_W; x++) {
+        if ((data[(y * WIDE_W + x) * 4 + 3] ?? 0) > 128) {
           left = Math.min(left, x)
           break
         }
@@ -1055,10 +1099,24 @@ describe('going somewhere', () => {
     const b = extent(still.ctx)
     if (a === null || b === null) throw new Error('nothing painted')
 
-    // A column she now occupies and did not before.
-    const x = a.right - 2
-    const y = Math.round((a.top + a.bottom) / 2)
-    expect(b.right).toBeLessThan(x)
+    /*
+      A point on the row it is measured on, not on her overall extent.
+
+      `a.right` is the widest she gets ANYWHERE, and she is a dome — at her
+      vertical centre she is narrower than at her shoulders. Sampling the
+      overall right edge at the middle row therefore asks about a pixel outside
+      her, and the test failed for a reason that had nothing to do with
+      translation.
+    */
+    const y = Math.round(a.bottom - (a.bottom - a.top) * 0.25)
+    const rightAt = (ctx: SKRSContext2D): number => {
+      const { data } = ctx.getImageData(0, y, WIDE_W, 1)
+      for (let x = WIDE_W - 1; x >= 0; x -= 1) if ((data[x * 4 + 3] ?? 0) > 128) return x
+      return -1
+    }
+    const x = rightAt(moved.ctx) - 2
+    // She really did move on this row, or the assertion below proves nothing.
+    expect(rightAt(still.ctx)).toBeLessThan(x)
     expect(still.avatar.hitTest(x, y), 'the control should be empty there').toBe(false)
     expect(moved.avatar.hitTest(x, y), 'she is painted there now').toBe(true)
   })

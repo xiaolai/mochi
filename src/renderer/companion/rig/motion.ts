@@ -29,6 +29,8 @@
  * to respect.
  */
 
+import { DRIFT } from './idle'
+
 /**
  * Everything a motion is allowed to move. See the header.
  *
@@ -314,19 +316,20 @@ export const BUILT_IN_MOTIONS: Readonly<Record<string, MotionClip>> = {
    * her window before she can use it.
    */
   hop: {
-    // Quick. A jump is over before you have finished noticing it started, and
-    // 560ms of it read as her being hoisted rather than jumping.
-    durationMs: 420,
+    // Quick and SHALLOW. This is a gesture, not a jump: she leaves the ground
+    // by about eight pixels at her drawn size, which is enough to read as a
+    // hop and not enough to read as her going anywhere.
+    durationMs: 460,
     loop: false,
     keys: [
       { t: 0, squash: 0, lift: 0 },
       // The crouch is FAST and the launch is faster: most of the clip is air.
-      { t: 0.14, squash: 0.17, lift: 0 },
-      { t: 0.26, squash: -0.1, lift: 0.11 },
-      { t: 0.44, squash: -0.04, lift: 0.22 },
-      { t: 0.62, squash: 0.03, lift: 0.11 },
-      { t: 0.72, squash: 0.15, lift: 0 },
-      { t: 0.86, squash: -0.05, lift: 0 },
+      { t: 0.14, squash: 0.1, lift: 0 },
+      { t: 0.26, squash: -0.05, lift: 0.045 },
+      { t: 0.44, squash: -0.02, lift: 0.085 },
+      { t: 0.62, squash: 0.015, lift: 0.042 },
+      { t: 0.72, squash: 0.085, lift: 0 },
+      { t: 0.86, squash: -0.025, lift: 0 },
       { t: 1, squash: 0, lift: 0 },
     ],
   },
@@ -342,13 +345,16 @@ export const BUILT_IN_MOTIONS: Readonly<Record<string, MotionClip>> = {
    * from under its own head.
    */
   swing: {
-    durationMs: 2200,
+    // Slow and shallow. A pendulum you notice is a pendulum you watch; this is
+    // meant to be seen out of the corner of an eye, so the travel is about four
+    // pixels either way on her drawn body.
+    durationMs: 3400,
     loop: true,
     keys: [
       { t: 0, lean: 0, shift: 0 },
-      { t: 0.25, lean: 0.095, shift: 0.17 },
+      { t: 0.25, lean: 0.032, shift: 0.045 },
       { t: 0.5, lean: 0, shift: 0 },
-      { t: 0.75, lean: -0.095, shift: -0.17 },
+      { t: 0.75, lean: -0.032, shift: -0.045 },
       { t: 1, lean: 0, shift: 0 },
     ],
   },
@@ -379,10 +385,10 @@ export const BUILT_IN_MOTIONS: Readonly<Record<string, MotionClip>> = {
       // instant at which this channel can be measured on its own -- a clip
       // whose channels all move together can only ever be tested as a whole.
       { t: 0, turn: 0, lean: 0, gazeX: 0 },
-      { t: 0.12, turn: 0.4, lean: 0.02, gazeX: 0.16 },
-      { t: 0.26, turn: 0.72, lean: 0.06, gazeX: 0.34 },
-      { t: 0.58, turn: 0.7, lean: 0.07, gazeX: 0.36 },
-      { t: 0.82, turn: 0.42, lean: 0, gazeX: 0 },
+      { t: 0.12, turn: 0.22, lean: 0.012, gazeX: 0.12 },
+      { t: 0.26, turn: 0.4, lean: 0.03, gazeX: 0.26 },
+      { t: 0.58, turn: 0.39, lean: 0.034, gazeX: 0.28 },
+      { t: 0.82, turn: 0.24, lean: 0, gazeX: 0 },
       { t: 1, turn: 0, lean: 0, gazeX: 0 },
     ],
   },
@@ -405,19 +411,19 @@ export const BUILT_IN_MOTIONS: Readonly<Record<string, MotionClip>> = {
    * it at the end, which is what a body does when it starts and stops.
    */
   wander: {
-    durationMs: 7_200,
+    durationMs: 9_000,
     loop: true,
     keys: [
       { t: 0, shift: 0, lean: 0, lift: 0 },
-      { t: 0.1, shift: 0.14, lean: 0.05, lift: 0.025 },
-      { t: 0.2, shift: 0.3, lean: 0.03, lift: 0 },
-      { t: 0.3, shift: 0.4, lean: -0.03, lift: 0.025 },
-      { t: 0.38, shift: 0.42, lean: 0, lift: 0 },
-      { t: 0.5, shift: 0.34, lean: -0.05, lift: 0.025 },
-      { t: 0.62, shift: 0, lean: -0.05, lift: 0 },
-      { t: 0.74, shift: -0.3, lean: -0.03, lift: 0.025 },
-      { t: 0.84, shift: -0.36, lean: 0.04, lift: 0 },
-      { t: 0.94, shift: -0.14, lean: 0.05, lift: 0.02 },
+      { t: 0.1, shift: 0.03, lean: 0.018, lift: 0.006 },
+      { t: 0.2, shift: 0.065, lean: 0.012, lift: 0 },
+      { t: 0.3, shift: 0.085, lean: -0.01, lift: 0.006 },
+      { t: 0.38, shift: 0.09, lean: 0, lift: 0 },
+      { t: 0.5, shift: 0.072, lean: -0.018, lift: 0.006 },
+      { t: 0.62, shift: 0, lean: -0.018, lift: 0 },
+      { t: 0.74, shift: -0.065, lean: -0.012, lift: 0.006 },
+      { t: 0.84, shift: -0.078, lean: 0.014, lift: 0 },
+      { t: 0.94, shift: -0.03, lean: 0.018, lift: 0.005 },
       { t: 1, shift: 0, lean: 0, lift: 0 },
     ],
   },
@@ -446,7 +452,16 @@ export function motionReach(clip: MotionClip): { readonly x: number; readonly up
   return { x, up }
 }
 
-/** The worst case across every built-in, which is what a window has to hold. */
+/**
+ * The worst case across every built-in, PLUS the drift, which is what a window
+ * has to hold.
+ *
+ * The drift is continuous and additive -- she is always a little off her spot,
+ * and a clip starts from wherever that is rather than from centre. So the two
+ * reaches SUM: reserving only the clip's would clip her by a couple of pixels
+ * at whichever extreme the two happened to agree on, intermittently, which is
+ * the least debuggable kind of wrong.
+ */
 export function builtInReach(): { readonly x: number; readonly up: number } {
   let x = 0
   let up = 0
@@ -455,7 +470,7 @@ export function builtInReach(): { readonly x: number; readonly up: number } {
     x = Math.max(x, reach.x)
     up = Math.max(up, reach.up)
   }
-  return { x, up }
+  return { x: x + DRIFT.shift, up: up + DRIFT.lift }
 }
 
 export type MotionParse =

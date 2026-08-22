@@ -161,13 +161,31 @@ const wakingSheet = createCanvas(MOTION_W * FRAMES * MOTION_DPR, MOTION_H * MOTI
 }
 const waking = `data:image/png;base64,${wakingSheet.toBuffer('image/png').toString('base64')}`
 
+/**
+ * The DRIFT alone: no clip playing, just her standing there.
+ *
+ * Long and slow — 24 seconds of it — because the point is that it never
+ * repeats and never goes anywhere. If this strip reads as a loop, the periods
+ * in `idle.ts` are too close together.
+ */
+const idleSheet = createCanvas(MOTION_W * FRAMES * MOTION_DPR, MOTION_H * MOTION_DPR)
+{
+  const ctx = idleSheet.getContext('2d')
+  const one = rig(MOTION_W, MOTION_H, MOTION_DPR)
+  for (let frame = 0; frame < FRAMES; frame += 1) {
+    one.avatar.render((frame / FRAMES) * 24_000)
+    ctx.drawImage(one.canvas, frame * MOTION_W * MOTION_DPR, 0)
+  }
+}
+const idling = `data:image/png;base64,${idleSheet.toBuffer('image/png').toString('base64')}`
+
 /** Resting: the pose the rig applies from `asleep`, not an expression. */
 const sleeping = await strip(2, (avatar, index) => {
   if (index === 1) avatar.setAsleep(true)
   avatar.render(0)
 })
 
-const html = page({ moods, half, motions, waking, sleeping, emotions: [...EMOTIONS], repose })
+const html = page({ moods, half, motions, waking, sleeping, idling, emotions: [...EMOTIONS], repose })
 await mkdir(OUT, { recursive: true })
 const path = join(OUT, 'showreel.html')
 await writeFile(path, html)
@@ -275,13 +293,23 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);font-si
 </section>
 
 <section>
-<h2><span class="num">03</span>Motions</h2>
+<h2><span class="num">03</span>Standing still — the drift</h2>
+<p>No clip playing. This is what runs <em>continuously</em> whenever she is awake: three sines per channel at periods that do not divide each other, summed, at a few pixels of amplitude. She shifts her weight and goes nowhere.</p>
+<div class="note">This is the layer that separates <b>alive</b> from <b>a picture that sometimes moves</b>. Breathing used to be the only thing running between gestures, so she was a still image punctuated by clips — and the clips got blamed for being coarse when what was coarse was the silence around them.</div>
+<figure class="cell wide" style="max-width:400px">
+  <div class="sprite play" style="--n:${FRAMES};--ms:24000ms;--ar:${MOTION_W / MOTION_H}"><span style="background-image:url(${d.idling})"></span></div>
+  <figcaption><b>drift</b><span class="meta">always on · 24s sampled</span><span class="chan"><code>lean</code> <code>shift</code> <code>lift</code></span></figcaption>
+</figure>
+</section>
+
+<section>
+<h2><span class="num">04</span>Motions</h2>
 <p>Each plays at its real duration. The four channels a clip may move are postural — <code>squash</code>, <code>lean</code>, <code>gazeX</code>, <code>gazeY</code> — plus the three added for travel: <code>lift</code>, <code>shift</code>, <code>turn</code>. The mouth is deliberately not among them.</p>
 <div class="grid wide">${clipCards}</div>
 </section>
 
 <section>
-<h2><span class="num">04</span>Waking, which is two things at once</h2>
+<h2><span class="num">05</span>Waking, which is two things at once</h2>
 <p>What <code>sleeps(false)</code> actually does: <code>surprised</code> at 0.6 with a 1400ms hold, and <code>hop</code> underneath it. An expression appearing on a body that did not react reads as a texture swap rather than as somebody waking up.</p>
 <figure class="cell wide" style="max-width:400px">
   <div class="sprite play" style="--n:${FRAMES};--ms:1600ms;--ar:${MOTION_W / MOTION_H}"><span style="background-image:url(${d.waking})"></span></div>
@@ -290,7 +318,7 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);font-si
 </section>
 
 <section>
-<h2><span class="num">05</span>Awake and resting</h2>
+<h2><span class="num">06</span>Awake and resting</h2>
 <p>Sleep is a <em>pose</em> the rig renders from <code>asleep</code>, not an expression assigned to her. That is why waking gives back whatever face she had chosen: nothing overwrote it.</p>
 <div class="pair">
   <figure class="cell"><div class="sprite" style="--n:2;--i:0"><span style="background-image:url(${d.sleeping})"></span></div><figcaption>awake</figcaption></figure>
@@ -299,7 +327,7 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);font-si
 </section>
 
 <section>
-<h2><span class="num">06</span>When each motion plays</h2>
+<h2><span class="num">07</span>When each motion plays</h2>
 <p>Nothing here waits for her to choose it — that is the mistake the eight unused faces record. Ambient motion climbs a ladder of silence, and the beat outranks all of it.</p>
 <div class="note">
 <b>glance</b> after ${repose.LOOK_AFTER_S}s of quiet · <b>swing</b> after ${repose.SWING_AFTER_S}s · <b>wander</b> after ${repose.WANDER_AFTER_S}s.<br>

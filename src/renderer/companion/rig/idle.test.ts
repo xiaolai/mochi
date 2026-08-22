@@ -4,9 +4,11 @@ import {
   BLINK_MAX_GAP_MS,
   BLINK_MIN_GAP_MS,
   BREATH_PERIOD_MS,
+  DRIFT,
   IdleLayer,
   blinkAt,
   breathAt,
+  driftAt,
   nextBlinkGap,
 } from './idle'
 
@@ -121,5 +123,76 @@ describe('IdleLayer', () => {
   it('returns a flat pose for a non-finite clock', () => {
     const layer = new IdleLayer(0, () => 0.5)
     expect(layer.pose(Number.NaN)).toEqual({ blink: 0, breath: 0 })
+  })
+})
+
+describe('the drift — being alive while going nowhere', () => {
+  it('stays inside its declared reach, over an hour of it', () => {
+    /*
+      The reach is reserved in her window before she can use it (`builtInReach`
+      sums it with the clips), so a drift that could exceed its own constant
+      would walk her into the edge of a transparent rectangle — intermittently,
+      at whatever moment three sines happened to agree.
+    */
+    for (let t = 0; t < 3_600_000; t += 97) {
+      const d = driftAt(t)
+      expect(Math.abs(d.lean), `lean at ${String(t)}`).toBeLessThanOrEqual(DRIFT.lean + 1e-9)
+      expect(Math.abs(d.shift), `shift at ${String(t)}`).toBeLessThanOrEqual(DRIFT.shift + 1e-9)
+      expect(d.lift, `lift at ${String(t)}`).toBeLessThanOrEqual(DRIFT.lift + 1e-9)
+    }
+  })
+
+  it('never puts her feet below the ground', () => {
+    // A bob that dipped would push her through the surface she stands on.
+    for (let t = 0; t < 200_000; t += 61) expect(driftAt(t).lift).toBeGreaterThanOrEqual(0)
+  })
+
+  it('does not repeat inside a minute, which is what stops it reading as a loop', () => {
+    /*
+      One sine per channel would be a metronome — the same defect the Poisson
+      blink gap exists to avoid, and it reads the same way: after about half a
+      minute the eye locks onto the period and she stops looking alive.
+
+      Sampled a second apart and compared against the same offset a minute
+      later. If any channel were periodic at a minute or less these would match.
+    */
+    let identical = 0
+    for (let t = 0; t < 60_000; t += 1_000) {
+      const a = driftAt(t)
+      const b = driftAt(t + 60_000)
+      if (Math.abs(a.shift - b.shift) < 1e-4 && Math.abs(a.lean - b.lean) < 1e-4) identical += 1
+    }
+    expect(identical).toBeLessThan(3)
+  })
+
+  it('is small enough to be presence rather than movement', () => {
+    // The whole point of it. At her drawn width these are single-digit pixels;
+    // a drift you can measure by eye is a character who is pacing.
+    expect(DRIFT.shift).toBeLessThan(0.04)
+    expect(DRIFT.lean).toBeLessThan(0.04)
+    expect(DRIFT.lift).toBeLessThan(0.02)
+  })
+
+  it('is a pure function of the clock, so a throttled window resumes in place', () => {
+    // No state, no random walk. A frame is a function of `now` alone, which is
+    // what lets a window that was backgrounded for ten minutes come back
+    // exactly where the clock says it should be rather than somewhere else.
+    expect(driftAt(1_234_567)).toEqual(driftAt(1_234_567))
+  })
+
+  it('answers zero for nonsense rather than NaN', () => {
+    for (const bad of [Number.NaN, Infinity, -Infinity]) {
+      expect(driftAt(bad)).toEqual({ lean: 0, shift: 0, lift: 0 })
+    }
+    expect(driftAt(1000, Number.NaN)).toEqual({ lean: 0, shift: 0, lift: 0 })
+  })
+
+  it('keeps a trace of itself asleep, rather than none', () => {
+    // A companion who stops moving altogether reads as a crash, which is the
+    // one thing the resting state must not look like.
+    const awake = driftAt(4_321, 1)
+    const resting = driftAt(4_321, 0.2)
+    expect(Math.abs(resting.shift)).toBeLessThan(Math.abs(awake.shift))
+    expect(Math.abs(resting.shift)).toBeGreaterThan(0)
   })
 })

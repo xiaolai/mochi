@@ -30,7 +30,7 @@ import {
   fitToCanvas,
   layoutFor,
 } from '@shared/avatar-layout'
-import { IdleLayer } from './idle'
+import { driftAt, IdleLayer, type Drift } from './idle'
 import { blendLook, type Look } from './looks'
 import { BUILT_IN_MOTIONS, poseAt, progress, type MotionClip, type MotionPose } from './motion'
 import { Spring } from './spring'
@@ -64,6 +64,19 @@ const TURN_REACH = 0.62
  * the rate it was tuned on she decays as she always did.
  */
 const IMPULSE_DECAY_PER_S = -Math.log(0.86) * 60
+
+/**
+ * How much of the drift survives sleep.
+ *
+ * A trace rather than none, for the reason the breath is kept: a companion who
+ * stops moving altogether reads as a crash, which is the one thing the resting
+ * state must not look like. A fifth is enough to see if you watch and not
+ * enough to look awake.
+ */
+const ASLEEP_DRIFT = 0.2
+
+/** No drift at all — the tuner wants her still. See `setIdle`. */
+const NO_DRIFT: Drift = { lean: 0, shift: 0, lift: 0 }
 
 export interface MochiOptions {
   readonly face?: FaceSpec
@@ -486,6 +499,21 @@ export class MochiAvatar implements AvatarBackend {
      * not wake her, mute anything, or change what the halo says. It refuses one
      * specific impossible picture and nothing else.
      */
+    /*
+      The DRIFT, added to whatever a clip is doing rather than replacing it.
+
+      This is the layer that separates "alive" from "a picture that sometimes
+      moves". Breathing was the only thing running between gestures, so she was
+      a still image punctuated by clips -- and the clips were then blamed for
+      being coarse, when what was coarse was the silence around them.
+
+      Additive, so a hop happens on top of a body that was already shifting its
+      weight, and so nothing here has to know whether a clip is playing.
+      `idle` gates it for the same reason it gates the breath: the tuner wants
+      her still, and a still she can be measured against.
+    */
+    const drift = this.idle ? driftAt(now, this.asleep ? ASLEEP_DRIFT : 1) : NO_DRIFT
+
     const shutEyes = this.asleep && !this.speaking
     const pose = shutEyes
       ? { blink: 1, breath: this.idleLayer.pose(now).breath }
@@ -518,7 +546,7 @@ export class MochiAvatar implements AvatarBackend {
     if (squash !== settled) this.squashSpring.snap(squash)
 
     this.advanceGaze(dt, look, moved)
-    this.paint(look, pose.blink, squash, moved)
+    this.paint(look, pose.blink, squash, moved, drift)
   }
 
   /**
@@ -576,7 +604,12 @@ export class MochiAvatar implements AvatarBackend {
     }
   }
 
-  private paint(look: Look, blink: number, squash: number, moved: MotionPose): void {
+  /**
+   * `drift` is passed in rather than computed here, because this method has no
+   * clock — `render` owns time, and a second reading of it inside the paint
+   * would be a second answer to what instant this frame is.
+   */
+  private paint(look: Look, blink: number, squash: number, moved: MotionPose, drift: Drift): void {
     const { ctx, face } = this
     this.applyTransform()
     ctx.clearRect(0, 0, this.cssWidth, this.cssHeight)
@@ -611,8 +644,8 @@ export class MochiAvatar implements AvatarBackend {
      * size — `shift: 0.5` is half a body width whether she is drawn at 50% or
      * 200%.
      */
-    const travelX = (moved.shift ?? 0) * face.bodyW * scale
-    const travelY = (moved.lift ?? 0) * face.bodyH * scale
+    const travelX = ((moved.shift ?? 0) + drift.shift) * face.bodyW * scale
+    const travelY = ((moved.lift ?? 0) + drift.lift) * face.bodyH * scale
     const originX = this.cssWidth / 2 + travelX
     // Measured from the BOTTOM of the canvas she was actually given, so a canvas
     // that is not the size the layout asked for still rests her on a surface
@@ -643,8 +676,9 @@ export class MochiAvatar implements AvatarBackend {
       upperShoulder: face.upperShoulder,
       lowerShoulder: face.lowerShoulder,
       // The motion layer adds to the expression's lean rather than replacing
-      // it -- a shy tilt and a sway are both true at once.
-      lean: look.lean + (moved.lean ?? 0),
+      // it -- a shy tilt and a sway are both true at once. The drift adds to
+      // both, for the same reason: she is never doing only one thing.
+      lean: look.lean + (moved.lean ?? 0) + drift.lean,
     }
     const body = squashed(base, squash)
 
