@@ -54,11 +54,17 @@ files:
 # `tray.ts` consumes these now -- this note said "nothing consumes these yet"
 # until the v2 tray landed and was not updated with it.
 #
-# What is still true is the second half: the generator that produced them did not
-# survive the rewrite, so `resources/` is hand-maintained. `shipped-icons.test.ts`
-# is what stands in for the generator -- it measures every asset here against the
-# rig that draws her, so the two can no longer come apart silently even though
-# nothing regenerates one from the other.
+# The generator is back, and `resources/` is GENERATED -- do not hand-edit it.
+# `pnpm icons` writes every file here from an SVG emitted by `rig/svg.ts`, whose
+# outline comes from `domeOutline`, the function that draws her on screen. So the
+# handoff's claim that the mark and the mochi "cannot drift" is finally true
+# rather than merely unfalsified.
+#
+# Two tests, asking different questions. `icons.test.ts` compares each committed
+# file with what the generator emits today, byte for byte -- `pnpm icons` is the
+# fix when it fails. `shipped-icons.test.ts` keeps measuring the assets against
+# the rig with a tolerance, which still catches somebody hand-editing a file to
+# match a generator that is itself wrong.
 #
 # Eight of the tray files -- `trayWin-onLight-*` -- are copied by this block and
 # selected by no code path, because the Windows taskbar-theme query was not
