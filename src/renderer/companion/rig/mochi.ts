@@ -427,7 +427,31 @@ export class MochiAvatar implements AvatarBackend {
       this.emotionExpiresAt = null
     }
 
-    const look = blendLook(this.emotion.emotion, this.emotion.intensity)
+    /**
+     * Asleep is a POSE, and it outranks whatever expression she is carrying.
+     *
+     * `sleepy` was drawn for exactly this state — `looks.ts` says `mouthAlpha`
+     * exists for its resting pose and nothing else — and for a while nothing
+     * wore it: rest shut the eyes and left the body in whatever look was
+     * current, so a sleeping mochi was an awake one with its eyes closed.
+     *
+     * Rendered HERE rather than by setting the emotion on the way down, and
+     * that distinction is the whole of it. `face.ts` clears her chosen
+     * expression when she rests, because `set_expression` promises the face
+     * she picked ends there — and a character told to look `angry` used to
+     * wake up angry into a session that had never heard of it. If sleep also
+     * ASSIGNED `sleepy`, the two would be writing to the same slot, and waking
+     * would have to guess which of them put it there. The rig knows it is
+     * asleep; it does not need to be told twice.
+     *
+     * Tied to `asleep` rather than to `shutEyes`, so a voice coming out of a
+     * sleeping face keeps the drowsy posture while the eyes open (see below).
+     * The mouth is safe: `paintMouth` takes the LOUDER of `mouthAlpha` and
+     * whatever is driving the mouth, so anything making a sound wins.
+     */
+    const look = this.asleep
+      ? blendLook('sleepy', 1)
+      : blendLook(this.emotion.emotion, this.emotion.intensity)
     /**
      * Asleep: eyes shut, and the breath left running.
      *

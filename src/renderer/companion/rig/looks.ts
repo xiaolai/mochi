@@ -48,8 +48,16 @@ export interface Look {
    * highlight that were simply always on would be a shading detail, and one
    * that blinked on a schedule would be noise.
    *
-   * It blends like everything else here, so the waking perk -- `surprised` at
-   * intensity 0.6, decaying -- fades the glint up and back down on its own.
+   * It blends with intensity like everything else here, so the waking perk --
+   * `surprised` at 0.6 for 1.4 seconds, in `face.ts` -- shows a partial glint
+   * rather than a full one.
+   *
+   * **It does not fade.** This entry used to say it did, and it was wrong
+   * twice over: nothing set the perk at all, and only `squash` runs through a
+   * spring -- every other channel of a `Look` is applied on the frame it is
+   * set. A hold ENDS an expression; it does not ease it out. Anyone wanting a
+   * fade has to interpolate the look itself, which is a change to this whole
+   * pipeline rather than a value in this table.
    */
   readonly sparkle: number
   /** -1..1 gaze bias, added to whatever the cursor is doing. Thinking looks up and away. */

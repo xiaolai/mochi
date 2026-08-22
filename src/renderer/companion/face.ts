@@ -220,6 +220,23 @@ const CHIP_FADE_S = 0.12
 const SHRINK_SETTLE_MS = 400
 
 /**
+ * The perk on waking: how long she looks pleased to see you.
+ *
+ * `looks.ts` documented this against the catchlight -- "her eyes lit up" is a
+ * property of the emotion rather than a timer, so seeing it carries
+ * information -- and then nothing ever set it. The glint was reachable only if
+ * she chose `happy` or `surprised` herself, which `usage.json` says she has
+ * never once done in 275 sessions.
+ *
+ * Short, and at PARTIAL intensity. A full `surprised` is the face for being
+ * startled; six tenths of it is the small lift of somebody coming back to a
+ * conversation. Long enough to be seen, short enough that it is over before
+ * she has finished her first sentence.
+ */
+const WAKING_PERK_MS = 1_400
+const WAKING_PERK_INTENSITY = 0.6
+
+/**
  * Its own surface, like the bubble's and for the same reason: she may be sitting
  * on anything, so a control tinted by the desktop behind it has no contrast
  * guarantee at all.
@@ -1318,6 +1335,17 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       }
     },
     sleeps: (asleep: boolean) => {
+      /*
+        A TRANSITION, read before the flag moves, and not merely this being
+        called with `false`.
+
+        `companion/main.ts` calls this on every session open as well as on the
+        rest frame — and a session is re-opened every hour (§53). So "was told
+        she is awake" happens hourly with nobody having woken her, and anything
+        hung off it would fire into the middle of a conversation. The reconnect
+        is supposed to be invisible; that is the entire feature.
+      */
+      const woke = resting && !asleep
       resting = asleep
       avatar.setAsleep(asleep)
       /*
@@ -1333,6 +1361,31 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         set in the same breath as the greeting.
       */
       if (asleep) avatar.setEmotion({ emotion: 'neutral', intensity: 0 })
+      /*
+        And on the way UP she perks.
+
+        This is the caller `holdMs` never had. The mechanism was built, tested
+        against two real bugs -- a hold set before the first frame, and one set
+        while the window was throttled -- and then never used by anything, so
+        an expression could only ever be changed by her asking for one.
+
+        It cannot stamp over a face she sets in the same breath as the
+        greeting, which is what the comment above was guarding: `setEmotion`
+        supersedes any pending reset, so her choice both wins and is not cut
+        short by this timer.
+
+        It CLEARS rather than fades. Only `squash` runs through a spring; the
+        rest of a look is applied on the frame it is set, so the perk ends the
+        way a raised eyebrow does rather than dissolving. Said here because the
+        word "decaying" invited the opposite reading.
+      */
+      if (woke) {
+        avatar.setEmotion({
+          emotion: 'surprised',
+          intensity: WAKING_PERK_INTENSITY,
+          holdMs: WAKING_PERK_MS,
+        })
+      }
       /**
        * Nothing to say while her eyes are shut, so the bubble closes.
        *

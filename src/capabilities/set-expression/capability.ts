@@ -7,10 +7,18 @@ import type { Capability } from '../kind'
  * ## Why this is a tool and not a guess
  *
  * Eight expressions are drawn — `neutral`, `happy`, `shy`, `sad`, `angry`,
- * `surprised`, `thinking`, `sleepy` — and until now two were reachable. `sleepy`
- * is what she wears asleep and `neutral` is everything else; the other six were
- * shipped, painted, and unreachable, because `setEmotion` had no caller outside
- * the rig.
+ * `surprised`, `thinking`, `sleepy` — and before this tool existed, `neutral`
+ * was the only one anybody ever saw: the other seven were shipped, painted, and
+ * unreachable, because `setEmotion` had no caller outside the rig.
+ *
+ * This header used to say `sleepy` was also reachable, "what she wears asleep".
+ * It was true when written and stopped being true the same week: rest was
+ * changed to CLEAR her chosen expression, so that a character told to look
+ * `angry` would not wake up angry into a session that had never heard of it —
+ * and for a while that left a sleeping mochi looking like an awake one with its
+ * eyes shut. `sleepy` is a rest POSE now, rendered by the rig from `asleep`
+ * rather than assigned to the slot this tool writes to. The two cannot fight,
+ * and neither has to guess which of them set the face.
  *
  * Inferring the face from her words was the obvious alternative and is worse.
  * Sentiment read off a transcript is a guess made by something that cannot hear

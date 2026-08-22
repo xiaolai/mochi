@@ -430,6 +430,71 @@ describe('MochiAvatar', () => {
     expect(inkPixels(first.ctx, 1)).toBe(inkPixels(open.ctx, 1))
   })
 
+  it('wears the sleepy pose while asleep, whatever face she was carrying', () => {
+    /*
+      `sleepy` is drawn for exactly one state, and for a while nothing wore it:
+      rest shut the eyes and left the BODY in whatever look was current, so a
+      sleeping mochi was an awake one with its eyes closed.
+
+      Against a control that is asleep having chosen nothing, rather than
+      against neutral-awake: the eyes are shut in both, so anything left over
+      is the posture this is about.
+    */
+    const carrying = rig()
+    carrying.avatar.setEmotion({ emotion: 'angry', intensity: 1 })
+    carrying.avatar.setAsleep(true)
+    carrying.avatar.render(0)
+
+    const nothing = rig()
+    nothing.avatar.setAsleep(true)
+    nothing.avatar.render(0)
+
+    // Asleep is a POSE and it outranks the slot `set_expression` writes to, so
+    // these two are the same picture.
+    expect(inkPixels(carrying.ctx, 1)).toBe(inkPixels(nothing.ctx, 1))
+
+    // And it is genuinely the sleepy look rather than whatever was there: an
+    // awake mochi carrying nothing draws differently.
+    const awake = rig()
+    awake.avatar.render(0)
+    expect(inkPixels(nothing.ctx, 1)).not.toBe(inkPixels(awake.ctx, 1))
+  })
+
+  it('gives the face she chose back when she wakes', () => {
+    /*
+      The pose is RENDERED from `asleep`, never assigned to the emotion slot —
+      so waking restores whatever was in that slot rather than having to guess
+      which of the two put `sleepy` there.
+
+      Two rigs through the identical frame sequence, differing only in the face
+      they carried into sleep. Comparing one rig against its own earlier frame
+      does not work here and the reason is worth keeping: the squash spring and
+      the breath both carry state across frames, so the same look drawn at two
+      timestamps is legitimately a pixel or two apart. Matched sequences hold
+      those equal and leave only the thing being asked about.
+    */
+    const carrying = rig()
+    carrying.avatar.setEmotion({ emotion: 'angry', intensity: 1 })
+    const empty = rig()
+
+    for (const one of [carrying, empty]) {
+      one.avatar.render(0)
+      one.avatar.setAsleep(true)
+      one.avatar.render(16)
+    }
+    // Asleep they are the same picture — the pose outranks the slot.
+    expect(inkPixels(carrying.ctx, 1)).toBe(inkPixels(empty.ctx, 1))
+
+    for (const one of [carrying, empty]) {
+      one.avatar.setAsleep(false)
+      one.avatar.render(32)
+    }
+    // Awake they are not: `angry` survived the sleep rather than being cleared
+    // by it. Clearing is `face.ts`'s job on the way DOWN, and it writes to the
+    // slot; nothing here does.
+    expect(inkPixels(carrying.ctx, 1)).not.toBe(inkPixels(empty.ctx, 1))
+  })
+
   it('lets an emotion expire back to neutral', () => {
     const { ctx, avatar } = rig()
     avatar.render(0)
