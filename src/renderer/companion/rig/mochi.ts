@@ -44,6 +44,16 @@ const NEUTRAL_SIGNAL: EmotionSignal = { emotion: 'neutral', intensity: 0 }
 const GAZE_TIME_CONSTANT_MS = 120
 
 /**
+ * How far a full `turn` slides her features, as a fraction of her half-width.
+ *
+ * Under 1 deliberately. At 1 a feature sits on the outline itself, and past the
+ * edge the clip stops reading as a turn and starts reading as a face coming
+ * off. 0.62 puts the far eye most of the way out of sight while the near one is
+ * still comfortably inside her.
+ */
+const TURN_REACH = 0.62
+
+/**
  * How fast a poke fades, per SECOND.
  *
  * Per second rather than per frame. The old `impulse *= 0.86` made the length
@@ -587,7 +597,23 @@ export class MochiAvatar implements AvatarBackend {
       this.silhouette = null
       return
     }
-    const originX = this.cssWidth / 2
+    /**
+     * Where she is standing THIS frame, translation included.
+     *
+     * Applied to the ORIGIN rather than to each thing drawn, and that is the
+     * whole reason translation is safe here: `toCanvas` is the one function
+     * every coordinate goes through, so the outline, the features and the
+     * silhouette all move together. The silhouette is what `hitTest` answers
+     * from, so click-through follows her painted pixels without anything else
+     * being told she moved.
+     *
+     * In fractions of her own body, so a clip means the same thing at every
+     * size — `shift: 0.5` is half a body width whether she is drawn at 50% or
+     * 200%.
+     */
+    const travelX = (moved.shift ?? 0) * face.bodyW * scale
+    const travelY = (moved.lift ?? 0) * face.bodyH * scale
+    const originX = this.cssWidth / 2 + travelX
     // Measured from the BOTTOM of the canvas she was actually given, so a canvas
     // that is not the size the layout asked for still rests her on a surface
     // rather than floating her.
@@ -604,9 +630,11 @@ export class MochiAvatar implements AvatarBackend {
      * wants her filling each one, not standing at a fixed height in it.
      */
     const originY =
-      layout === null
+      (layout === null
         ? this.cssHeight * (1 - (BREATHING_UNITS * scale) / this.cssHeight)
-        : feetY(this.cssHeight, BREATHING_UNITS * scale, this.feetFromTop)
+        : feetY(this.cssHeight, BREATHING_UNITS * scale, this.feetFromTop)) -
+      // MINUS, because the canvas is +y down and `lift` is up.
+      travelY
 
     const base: BodyShape = {
       halfWidth: (face.bodyW / 2) * scale,
@@ -626,8 +654,24 @@ export class MochiAvatar implements AvatarBackend {
     const outline = domeOutline(body).map(toCanvas)
     this.silhouette = toPath(outline)
 
+    /**
+     * Turning: the features slide, the body does not.
+     *
+     * There is one silhouette and no second view, so this cannot be a
+     * rotation. What it can be is the flat-character trick -- everything drawn
+     * on her moves toward one edge, and because the whole of `paint` is clipped
+     * to the outline, the far side passes out of sight around her rather than
+     * sticking out of it. The clip that already exists for a different reason
+     * is what makes this read correctly.
+     *
+     * `TURN_REACH` is in the same normalised space `placeFeature` takes, where
+     * 1 is her half-width — so a full `turn: 1` would put a feature on the
+     * outline itself. Kept well under that: past the edge it stops looking like
+     * a turn and starts looking like a face sliding off.
+     */
+    const turn = (moved.turn ?? 0) * TURN_REACH
     const place = (nx: number, ny: number): Point =>
-      toCanvas(placeFeature(base, body, nx, ny, face.gripX, face.gripY))
+      toCanvas(placeFeature(base, body, nx + turn, ny, face.gripX, face.gripY))
 
     // EVERYTHING is clipped to the silhouette, not just the body.
     //

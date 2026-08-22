@@ -29,8 +29,50 @@
  * to respect.
  */
 
-/** Everything a motion is allowed to move. See the header. */
-export const MOTION_CHANNELS = ['squash', 'lean', 'gazeX', 'gazeY'] as const
+/**
+ * Everything a motion is allowed to move. See the header.
+ *
+ * ## The three that were added, and why they are not more
+ *
+ * `squash`, `lean`, `gazeX`, `gazeY` are postural and could not express a
+ * character who goes anywhere: a hop with no vertical channel is a crouch, and
+ * a wander with no horizontal one is a lean. So:
+ *
+ * - `lift` — up, in fractions of her body HEIGHT. Positive leaves the ground.
+ * - `shift` — right, in fractions of her body WIDTH.
+ * - `turn` — -1..1, how far her features have slid toward one side.
+ *
+ * `turn` is NOT a rotation and cannot become one. One front-facing silhouette
+ * is drawn; there is no second view and no yaw. What it does is slide the
+ * features across the body, and everything is clipped to the silhouette
+ * already, so the far eye passes out of sight around her edge. That reads as
+ * turning to look at something and does not read as turning around. Anyone
+ * wanting the second thing has to draw her from behind, which is art rather
+ * than a channel.
+ *
+ * The mouth is still not among these, for the reason the header gives.
+ *
+ * ## Translation is a channel, not a window move
+ *
+ * `lift` and `shift` move her INSIDE her own window, and `paint` applies them
+ * by offsetting the origin every other coordinate is derived from -- so the
+ * outline, the features and the hit-test silhouette all travel together, and
+ * click-through keeps following her painted pixels for free.
+ *
+ * Moving the WINDOW was the alternative and is worse: `setPosition` from main
+ * on every frame of a renderer-driven animation is two processes disagreeing
+ * about where she is sixty times a second, which is the problem `drag.ts`
+ * already needs a cursor poll to solve.
+ */
+export const MOTION_CHANNELS = [
+  'squash',
+  'lean',
+  'gazeX',
+  'gazeY',
+  'lift',
+  'shift',
+  'turn',
+] as const
 export type MotionChannel = (typeof MOTION_CHANNELS)[number]
 
 /** What the layer contributes at one instant. Absent means "not moved". */
@@ -152,6 +194,158 @@ export const BUILT_IN_MOTIONS: Readonly<Record<string, MotionClip>> = {
       { t: 1, lean: 0, gazeX: 0 },
     ],
   },
+
+  /**
+   * A small hop: crouch, launch, hang, land, settle.
+   *
+   * The ANTICIPATION is what makes it read as a jump rather than a twitch --
+   * she compresses before she leaves the ground, and lands compressed again.
+   * Squash and lift are deliberately out of phase: at the apex she is stretched
+   * (negative squash) and highest, and the two return to zero at different
+   * times so the landing has weight.
+   *
+   * `lift: 0.16` is about eleven pixels at her default size. Small on purpose
+   * -- this is a gesture, not a jump, and the room for it has to be reserved in
+   * her window before she can use it.
+   */
+  hop: {
+    durationMs: 560,
+    loop: false,
+    keys: [
+      { t: 0, squash: 0, lift: 0 },
+      { t: 0.16, squash: 0.13, lift: 0 },
+      { t: 0.3, squash: -0.07, lift: 0.07 },
+      { t: 0.46, squash: -0.03, lift: 0.16 },
+      { t: 0.62, squash: 0.02, lift: 0.08 },
+      { t: 0.74, squash: 0.11, lift: 0 },
+      { t: 0.88, squash: -0.03, lift: 0 },
+      { t: 1, squash: 0, lift: 0 },
+    ],
+  },
+
+  /**
+   * A pendulum: her body goes where it leans, repeating.
+   *
+   * The difference from `sway`, which is worth saying because they are easy to
+   * confuse: `sway` moves her GAZE and leaves her body where it is, and reads
+   * as attention wandering. This moves her body and leaves her gaze alone, and
+   * reads as contentment. Lean and shift are IN PHASE -- a pendulum travels the
+   * way it tilts, and putting them out of phase produces a body sliding out
+   * from under its own head.
+   */
+  swing: {
+    durationMs: 2600,
+    loop: true,
+    keys: [
+      { t: 0, lean: 0, shift: 0 },
+      { t: 0.25, lean: 0.085, shift: 0.12 },
+      { t: 0.5, lean: 0, shift: 0 },
+      { t: 0.75, lean: -0.085, shift: -0.12 },
+      { t: 1, lean: 0, shift: 0 },
+    ],
+  },
+
+  /**
+   * Turning to look at something beside her, and coming back.
+   *
+   * Not a rotation -- see the note on `MOTION_CHANNELS`. The features slide
+   * toward one edge and the silhouette clips the far one, which is what a flat
+   * character turning looks like. The lean and the gaze go with it because a
+   * head that turns without the body reads as a glance, and a glance is what
+   * the gaze channel alone already does.
+   *
+   * One-shot, and it returns to zero: a turn that stayed turned would leave her
+   * facing away for the rest of the session, and there is no view of her from
+   * that angle to make it worth looking at.
+   */
+  turn: {
+    durationMs: 1500,
+    loop: false,
+    keys: [
+      // Her face LEADS and TRAILS her body, which is how a head turn actually
+      // goes: the features start moving before the shoulders commit, and they
+      // are the last thing to come back. It also leaves a moment near the end
+      // where the lean is exactly zero and the turn is not, which is the only
+      // instant at which this channel can be measured on its own -- a clip
+      // whose channels all move together can only ever be tested as a whole.
+      { t: 0, turn: 0, lean: 0, gazeX: 0 },
+      { t: 0.14, turn: 0.34, lean: 0, gazeX: 0.1 },
+      { t: 0.3, turn: 0.62, lean: 0.05, gazeX: 0.3 },
+      { t: 0.6, turn: 0.6, lean: 0.06, gazeX: 0.32 },
+      { t: 0.82, turn: 0.42, lean: 0, gazeX: 0 },
+      { t: 1, turn: 0, lean: 0, gazeX: 0 },
+    ],
+  },
+
+  /**
+   * Wandering: a slow drift one way, a pause, and back.
+   *
+   * LONG and slow on purpose. Everything else in this app is built so she can
+   * be ignored -- click-through by default, a halo rather than a spinner -- and
+   * a companion who crosses your screen quickly is one you have to attend to.
+   * Eleven seconds for less than half a body width each way is movement you
+   * notice only if you look.
+   *
+   * The bob is on `lift` at twice the drift's frequency, so her step and her
+   * travel are not the same beat. Both return to zero at `t: 1`, which the
+   * loop-closure check enforces for every channel rather than for the one the
+   * author was thinking about.
+   *
+   * She leans INTO the direction of travel at the start of each leg and out of
+   * it at the end, which is what a body does when it starts and stops.
+   */
+  wander: {
+    durationMs: 11_000,
+    loop: true,
+    keys: [
+      { t: 0, shift: 0, lean: 0, lift: 0 },
+      { t: 0.1, shift: 0.14, lean: 0.05, lift: 0.025 },
+      { t: 0.2, shift: 0.3, lean: 0.03, lift: 0 },
+      { t: 0.3, shift: 0.4, lean: -0.03, lift: 0.025 },
+      { t: 0.38, shift: 0.42, lean: 0, lift: 0 },
+      { t: 0.5, shift: 0.34, lean: -0.05, lift: 0.025 },
+      { t: 0.62, shift: 0, lean: -0.05, lift: 0 },
+      { t: 0.74, shift: -0.3, lean: -0.03, lift: 0.025 },
+      { t: 0.84, shift: -0.36, lean: 0.04, lift: 0 },
+      { t: 0.94, shift: -0.14, lean: 0.05, lift: 0.02 },
+      { t: 1, shift: 0, lean: 0, lift: 0 },
+    ],
+  },
+}
+
+/**
+ * How far a clip takes her from where she stands, as fractions of her body.
+ *
+ * The room for a translation has to exist in her window BEFORE she uses it, or
+ * she walks into the edge of a transparent rectangle and is clipped by it. This
+ * is what `face.ts` reserves against, and it is derived from the keys rather
+ * than declared beside them: a number an author has to keep in step with the
+ * clip is a number that goes stale the first time somebody retimes it.
+ *
+ * `up` only, for `lift`. She hops; she does not sink through the floor, and
+ * reserving room below her would push her down inside her own window for a
+ * clearance nothing uses.
+ */
+export function motionReach(clip: MotionClip): { readonly x: number; readonly up: number } {
+  let x = 0
+  let up = 0
+  for (const key of clip.keys) {
+    x = Math.max(x, Math.abs(key.shift ?? 0))
+    up = Math.max(up, key.lift ?? 0)
+  }
+  return { x, up }
+}
+
+/** The worst case across every built-in, which is what a window has to hold. */
+export function builtInReach(): { readonly x: number; readonly up: number } {
+  let x = 0
+  let up = 0
+  for (const clip of Object.values(BUILT_IN_MOTIONS)) {
+    const reach = motionReach(clip)
+    x = Math.max(x, reach.x)
+    up = Math.max(up, reach.up)
+  }
+  return { x, up }
 }
 
 export type MotionParse =

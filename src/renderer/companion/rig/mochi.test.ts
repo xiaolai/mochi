@@ -915,3 +915,176 @@ describe('a motion that loops, and the only thing that ends it', () => {
     }).not.toThrow()
   })
 })
+
+/**
+ * The three channels that let her go somewhere.
+ *
+ * Everything here is measured against a CONTROL rendered at the same
+ * timestamps with no motion playing, rather than against the same rig's earlier
+ * frame: the breath and the squash spring both carry state, so one pose drawn
+ * at two instants is legitimately a few pixels apart. Matched timelines hold
+ * that equal and leave only the travel.
+ */
+describe('going somewhere', () => {
+  /** Her full painted extent, which `paintedBox` does not give. */
+  function extent(
+    ctx: SKRSContext2D,
+  ): { left: number; right: number; top: number; bottom: number } | null {
+    const { data } = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+    let left = WIDTH
+    let right = -1
+    let top = HEIGHT
+    let bottom = -1
+    for (let y = 0; y < HEIGHT; y++) {
+      for (let x = 0; x < WIDTH; x++) {
+        if ((data[(y * WIDTH + x) * 4 + 3] ?? 0) <= 128) continue
+        left = Math.min(left, x)
+        right = Math.max(right, x)
+        top = Math.min(top, y)
+        bottom = Math.max(bottom, y)
+      }
+    }
+    return right < 0 ? null : { left, right, top, bottom }
+  }
+
+  /** Where her ink sits horizontally, which is what a turn moves. */
+  function inkCentroidX(ctx: SKRSContext2D): number {
+    const { data } = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+    let sum = 0
+    let n = 0
+    for (let y = 0; y < HEIGHT; y++) {
+      for (let x = 0; x < WIDTH; x++) {
+        const i = (y * WIDTH + x) * 4
+        if ((data[i + 3] ?? 0) > 200 && (data[i + 1] ?? 255) < 110) {
+          sum += x
+          n += 1
+        }
+      }
+    }
+    return n === 0 ? 0 : sum / n
+  }
+
+  /** Play `name` and render it at `at`, against a control with no motion. */
+  function at(name: string, ms: number): { moved: Rig; still: Rig } {
+    const moved = rig()
+    moved.avatar.playMotion(name)
+    moved.avatar.render(0)
+    moved.avatar.render(ms)
+
+    const still = rig()
+    still.avatar.render(0)
+    still.avatar.render(ms)
+    return { moved, still }
+  }
+
+  /**
+   * Where her BASE is, horizontally — the discriminator between the two ways
+   * her edges can move.
+   *
+   * A `lean` shears her: the top travels and the base stays put. A `shift`
+   * moves the whole body, base included. The first draft of the test below
+   * measured her overall extent, and it passed with the translation deleted —
+   * `swing` carries a lean as well, and the lean alone moved the edges. So the
+   * assertion has to look at the one place a lean cannot reach.
+   */
+  function baseLeft(ctx: SKRSContext2D, bottom: number): number {
+    const { data } = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+    let left = WIDTH
+    for (let y = Math.max(0, bottom - 3); y <= bottom; y++) {
+      for (let x = 0; x < WIDTH; x++) {
+        if ((data[(y * WIDTH + x) * 4 + 3] ?? 0) > 128) {
+          left = Math.min(left, x)
+          break
+        }
+      }
+    }
+    return left
+  }
+
+  it('carries her sideways on `shift`, base and all', () => {
+    /*
+      `swing`, not `wander`, and the reason is the harness rather than the code:
+      `rig()` builds her `fit-canvas`, so she FILLS a 240px canvas and
+      `wander`'s 0.42 body widths walk her off the edge of it. In the app that
+      room is reserved in the pad; here there is none to reserve.
+    */
+    const { moved, still } = at('swing', 0.25 * 2600)
+    const a = extent(moved.ctx)
+    const b = extent(still.ctx)
+    if (a === null || b === null) throw new Error('nothing painted')
+
+    // The BASE, which a lean cannot move. This is what fails if the translation
+    // is removed; her overall extent does not, because the lean moves that too.
+    expect(baseLeft(moved.ctx, a.bottom)).toBeGreaterThan(baseLeft(still.ctx, b.bottom))
+    // She travelled; she did not stretch. An offset applied to one edge and not
+    // the other would widen her instead of moving her.
+    expect(a.right - a.left).toBeCloseTo(b.right - b.left, -1)
+  })
+
+  it('takes her off the ground on `lift`', () => {
+    // `hop` is at its apex around t = 0.46 of 560ms.
+    const { moved, still } = at('hop', 0.46 * 560)
+    const a = extent(moved.ctx)
+    const b = extent(still.ctx)
+    if (a === null || b === null) throw new Error('nothing painted')
+    // Up is a SMALLER y. Both edges, or she is being squashed rather than
+    // lifted -- and `hop` uses squash too, so only the pair proves travel.
+    expect(a.bottom).toBeLessThan(b.bottom)
+    expect(a.top).toBeLessThan(b.top)
+  })
+
+  it('takes the hit test with her, so clicks follow the pixels', () => {
+    /*
+      The promise the class makes is that only what you can see takes the
+      mouse. Translation applied per-drawing-call rather than to the origin
+      would move her pixels and leave the silhouette behind, and then there are
+      visible pixels that `hitTest` calls empty desktop -- the click lands on
+      whatever is behind her, and nothing looks wrong.
+    */
+    const { moved, still } = at('wander', 0.38 * 11_000)
+    const a = extent(moved.ctx)
+    const b = extent(still.ctx)
+    if (a === null || b === null) throw new Error('nothing painted')
+
+    // A column she now occupies and did not before.
+    const x = a.right - 2
+    const y = Math.round((a.top + a.bottom) / 2)
+    expect(b.right).toBeLessThan(x)
+    expect(still.avatar.hitTest(x, y), 'the control should be empty there').toBe(false)
+    expect(moved.avatar.hitTest(x, y), 'she is painted there now').toBe(true)
+  })
+
+  it('slides her features on `turn` without moving her outline', () => {
+    // Not a rotation and it cannot become one: there is one silhouette. What
+    // turns is what is drawn ON her, and the clip to the outline is what makes
+    // the far side pass out of sight rather than stick out.
+    const { moved, still } = at('turn', 0.82 * 1500)
+    const a = extent(moved.ctx)
+    const b = extent(still.ctx)
+    if (a === null || b === null) throw new Error('nothing painted')
+    /*
+      Read at `t = 0.82`, where the clip's `lean` and `gazeX` are back to ZERO
+      and the turn is not — her face trails her body coming back. That instant
+      exists so this channel can be measured alone: at any other point the clip
+      moves three things at once, and an earlier draft of this test passed with
+      the turn deleted because the lean was moving the pixels by itself.
+
+      So the outline is not merely close, it is IDENTICAL. Turning is something
+      that happens to what is drawn on her, never to her shape.
+    */
+    expect(a.left).toBe(b.left)
+    expect(a.right).toBe(b.right)
+    expect(a.top).toBe(b.top)
+    expect(a.bottom).toBe(b.bottom)
+    /*
+      And the features DID move — measured by where the ink is, not how much of
+      it there is.
+
+      `inkPixels` counts; it does not locate. Sliding a face across a body
+      preserves the count exactly, so counting reported "no change" for a turn
+      that had plainly happened. The centroid is the measure that matches the
+      claim.
+    */
+    expect(inkCentroidX(moved.ctx)).toBeGreaterThan(inkCentroidX(still.ctx) + 1)
+  })
+})

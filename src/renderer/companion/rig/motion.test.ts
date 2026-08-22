@@ -8,7 +8,15 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { BUILT_IN_MOTIONS, MOTION_CHANNELS, parseMotionClip, poseAt, progress } from './motion'
+import {
+  BUILT_IN_MOTIONS,
+  MOTION_CHANNELS,
+  builtInReach,
+  motionReach,
+  parseMotionClip,
+  poseAt,
+  progress,
+} from './motion'
 
 const nod = BUILT_IN_MOTIONS['nod']!
 const sway = BUILT_IN_MOTIONS['sway']!
@@ -195,5 +203,48 @@ describe('a clip off disk is checked, not trusted', () => {
 
   it('needs at least two keys, because one is a pose', () => {
     expect(parseMotionClip({ ...good, keys: [{ t: 0 }] }).ok).toBe(false)
+  })
+})
+
+describe("the built-ins are held to the standard a stranger's clip is", () => {
+  it('every one of them survives the parser', () => {
+    /*
+      They are object literals, so nothing made them face `parseMotionClip` —
+      the bounds, the key ordering, the two-key minimum and the loop closure
+      are all enforced on a clip off DISK and were enforced on these only by
+      whoever typed them.
+
+      That gap grew teeth the moment three channels were added: `lift: 1.4` is a
+      legal TypeScript number that puts her outside her own window, and the
+      author of the next clip should not be the only check on it.
+    */
+    for (const [name, clip] of Object.entries(BUILT_IN_MOTIONS)) {
+      const parsed = parseMotionClip(JSON.parse(JSON.stringify(clip)))
+      expect(parsed.ok, `${name}: ${parsed.ok ? '' : parsed.problems.join('; ')}`).toBe(true)
+    }
+  })
+
+  it('reserves room for exactly the travel its keys ask for', () => {
+    // Derived rather than declared, so retiming a clip cannot leave the number
+    // beside it stale. `up` only: she hops rather than sinking.
+    expect(motionReach(BUILT_IN_MOTIONS['nod']!)).toEqual({ x: 0, up: 0 })
+    expect(motionReach(BUILT_IN_MOTIONS['hop']!)).toEqual({ x: 0, up: 0.16 })
+    expect(motionReach(BUILT_IN_MOTIONS['swing']!).x).toBeCloseTo(0.12)
+
+    const worst = builtInReach()
+    for (const clip of Object.values(BUILT_IN_MOTIONS)) {
+      const one = motionReach(clip)
+      expect(worst.x).toBeGreaterThanOrEqual(one.x)
+      expect(worst.up).toBeGreaterThanOrEqual(one.up)
+    }
+  })
+
+  it('keeps the worst case small enough to be a gesture', () => {
+    // The pad reserves this permanently, so it is transparent window around her
+    // for the whole session. A clip that wanted a body width each way would be
+    // asking for a window twice as wide as she is, always.
+    const worst = builtInReach()
+    expect(worst.x).toBeLessThanOrEqual(0.5)
+    expect(worst.up).toBeLessThanOrEqual(0.25)
   })
 })

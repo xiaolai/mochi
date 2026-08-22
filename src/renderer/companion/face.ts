@@ -1,8 +1,10 @@
 import { MochiAvatar } from './rig/mochi'
+import { builtInReach } from './rig/motion'
 import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
 import type { Emotion } from '@shared/avatar'
 import type { HaloWhen } from '@shared/ipc'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
+import { createRepose, type Ambient } from './repose'
 import { BUBBLE_REACH, createBubble, WIDEST_BUBBLE } from './bubble'
 import { resolvePalette, whenSchemeChanges, type Palette } from '../design/resolve'
 import {
@@ -376,6 +378,31 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       wants 26px above her and the halo wants about 27.
     */
     const ring = haloRect(her)
+    /*
+      Room for her to MOVE, reserved whether or not she is moving.
+
+      `lift` and `shift` translate her inside this window, and a window fitted
+      to her standing still clips her the moment she uses either — she walks
+      into the edge of a transparent rectangle and is cut in half by it.
+
+      Reserved as a CONSTANT, from the worst case across every built-in clip,
+      rather than tracked per motion. Growing the window when a clip starts and
+      shrinking it when it ends means resizing a window during an animation,
+      sixty times a second, against a shrink that is deliberately delayed —
+      three moving parts to save about forty transparent pixels. The pixels are
+      free; the state machine is not.
+
+      `up` only for the vertical half. She hops rather than sinking, and
+      reserving room below would push her down inside her own window to hold a
+      clearance nothing ever uses.
+    */
+    const reach = builtInReach()
+    const travel = {
+      x: -reach.x * body.width,
+      y: -reach.up * body.height,
+      w: body.width * (1 + reach.x * 2),
+      h: body.height * (1 + reach.up),
+    }
     const around = [
       chipRect(her),
       {
@@ -384,6 +411,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         w: ring.rx * 2,
         h: haloReach() * 2,
       },
+      travel,
     ]
     const pad = {
       left: Math.max(0, ...around.map((one) => -one.x)),
@@ -733,6 +761,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * measurement and for why nothing about it may come from the service.
    */
   const beat = createBeat()
+  const repose = createRepose()
+  /** The ambient loop actually playing, so a rung is started once and not per frame. */
+  let ambient: Ambient = 'none'
 
   /** The microphone's own analyser. Hers drives the mouth; this drives nothing
    *  she says — only whether she looks like she is waiting on somebody. */
@@ -1297,6 +1328,39 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // `dragging` first, and it overrides the rest: a drag that has left her
     // silhouette still owns the pointer, and the release is what remembers
     // where she was put.
+    /**
+     * Ambient motion, and the one place every reason to have none is collected.
+     *
+     * `busy` is asserted for all of it: she is speaking, they are speaking, a
+     * beat is outstanding, she is resting, or the pointer is on her. There is
+     * ONE motion slot, and `beat.ts` uses it to say something real — she is
+     * waiting on a slow answer — so an ambient loop that could overwrite it
+     * would replace a signal with decoration. Hence `waiting !== 'none'` is
+     * part of being busy rather than a special case afterwards.
+     *
+     * Stepped here, at the end of the frame, because `onHer` is computed a few
+     * lines up and this is the first point where the whole answer is known.
+     */
+    const busy =
+      resting ||
+      onHer ||
+      dragging ||
+      envelope.speaking ||
+      attention !== 'idle' ||
+      waiting !== 'none'
+    const next = repose.step(seconds, busy)
+    // The glance is an EVENT and goes first: it is a one-shot, so it plays over
+    // whatever loop is running and the rig clears it when it finishes.
+    if (next.look) avatar.playMotion('turn')
+    if (next.loop !== ambient) {
+      ambient = next.loop
+      // `stopMotion` rather than playing nothing: `sway` and `wander` loop, and
+      // a loop left running is the defect §19's addendum describes in another
+      // form -- a state that stopped meaning anything because it never ended.
+      if (ambient === 'none') avatar.stopMotion()
+      else avatar.playMotion(ambient)
+    }
+
     const on = dragging || onHer || onChip || onControls
     if (on !== solid) {
       solid = on
@@ -1385,7 +1449,16 @@ export function showFace(canvas: HTMLCanvasElement): Face {
           intensity: WAKING_PERK_INTENSITY,
           holdMs: WAKING_PERK_MS,
         })
+        // And she moves, not only changes face. A perk with no motion under it
+        // is an expression appearing on a body that did not react, which reads
+        // as a texture swap rather than as somebody waking up.
+        avatar.playMotion('hop')
       }
+      // Either direction: the quiet starts again. Without this she would be
+      // put to rest mid-wander and wake straight back into it, having counted
+      // the whole sleep as time nobody spoke to her.
+      repose.reset()
+      ambient = 'none'
       /**
        * Nothing to say while her eyes are shut, so the bubble closes.
        *
@@ -1442,6 +1515,12 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       waiting = 'none'
       thinking = false
       avatar.stopMotion()
+      // `stopMotion` above kills whatever was playing, so the record of what is
+      // playing has to agree or the next rung would be skipped: `ambient` would
+      // still say `wander` while nothing was running, and the comparison that
+      // starts a loop only fires on a change.
+      repose.reset()
+      ambient = 'none'
       // The OTHER exit from the beat, and it needs the same restore. A session
       // that ended mid-beat left her eyes at the thinking coordinates, and
       // clearing the flag above does not move them — so the new session opened
