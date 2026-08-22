@@ -3,6 +3,7 @@ import { isPersonaId } from '@shared/persona'
 import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
 import { BUBBLE_SIDES, type BubbleSide } from '@shared/persona'
 import { isHaloWhen, type HaloWhen } from '@shared/ipc'
+import { readLanguages } from '@shared/transcription'
 import {
   DEFAULT_GRANTS,
   WITHHELD_GRANTS,
@@ -569,6 +570,56 @@ export function readShoulderChip(userData: string): boolean {
 
 export function writeShoulderChip(userData: string, shown: boolean): void {
   writeMerged(userData, { shoulderChip: shown })
+}
+
+/**
+ * Which languages she should expect to hear, as hints for the transcriber.
+ *
+ * ## Empty is the default, and it is a choice rather than a gap
+ *
+ * Nothing is sent when this is empty, and `gpt-transcribe` detects the language
+ * itself and reports what it found. That is the honest default for an
+ * application that has no idea who installed it: pinning a pair of languages
+ * would decide, for somebody who speaks neither, that they are talking in a
+ * language they do not speak — and the hint would then be actively working
+ * against them.
+ *
+ * AGENTS.md rule 16 says configuration you do not send runs on somebody else's
+ * defaults, and that is true here too. The difference is that this default is
+ * the one worth having: detection is what the model does well, and a hint is
+ * only better than detection when the person supplying it actually knows.
+ *
+ * ## A preference, not a persona field
+ *
+ * `realtime-model.ts` draws the same line and states the test: this describes
+ * the person at the keyboard and the room they are in, not the character being
+ * worn. Switching from a work persona to a personal one does not change which
+ * languages get spoken at the machine, so filing it under a character would
+ * make the control mean something different the first time somebody switched.
+ */
+export function readTranscriptionLanguages(userData: string): readonly string[] {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) return []
+  try {
+    const value: unknown = JSON.parse(read.text)
+    return readLanguages(
+      (value as { transcriptionLanguages?: unknown } | null)?.transcriptionLanguages,
+    )
+  } catch {
+    // Unreadable falls back to detection rather than to a guess, which is the
+    // same direction every other reader here fails in: when the answer cannot
+    // be established, nothing is claimed.
+    return []
+  }
+}
+
+export function writeTranscriptionLanguages(userData: string, codes: readonly string[]): void {
+  // Checked again on the way IN, not only at the control. `readLanguages` is
+  // the one place the grammar, the deduplication and the bound live, so a
+  // caller that skipped the window cannot write a file the reader would then
+  // silently truncate — which is how a stored choice comes to differ from the
+  // one that was made.
+  writeMerged(userData, { transcriptionLanguages: [...readLanguages(codes)] })
 }
 
 /**

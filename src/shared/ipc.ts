@@ -285,6 +285,15 @@ export const SETTINGS_CHANNELS = [
    */
   'settings:grant',
   /**
+   * Which languages she should expect to hear.
+   *
+   * Its own channel rather than a field on `settings:screen`, because that one
+   * is about the corner of the display and this decides what her archive ends
+   * up holding. Folding them together would put a control that changes what is
+   * remembered on a pane somebody opens to move a speech bubble.
+   */
+  'settings:hearing',
+  /**
    * Ask the machine about Codex again, and wait for the answer.
    *
    * `invoke`, not a fire-and-forget: the check spawns two child processes with
@@ -366,6 +375,34 @@ export interface SettingsScreen {
   readonly sleepAfterMinutes: number
   /** Every value the pane may offer, so it never draws one main would refuse. */
   readonly sleepAfterChoices: readonly number[]
+}
+
+/**
+ * Which languages she should expect to hear, as the settings window draws it.
+ *
+ * The empty list is the ordinary state and the window says so in words rather
+ * than leaving an empty control to be read as broken: nothing chosen means the
+ * transcriber works the language out for itself, which is what it is good at.
+ */
+export interface SettingsHearing {
+  /** ISO 639-1 codes currently hinted. Empty means detect. */
+  readonly languages: readonly string[]
+  /**
+   * Every language the pane may offer, code and name.
+   *
+   * Sent rather than imported by the window, for `haloChoices`' reason: the
+   * list main will accept and the list the pane draws have to be one list, and
+   * two copies of it drift the day either is edited.
+   */
+  readonly choices: readonly { readonly code: string; readonly label: string }[]
+  /** How many may be chosen at once, so the pane can say so before refusing. */
+  readonly most: number
+}
+
+/** What may be changed about her hearing. Absent means unchanged. */
+export interface HearingChange {
+  /** Codes, unchecked — this is the WIRE shape. `applyHearing` decides. */
+  readonly languages?: readonly unknown[]
 }
 
 /** What may be changed about the screen. Absent means unchanged. */
@@ -698,6 +735,7 @@ export interface SettingsView {
   readonly grants: readonly SettingsGrant[]
   readonly lookup: SettingsLookup
   readonly screen: SettingsScreen
+  readonly hearing: SettingsHearing
   readonly keys: readonly SettingsKey[]
   readonly about: SettingsAbout
   /** Named for display. Opening one goes through `settings:reveal` by kind. */
@@ -777,6 +815,7 @@ export interface MochiSettingsApi {
   read(): Promise<SettingsView>
   lookup(change: LookupChange): Promise<SettingsWrite>
   screen(change: ScreenChange): Promise<SettingsWrite>
+  hearing(change: HearingChange): Promise<SettingsWrite>
   grant(change: GrantChange): Promise<SettingsWrite>
   reveal(what: Revealable): void
   /**
@@ -965,6 +1004,22 @@ export interface SessionConfig {
    * had already opened the microphone.
    */
   readonly asleep: boolean
+  /**
+   * How the USER's speech is turned into text, resolved in main.
+   *
+   * On the config rather than a constant in the renderer because the languages
+   * are a setting somebody can change, and `voice:config` is read fresh on
+   * every session — so a change lands on her next wake without a restart, the
+   * same way a persona edit does.
+   *
+   * `languages` EMPTY means send no hint and let the model detect. The renderer
+   * omits the field entirely rather than sending `[]`, because an empty list is
+   * a claim about what will be spoken and the absence of one is not.
+   */
+  readonly transcription: {
+    readonly model: string
+    readonly languages: readonly string[]
+  }
 }
 
 /**

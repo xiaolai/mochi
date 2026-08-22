@@ -91,6 +91,11 @@ const PREFERENCES: Readonly<Record<string, Declared>> = {
     because: 'the "On screen" pane',
     provenBy: 'sleepAfterMinutes',
   },
+  transcriptionLanguages: {
+    kind: 'user-choice',
+    because: 'the "Hearing you" pane',
+    provenBy: 'Languages spoken',
+  },
   webSearch: {
     kind: 'user-choice',
     because: 'the "Looking things up" pane',

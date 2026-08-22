@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { MOST_LANGUAGES } from '@shared/transcription'
 import {
   BUBBLE_SIDES,
   DEFAULT_PERSONA,
@@ -15,6 +16,7 @@ import { WEB_SEARCH_MODES } from '@shared/delegation'
 import {
   applyChange,
   applyLookup,
+  applyHearing,
   applyScreen,
   folderFor,
   listAvatars,
@@ -650,5 +652,65 @@ describe('the six fields that had no control until now', () => {
   it('refuses a prompt past the limit the parser enforces', () => {
     expect(change({ style: 'x'.repeat(PERSONA_LIMITS.style + 1) }).ok).toBe(false)
     expect(change({ style: '' }).ok).toBe(true)
+  })
+})
+
+/**
+ * Which languages she should expect to hear.
+ *
+ * The one that separates this from `readLanguages`: a FILE is read tolerantly,
+ * because it may have been written by another version, and a CONTROL somebody
+ * just operated is refused loudly. Filtering a person's selection down and
+ * telling them it saved is the failure this whole pane exists to remove.
+ */
+describe('which languages she should expect to hear', () => {
+  it('changes nothing when nothing was asked for', () => {
+    expect(applyHearing({})).toEqual({ ok: true, change: {} })
+  })
+
+  it('takes a list of codes', () => {
+    expect(applyHearing({ languages: ['en', 'zh'] })).toEqual({
+      ok: true,
+      change: { languages: ['en', 'zh'] },
+    })
+  })
+
+  it('takes an EMPTY list, because detection is a real answer', () => {
+    // Not "nothing was asked for" -- clearing the selection is a choice, and
+    // refusing it would leave somebody unable to undo a hint they regretted.
+    expect(applyHearing({ languages: [] })).toEqual({ ok: true, change: { languages: [] } })
+  })
+
+  it('REFUSES a code it does not recognise rather than dropping it', () => {
+    // The whole difference from the file reader. Saving three of somebody's
+    // four choices and reporting success is how a control comes to be
+    // distrusted.
+    const asked = applyHearing({ languages: ['en', 'ENGLISH'] })
+    expect(asked.ok).toBe(false)
+    if (!asked.ok) expect(asked.why).toContain('ENGLISH')
+  })
+
+  it('refuses more than may be chosen at once', () => {
+    const many = ['en', 'zh', 'es', 'hi', 'ar', 'pt', 'ru']
+    expect(many.length).toBeGreaterThan(MOST_LANGUAGES)
+    const asked = applyHearing({ languages: many })
+    expect(asked.ok).toBe(false)
+    if (!asked.ok) expect(asked.why).toContain(String(MOST_LANGUAGES))
+  })
+
+  it('refuses anything that is not a list', () => {
+    // It crosses a bridge, so the wire type accepts whatever a page sent.
+    // `.length` on a string is a number, which is how `'en'` would otherwise
+    // pass the bound check and reach the store as two one-character codes.
+    for (const value of ['en', 42, null, { 0: 'en' }]) {
+      expect(applyHearing({ languages: value as unknown as readonly unknown[] }).ok).toBe(false)
+    }
+  })
+
+  it('collapses duplicates, so what is stored is what was asked for', () => {
+    expect(applyHearing({ languages: ['en', 'en', 'zh'] })).toEqual({
+      ok: true,
+      change: { languages: ['en', 'zh'] },
+    })
   })
 })

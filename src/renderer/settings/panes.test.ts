@@ -33,6 +33,14 @@ function settled(): SettingsView {
       profilePath: null,
       codex: { readiness: 'ready', remedy: null },
     },
+    hearing: {
+      languages: [],
+      choices: [
+        { code: 'en', label: 'English' },
+        { code: 'zh', label: 'Chinese' },
+      ],
+      most: 6,
+    },
     screen: {
       halo: 'always',
       haloChoices: ['always', 'listening', 'never'],
@@ -49,8 +57,8 @@ function settled(): SettingsView {
   }
 }
 
-describe('the five groups', () => {
-  it('is five, in the order they are drawn', () => {
+describe('the six groups', () => {
+  it('is six, in the order they are drawn', () => {
     /*
       `where` is gone, folded into `about`.
 
@@ -60,7 +68,17 @@ describe('the five groups', () => {
       buttons, so finding either meant knowing which of two words this
       repository had picked for one subject.
     */
-    expect(PANES.map((one) => one.id)).toEqual(['may-do', 'looking', 'on-screen', 'keys', 'about'])
+    // `hearing` sits after `looking` and before `on-screen`: both of the first
+    // two are about what she does with the world outside this window, and
+    // `on-screen` begins the ones about the window itself.
+    expect(PANES.map((one) => one.id)).toEqual([
+      'may-do',
+      'looking',
+      'hearing',
+      'on-screen',
+      'keys',
+      'about',
+    ])
   })
 
   it('is W-S1’s groups rather than the handoff’s', () => {
@@ -73,6 +91,7 @@ describe('the five groups', () => {
     expect(labels).not.toContain('Sound')
     expect(labels).not.toContain('What is kept')
     expect(labels).toContain('On screen')
+    expect(labels).toContain('Hearing you')
     expect(labels).toContain('Keys')
     expect(labels).toContain('About')
   })

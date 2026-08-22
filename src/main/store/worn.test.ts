@@ -23,6 +23,8 @@ import {
   writeHaloWhen,
   readShoulderChip,
   writeShoulderChip,
+  readTranscriptionLanguages,
+  writeTranscriptionLanguages,
   readHerPlace,
   writeHerPlace,
   readShelfPlace,
@@ -367,6 +369,57 @@ describe('whether the control at her shoulder is offered', () => {
     writeShoulderChip(userData, false)
     expect(readHaloWhen(userData)).toBe('never')
     expect(readShoulderChip(userData)).toBe(false)
+  })
+})
+
+describe('which languages she should expect to hear', () => {
+  it('is EMPTY before anybody has chosen, which means detect', () => {
+    // Not a missing answer. Nothing is sent, and the transcriber works the
+    // language out for itself -- which is the honest default for an
+    // application that has no idea who installed it.
+    expect(readTranscriptionLanguages(userData)).toEqual([])
+  })
+
+  it('round-trips a choice', () => {
+    writeTranscriptionLanguages(userData, ['zh', 'en'])
+    expect(readTranscriptionLanguages(userData)).toEqual(['zh', 'en'])
+  })
+
+  it('goes back to detection when the choice is cleared', () => {
+    writeTranscriptionLanguages(userData, ['zh'])
+    writeTranscriptionLanguages(userData, [])
+    expect(readTranscriptionLanguages(userData)).toEqual([])
+  })
+
+  it('reads a hand-edited file the same way the control would be read', () => {
+    // The bound, the grammar and the deduplication are `readLanguages`', and
+    // this is the path that proves the FILE goes through them too. A file is
+    // exactly as capable of naming forty languages as a broken window is.
+    writePreferences({ transcriptionLanguages: ['en', 'en', 'ENGLISH', 9, 'zh'] })
+    expect(readTranscriptionLanguages(userData)).toEqual(['en', 'zh'])
+  })
+
+  it('falls back to detection rather than to a guess when the file is unreadable', () => {
+    writeFileSync(join(userData, 'preferences.json'), 'not json')
+    expect(readTranscriptionLanguages(userData)).toEqual([])
+  })
+
+  it('stores what will be read back, not something wider', () => {
+    // Checked on the way IN as well as out: a caller that skipped the window
+    // must not be able to write a file the reader then silently truncates,
+    // which is how a stored choice comes to differ from the one that was made.
+    writeTranscriptionLanguages(userData, ['en', 'en', 'zz-not-a-code', 'zh'])
+    const stored = JSON.parse(readFileSync(join(userData, 'preferences.json'), 'utf8')) as {
+      transcriptionLanguages: unknown
+    }
+    expect(stored.transcriptionLanguages).toEqual(['en', 'zh'])
+  })
+
+  it('does not disturb the other preferences in the same file', () => {
+    writeHaloWhen(userData, 'never')
+    writeTranscriptionLanguages(userData, ['ja'])
+    expect(readHaloWhen(userData)).toBe('never')
+    expect(readTranscriptionLanguages(userData)).toEqual(['ja'])
   })
 })
 

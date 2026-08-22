@@ -1,4 +1,5 @@
 import { parseServerFrame } from '@shared/realtime/frames'
+import { transcriptionConfig } from '@shared/transcription'
 import { isPrivateFrame, type SessionConfig } from '@shared/ipc'
 import type { FaceSpec } from '@shared/avatar-spec'
 import { createPending, type Spoken } from './pending'
@@ -129,8 +130,24 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   let closed = false
   /** How to stop listening for main's frames. See `MochiApi.onSend`. */
   let stopListening: (() => void) | null = null
+  /**
+   * The timer that says the configuration never landed. See `confirmed` below.
+   *
+   * Declared HERE, with the rest of the mutable state, rather than beside the
+   * essay that explains it: `shutdown` clears it, `shutdown` is defined above
+   * that essay, and a `let` read before its declaration throws. Nothing reaches
+   * it early today — but the one path that would is the teardown, and this
+   * file's own header is three points about teardown ordering that each cost a
+   * real bug. An ordering argument is not worth making twice.
+   */
+  let confirming: ReturnType<typeof setTimeout> | null = null
 
   function shutdown(): void {
+    // Above the guard, with the tracks and for the same reason: a session that
+    // died inside the confirmation window would otherwise report itself
+    // unconfigured seconds after it was gone, which is a false alarm about a
+    // session nobody is in.
+    confirmed()
     // A turn she began and was cut off in, whose transcript never arrived, is
     // still a fact. Filed as an empty `cut` marker rather than lost.
     for (const spoken of pending.flush()) file(spoken)
@@ -195,6 +212,35 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   const announced = new Set<string>()
   /** She greets once per session, not once per `session.updated`. */
   let greeted = false
+
+  /**
+   * Proof that the configuration actually landed, rather than the hope of it.
+   *
+   * §24 §3 measured what she runs on when it does not: transcription off, noise
+   * reduction off, `server_vad` rather than `semantic_vad`, and a voice that is
+   * not hers — and NO instructions, so no name, no manner, no memory of
+   * anybody. AGENTS.md rule 16 is exactly this, and the service echoes
+   * `session.updated` on success, so the difference is observable and was
+   * simply not being observed.
+   *
+   * One rejected field takes the WHOLE update with it, which is what makes this
+   * worth an assertion rather than a comment: every field in that object is a
+   * thing the service could stop accepting, and the symptom of losing them all
+   * is a companion who is subtly not herself. Silence here is the loudest thing
+   * this session can report.
+   *
+   * The FIRST update only. A later one — a standing grant changing mid-call —
+   * fails back onto the configuration already in force, which is wrong but not
+   * unrecognisable.
+   */
+  /** Well beyond any observed round trip; §24 attributed errors within six. */
+  const CONFIRM_MS = 5_000
+
+  function confirmed(): void {
+    if (confirming === null) return
+    clearTimeout(confirming)
+    confirming = null
+  }
 
   callbacks.onState('opening')
 
@@ -290,6 +336,12 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
         })
         break
       case 'other':
+        // The configuration landed. FIRST in this branch and separate from the
+        // greeting below, because it is true whether or not she may speak: a
+        // session where `speak_first` is withheld is still a configured one,
+        // and hanging this off the greeting would report every such session as
+        // unconfigured.
+        if (frame.type === 'session.updated') confirmed()
         /**
          * The greeting, and it waits for `session.updated` on purpose.
          *
@@ -494,7 +546,10 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
             // a turn is rather than an energy threshold deciding for it.
             noise_reduction: { type: 'far_field' },
             turn_detection: { type: 'semantic_vad' },
-            transcription: { model: 'whisper-1' },
+            // Resolved in main, because the languages are somebody's setting.
+            // The empty-means-omit rule is `transcriptionConfig`'s, which is
+            // where it can be tested — nothing can construct this file.
+            transcription: transcriptionConfig(config.transcription),
           },
         },
         tools: mayDo.tools,
@@ -506,6 +561,16 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   // Sent the instant the channel opens, with everything already in hand.
   channel.addEventListener('open', () => {
     put(sessionUpdate())
+    confirming = setTimeout(() => {
+      confirming = null
+      window.mochi.report({
+        kind: 'note',
+        text:
+          'NOT CONFIGURED: no session.updated came back, so she is running on the ' +
+          "service's defaults — no instructions, no voice of hers, server_vad. " +
+          'An `error` frame above says which field was refused.',
+      })
+    }, CONFIRM_MS)
   })
 
   return {

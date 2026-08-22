@@ -19,6 +19,7 @@ import {
   type PersonaAction,
   type PersonaChange,
   type Revealable,
+  type HearingChange,
   type ScreenChange,
   type SettingsCodex,
   type SettingsView,
@@ -224,6 +225,9 @@ const settings: MochiSettingsApi = {
   },
   async screen(change: ScreenChange) {
     return (await ipcRenderer.invoke(guardSettings('settings:screen'), change)) as SettingsWrite
+  },
+  async hearing(change: HearingChange) {
+    return (await ipcRenderer.invoke(guardSettings('settings:hearing'), change)) as SettingsWrite
   },
   async grant(change: GrantChange) {
     return (await ipcRenderer.invoke(guardSettings('settings:grant'), change)) as SettingsWrite

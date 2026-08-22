@@ -34,6 +34,7 @@ import {
 import { HALO_WHEN, isHaloWhen, type HaloWhen } from '@shared/ipc'
 import type {
   GrantUse,
+  HearingChange,
   LookupChange,
   ScreenChange,
   SettingsGrant,
@@ -49,6 +50,7 @@ import type {
   SettingsWrite,
 } from '@shared/ipc'
 import { GRANT_SPECS, type Grants } from '@shared/grants'
+import { MOST_LANGUAGES, isLanguageCode } from '@shared/transcription'
 
 import type { Usage } from './store/usage'
 import { WEB_SEARCH_MODES, isWebSearchMode, type WebSearchMode } from '@shared/delegation'
@@ -405,6 +407,59 @@ export function applyLookup(
       }
     }
     next.profile = change.profile
+  }
+
+  return { ok: true, change: next }
+}
+
+/** A checked hearing change, in the types the store actually takes. */
+export interface CheckedHearing {
+  readonly languages?: readonly string[]
+}
+
+/**
+ * Fold a page's request about her hearing into a call main will make.
+ *
+ * `applyLookup`'s shape and `applyLookup`'s reason: the wire type accepts
+ * whatever a page sent, so every field is checked here rather than passed on.
+ *
+ * ## Refused rather than filtered
+ *
+ * The tempting version drops the codes it does not recognise and saves the
+ * rest, which is how somebody chooses four languages, gets two, and is told it
+ * worked. `readLanguages` is deliberately tolerant because it reads a FILE that
+ * may have been written by another version; this reads a control somebody just
+ * operated, and the two want opposite behaviour. A person who can see what they
+ * clicked should be told when it was not what got saved.
+ *
+ * The empty list is accepted and means detect — see `readTranscriptionLanguages`.
+ */
+export function applyHearing(
+  change: HearingChange,
+):
+  | { readonly ok: true; readonly change: CheckedHearing }
+  | { readonly ok: false; readonly why: string } {
+  const next: { languages?: readonly string[] } = {}
+
+  if (change.languages !== undefined) {
+    if (!Array.isArray(change.languages)) {
+      return { ok: false, why: 'That is not a list of languages.' }
+    }
+    const asked = change.languages
+    if (asked.length > MOST_LANGUAGES) {
+      return {
+        ok: false,
+        why: `Choose at most ${String(MOST_LANGUAGES)} languages, or none to let her work it out.`,
+      }
+    }
+    for (const one of asked) {
+      if (!isLanguageCode(one)) return { ok: false, why: `${String(one)} is not a language code.` }
+    }
+    // Deduplicated here so the answer main stores is the answer that was
+    // asked for -- `writeTranscriptionLanguages` would collapse them anyway,
+    // and a stored value that differs from the request is the thing this
+    // function exists to prevent.
+    next.languages = [...new Set(asked as readonly string[])]
   }
 
   return { ok: true, change: next }

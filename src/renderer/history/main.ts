@@ -1639,6 +1639,14 @@ const machineHandlers: PaneHandlers = {
   screen: (change) => {
     void writeMachine(() => window.mochiSettings.screen(change), 'Saved.')
   },
+  hearing: (change) => {
+    // Its own sentence rather than the shared "Saved.", because nothing on
+    // screen changes and the setting does not reach the session she is in.
+    void writeMachine(
+      () => window.mochiSettings.hearing(change),
+      'Saved. It takes effect on her next wake.',
+    )
+  },
   grant: (change) => {
     void writeMachine(() => window.mochiSettings.grant(change), 'Saved.')
   },

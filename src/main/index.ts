@@ -80,10 +80,13 @@ import {
   writeHaloWhen,
   readShoulderChip,
   writeShoulderChip,
+  readTranscriptionLanguages,
+  writeTranscriptionLanguages,
   writeHerPlace,
   type Resting,
 } from './store/worn'
 import { claimShortcuts, releaseShortcuts, type ShortcutOutcome } from './shortcuts'
+import { MOST_LANGUAGES, OFFERED_LANGUAGES, TRANSCRIPTION_MODEL } from '@shared/transcription'
 import { SHORTCUTS } from '@shared/shortcuts'
 import { allowsCapability, isGrant, withheldGuidance, GRANT_SPECS } from '@shared/grants'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
@@ -146,6 +149,7 @@ console.log(`[main] run ${runName(new Date())}`)
 const NOMINAL_BODY = { left: (WINDOW_W - 94) / 2, top: FEET_FROM_TOP - 73, width: 94, height: 73 }
 import {
   applyChange,
+  applyHearing,
   applyLookup,
   applyScreen,
   folderFor,
@@ -1590,6 +1594,16 @@ ipcMain.handle('voice:config', () => {
     bubbleSide: resolved.persona.bubbleSide,
     asleep: resting.asleep,
     tools: mayDo.tools,
+    /*
+      Read here, on the same pass as everything else, because it is read from
+      the same file at the same moment — the argument `bubbleSide` and `asleep`
+      already make. An empty list means send no hint and let the model detect;
+      see `readTranscriptionLanguages`.
+    */
+    transcription: {
+      model: TRANSCRIPTION_MODEL,
+      languages: readTranscriptionLanguages(userData),
+    },
   }
 })
 
@@ -1861,6 +1875,13 @@ ipcMain.handle('settings:read', (): SettingsView => {
       shoulderChip: readShoulderChip(userData),
       sleepAfterMinutes: readSleepAfterMinutes(userData),
     }),
+    hearing: {
+      languages: readTranscriptionLanguages(userData),
+      // The list main will ACCEPT, sent rather than imported by the window, so
+      // the pane cannot offer a language this build would refuse.
+      choices: OFFERED_LANGUAGES,
+      most: MOST_LANGUAGES,
+    },
     keys: listKeys(claimed),
     about: {
       name: app.getName(),
@@ -2524,6 +2545,42 @@ ipcMain.handle('settings:screen', (_event, change: unknown): SettingsWrite => {
     // which is the one moment somebody is watching for it to work.
     armIdleSleep()
     console.log(`[rest] resting after ${minutes === 0 ? 'never' : `${String(minutes)} min`}`)
+  }
+
+  return { ok: true }
+})
+
+/**
+ * Which languages the transcriber should expect to hear.
+ *
+ * NOT sent to her window, unlike the halo and the shoulder chip. Those two
+ * change something already on screen; this one changes a field of
+ * `session.update`, and the voice is locked after her first audio (§21) — so
+ * re-sending the configuration mid-session is a reconnect, not an update. It
+ * lands on her next wake, which is what `voice:config` being read fresh every
+ * session already guarantees, and the window says so rather than leaving
+ * somebody to wonder whether it took.
+ */
+ipcMain.handle('settings:hearing', (_event, change: unknown): SettingsWrite => {
+  if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
+  const asked = applyHearing(change)
+  if (!asked.ok) return refuse(asked.why)
+
+  if (asked.change.languages !== undefined) {
+    const languages = asked.change.languages
+    try {
+      writeTranscriptionLanguages(app.getPath('userData'), languages)
+    } catch (error: unknown) {
+      // Loud, and reported where somebody will see it — `settings:lookup`'s
+      // reason: a setting that silently did not land is the failure this
+      // window exists to remove.
+      console.error('[hearing] could not save the languages:', error)
+      problems.note('settings', null, `the languages could not be saved: ${String(error)}`)
+      return refuse(`That could not be saved: ${String(error)}`)
+    }
+    console.log(
+      `[hearing] expecting ${languages.length === 0 ? 'whatever she detects' : languages.join(', ')}`,
+    )
   }
 
   return { ok: true }
