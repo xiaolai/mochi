@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boundaryAt, costOf, isDense } from './script'
+import { UNKNOWN_DENSE_COST, boundaryAt, costOf, isDense } from './script'
 
 describe('which script a glyph is', () => {
   it('knows the spaceless scripts from the alphabetic ones', () => {
@@ -13,6 +13,56 @@ describe('which script a glyph is', () => {
     const ratio = costOf('今') / costOf('a')
     expect(ratio).toBeGreaterThan(3.5)
     expect(ratio).toBeLessThan(3.9)
+  })
+
+  it('reaches Han and kana OUTSIDE the basic plane', () => {
+    // The hand-written range list this module used to carry stopped at U+FFFF,
+    // so a supplementary-plane Han glyph paced at the Latin rate — 3.68× too
+    // fast, i.e. the estimate ran LONG, which is the direction §60 exists to
+    // avoid. `store/segment.ts` had already moved off the same list; this one
+    // had not.
+    for (const glyph of ['𠀀', '𛀁']) {
+      expect(isDense(glyph)).toBe(true)
+      expect(costOf(glyph)).toBeGreaterThan(3)
+    }
+  })
+
+  it('does not treat other alphabets as Chinese', () => {
+    /*
+      THE expensive one, and it was invisible by construction.
+
+      The old range read `豈-﫿`, meaning the CJK Compatibility Ideographs
+      block. That block begins with `豈` U+F900; the literal in the source was
+      the ordinary `豈` U+8C48, which renders identically in every editor and
+      every diff. So the range spanned 28,344 codepoints instead of 512 and
+      swallowed Yi, Lisu, Vai, Syloti Nagri and Latin Extended-E — charging
+      them the Chinese cost and letting a line break in the middle of their
+      words, which is the wrapping bug in this file's own header happening to
+      somebody else's alphabet.
+    */
+    for (const glyph of ['ꀀ', 'ꓐ', 'ꔀ', 'ꠀ', 'ꞵ']) {
+      expect(isDense(glyph)).toBe(false)
+      expect(costOf(glyph)).toBe(1)
+    }
+    // And the block it was actually reaching for is still covered.
+    expect(isDense('\u{F900}')).toBe(true)
+  })
+
+  it('gives an unspaced script nobody has timed the conservative cost', () => {
+    // §60 named this gap and named its direction: a script denser than Latin
+    // charged the Latin cost runs the cursor fast and the estimate long. Thai,
+    // Lao, Khmer, Myanmar and Tibetan fell to 1 and now do not.
+    for (const glyph of ['ก', 'ພ', 'ក', 'မ', 'ཀ']) {
+      expect(isDense(glyph)).toBe(true)
+      expect(costOf(glyph)).toBe(UNKNOWN_DENSE_COST)
+    }
+  })
+
+  it('never charges an unmeasured script less than a Latin one', () => {
+    // The safety property, stated as one assertion rather than as a list: this
+    // is what makes "conservative" mean something. Erring slow loses a word
+    // from a turn already marked `cut`; erring fast writes words she never said.
+    expect(UNKNOWN_DENSE_COST).toBeGreaterThanOrEqual(1)
   })
 })
 

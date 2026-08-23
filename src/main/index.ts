@@ -11,7 +11,7 @@ import {
   VOICE_NAMES,
 } from '@shared/persona'
 import { createRegistry } from '@shared/capability/registry'
-import { heardPortion } from './heard'
+import { whatToFile } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'
 import {
   REVEALABLE,
@@ -163,7 +163,12 @@ import {
   refuse,
 } from './settings'
 import { packageFolder } from './store/personas'
-import { createTranscripts, type Transcripts } from './store/transcripts'
+import {
+  boundedForgetSet,
+  createTranscripts,
+  type SessionToken,
+  type Transcripts,
+} from './store/transcripts'
 import { noteUsed, readUsage } from './store/usage'
 import { whatSheMayDo } from './what-she-may-do'
 import { createConversation, type Conversation } from './store/conversation'
@@ -1695,20 +1700,34 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
     // timed out from underneath: `heard` arrives when they finish speaking and
     // this arrives when she does, which on a lookup can be half a minute later.
     stirred()
-    if (event.heard === null) {
-      // She finished: everything generated was spoken.
-      console.log(`[voice] said: ${event.transcript}`)
-      conversation().file('her', event.transcript)
+    /*
+      The whole decision is `whatToFile`, and it is BELOW `stirred()` on
+      purpose.
+
+      A preamble is still her speaking, so the idle clock has to see it even
+      though the archive must not. Getting that order backwards would let a
+      conversation full of lookups time out from underneath her.
+    */
+    const filing = whatToFile(event)
+    if (filing.kind === 'preamble') {
+      // Logged, never filed. A preamble vanishing with no trace at all is how
+      // somebody comes to believe the transcript is lossy.
+      console.log(`[voice] preamble, not filed: ${filing.text}`)
       return
     }
-    const heard = heardPortion(event.transcript, event.heard.at)
+    if (filing.kind === 'whole') {
+      console.log(`[voice] said: ${filing.text}`)
+      // The transcript's own instant, not this one. A finished turn is settled
+      // by `output_audio_buffer.stopped`, which §19 puts 2.1–7.9s after
+      // generation — and one whose verdict never came is settled at session
+      // close, which can be an hour later.
+      conversation().file('her', filing.text, { cut: false, at: filing.at })
+      return
+    }
     console.log(
-      `[voice] said (cut): ${heard.length} of ${event.transcript.length} chars — "${heard.slice(-48)}"`,
+      `[voice] said (cut): ${filing.text.length} of ${event.transcript.length} chars — "${filing.text.slice(-48)}"`,
     )
-    // The interruption's timestamp, not this frame's: the transcript can arrive
-    // 16 seconds late, which would file her fragment AFTER the user turn that
-    // cut it off and reverse the archive's order.
-    conversation().file('her', heard, { cut: true, at: event.heard.interruptedAt })
+    conversation().file('her', filing.text, { cut: true, at: filing.at })
     return
   }
   if (event?.kind === 'pointer') {
@@ -2676,7 +2695,12 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
       if (!Array.isArray(tokens) || tokens.some((one) => typeof one !== 'string')) {
         return no('That does not name any conversations.')
       }
-      const wanted = tokens as readonly string[]
+      // The BOUNDED set, which is what `forgetSessions` will actually delete.
+      // Releasing the live conversation from the caller's unbounded list let a
+      // request naming more than `MOST_AT_ONCE` restart recording while the old
+      // conversation's rows were still on disk. One function answers "what was
+      // deleted" for both sides now.
+      const wanted = boundedForgetSet(tokens as readonly SessionToken[])
       gone = archive.forgetSessions(worn, wanted)
       if (live !== null && wanted.includes(live)) conversation().forget(live)
     } else if (kind === 'hers') {

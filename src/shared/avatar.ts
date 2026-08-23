@@ -76,6 +76,22 @@ export function clamp01(value: number): number {
 }
 
 /**
+ * Clamp to -1..1, for a signed OFFSET rather than a magnitude.
+ *
+ * Beside `clamp01` and deliberately not derived from it: the two answer
+ * different questions, and using the 0..1 one on a position is the whole of the
+ * gaze bug `AvatarBackend.lookAt` describes — centre came out as the top-left
+ * corner and half the input range collapsed onto it.
+ *
+ * Non-finite returns 0 here, which is CENTRE for a signed offset. Callers that
+ * must not move on a bad sample check finiteness before calling, as `lookAt`
+ * does; this is the floor rather than that policy.
+ */
+export function clampSigned(value: number): number {
+  return Number.isFinite(value) ? Math.min(1, Math.max(-1, value)) : 0
+}
+
+/**
  * Differences a call site would otherwise have to branch on. Nothing goes in
  * here speculatively -- each field marks a divergence that is already known.
  *
@@ -143,8 +159,34 @@ export interface AvatarBackend {
   playMotion(name: string): void
 
   /**
-   * Gaze target in normalised viewport coordinates, origin at the top-left.
-   * Finite values are clamped to 0..1.
+   * Gaze target as a SIGNED offset from centre: -1..1 on each axis, origin in
+   * the middle. Finite values are clamped to that range.
+   *
+   * ## The range is -1..1 because that is what every caller has always sent
+   *
+   * This said 0..1 with the origin at the top-left, and `MochiAvatar.lookAt`
+   * implemented it — `(clamp01(n) - 0.5) * 2` — while `face.ts` passed
+   * `(clientX / width) * 2 - 1` from every `mousemove`, `lookAt(0, 0)` to
+   * recentre on `mouseleave`, and `lookAt(0.35, -0.5)` for the thinking pose.
+   *
+   * Measured against the implementation, the whole left and top half of the
+   * pointer range collapsed onto one point:
+   *
+   * | caller meant | backend stored |
+   * | --- | --- |
+   * | centre `0` | **-1** — hard up-left |
+   * | left edge `-1` | -1, identical to centre |
+   * | right edge `1` | 1 |
+   *
+   * So she tracked the cursor only across the right and bottom half, and the
+   * `mouseleave` recentre — whose entire job is to put her eyes back to the
+   * middle — pinned them to the corner instead.
+   *
+   * The interface moved rather than the callers, because -1..1 is what the rest
+   * of the backend already used: `setAsleep` and the reset path both assign
+   * `gazeTarget = { x: 0, y: 0 }` DIRECTLY and mean centre by it, and the
+   * per-frame sum adds `look.gazeX` offsets that are signed. 0..1 was the only
+   * dissenting statement, and it was in the one place nothing executed.
    *
    * A non-finite coordinate leaves the previous target in place rather than
    * being coerced to 0 -- clamp01's policy is right for a magnitude like mouth

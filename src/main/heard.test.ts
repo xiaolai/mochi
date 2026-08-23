@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { heardPortion } from './heard'
+import { heardPortion, whatToFile } from './heard'
 
 /**
  * What gets remembered when she is cut off.
@@ -71,5 +71,72 @@ describe('cutting to what she was heard saying', () => {
         expect(text.startsWith(heardPortion(text, at))).toBe(true)
       }
     }
+  })
+})
+
+describe('what a reported turn does to the archive', () => {
+  const spoke = (over: Partial<Parameters<typeof whatToFile>[0]> = {}) =>
+    whatToFile({ transcript: 'something she said', phase: null, heard: null, at: 5000, ...over })
+
+  it('keeps a spoken preamble OUT of the archive', () => {
+    /*
+      §69's measurement is the whole of this. `set_expression` and
+      `ask_workspace` are both preceded by a `commentary` message she says out
+      loud — *"Okay, that sounds heavy—let me take a moment to respond
+      thoughtfully."* — and §28 §3 caught the consequence in a live session: two
+      acknowledgements 4.5 seconds apart, filed as two things she said.
+    */
+    const filing = spoke({ transcript: 'let me look that up for you', phase: 'commentary' })
+    expect(filing.kind).toBe('preamble')
+  })
+
+  it('files an ordinary answer whole', () => {
+    expect(spoke({ phase: 'final_answer' })).toEqual({
+      kind: 'whole',
+      text: 'something she said',
+      at: 5000,
+    })
+  })
+
+  it('files a turn with NO phase, rather than dropping it', () => {
+    /*
+      The WebRTC-absence case, and the direction matters more than the case.
+      §67 measured `phase` over a WebSocket; if this transport never delivers
+      the item frame, every turn arrives with a null phase. Withholding those
+      would empty the archive completely — so the default is keep, and the log
+      says once per session that it cannot tell the two apart.
+    */
+    expect(spoke({ phase: null }).kind).toBe('whole')
+  })
+
+  it('files a phase it has never heard of, rather than dropping it', () => {
+    // An append-only archive has asymmetric mistakes: an extra line of filler
+    // is noise, a real turn silently discarded is a memory she cannot get back.
+    expect(spoke({ phase: 'some_phase_shipped_next_year' }).kind).toBe('whole')
+  })
+
+  it('cuts an interrupted turn and stamps it at the BARGE-IN', () => {
+    const filing = spoke({
+      transcript: 'the little owl taps the pixel feather and says hello',
+      heard: { at: 30, interruptedAt: 1_700_000_000_000 },
+    })
+    expect(filing.kind).toBe('cut')
+    if (filing.kind !== 'cut') return
+    // Not this frame's instant: §28 measured the transcript arriving up to 16
+    // seconds after the interruption, which would file her fragment after the
+    // user turn that cut it off and reverse the archive.
+    expect(filing.at).toBe(1_700_000_000_000)
+    expect(filing.text.length).toBeLessThanOrEqual(30)
+  })
+
+  it('withholds a preamble even when she was cut off mid-preamble', () => {
+    // §69 saw one spent for nothing — a `commentary` message followed by no
+    // tool call at all. Cutting her off during one changes nothing about
+    // whether it was said to anybody.
+    const filing = spoke({
+      phase: 'commentary',
+      heard: { at: 5, interruptedAt: 1_700_000_000_000 },
+    })
+    expect(filing.kind).toBe('preamble')
   })
 })

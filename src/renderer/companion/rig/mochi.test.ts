@@ -1155,3 +1155,78 @@ describe('going somewhere', () => {
     expect(inkCentroidX(moved.ctx)).toBeGreaterThan(inkCentroidX(still.ctx) + 1)
   })
 })
+
+describe('where she looks', () => {
+  /**
+   * The bug: `lookAt` took 0..1 while every caller sent -1..1.
+   *
+   * `face.ts` passes `(clientX / width) * 2 - 1` from `mousemove`,
+   * `lookAt(0, 0)` to recentre on `mouseleave`, and `lookAt(0.35, -0.5)` for
+   * the thinking pose. The backend did `(clamp01(n) - 0.5) * 2`, so centre came
+   * out hard up-left and the whole left half of the screen mapped onto it.
+   *
+   * Asserted on the PAINTED pixels rather than a private field, the same way
+   * the NaN control above does: the field is what a reimplementation would
+   * keep, and the picture is what a person sees.
+   */
+  function pupilsAt(nx: number, ny: number): string {
+    const each = rig()
+    each.avatar.setIdle(false)
+    each.avatar.lookAt(nx, ny)
+    // Long enough for the gaze spring to arrive at its target.
+    for (let i = 0; i <= 60; i += 1) each.avatar.render(i * 16)
+    const { data } = each.ctx.getImageData(0, 0, WIDTH, HEIGHT)
+    // A digest of the dark pixels, which is where her pupils are.
+    let signature = ''
+    for (let i = 0; i < data.length; i += 4) {
+      if ((data[i + 3] ?? 0) > 200 && (data[i + 1] ?? 255) < 110) signature += String(i)
+    }
+    return signature
+  }
+
+  it('does not collapse the left half of the screen onto centre', () => {
+    /*
+      THE symptom, and the sharpest form of it.
+
+      Under the old mapping `clamp01(-1)` and `clamp01(0)` were both 0, so
+      looking hard left and looking straight ahead painted IDENTICAL pixels —
+      she tracked the cursor across the right and bottom half of her window
+      only. No mirroring arithmetic is needed to see that; the two simply must
+      not be the same picture.
+    */
+    expect(pupilsAt(-1, 0)).not.toBe(pupilsAt(0, 0))
+  })
+
+  it('moves her eyes monotonically across the whole range', () => {
+    const left = pupilsAt(-1, 0)
+    const centre = pupilsAt(0, 0)
+    const right = pupilsAt(1, 0)
+    expect(new Set([left, centre, right]).size).toBe(3)
+  })
+
+  it('treats 0,0 as centre — the same place a fresh rig looks', () => {
+    /*
+      `mouseleave` calls `lookAt(0, 0)` for exactly this, and `setAsleep` and
+      the reset path assign `gazeTarget = { x: 0, y: 0 }` DIRECTLY and mean
+      centre by it. Two ways into one field that disagreed about its origin is
+      what the defect WAS, so this compares them.
+
+      A rig that has never been told where to look is already at centre, which
+      makes it the control.
+    */
+    const untouched = rig()
+    untouched.avatar.setIdle(false)
+    for (let i = 0; i <= 60; i += 1) untouched.avatar.render(i * 16)
+    const { data } = untouched.ctx.getImageData(0, 0, WIDTH, HEIGHT)
+    let signature = ''
+    for (let i = 0; i < data.length; i += 4) {
+      if ((data[i + 3] ?? 0) > 200 && (data[i + 1] ?? 255) < 110) signature += String(i)
+    }
+    expect(pupilsAt(0, 0)).toBe(signature)
+  })
+
+  it('clamps past the range rather than letting her eyes leave her head', () => {
+    expect(pupilsAt(50, 0)).toBe(pupilsAt(1, 0))
+    expect(pupilsAt(-50, 0)).toBe(pupilsAt(-1, 0))
+  })
+})

@@ -17,6 +17,7 @@ import {
 } from '@shared/avatar-layout'
 import { createUtterance } from './utterance'
 import { createAttending, levelOf, type Attention } from './attending'
+import { createLoopback } from './loopback'
 import { createBeat, type Beat } from './beat'
 import { chipRect, drawChip, hits as chipHits, visible as chipVisible } from './chip'
 import { drawHalo, haloFor, haloRect, haloReach } from './halo'
@@ -80,12 +81,12 @@ export interface Face {
    * which is a different problem with a different fix.
    */
   listen(stream: MediaStream): void
-  /** One fragment of what she is saying, with the ITEM it belongs to. */
-  saying(delta: string, itemId: string): void
+  /** One fragment of what she is saying, with the RESPONSE it belongs to. */
+  saying(delta: string, responseId: string): void
   /** Her voice for this item has started. Paces the cursor. */
-  speaks(itemId: string): void
+  speaks(responseId: string): void
   /** And has finished, naturally or by interruption. The two differ; see `pace.ts`. */
-  finished(itemId: string, interrupted: boolean): void
+  finished(responseId: string, interrupted: boolean): void
   /**
    * Where she is estimated to have got to, for whoever files what was heard.
    *
@@ -93,7 +94,7 @@ export interface Face {
    * own truncated audio: −3% to −22%, always short, against +446% to +513% for
    * filing everything she generated.
    */
-  heard(): { text: string; at: number; itemId: string | null }
+  heard(): { text: string; at: number }
   /**
    * A different character is being worn: her face, and a new voice.
    *
@@ -765,6 +766,15 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   /** The ambient loop actually playing, so a rung is started once and not per frame. */
   let ambient: Ambient = 'none'
 
+  /**
+   * How much of her own voice is coming back in. An INSTRUMENT, not a fix.
+   *
+   * §17 named the one thing nobody has measured — post-AEC residual on real
+   * hardware — and said in terms that it is a measurement rather than a
+   * threshold to nudge. See `loopback.ts`; nothing here acts on what it reports.
+   */
+  const loopback = createLoopback()
+
   /** The microphone's own analyser. Hers drives the mouth; this drives nothing
    *  she says — only whether she looks like she is waiting on somebody. */
   let mic: AnalyserNode | null = null
@@ -1067,9 +1077,20 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     frame = requestAnimationFrame(tick)
 
     const seconds = lastAt === null ? 1 / 60 : Math.min(0.1, (now - lastAt) / 1000)
+    /*
+      Her RAW level this frame, kept rather than passed straight through.
+
+      `EnvelopeState` carries `mouthOpen`, which is normalised against her own
+      running peak — the right thing for a mouth and the wrong thing for a
+      comparison, because it has had the very amplitude removed that the
+      loopback measurement is about. The microphone side is `rms` too, so the
+      two are in one unit.
+    */
+    let herLevel = 0
     if (analyser !== null && samples !== null) {
       analyser.getFloatTimeDomainData(samples)
-      envelope = advanceEnvelope(rms(samples), envelope, seconds, DEFAULT_ENVELOPE)
+      herLevel = rms(samples)
+      envelope = advanceEnvelope(herLevel, envelope, seconds, DEFAULT_ENVELOPE)
       avatar.setMouthOpen(envelope.mouthOpen)
       // Her eyes, from the same measurement as her mouth. The rig holds a
       // blink shut for the whole of `asleep`, and a mouth moving under closed
@@ -1097,7 +1118,30 @@ export function showFace(canvas: HTMLCanvasElement): Face {
      */
     if (mic !== null && micSamples !== null && !resting && hearing) {
       mic.getFloatTimeDomainData(micSamples)
-      const now = attending.step(levelOf(micSamples), seconds)
+      const heardLevel = levelOf(micSamples)
+      /*
+        Both levels, same frame, and only while she is audible.
+
+        This is the exact condition §17 is about: her voice is playing and the
+        microphone is open, which on speakers is when the residue gets in. The
+        gate is the envelope's own `speaking` rather than a threshold invented
+        here — the mouth already answers "is she making sound", and §17's
+        addendum is a whole paragraph about what happens when that window is
+        counted in time instead of in evidence.
+      */
+      const summary = loopback.observe(herLevel, heardLevel, envelope.speaking)
+      if (summary !== null) {
+        const { correlation: c, residual: r } = summary
+        window.mochi.report({
+          kind: 'note',
+          text:
+            `loopback over ${String(summary.windows)} windows — ` +
+            `correlation ${c.min.toFixed(2)}/${c.median.toFixed(2)}/${c.max.toFixed(2)} ` +
+            `residual ${r.min.toFixed(3)}/${r.median.toFixed(3)}/${r.max.toFixed(3)} ` +
+            '(min/median/max; §17 wants this on speakers AND on earphones)',
+        })
+      }
+      const now = attending.step(heardLevel, seconds)
       if (now !== attention) {
         attention = now
         // Their turn ended. What she DOES about it is the beat's, including how
@@ -1372,16 +1416,17 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   return {
     // Unconditional, all three. Gating these on the bubble is what made the
     // estimate not exist for the default persona.
-    saying: (delta: string, itemId: string) => utterance.add(delta, itemId),
-    speaks: (itemId: string) => {
+    saying: (delta: string, responseId: string) => utterance.add(delta, responseId),
+    speaks: (responseId: string) => {
       // She has an answer, so the microphone's own wait is spent. Her GAZE is
       // not moved here: that belongs to the beat, which waits for audio rather
       // than for the frame promising it — §64 measured the two disagreeing.
       attending.answered()
-      utterance.speaks(itemId)
+      utterance.speaks(responseId)
     },
-    finished: (itemId: string, interrupted: boolean) => utterance.finished(itemId, interrupted),
-    heard: () => ({ text: utterance.text(), at: utterance.at(), itemId: utterance.itemId() }),
+    finished: (responseId: string, interrupted: boolean) =>
+      utterance.finished(responseId, interrupted),
+    heard: () => ({ text: utterance.text(), at: utterance.at() }),
     prefersBubble: (side: SidePreference) => {
       bubbleSide = side
     },
@@ -1411,6 +1456,10 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       */
       const woke = resting && !asleep
       resting = asleep
+      // A half-filled window spans a silence nobody was in. Same argument as
+      // `attending`'s reset one guard up: state measured across a nap is not a
+      // measurement of anything.
+      loopback.reset()
       avatar.setAsleep(asleep)
       /*
         The FACE she chose ends here, because `set_expression` says it does.

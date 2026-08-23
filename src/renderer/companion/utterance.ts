@@ -16,6 +16,20 @@ import { createPacer, type Pacer } from './pace'
  * playing. `begun` outlives it, because the bubble's fade still has to run
  * after she stops and gating that on `speaking` froze it on screen.
  *
+ * ## It is keyed on the RESPONSE, not on the item
+ *
+ * Not a preference — it is the only key the frames that drive it carry.
+ * `response.output_audio_transcript.delta` and all three
+ * `output_audio_buffer.*` name a RESPONSE and nothing else (§20 §1). Only
+ * `conversation.item.truncated` names an item, and it names no response.
+ *
+ * Every parameter here used to be called `itemId`, and `session.ts` passed the
+ * truncation's item id straight into `finished()` — so the interrupted call
+ * compared `item_…` against `resp_…`, matched nothing, and returned. The cursor
+ * was never told she had been cut off. `session.ts` joins the two spaces
+ * through `Pending.responseFor` now; the names here say which space this is so
+ * the two cannot be confused again.
+ *
  * ## The rate belongs to the VOICE
  *
  * `Pacer` keeps its learned rate across utterances on purpose — one voice's
@@ -24,23 +38,21 @@ import { createPacer, type Pacer } from './pace'
  * carrying one voice's number into another is not a small error.
  */
 export interface Utterance {
-  /** One fragment of what she is generating, with the item it belongs to. */
-  add(delta: string, itemId: string): void
-  /** Her audio for this item has begun — `output_audio_buffer.started`. */
-  speaks(itemId: string): void
+  /** One fragment of what she is generating, with the RESPONSE it belongs to. */
+  add(delta: string, responseId: string): void
+  /** Her audio for this response has begun — `output_audio_buffer.started`. */
+  speaks(responseId: string): void
   /** It ended: naturally, or because she was cut off. */
-  finished(itemId: string, interrupted: boolean): void
+  finished(responseId: string, interrupted: boolean): void
   /** Advance. `quietFor` is the analyser's, and `dt` the frame's. */
   step(quietFor: number, dtSeconds: number): void
   /** A different character is being worn, so the voice is different too. */
   wear(): void
-  /** Everything generated for the item on screen. */
+  /** Everything generated for the response on screen. */
   text(): string
-  /** Which item that is, or null before she has said anything. */
-  itemId(): string | null
   /** How far into it she is estimated to have got. */
   at(): number
-  /** Whether this item's audio has ever started. The fade needs it. */
+  /** Whether this response's audio has ever started. The fade needs it. */
   begun(): boolean
 }
 
@@ -58,12 +70,12 @@ export const SOUNDING_S = 0.25
 
 export function createUtterance(): Utterance {
   let text = ''
-  let itemId: string | null = null
+  let responseId: string | null = null
   let begun = false
   let pacer: Pacer = createPacer()
 
   function begin(next: string): void {
-    itemId = next
+    responseId = next
     text = ''
     begun = false
     pacer.restart()
@@ -71,19 +83,19 @@ export function createUtterance(): Utterance {
 
   return {
     add(delta: string, next: string) {
-      if (next !== itemId) begin(next)
+      if (next !== responseId) begin(next)
       if (text.length < MAX_HELD) text += delta
       pacer.wrote(text)
     },
     speaks(next: string) {
-      if (next !== itemId) begin(next)
+      if (next !== responseId) begin(next)
       begun = true
       pacer.began()
     },
     finished(next: string, interrupted: boolean) {
-      // A frame for an item that is no longer on screen is not this one's
+      // A frame for a response that is no longer on screen is not this one's
       // business, and acting on it would stop a live cursor.
-      if (next !== itemId) return
+      if (next !== responseId) return
       if (interrupted) pacer.cut()
       else pacer.ended()
     },
@@ -101,10 +113,9 @@ export function createUtterance(): Utterance {
       // between two voices.
       pacer = createPacer()
       begin('')
-      itemId = null
+      responseId = null
     },
     text: () => text,
-    itemId: () => itemId,
     at: () => pacer.at(),
     begun: () => begun,
   }

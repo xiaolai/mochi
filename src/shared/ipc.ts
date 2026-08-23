@@ -901,6 +901,30 @@ export type VoiceReport =
   | {
       readonly kind: 'said'
       readonly transcript: string
+      /**
+       * What KIND of turn this was: `commentary`, `final_answer`, or null.
+       *
+       * §26 §5 and §67 §1 measured a tool turn arriving as two items — a
+       * `message` tagged `commentary` and then the `function_call` — and §69
+       * measured what that costs here: the commentary message is SPOKEN, so
+       * *"let me take a moment to respond thoughtfully"* reaches the archive
+       * looking exactly like an answer.
+       *
+       * Reported rather than acted on in the renderer. Whether a preamble is
+       * part of the conversation is a decision about what she remembers, and
+       * `heard.ts` states the rule those follow: decisions are main's.
+       */
+      readonly phase: string | null
+      /**
+       * When this turn belongs in the archive, in epoch milliseconds.
+       *
+       * A turn settles when its VERDICT arrives — `output_audio_buffer.stopped`
+       * for one she finished, `conversation.item.truncated` for one she was cut
+       * off in — and both can be seconds after the transcript, or an hour later
+       * at session close. Stamping at the write would reorder the archive
+       * against the conversation that produced it.
+       */
+      readonly at: number
       readonly heard: { readonly at: number; readonly interruptedAt: number } | null
     }
   /**

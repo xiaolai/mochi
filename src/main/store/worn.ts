@@ -520,7 +520,21 @@ export function readLegacyBubbleSide(userData: string): BubbleSide {
  */
 export function bubbleSideMigrated(userData: string): boolean {
   const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return false
+  /*
+    ABSENT is "not yet". Anything else is "cannot tell", and cannot-tell has to
+    fail closed — which is what the paragraph above says and what this line did
+    not do.
+
+    `readBounded` separates the two (`absent` against `unreadable`,
+    `not-a-file`, `too-large`) and both were collapsed into `return false`. So a
+    preferences file that existed and could not be read was reported as a fresh
+    install: the migration ran, and `markBubbleSideMigrated` then called
+    `writeMerged` — a read-modify-write over the file nothing had been able to
+    read. That is the shape `@shared/policy` and `grants.ts` were both corrected
+    to on 2026-08-19 (absent → default, present-but-unreadable → withheld), and
+    this was the one place still doing it the old way.
+  */
+  if (!read.ok) return read.reason.kind !== 'absent'
   try {
     const value: unknown = JSON.parse(read.text)
     return (value as { bubbleSideMigrated?: unknown } | null)?.bubbleSideMigrated === true

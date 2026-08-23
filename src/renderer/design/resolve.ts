@@ -102,25 +102,69 @@ const READ = [
 ] as const satisfies readonly { key: keyof Palette; token: string; property: string }[]
 
 /** What a token that does not exist resolves to, and therefore what to refuse. */
-const MISSING = 'rgb(255, 0, 255)'
+/**
+ * Two fallbacks, and a token is missing only when the two DISAGREE.
+ *
+ * A single sentinel cannot work here, and the reason is `--her`: `applyAccent`
+ * writes it from the worn face, and §13 says in terms that the accent is **user
+ * data** — `FaceSpec.colBody` can be set to anything in the tuner, which is why
+ * that entry's contrast guarantee is proved by sweeping the whole colour cube.
+ * So the sentinel is inside the space of legal values, and a persona whose
+ * colour happened to be `#ff00ff` resolved to exactly it and was reported as a
+ * document that does not load `tokens.css` — throwing out of `resolvePalette`
+ * and taking the palette down over a colour somebody was entitled to pick.
+ *
+ * Any pair works: a token that IS defined resolves to its own value under both
+ * fallbacks, and a token that is not resolves to whichever fallback was given.
+ * That is a property of `var()` rather than of the two colours, so no user value
+ * can collide with it — which is what a single sentinel could never promise.
+ */
+const ABSENT = ['magenta', 'cyan'] as const
+
+/**
+ * Which tokens did not resolve, given what each probe read back.
+ *
+ * Extracted so it can be asserted. `resolvePalette` needs `getComputedStyle`
+ * and this suite runs in node on purpose — the repository's own note is that a
+ * fake DOM "would only make the rig look tested" — so the DOM half stays
+ * untested and the DECISION does not.
+ */
+export function tokensThatDidNotResolve(
+  reads: readonly { readonly token: string; readonly under: readonly [string, string] }[],
+): readonly string[] {
+  return reads.filter(({ under: [a, b] }) => a !== b).map(({ token }) => token)
+}
 
 export function resolvePalette(root: HTMLElement): Palette {
   const document = root.ownerDocument
-  const probe = document.createElement('span')
-  probe.setAttribute('aria-hidden', 'true')
-  // Out of flow and unpaintable: this must not disturb a window whose whole job
-  // is being transparent.
-  probe.style.position = 'absolute'
-  probe.style.opacity = '0'
-  probe.style.pointerEvents = 'none'
-  for (const one of READ) probe.style.setProperty(one.property, `var(${one.token}, magenta)`)
+  const probes = ABSENT.map((fallback) => {
+    const probe = document.createElement('span')
+    probe.setAttribute('aria-hidden', 'true')
+    // Out of flow and unpaintable: this must not disturb a window whose whole job
+    // is being transparent.
+    probe.style.position = 'absolute'
+    probe.style.opacity = '0'
+    probe.style.pointerEvents = 'none'
+    for (const one of READ) probe.style.setProperty(one.property, `var(${one.token}, ${fallback})`)
+    root.append(probe)
+    return probe
+  })
 
-  root.append(probe)
-  const computed = getComputedStyle(probe)
-  const read = READ.map((one) => [one, computed.getPropertyValue(one.property)] as const)
-  probe.remove()
+  const computed = probes.map((probe) => getComputedStyle(probe))
+  const read = READ.map(
+    (one, index) =>
+      [
+        one,
+        computed[0]?.getPropertyValue(one.property) ?? '',
+        computed[1]?.getPropertyValue(one.property) ?? '',
+        index,
+      ] as const,
+  )
+  for (const probe of probes) probe.remove()
 
-  const missing = read.filter(([, value]) => value === MISSING).map(([one]) => one.token)
+  const missing = tokensThatDidNotResolve(
+    read.map(([one, a, b]) => ({ token: one.token, under: [a, b] as const })),
+  )
   if (missing.length > 0) {
     throw new Error(
       `design: ${missing.join(', ')} did not resolve — this document does not load tokens.css`,

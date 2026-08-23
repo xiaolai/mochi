@@ -14,7 +14,9 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ARCHIVE_FORMAT,
+  boundedForgetSet,
   createTranscripts,
+  MOST_AT_ONCE,
   parseArchive,
   TRANSCRIPTS_FILE,
   type Transcripts,
@@ -1402,5 +1404,37 @@ describe('deleting several of hers', () => {
     const his = conversation(t, 'coach', 2_000)
     expect(t.forgetSessions('coach', [hers, his])).toBe(1)
     expect(t.sessions('ada')).toHaveLength(1)
+  })
+})
+
+describe('what a forget request actually acts on', () => {
+  it('is the same answer for the store and for its caller', () => {
+    /*
+      The bound was applied in `forgetSessions` and NOT where the caller decides
+      whether the live conversation was among the deleted — `main/index.ts` read
+      its own unbounded list. So a request naming more than `MOST_AT_ONCE`
+      released the live token while its rows were still on disk: recording
+      restarted into a fresh conversation and the old one stayed.
+
+      Asserted as the property rather than as a number, so the two cannot drift
+      apart again if the limit moves.
+    */
+    const flood = Array.from({ length: MOST_AT_ONCE + 50 }, (_, i) => `t${String(i)}`)
+    const live = 'the-live-one'
+    const bounded = boundedForgetSet([...flood, live])
+    // The live token fell off the end, so the caller must NOT release it.
+    expect(bounded).not.toContain(live)
+    expect(bounded).toHaveLength(MOST_AT_ONCE)
+  })
+
+  it('keeps a genuine token that sits among a flood', () => {
+    // The original decision this bound exists for, restated: a real token in
+    // the first thousand still goes.
+    const flood = Array.from({ length: MOST_AT_ONCE + 50 }, (_, i) => `t${String(i)}`)
+    expect(boundedForgetSet(['real', ...flood])).toContain('real')
+  })
+
+  it('collapses duplicates before counting against the limit', () => {
+    expect(boundedForgetSet(['a', 'a', 'b'])).toEqual(['a', 'b'])
   })
 })

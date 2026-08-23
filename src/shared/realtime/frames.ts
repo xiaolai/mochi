@@ -74,10 +74,43 @@ export type ServerFrame =
    * What the user said, once ASR has settled it.
    *
    * A SEPARATE pass from the audio she hears — she is speech-to-speech, so bad
-   * ASR does not make her mishear anyone. It makes the log and the archive
-   * wrong, which is a different problem with a different fix.
+   * ASR does not make her mishear anyone. **Measured, not assumed**: §70 pushed
+   * a real recording in and watched the user's item enter the conversation with
+   * `transcript: null` and stay null while she began generating 587ms later. It
+   * makes the log and the archive wrong, which is a different problem with a
+   * different fix.
+   *
+   * The frame also carries `item_id`, which is deliberately not exposed: this
+   * is filed against the open conversation, not joined to anything.
    */
-  | { readonly kind: 'heard'; readonly transcript: string; readonly itemId: string }
+  | { readonly kind: 'heard'; readonly transcript: string }
+  /**
+   * An item was opened in a response — the earliest frame in a turn.
+   *
+   * Two things nothing else in this parser can supply.
+   *
+   * **`phase`.** §67 measured it on 11 of 11 responses: `commentary` on every
+   * turn that went on to call a tool, `final_answer` on every turn that did
+   * not, never both in one response. §26 §5 and §69 measured what that means
+   * here — the commentary message is SPOKEN and carries its own audio
+   * transcript, so without this field a sentence like *"let me celebrate with
+   * you for a moment"* is indistinguishable from an answer and is filed as one.
+   *
+   * **The join.** `output_audio_buffer.*` carries only `response_id`;
+   * `conversation.item.truncated` carries only `item_id`. This frame is the one
+   * place both appear together, and §28 measured it arriving 197ms BEFORE
+   * `output_audio_buffer.started`, so the pairing is known before either of the
+   * others can need it.
+   *
+   * `phase` is null on a `function_call` item, which carries none — captured
+   * that way, not assumed.
+   */
+  | {
+      readonly kind: 'item-added'
+      readonly itemId: string
+      readonly responseId: string
+      readonly phase: string | null
+    }
   /**
    * One fragment of what she is saying, as it is generated.
    *
@@ -118,6 +151,21 @@ export type ServerFrame =
   | { readonly kind: 'malformed'; readonly type: string; readonly missing: readonly string[] }
   /** Not JSON, or not an object. */
   | { readonly kind: 'unreadable' }
+
+/**
+ * The phase value that marks a preamble rather than an answer.
+ *
+ * A constant because two processes compare against it — the renderer to know
+ * whether it has ever seen one, main to decide what reaches the archive — and a
+ * string literal written twice is how the two come to disagree the day the
+ * service adds a third phase.
+ *
+ * Only this one is named. `final_answer` needs no constant: everything that is
+ * not a preamble is filed, which is the safe direction for an archive. A phase
+ * nobody here has heard of is treated as an answer and kept, because losing a
+ * real turn is worse than keeping a line of filler.
+ */
+export const COMMENTARY = 'commentary'
 
 const BUFFER_PHASE: Readonly<Record<string, 'started' | 'stopped' | 'cleared'>> = {
   'output_audio_buffer.started': 'started',
@@ -182,12 +230,35 @@ export function parseServerFrame(text: string): ServerFrame {
   // Both shapes below were captured on 2026-08-17 by running the app and
   // reading what announced itself — the `other` branch's whole purpose.
   if (type === 'conversation.item.input_audio_transcription.completed') {
-    const missing = missingFrom(value, ['transcript', 'item_id'])
+    const missing = missingFrom(value, ['transcript'])
     if (missing.length > 0) return { kind: 'malformed', type, missing }
+    return { kind: 'heard', transcript: value['transcript'] as string }
+  }
+
+  /**
+   * Captured 2026-08-22 by `dev-docs/spikes/probe-phase/probe.mjs`, which wrote
+   * every frame of eleven responses to disk whole. Both shapes are in the
+   * fixture: a `message` item carrying `phase`, and a `function_call` item
+   * carrying none.
+   *
+   * **A missing `phase` is not malformed.** The `function_call` item genuinely
+   * has no such field, so demanding one would report every tool turn as a
+   * service change. `item.id` and `response_id` are the fields this frame is
+   * read for, and those are required.
+   */
+  if (type === 'response.output_item.added') {
+    const item = value['item']
+    const itemId = isRecord(item) ? item['id'] : undefined
+    const responseId = value['response_id']
+    if (typeof itemId !== 'string' || typeof responseId !== 'string') {
+      return { kind: 'malformed', type, missing: ['item.id', 'response_id'] }
+    }
+    const phase = isRecord(item) ? item['phase'] : undefined
     return {
-      kind: 'heard',
-      transcript: value['transcript'] as string,
-      itemId: value['item_id'] as string,
+      kind: 'item-added',
+      itemId,
+      responseId,
+      phase: typeof phase === 'string' ? phase : null,
     }
   }
 

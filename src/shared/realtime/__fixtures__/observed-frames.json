@@ -135,5 +135,50 @@
     "item_id": "item_observed",
     "content_index": 0,
     "audio_end_ms": 14180
+  },
+  "response.output_item.added": {
+    "_note": "Captured whole 2026-08-22 by probe-phase/probe.mjs, gpt-realtime-2.1, tools mode (findings.md §67). The message item that precedes a tool call, carrying phase=commentary.",
+    "type": "response.output_item.added",
+    "event_id": "event_EFUxfIqhFDpMd5rudb2Ka",
+    "response_id": "resp_EFUxfR9jZsSFeeTFuZKsQ",
+    "output_index": 0,
+    "item": {
+      "id": "item_EFUxfupjtiS5OlFnTFlD2",
+      "type": "message",
+      "status": "in_progress",
+      "role": "assistant",
+      "content": [],
+      "phase": "commentary"
+    }
+  },
+  "response.output_item.added.function_call": {
+    "_note": "Same response, second item. A function_call item carries NO phase field — which is why a missing one is not malformed.",
+    "type": "response.output_item.added",
+    "event_id": "event_EFUxg8hkl3dMDLjKQB8Hz",
+    "response_id": "resp_EFUxfR9jZsSFeeTFuZKsQ",
+    "output_index": 1,
+    "item": {
+      "id": "item_EFUxgVwIwTS9uxjsI8XOM",
+      "type": "function_call",
+      "status": "in_progress",
+      "name": "ask_workspace",
+      "call_id": "call_6Zt79UMzR7xMONCU",
+      "arguments": ""
+    }
+  },
+  "response.output_item.added.final_answer": {
+    "_note": "Captured whole 2026-08-22, same probe, plain mode — no tools declared. The other phase, and the only other one seen in 11 responses.",
+    "type": "response.output_item.added",
+    "event_id": "event_EFUzHQpuoOScs8fMr2NPe",
+    "response_id": "resp_EFUzGgBCRithT1RdQbElb",
+    "output_index": 0,
+    "item": {
+      "id": "item_EFUzGpURc2kDZLA02NHTG",
+      "type": "message",
+      "status": "in_progress",
+      "role": "assistant",
+      "content": [],
+      "phase": "final_answer"
+    }
   }
 }

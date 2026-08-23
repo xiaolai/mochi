@@ -116,7 +116,41 @@ export interface Hit {
  * their own archive, so a payload larger than this did not come from somebody
  * clicking, and the transaction should not be asked to find out.
  */
-const MOST_AT_ONCE = 1000
+/**
+ * The most conversations one `forgetSessions` call may name.
+ *
+ * A payload this large is not a request anybody made by hand, and the bound is
+ * what stops a compromised renderer turning one message into a hundred-thousand
+ * row transaction.
+ *
+ * **It TRIMS rather than refuses, and that is deliberate** — `transcripts.test.ts`
+ * asserts it: a genuine token sitting among a flood still goes. A draft of this
+ * change made it a refusal instead and was reverted, because declining the whole
+ * request would discard the real deletion somebody actually asked for in order
+ * to punish the noise around it.
+ */
+export const MOST_AT_ONCE = 1000
+
+/**
+ * The tokens a `forgetSessions` call will actually act on.
+ *
+ * Exported because **two** places need the same answer, and until now only one
+ * of them had it. `forgetSessions` collapses duplicates and trims an absurd
+ * payload — deliberate, and asserted: a flood from a compromised renderer must
+ * not become a hundred-thousand-row transaction, while a real token sitting
+ * among it still goes.
+ *
+ * The caller in `main/index.ts` then decides whether the LIVE conversation was
+ * among those deleted, and it was reading the caller's own unbounded list. So a
+ * request naming more than a thousand released the live token while its rows
+ * were still on disk — recording restarted into a fresh conversation and the
+ * old one stayed, which is the opposite of what "forget these" was asked to do.
+ *
+ * One function, so "what was deleted" cannot be answered two ways.
+ */
+export function boundedForgetSet(tokens: readonly SessionToken[]): readonly SessionToken[] {
+  return [...new Set(tokens)].slice(0, MOST_AT_ONCE)
+}
 
 /**
  * The one format read, and the one written. Not the newest of several.
@@ -872,10 +906,18 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       return { ok: true, sessions, turns, skipped, conflicts }
     },
     forgetSessions(personaId, tokens) {
-      // Collapsed and bounded BEFORE the transaction opens. A payload arrives
-      // from the renderer, which is the least trusted process here, and a
-      // hundred thousand tokens is not a request anybody made by hand.
-      const wanted = [...new Set(tokens)].slice(0, MOST_AT_ONCE)
+      /*
+        Collapsed and bounded BEFORE the transaction opens, through the SAME
+        function the caller uses.
+
+        The bound was always here; what was not was any way for `main/index.ts`
+        to know which tokens it covered. That caller decides whether the live
+        conversation was among the deleted, and it read its own unbounded list —
+        so a request naming more than `MOST_AT_ONCE` released the live token
+        while its rows were still on disk. The count returned here is honest
+        about how many went; it was never the count that was wrong.
+      */
+      const wanted = boundedForgetSet(tokens)
       if (wanted.length === 0) return 0
       const gone = atomically(() => {
         let removed = 0

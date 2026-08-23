@@ -65,11 +65,23 @@ export function looksEmpty(value: string): boolean {
 /**
  * Bounded text, cut on a character rather than in the middle of one.
  *
- * ONE implementation of a rule three modules were writing out: `ipc.ts`
- * bounding a spoken turn, the working set bounding one it holds, and the
- * preload bounding a failure reason. Each did it slightly differently, and two
- * of the three could leave a lone surrogate -- half an emoji, which renders as
- * a replacement character and is not the text anybody said.
+ * ONE implementation of a rule several modules kept writing out. Each did it
+ * slightly differently, and some could leave a lone surrogate -- half an emoji,
+ * which renders as a replacement character and is not the text anybody said.
+ *
+ * **The consolidation came undone once, and the way it did is the warning.**
+ * This paragraph used to name its three callers -- `ipc.ts` bounding a spoken
+ * turn, the working set, the preload bounding a failure reason. All three went
+ * in the v1 rewrite, and nothing inherited the call: `boundedHead` and
+ * `boundedTail` were left with **no callers and no test file**, while
+ * `store/memory.ts` grew a plain `notes.slice(0, PERSONA_LIMITS.memory)` for
+ * exactly this job. That slice cuts on a UTF-16 unit, so a note ending mid-
+ * emoji at 20,000 units came back with `isWellFormed() === false` -- measured
+ * -- and went into her note file and then into her system prompt.
+ *
+ * So the callers are deliberately NOT listed here again. A list of call sites
+ * is a fact about other files that this file cannot keep true; `text.test.ts`
+ * asserts the property instead, which is a thing this file can keep.
  *
  * The budget is UTF-16 UNITS, because that is what every caller's limit is
  * expressed in and what `.length` reports. Counting code points instead was the

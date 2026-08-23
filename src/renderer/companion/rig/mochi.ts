@@ -14,6 +14,7 @@
 
 import {
   clamp01,
+  clampSigned,
   type AvatarBackend,
   type AvatarBackendCaps,
   type AvatarKind,
@@ -334,7 +335,12 @@ export class MochiAvatar implements AvatarBackend {
     // Non-finite leaves the previous target alone. Coercing to 0 would snap her
     // gaze to a corner on one bad sample.
     if (!Number.isFinite(nx) || !Number.isFinite(ny)) return
-    this.gazeTarget = { x: (clamp01(nx) - 0.5) * 2, y: (clamp01(ny) - 0.5) * 2 }
+    // SIGNED, clamped to -1..1 — see `AvatarBackend.lookAt`. This used to read
+    // `(clamp01(n) - 0.5) * 2`, which took 0..1 while every caller sent -1..1,
+    // so centre landed hard up-left and the left half of the screen was one
+    // point. `setAsleep` and the reset path assign this field directly in the
+    // signed range, so those two disagreed with this one about where centre is.
+    this.gazeTarget = { x: clampSigned(nx), y: clampSigned(ny) }
   }
 
   /**

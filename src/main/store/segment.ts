@@ -1,3 +1,5 @@
+import { MEASURED_DENSE } from '@shared/script'
+
 /**
  * Making CJK text findable in FTS5, on both sides of the index.
  *
@@ -45,9 +47,20 @@
  * Hangul is deliberately absent: Korean is written WITH spaces, so the default
  * tokenizer already handles it, and splitting it per syllable would make its
  * search worse rather than better.
+ *
+ * ## The set comes from `@shared/script`, and that is the point
+ *
+ * It was a second literal here. `shared/script.ts` asks the same question for
+ * pacing and wrapping, and it still held the hand-written list this comment
+ * describes moving off -- so the two modules disagreed about whether `𠀀` is
+ * Chinese, and each was right about its own half of the app. One source, two
+ * flags: this one is global, because it replaces every run in a string.
+ *
+ * `MEASURED_DENSE` rather than everything `isDense` covers, and the difference
+ * is Hangul and Thai. Those belong to the typography question, not to this one:
+ * splitting a spaced script per character is what the paragraph above refuses.
  */
-const RUN =
-  /[\p{Script_Extensions=Han}\p{Script_Extensions=Hiragana}\p{Script_Extensions=Katakana}]+/gu
+const RUN = new RegExp(`[${MEASURED_DENSE}]+`, 'gu')
 
 /**
  * Splitting a run into what a person sees as one character.

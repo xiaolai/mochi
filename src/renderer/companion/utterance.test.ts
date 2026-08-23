@@ -69,8 +69,11 @@ describe('one item at a time', () => {
 
     u.add('what she says now', 'i2')
     expect(u.text()).toBe('what she says now')
-    expect(u.itemId()).toBe('i2')
+    // Asserted through the surface rather than through a getter for the id.
+    // `itemId()` existed only so `heard()` could return a value nothing read,
+    // and a getter kept alive by its own test is a getter with no consumer.
     expect(u.at()).toBe(0)
+    expect(u.begun()).toBe(false)
   })
 
   it('keeps accumulating while the same item streams', () => {
@@ -145,6 +148,9 @@ describe('the learned rate belongs to the voice', () => {
     u.add('the last character said this', 'i1')
     u.wear()
     expect(u.text()).toBe('')
-    expect(u.itemId()).toBeNull()
+    // The next delta begins a fresh utterance whatever id it carries — which is
+    // what "forgets" has to mean, and is observable without a getter.
+    u.add('the new character', 'i1')
+    expect(u.text()).toBe('the new character')
   })
 })

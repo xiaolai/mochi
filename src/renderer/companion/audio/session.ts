@@ -115,10 +115,17 @@ export interface SessionCallbacks {
    * a natural end means she said everything that was generated, which is the one
    * fact the pacing can calibrate itself against. Barge-in is routine here
    * (§17), so conflating them would poison the estimate constantly.
+   *
+   * **A RESPONSE id in both cases**, and that is the whole of a bug this
+   * parameter used to carry. `output_audio_buffer.stopped` names a response;
+   * `conversation.item.truncated` names an ITEM, and it was passed straight
+   * through — so the interrupted call could never match the utterance on
+   * screen, and the cursor was never told to stop. The two spaces are joined
+   * through `Pending.responseFor` before this is called.
    */
-  readonly onFinished: (id: string, interrupted: boolean) => void
-  /** Where the cursor had reached. Read at the barge-in; see `settle`. */
-  readonly heard: () => { text: string; at: number; itemId: string | null }
+  readonly onFinished: (responseId: string, interrupted: boolean) => void
+  /** Where the cursor has reached, right now. See `Pending`'s `heardAt`. */
+  readonly heard: () => { text: string; at: number }
 }
 
 const CHANNEL = 'oai-events'
@@ -191,20 +198,58 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
 
   const pending = createPending()
 
+  /**
+   * Whether the phase mechanism is alive on this transport, said out loud once.
+   *
+   * §67 measured `phase` on 11 of 11 responses — over a WEBSOCKET. This app is
+   * WebRTC, and `realtime-model.ts` states the rule that makes the difference
+   * matter: a result on one transport does not speak for the other. So the
+   * mechanism degrades into exactly the old behaviour if the frame never
+   * arrives, and SAYS SO rather than looking like it is working. That is the
+   * shape §47 asked for after two mechanisms shipped green and dead on a field
+   * nobody had seen; here the field has been captured and only the transport is
+   * unverified.
+   *
+   * **Three turns, not one, and the greeting is why.** §67 names exactly one
+   * thing it did not establish about this field: *whether the phase split
+   * survives `conversation: 'none'`* — which is how the greeting is sent, a few
+   * lines below. So a phaseless FIRST turn is an open question rather than
+   * evidence, and warning on it would fire on every session that works
+   * perfectly. §67 saw no misses in eleven responses, so three in a row is
+   * already far outside what a working transport produces.
+   */
+  const PHASELESS_BEFORE_WARNING = 3
+  let phaseless = 0
+  let saidPhaseless = false
+
   function file(spoken: Spoken | null): void {
     if (spoken === null) return
-    if (spoken.interruptedAt === null) {
-      window.mochi.report({ kind: 'said', transcript: spoken.transcript, heard: null })
-      return
+    if (spoken.phase !== null) phaseless = 0
+    else if (!saidPhaseless && (phaseless += 1) >= PHASELESS_BEFORE_WARNING) {
+      saidPhaseless = true
+      window.mochi.report({
+        kind: 'note',
+        text:
+          `NO PHASE: ${String(phaseless)} turns in a row carried none, so no ` +
+          'response.output_item.added is delivering it on this transport — a spoken ' +
+          '`commentary` preamble cannot be told from an answer and both are being ' +
+          'filed. §67 measured it on 11 of 11 responses over a WebSocket; this is ' +
+          'WebRTC.',
+      })
     }
-    // The estimate is read HERE, at the barge-in — the cursor keeps no history,
-    // and by the time the transcript arrives she has long stopped.
-    const heard = callbacks.heard()
     window.mochi.report({
       kind: 'said',
       transcript: spoken.transcript,
+      phase: spoken.phase,
+      // When it belongs in the archive. A turn now settles on its VERDICT,
+      // which for a natural end is seconds after the transcript and at session
+      // close could be an hour, so the write cannot supply this.
+      at: spoken.at,
       // Observations only. Main decides how much of it is remembered.
-      heard: { at: heard.at, interruptedAt: spoken.interruptedAt },
+      heard:
+        spoken.interruptedAt === null
+          ? null
+          : { at: spoken.heardAt ?? 0, interruptedAt: spoken.interruptedAt },
     })
   }
 
@@ -287,15 +332,42 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
         // the wire, and could not have said whether she heard anything at all.
         window.mochi.report({ kind: 'heard', transcript: frame.transcript })
         break
+      case 'item-added':
+        /*
+          The earliest frame in a turn, and the only one carrying both ids.
+
+          §67 measured it 265ms before her audio and ~15ms before the first
+          transcript delta; §28 measured it 197ms before
+          `output_audio_buffer.started`. So by the time anything downstream can
+          need the pairing or the phase, this has already run.
+        */
+        pending.began(frame.itemId, frame.responseId, frame.phase)
+        break
       case 'saying':
         callbacks.onSaying(frame.delta, frame.responseId)
         break
       case 'said':
-        file(pending.said(frame.itemId, frame.transcript))
+        file(pending.said(frame.itemId, frame.transcript, Date.now()))
         break
       case 'truncated': {
-        const spoken = pending.truncated(frame.itemId, Date.now())
-        callbacks.onFinished(frame.itemId, true)
+        /*
+          The cursor is read HERE, and the ORDER of these three lines is the
+          fix.
+
+          `pending.truncated` takes the estimate as an argument rather than the
+          turn reaching for it later, because "later" is when the transcript
+          arrives — §58 measured that landing after the truncation in 13 of 13
+          runs at a six-second cut, and by then a short barge-in has already
+          started her next response and reset the cursor to zero.
+
+          The join first, so `onFinished` gets a response id like every other
+          caller. Null when no item frame arrived: then nothing is told to stop,
+          which is exactly what happened before this existed, and the analyser
+          stops the cursor a quarter-second later anyway.
+        */
+        const responseId = pending.responseFor(frame.itemId)
+        const spoken = pending.truncated(frame.itemId, Date.now(), callbacks.heard().at)
+        if (responseId !== null) callbacks.onFinished(responseId, true)
         file(spoken)
         break
       }
@@ -313,7 +385,24 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
          * such signal — the analyser hears sound but cannot attribute it.
          */
         if (frame.phase === 'started') callbacks.onSpeaks(frame.responseId)
-        else if (frame.phase === 'stopped') callbacks.onFinished(frame.responseId, false)
+        else if (frame.phase === 'stopped') {
+          callbacks.onFinished(frame.responseId, false)
+          /*
+            THE verdict that says she was not interrupted.
+
+            §55 counted it exactly — 40 responses produced 38 `cleared` and 2
+            `stopped`, the two that finished naturally — so every response ends
+            with one or the other and this is the other. Without it a transcript
+            had to be filed on arrival, and §58's 32-second case (transcript
+            first, truncation half a second later) filed the whole generated
+            text as an uncut turn and then an empty cut marker on top of it.
+
+            After `onFinished`, because that is what stops the cursor; the
+            estimate is not read on this path, but the ordering is the same one
+            the truncated case uses and having two is how they drift.
+          */
+          for (const spoken of pending.finished(frame.responseId)) file(spoken)
+        }
         // `cleared` is handled by the `truncated` frame instead, which is the
         // one carrying the item id the archive needs.
         break

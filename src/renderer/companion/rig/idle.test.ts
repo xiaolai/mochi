@@ -126,6 +126,41 @@ describe('IdleLayer', () => {
   })
 })
 
+/**
+ * The worst sample over a sweep, and WHERE it was.
+ *
+ * ## Why the assertion is outside the loop
+ *
+ * These sweeps take tens of thousands of samples, and an `expect()` per sample
+ * is tens of thousands of matcher objects plus a template string built eagerly
+ * whether or not anything fails. Idle that costs about a quarter-second; on a
+ * loaded machine it ran past vitest's 5s deadline and the suite went red with
+ * **a timeout, which says nothing about the drift** — the same failure this
+ * repository already fixed once in a wiring guard (`ed89492`), which is what
+ * makes it a class rather than an incident.
+ *
+ * Nothing is sampled less finely to pay for it: the sweeps are unchanged and
+ * the property is unchanged. Only the reporting moved, and it got better — a
+ * failure now names the WORST offender over the whole hour instead of the first
+ * one, which is the sample somebody tuning a constant actually needs.
+ */
+function worstOver(
+  span: number,
+  step: number,
+  measure: (t: number) => number,
+): { value: number; at: number } {
+  let value = Number.NEGATIVE_INFINITY
+  let at = 0
+  for (let t = 0; t < span; t += step) {
+    const one = measure(t)
+    if (one > value) {
+      value = one
+      at = t
+    }
+  }
+  return { value, at }
+}
+
 describe('the drift — being alive while going nowhere', () => {
   it('stays inside its declared reach, over an hour of it', () => {
     /*
@@ -134,17 +169,24 @@ describe('the drift — being alive while going nowhere', () => {
       would walk her into the edge of a transparent rectangle — intermittently,
       at whatever moment three sines happened to agree.
     */
-    for (let t = 0; t < 3_600_000; t += 97) {
-      const d = driftAt(t)
-      expect(Math.abs(d.lean), `lean at ${String(t)}`).toBeLessThanOrEqual(DRIFT.lean + 1e-9)
-      expect(Math.abs(d.shift), `shift at ${String(t)}`).toBeLessThanOrEqual(DRIFT.shift + 1e-9)
-      expect(d.lift, `lift at ${String(t)}`).toBeLessThanOrEqual(DRIFT.lift + 1e-9)
+    const channels = [
+      { name: 'lean', bound: DRIFT.lean, of: (t: number) => Math.abs(driftAt(t).lean) },
+      { name: 'shift', bound: DRIFT.shift, of: (t: number) => Math.abs(driftAt(t).shift) },
+      { name: 'lift', bound: DRIFT.lift, of: (t: number) => driftAt(t).lift },
+    ]
+    for (const channel of channels) {
+      const worst = worstOver(3_600_000, 97, channel.of)
+      expect(worst.value, `${channel.name} peaks at t=${String(worst.at)}`).toBeLessThanOrEqual(
+        channel.bound + 1e-9,
+      )
     }
   })
 
   it('never puts her feet below the ground', () => {
     // A bob that dipped would push her through the surface she stands on.
-    for (let t = 0; t < 200_000; t += 61) expect(driftAt(t).lift).toBeGreaterThanOrEqual(0)
+    // Negated so the same worst-case helper finds the DEEPEST dip.
+    const deepest = worstOver(200_000, 61, (t) => -driftAt(t).lift)
+    expect(-deepest.value, `lowest lift at t=${String(deepest.at)}`).toBeGreaterThanOrEqual(0)
   })
 
   it('does not repeat inside a minute, which is what stops it reading as a loop', () => {

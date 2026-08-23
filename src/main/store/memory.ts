@@ -36,6 +36,7 @@ import { unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { PERSONA_LIMITS, isPersonaId } from '@shared/persona'
+import { boundedHead } from '@shared/text'
 import { writeJsonAtomically } from './json-file'
 
 export const MEMORY_DIR = 'memory'
@@ -128,13 +129,22 @@ export function recallState(userData: string, id: string): Recalled {
     console.warn(`[memory] ${id} has no notes to read`)
     return { ok: false, why: 'has no notes to read' }
   }
-  // TRUNCATED rather than refused. The bound exists to stop an unbounded
-  // request going out on every wake; dropping her whole memory because it grew
-  // past the ceiling would be a worse answer to that than keeping what fits.
-  return {
-    ok: true,
-    notes: notes.length > PERSONA_LIMITS.memory ? notes.slice(0, PERSONA_LIMITS.memory) : notes,
-  }
+  /*
+    TRUNCATED rather than refused. The bound exists to stop an unbounded request
+    going out on every wake; dropping her whole memory because it grew past the
+    ceiling would be a worse answer to that than keeping what fits.
+
+    Through `boundedHead` rather than `.slice`, and that is a correctness fix
+    rather than tidiness: a raw slice cuts on a UTF-16 UNIT, so a limit landing
+    between the two halves of an astral character leaves a LONE SURROGATE.
+    Measured — 20,000 units of text ending mid-emoji comes back with
+    `isWellFormed() === false` — and this string is written to her note file and
+    then into her system prompt. `shared/text.ts` exists for exactly this and
+    says so; it had simply stopped being called.
+
+    It also marks the cut with an ellipsis, which the silent slice did not.
+  */
+  return { ok: true, notes: boundedHead(notes, PERSONA_LIMITS.memory) }
 }
 
 /**
@@ -155,7 +165,8 @@ export function recallState(userData: string, id: string): Recalled {
  * a sentence for her to say and an exception does not.
  */
 export function remember(userData: string, id: string, notes: string): void {
-  const kept = notes.length > PERSONA_LIMITS.memory ? notes.slice(0, PERSONA_LIMITS.memory) : notes
+  // Same rule as `recall`'s, through the same function — see the note there.
+  const kept = boundedHead(notes, PERSONA_LIMITS.memory)
   // The version being replaced is kept, ONE deep.
   //
   // Not a history: one step back is what makes an automatic rewrite reviewable,
@@ -219,9 +230,7 @@ export function previousNote(userData: string, id: string): string | null {
   if (typeof previous !== 'string') return null
   // Bounded on the way out like `recall`'s, and for the same reason: this
   // reaches a window, and a file edited by hand can hold anything.
-  return previous.length > PERSONA_LIMITS.memory
-    ? previous.slice(0, PERSONA_LIMITS.memory)
-    : previous
+  return boundedHead(previous, PERSONA_LIMITS.memory)
 }
 
 /**

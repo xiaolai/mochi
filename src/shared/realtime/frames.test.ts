@@ -67,6 +67,9 @@ describe('frames captured from the live service', () => {
       'response.function_call_arguments.done',
       'response.output_audio_transcript.delta',
       'response.output_audio_transcript.done',
+      'response.output_item.added',
+      'response.output_item.added.final_answer',
+      'response.output_item.added.function_call',
     ])
   })
 
@@ -122,6 +125,73 @@ describe('frames captured from the live service', () => {
   })
 })
 
+describe('the item frame, which carries the phase and the join', () => {
+  it('reads a spoken preamble as commentary', () => {
+    // §67: `commentary` on 7 of 7 tool turns, `final_answer` on 4 of 4 without,
+    // never both in one response. §26 §5 and §69 measured that the commentary
+    // message is SPOKEN — 79 characters of "Let me check th…" — which is why it
+    // reaches the archive looking exactly like an answer.
+    expect(parseServerFrame(frame('response.output_item.added'))).toEqual({
+      kind: 'item-added',
+      itemId: 'item_EFUxfupjtiS5OlFnTFlD2',
+      responseId: 'resp_EFUxfR9jZsSFeeTFuZKsQ',
+      phase: 'commentary',
+    })
+  })
+
+  it('reads an ordinary answer as final_answer', () => {
+    expect(parseServerFrame(frame('response.output_item.added.final_answer'))).toMatchObject({
+      kind: 'item-added',
+      phase: 'final_answer',
+    })
+  })
+
+  it('is not malformed when an item genuinely carries no phase', () => {
+    /*
+      The `function_call` item has no `phase` field — captured that way, in the
+      same response as the commentary message above. Demanding one would report
+      every tool turn in the app as a service change, which is the cry-wolf
+      version of the loudness `malformed` exists for.
+    */
+    const captured = JSON.parse(frame('response.output_item.added.function_call')) as {
+      item: Record<string, unknown>
+    }
+    expect(Object.keys(captured.item)).not.toContain('phase')
+    expect(parseServerFrame(frame('response.output_item.added.function_call'))).toEqual({
+      kind: 'item-added',
+      itemId: 'item_EFUxgVwIwTS9uxjsI8XOM',
+      responseId: 'resp_EFUxfR9jZsSFeeTFuZKsQ',
+      phase: null,
+    })
+  })
+
+  it('is the one frame carrying BOTH ids, which is what makes it the join', () => {
+    /*
+      The load-bearing fact, asserted as an absence on both sides.
+
+      `output_audio_buffer.*` names a response and no item;
+      `conversation.item.truncated` names an item and no response. Passing one
+      where the other was expected is exactly the bug this frame closes, and it
+      could not be caught by any test that invented its own ids.
+    */
+    const item = JSON.parse(frame('response.output_item.added')) as Record<string, unknown>
+    expect(Object.keys(item)).toContain('response_id')
+    expect(Object.keys(item['item'] as Record<string, unknown>)).toContain('id')
+
+    const audio = JSON.parse(frame('output_audio_buffer.started')) as Record<string, unknown>
+    expect(Object.keys(audio)).not.toContain('item_id')
+    const cut = JSON.parse(frame('conversation.item.truncated')) as Record<string, unknown>
+    expect(Object.keys(cut)).not.toContain('response_id')
+  })
+
+  it('is LOUD when the ids it is read for are not there', () => {
+    const parsed = parseServerFrame(
+      JSON.stringify({ type: 'response.output_item.added', event_id: 'e', item: {} }),
+    )
+    expect(parsed.kind).toBe('malformed')
+  })
+})
+
 describe('the two frames that make a conversation visible', () => {
   it('reads a fragment of what she is saying, for the bubble', () => {
     const parsed = parseServerFrame(frame('response.output_audio_transcript.delta'))
@@ -137,8 +207,13 @@ describe('the two frames that make a conversation visible', () => {
     expect(parsed).toEqual({
       kind: 'heard',
       transcript: 'what the user said',
-      itemId: 'item_observed',
     })
+    // The frame carries `item_id` and it is deliberately not exposed: §70
+    // measured the user's item entering the conversation with `transcript:
+    // null` and staying null while she generated, so this is a side-channel for
+    // the log and the archive, joined to nothing.
+    const captured = JSON.parse(frame('conversation.item.input_audio_transcription.completed'))
+    expect(Object.keys(captured as Record<string, unknown>)).toContain('item_id')
   })
 
   it('reads what she said, and carries the response id that distinguishes utterances', () => {
