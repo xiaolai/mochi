@@ -185,7 +185,16 @@ const sleeping = await strip(2, (avatar, index) => {
   avatar.render(0)
 })
 
-const html = page({ moods, half, motions, waking, sleeping, idling, emotions: [...EMOTIONS], repose })
+const html = page({
+  moods,
+  half,
+  motions,
+  waking,
+  sleeping,
+  idling,
+  emotions: [...EMOTIONS],
+  repose,
+})
 await mkdir(OUT, { recursive: true })
 const path = join(OUT, 'showreel.html')
 await writeFile(path, html)
