@@ -1,6 +1,48 @@
 import { describe, expect, it } from 'vitest'
 import { EMOTIONS } from '@shared/avatar'
 import { LOOKS, NEUTRAL, blendLook } from './looks'
+import { lidScale } from './face'
+
+/**
+ * A shut eye is a hairline, and it stays one whatever she is wearing.
+ *
+ * The floor used to sit on the blink alone, which holds only while the
+ * expression leaves the eye at full height. `sleepy` takes the arcs to 0.16
+ * before the blink applies, so a held blink produced six thousandths of an eye
+ * and she slept with no eyes rather than closed ones — reachable the day
+ * `sleepy` became the rest pose, and not one day before.
+ */
+describe('a lid never closes to nothing', () => {
+  it('keeps a hairline for EVERY emotion at full blink', () => {
+    for (const emotion of EMOTIONS) {
+      const look = LOOKS[emotion]
+      expect(lidScale(look.eyeUpper, 1), `${emotion} upper`).toBeGreaterThanOrEqual(0.04)
+      expect(lidScale(look.eyeLower, 1), `${emotion} lower`).toBeGreaterThanOrEqual(0.04)
+    }
+  })
+
+  it('is the SLEEPING case that this exists for', () => {
+    // The specimen, named: 0.16 * 0.04 is what she used to sleep with.
+    expect(LOOKS.sleepy.eyeUpper).toBeLessThan(0.2)
+    expect(LOOKS.sleepy.eyeUpper * 0.04).toBeLessThan(0.01)
+    expect(lidScale(LOOKS.sleepy.eyeUpper, 1)).toBe(0.04)
+  })
+
+  it('leaves an open eye alone', () => {
+    // The floor must not become a change to how she looks awake.
+    for (const emotion of EMOTIONS) {
+      const look = LOOKS[emotion]
+      expect(lidScale(look.eyeUpper, 0), emotion).toBe(look.eyeUpper)
+    }
+  })
+
+  it('closes smoothly rather than snapping to the floor', () => {
+    // Half a blink is half an eye, for a look that is not already near the
+    // floor -- otherwise the guard would have flattened the whole animation.
+    expect(lidScale(1, 0.5)).toBeCloseTo(0.5, 6)
+    expect(lidScale(1, 0.9)).toBeCloseTo(0.1, 6)
+  })
+})
 
 describe('LOOKS', () => {
   it('has an entry for every canonical emotion', () => {

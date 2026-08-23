@@ -83,6 +83,34 @@ export function paintCheeks(
   ctx.restore()
 }
 
+/**
+ * The smallest a lid may get. A shut eye is a HAIRLINE, never nothing.
+ *
+ * An eye that vanishes entirely reads as a dropped frame rather than as a
+ * closed eye, which is the one thing the sleeping pose must not look like.
+ */
+const MIN_LID = 0.04
+
+/**
+ * How far one lid is open, given the expression and the blink.
+ *
+ * ## The floor is on the PRODUCT, and that is the whole of this function
+ *
+ * It used to be on the blink alone -- `Math.max(0.04, 1 - blink)` -- which
+ * holds only while the expression leaves the eye at full height. `sleepy` does
+ * not: it takes the arcs to `0.16` before the blink is applied, so a held
+ * blink produced `0.16 x 0.04`, six thousandths of an eye, and she slept with
+ * no eyes at all rather than with shut ones.
+ *
+ * That was reachable the day `sleepy` became the rest pose and not before,
+ * which is exactly why the guarantee belongs on the number that is drawn
+ * rather than on one of its factors. Any expression, any blink: the lid is
+ * never thinner than `MIN_LID`.
+ */
+export function lidScale(look: number, blink: number): number {
+  return Math.max(MIN_LID, look * Math.max(0, 1 - blink))
+}
+
 export function paintEyes(
   ctx: CanvasRenderingContext2D,
   face: FaceSpec,
@@ -92,14 +120,11 @@ export function paintEyes(
   place: Place,
   scale: number,
 ): void {
-  // Blink multiplies both edges toward zero. A floor keeps a hairline visible
-  // at full closure -- an eye that vanishes entirely reads as a dropped frame.
-  const open = Math.max(0.04, 1 - blink)
   const halfWidth = face.eyeHw * scale * look.eyeWidth
   const lens: LensShape = {
     halfWidth,
-    upper: face.eyeUpper * scale * look.eyeUpper * open,
-    lower: face.eyeLower * scale * look.eyeLower * open,
+    upper: face.eyeUpper * scale * lidScale(look.eyeUpper, blink),
+    lower: face.eyeLower * scale * lidScale(look.eyeLower, blink),
     tilt: 0,
     roundness: face.eyeRound,
   }
