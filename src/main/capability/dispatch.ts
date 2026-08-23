@@ -58,6 +58,27 @@ export interface Dispatch {
   readonly note: (name: string, detail: string) => void
   readonly log: (line: string) => void
   readonly warn: (line: string, error?: unknown) => void
+  /**
+   * A late answer has landed; ask her to volunteer it.
+   *
+   * §1 chose to send the second `function_call_output` with NO
+   * `response.create`, because asking for a turn while she is speaking is
+   * refused intermittently — and its note for what happens instead is *"it
+   * comes out naturally the next time she speaks"*. Observed 2026-08-24, that
+   * assumes a conversation that keeps going: the forecast arrived 25 seconds
+   * after she said "just a tiny moment more", into a silent room, and was
+   * never said at all.
+   *
+   * So the frame is unchanged and this is separate from it. Whether she may
+   * speak yet is the renderer's to judge — see `audio/nudge.ts` — and a refusal
+   * costs nothing, because the answer is already queued and degrades to exactly
+   * the old behaviour.
+   *
+   * ONLY on the deferred path. An `immediate` capability answers inside the
+   * turn she is already taking, and asking for another would interrupt her
+   * mid-sentence to repeat herself.
+   */
+  readonly volunteer: () => void
 }
 
 /**
@@ -130,7 +151,7 @@ export function handleCall(
   dispatch: Dispatch,
   call: { readonly name: string; readonly callId: string; readonly args: unknown },
 ): void {
-  const { capabilities, deps, ledger, note, log, warn, withheld } = dispatch
+  const { capabilities, deps, ledger, note, log, warn, withheld, volunteer } = dispatch
   const { name, callId } = call
 
   /**
@@ -242,15 +263,29 @@ export function handleCall(
           const output = await capability.handler(arrival.args, deps)
           if (settle(name, note, () => ledger.deliver(callId, output))) {
             quietly(() => log(`[capability] ${name} delivered ${forLog(output)}`))
+            // AFTER the answer is on the wire, so the turn she is asked for can
+            // carry it. Quietly, for `quietly`'s reason: the answer is out, and
+            // a failure to ask must not become a failure to deliver.
+            quietly(() => {
+              volunteer()
+            })
           }
         } catch (error: unknown) {
           // Delivered anyway. A deferred call that never arrives is worse than
           // a refusal, and `undelivered()` is the only thing that would notice.
           quietly(() => warn(`[capability] ${name} threw:`, error))
           quietly(() => note(name, String(error)))
-          settle(name, note, () =>
-            ledger.deliver(callId, { status: 'unavailable', guidance: DID_NOT_FINISH }),
-          )
+          if (
+            settle(name, note, () =>
+              ledger.deliver(callId, { status: 'unavailable', guidance: DID_NOT_FINISH }),
+            )
+          ) {
+            // A refusal is an answer too. She said she would look; "it did not
+            // work" spoken is the whole point of not leaving her silent.
+            quietly(() => {
+              volunteer()
+            })
+          }
         }
       })()
       return

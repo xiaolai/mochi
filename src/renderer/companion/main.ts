@@ -360,6 +360,9 @@ async function open(): Promise<void> {
 window.mochi.onSend((frame) => {
   const type = (frame as { type?: unknown }).type
   if (type === '__mochi_reconnect__') void open()
+  // A late answer landed. The session decides whether she may speak yet; with
+  // no session there is nothing queued to speak, so nothing to do.
+  if (type === '__mochi_volunteer__') session?.volunteer()
   /**
    * Close it, and do not open another.
    *

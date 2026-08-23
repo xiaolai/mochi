@@ -1628,6 +1628,17 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
       capabilities: CAPABILITIES.byName,
       deps: capabilityDeps,
       ledger,
+      /*
+        A late answer landed, so ask her to say it.
+
+        Main decides THAT she should; the renderer decides WHEN, because "is she
+        making sound right now" is a fact about the audio it holds. A private
+        frame rather than a `response.create` from here for exactly that reason
+        — see `audio/nudge.ts` for the measured behaviour it is working around.
+      */
+      volunteer: () => {
+        tellCompanion({ type: '__mochi_volunteer__' })
+      },
       note: (capability, detail) => problems.note('capability', capability, detail),
       /**
        * Read PER CALL, not held. The switch is in a window somebody can open

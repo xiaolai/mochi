@@ -42,6 +42,7 @@ function deferred(name: string, handler: Capability['handler']): Capability {
 
 function harness(capabilities: readonly Capability[]) {
   const frames: AnswerFrame[] = []
+  const volunteered: number[] = []
   const noted: string[] = []
   const byName = new Map(capabilities.map((one) => [one.manifest.name, one]))
   const uses: string[] = []
@@ -55,12 +56,13 @@ function harness(capabilities: readonly Capability[]) {
     capabilities: byName,
     deps: stubDeps(),
     ledger,
+    volunteer: () => volunteered.push(1),
     note: (name, detail) => noted.push(`${name}: ${detail}`),
     log: () => {},
     warn: () => {},
     withheld: () => null,
   }
-  return { dispatch, ledger, frames, noted, uses }
+  return { dispatch, ledger, frames, noted, uses, volunteered }
 }
 
 /** What actually went on the wire for a call, in order. */
@@ -201,6 +203,7 @@ describe('a call that cannot be run', () => {
         log: () => {},
         warn: () => {},
         withheld: () => null,
+        volunteer: () => undefined,
       },
       CALL,
     )
@@ -252,6 +255,7 @@ describe('an observer that fails', () => {
           log: angry,
           warn: angry,
           withheld: () => null,
+          volunteer: () => undefined,
         },
         CALL,
       ),
@@ -283,6 +287,7 @@ describe('an observer that fails', () => {
         log: angry,
         warn: angry,
         withheld: () => null,
+        volunteer: () => undefined,
       },
       { name: 'slow', callId: 'call_6', args: '{}' },
     )
@@ -405,6 +410,7 @@ describe('a transport that has gone away', () => {
       log: () => {},
       warn: () => {},
       withheld: () => null,
+      volunteer: () => undefined,
     }
     return { dispatch, noted }
   }
@@ -458,5 +464,61 @@ describe('a transport that has gone away', () => {
       }),
     )
     expect(() => handleCall(dispatch, CALL)).not.toThrow()
+  })
+})
+
+describe('asking her to volunteer a late answer', () => {
+  it('asks once the deferred result is on the wire', async () => {
+    /*
+      §1 sends the second `function_call_output` with no `response.create`, and
+      its note for what happens next is *"it comes out naturally the next time
+      she speaks"*. Observed 2026-08-24, that assumed a conversation that keeps
+      going: the forecast landed 25 seconds after she said "just a tiny moment
+      more, 笑来", into a silent room, and was never spoken at all.
+
+      The frame itself is unchanged — `ledger.test.ts` still asserts it never
+      asks for a turn. This is a separate signal, and the RENDERER decides
+      whether she may take one; see `audio/nudge.ts`.
+    */
+    const { dispatch, frames, volunteered } = harness([
+      deferred('slow', async () => ({ status: 'ok', answer: 'Tuesday' })),
+    ])
+    handleCall(dispatch, { name: 'slow', callId: 'call_v', args: '{}' })
+    // Acknowledged, not yet delivered: nothing to volunteer.
+    expect(volunteered).toHaveLength(0)
+
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(volunteered).toHaveLength(1)
+    // AFTER the answer, so the turn she is asked for can carry it.
+    expect(outputs(frames, 'call_v')).toEqual([
+      { status: 'started' },
+      { status: 'ok', answer: 'Tuesday' },
+    ])
+  })
+
+  it('asks even when the lookup failed, because a refusal is an answer', async () => {
+    // She said she would look. "It did not work", spoken, is the whole point of
+    // not leaving her silent — a failed lookup that says nothing is the same
+    // dead end as a successful one that says nothing.
+    const { dispatch, volunteered } = harness([
+      deferred('slow', async () => {
+        throw new Error('the CLI died')
+      }),
+    ])
+    handleCall(dispatch, { name: 'slow', callId: 'call_w', args: '{}' })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(volunteered).toHaveLength(1)
+  })
+
+  it('does NOT ask for an immediate capability', () => {
+    /*
+      An immediate answer settles inside the turn she is already taking, so
+      asking for another would interrupt her mid-sentence to repeat herself —
+      and mid-sentence is exactly where §1 measured `response.create` being
+      refused.
+    */
+    const { dispatch, volunteered } = harness([immediate('fast', () => ({ status: 'ok' }))])
+    handleCall(dispatch, CALL)
+    expect(volunteered).toHaveLength(0)
   })
 })

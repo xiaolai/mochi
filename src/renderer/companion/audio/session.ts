@@ -3,6 +3,7 @@ import { transcriptionConfig } from '@shared/transcription'
 import { isPrivateFrame, type SessionConfig } from '@shared/ipc'
 import type { FaceSpec } from '@shared/avatar-spec'
 import { createPending, type Spoken } from './pending'
+import { createNudge } from './nudge'
 
 /**
  * The live session: her ears, her voice, and the wire between them.
@@ -63,6 +64,14 @@ export interface Session {
    * speaking is refused intermittently (§1).
    */
   mayDo(change: { readonly instructions: string; readonly tools: readonly unknown[] }): void
+  /**
+   * A late answer has landed; ask her to say it when she can.
+   *
+   * Main decides that she should — see `dispatch.ts` — and this decides when,
+   * because only this side knows whether she is mid-sentence. `nudge.ts`
+   * carries the measurement and the reason a refused ask costs nothing.
+   */
+  volunteer(): void
   /** Open the microphone. Off until this is called — see point 4 above. */
   listen(on: boolean): void
   /** Idempotent, and the only path that releases anything. */
@@ -197,6 +206,18 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   }
 
   const pending = createPending()
+  const nudge = createNudge()
+
+  /**
+   * Ask for a turn, so a late answer is spoken rather than merely queued.
+   *
+   * No overrides: the `function_call_output` is already in the conversation and
+   * she needs to see it, so this is deliberately NOT the greeting's
+   * `conversation: 'none'`.
+   */
+  function askForTurn(): void {
+    put({ type: 'response.create' })
+  }
 
   /**
    * Whether the phase mechanism is alive on this transport, said out loud once.
@@ -384,6 +405,11 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
          * As an anchor for "whose sound is this", it is exact and it is the only
          * such signal — the analyser hears sound but cannot attribute it.
          */
+        // Her sound starting and stopping is also what says whether a late
+        // answer may be spoken yet. `cleared` counts as stopping: a barge-in
+        // means she really has stopped, and the person who just took the floor
+        // is the one most likely to want the answer.
+        if (nudge.sounding(frame.phase === 'started')) askForTurn()
         if (frame.phase === 'started') callbacks.onSpeaks(frame.responseId)
         else if (frame.phase === 'stopped') {
           callbacks.onFinished(frame.responseId, false)
@@ -671,6 +697,9 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     mayDo(change) {
       mayDo = { instructions: change.instructions, tools: change.tools }
       put(sessionUpdate())
+    },
+    volunteer() {
+      if (nudge.wanted()) askForTurn()
     },
     listen(on: boolean) {
       // Nothing to enable after `shutdown`, which stops the track and clears
