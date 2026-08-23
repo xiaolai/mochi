@@ -39,13 +39,53 @@ const SRC = join(process.cwd(), 'src')
  * when it was matching the comment that documented its removal. A guard whose
  * evidence can be a sentence somebody wrote about the code is not a guard.
  */
+/**
+ * MEMOISED, and that is a correctness matter rather than a nicety.
+ *
+ * This is called once per (surface x file): `isCalled` scans every file for
+ * every surface, and `receiversOf` scans them all again for every method. At
+ * 209 files and 86 surfaces that is roughly eighteen thousand reads of the
+ * same two hundred files, each followed by two regex passes over the whole
+ * text -- and it grew past vitest's 5s default the week the rig gained its
+ * motion library, so the guard began FAILING BY TIMEOUT on a healthy tree.
+ *
+ * A timeout is the worst way for a guard to break: it says nothing about what
+ * it was guarding, and the obvious fix is to raise the limit, which buys green
+ * by making the guard slower to notice the next thing. The work was simply
+ * repeated; the cache removes the repetition and changes no answer.
+ *
+ * Safe because this is a test process reading a tree nothing mutates while it
+ * runs. If that ever stops being true, this cache is the first thing to
+ * suspect.
+ */
+const STRIPPED = new Map<string, string>()
+
 function stripped(path: string): string {
-  return readFileSync(path, 'utf8')
+  const held = STRIPPED.get(path)
+  if (held !== undefined) return held
+  const text = readFileSync(path, 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^[ \t]*\/\/.*$/gm, '')
+  STRIPPED.set(path, text)
+  return text
 }
 
+/**
+ * The walk, once per directory, for the reason `stripped` is memoised: this is
+ * called inside the per-surface loop AND inside `receiversOf`, so an 86-surface
+ * run walked the tree well over a hundred times to get the same 209 paths.
+ */
+const WALKED = new Map<string, string[]>()
+
 function tsFilesUnder(dir: string): string[] {
+  const held = WALKED.get(dir)
+  if (held !== undefined) return held
+  const walked = walk(dir)
+  WALKED.set(dir, walked)
+  return walked
+}
+
+function walk(dir: string): string[] {
   const found: string[] = []
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name)
@@ -130,7 +170,15 @@ const KNOWN_DEBT: readonly string[] = [
  * `Transcripts.close` passed because `peer.close()` exists in the renderer --
  * the guard certifying the exact defect it was written to catch.
  */
+const RECEIVERS = new Map<string, Set<string>>()
+
+/**
+ * Memoised per TYPE, not per surface. `Transcripts` has a dozen methods and
+ * each one was re-scanning every file to rediscover the same receivers.
+ */
 function receiversOf(surfaceType: string): Set<string> {
+  const held = RECEIVERS.get(surfaceType)
+  if (held !== undefined) return held
   const names = new Set<string>()
   const annotated = new RegExp(
     `([A-Za-z][A-Za-z0-9_$]*)\\s*(?:\\([^)]*\\))?\\s*:\\s*(?:Pick<)?${surfaceType}\\b`,
@@ -139,6 +187,7 @@ function receiversOf(surfaceType: string): Set<string> {
   for (const path of tsFilesUnder(SRC)) {
     for (const match of stripped(path).matchAll(annotated)) names.add(match[1] ?? '')
   }
+  RECEIVERS.set(surfaceType, names)
   return names
 }
 
