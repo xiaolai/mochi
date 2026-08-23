@@ -3,7 +3,7 @@
  *
  * ## A machine preference, not a persona field
  *
- * `preferences.ts` already draws this line and states the test: which model
+ * `store/worn.ts` already draws this line and states the test: which model
  * runs describes this installation rather than the character being worn. The
  * same person wants `mini` on a metered hotel connection and `2.1` at their
  * desk, and switching persona must not change either. That is the definition

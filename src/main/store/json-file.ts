@@ -2,7 +2,8 @@
  * Reading and writing the small JSON files that make up her state.
  *
  * ONE implementation, because there were two. `persona.ts` and
- * `preferences.ts` had grown the same eight lines of temp-file-and-rename
+ * `store/worn.ts` -- `preferences.ts` when this was written -- had grown the
+ * same eight lines of temp-file-and-rename
  * independently, down to the `0o600` mode and the trailing newline — and the
  * careful reasoning about why the rename matters was written out in only one of
  * them. Two copies of a careful thing are one careful thing and one liability:

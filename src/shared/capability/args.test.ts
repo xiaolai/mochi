@@ -4,7 +4,9 @@ import type { CapabilityManifest } from './manifest'
 
 /**
  * v1's `readStringArg`, copied verbatim out of
- * `renderer/companion/audio/configure.ts`, as the reference implementation.
+ * v1's `renderer/companion/audio/configure.ts`, as the reference
+ * implementation. That file went with the rewrite and is not readable now; the
+ * payload it produced is what the golden test in `manifest.test.ts` pins.
  *
  * The claim this file has to support is "behaviour unchanged". Restating the
  * old rules as fresh expectations would only prove that the new code matches
