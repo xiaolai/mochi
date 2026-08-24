@@ -32,7 +32,11 @@ export function keptSection(view: ShelfView, handlers: ShelfHandlers): HTMLEleme
     const forget = element('button', 'btn', 'Forget these')
     forget.type = 'button'
     forget.addEventListener('click', () => {
-      handlers.forgetKept({ kind: 'collection', collection: one.collection })
+      handlers.forgetKept({
+        personaId: view.wornId,
+        kind: 'collection',
+        collection: one.collection,
+      })
     })
     row.append(forget)
     return row
@@ -41,7 +45,7 @@ export function keptSection(view: ShelfView, handlers: ShelfHandlers): HTMLEleme
   const all = element('button', 'btn', 'Forget everything she has kept')
   all.type = 'button'
   all.addEventListener('click', () => {
-    handlers.forgetKept({ kind: 'all' })
+    handlers.forgetKept({ personaId: view.wornId, kind: 'all' })
   })
 
   return section('What she has kept', 'written by her, when you asked her to', ...rows, all)

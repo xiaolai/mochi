@@ -41,9 +41,15 @@ export interface KeptSummary {
  * removing a single thing is a conversation she can have — `forget_kept` — and
  * the sheet is where the sweeping gestures live, because those are the ones
  * that want to be seen before they happen.
+ *
+ * `personaId` names who the sheet was drawn FOR. Main refuses when it no longer
+ * matches who is worn: a character switch between drawing the button and
+ * pressing it would otherwise erase the new character's store, which is the
+ * one mistake this section exists to prevent rather than cause.
  */
 export type KeptAction =
-  { readonly kind: 'collection'; readonly collection: string } | { readonly kind: 'all' }
+  | { readonly personaId: string; readonly kind: 'collection'; readonly collection: string }
+  | { readonly personaId: string; readonly kind: 'all' }
 
 /** One conversation, as the window lists it. */
 export interface HistoryConversation {

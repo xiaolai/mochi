@@ -217,12 +217,22 @@ export function readGrantsState(userData: string): {
  * chose, so an install that never touched a grant seeds nothing and everybody
  * starts at `DEFAULT_GRANTS` — which is what they already had.
  */
-export function legacyGrants(userData: string): Grants | null {
+export function legacyGrants(userData: string): Grants | null | undefined {
   const held = readGrantsState(userData)
-  // Unreadable seeds nothing. Seeding `WITHHELD_GRANTS` from a file this
-  // process merely could not open would revoke everybody's permissions on the
-  // strength of a transient read failure, and there is no way back from it.
-  return held.readable ? held.grants : null
+  /*
+    Unreadable is NOT "nobody chose", and the difference decides a default.
+
+    Seeding `WITHHELD_GRANTS` from a file this process merely could not open
+    would revoke everybody's permissions on a transient read failure, with no
+    way back. But answering `null` makes the migration seed nothing, and an
+    unseeded character reads as `DEFAULT_GRANTS` — so an unreadable file ends
+    up GRANTING everything, which is the worse of the two directions.
+
+    So it answers `undefined` for unreadable and `null` only for absent, and the
+    caller keeps the legacy policy in force rather than picking either.
+  */
+  if (!held.readable) return undefined
+  return held.grants
 }
 
 /**

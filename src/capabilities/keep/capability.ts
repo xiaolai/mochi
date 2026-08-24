@@ -1,3 +1,4 @@
+import { fenced } from '@shared/instructions'
 import { KEPT_LIMITS } from '../../main/store/kept'
 import type { Capability } from '../kind'
 
@@ -82,7 +83,10 @@ export const capability: Capability = {
       status: 'done',
       guidance:
         wrote.previous === null ? deps.prompt('kept.written') : deps.prompt('kept.replaced'),
-      replaced: wrote.previous,
+      // Fenced: what it replaced is text somebody or some file put there, and
+      // handing it back raw is a way for stored content to read as a new
+      // instruction on every overwrite.
+      replaced: wrote.previous === null ? null : fenced('kept', wrote.previous),
       room: KEPT_LIMITS.rows,
     }
   },

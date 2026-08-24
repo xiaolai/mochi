@@ -1,5 +1,6 @@
 import type { prepareAll } from './statements'
 import { tooLong } from '@shared/parse-persona'
+import { looksEmpty } from '@shared/text'
 
 /**
  * What a persona was asked to keep, and the only place she may write.
@@ -80,7 +81,10 @@ export function createKept(
     put(personaId, collection, key, value) {
       if (!NAME.test(collection)) return { refused: 'bad-collection', previous: null }
       if (!NAME.test(key)) return { refused: 'bad-key', previous: null }
-      if (value.trim() === '') return { refused: 'empty-value', previous: null }
+      // `looksEmpty`, not `trim() === ''`: a document of nothing but zero-width
+      // joiners renders as nothing and would be kept as if it said something.
+      // The same predicate `remember_this` uses, for the same reason.
+      if (looksEmpty(value)) return { refused: 'empty-value', previous: null }
       if (tooLong(value, KEPT_LIMITS.value)) return { refused: 'value-too-long', previous: null }
 
       // The row cap counts what is already there, and a REPLACEMENT of an

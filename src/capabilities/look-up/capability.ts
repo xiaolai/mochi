@@ -1,4 +1,17 @@
+import { fenced } from '@shared/instructions'
 import type { Capability } from '../kind'
+
+/**
+ * How much one lookup may hand back.
+ *
+ * A collection may legally hold 500 entries of 4,000 graphemes, so an unbounded
+ * listing is megabytes in a single tool result that then rides the session for
+ * the rest of the conversation. Names are cheap and always complete; values are
+ * capped, and the caller is told when it was cut rather than left to assume the
+ * collection was small.
+ */
+const MOST_ENTRIES = 25
+const MOST_CHARACTERS = 4_000
 
 /**
  * Read back what she kept.
@@ -41,6 +54,11 @@ export const capability: Capability = {
     const collection = String(args['collection'] ?? '')
     const key = String(args['key'] ?? '')
 
+    // A key with no collection is not a listing request — it is a lookup with
+    // half its address missing. Answering it by listing everything would look
+    // like the entry did not exist.
+    if (collection === '' && key !== '') return cannot(deps.prompt('kept.badName'))
+
     if (collection === '') {
       const held = store.kept.collections(personaId)
       if (held.length === 0) return cannot(deps.prompt('kept.nothingKeptAtAll'))
@@ -53,14 +71,24 @@ export const capability: Capability = {
     if (key === '') {
       const entries = store.kept.inCollection(personaId, collection)
       if (entries.length === 0) return cannot(deps.prompt('kept.nothingUnderThatName'))
+      const shown: { key: string; value: string }[] = []
+      let spent = 0
+      for (const entry of entries.slice(0, MOST_ENTRIES)) {
+        if (spent + entry.value.length > MOST_CHARACTERS) break
+        spent += entry.value.length
+        shown.push({ key: entry.key, value: fenced('kept', entry.value) })
+      }
       return {
         status: 'done',
-        entries: entries.map((one) => ({ key: one.key, value: one.value })),
+        entries: shown,
+        // Said rather than implied: a truncated list that looks complete is how
+        // she comes to state confidently that something is not there.
+        more: entries.length - shown.length,
       }
     }
 
     const one = store.kept.one(personaId, collection, key)
     if (one === null) return cannot(deps.prompt('kept.nothingUnderThatName'))
-    return { status: 'done', key: one.key, value: one.value }
+    return { status: 'done', key: one.key, value: fenced('kept', one.value) }
   },
 }

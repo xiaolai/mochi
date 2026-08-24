@@ -58,7 +58,6 @@ import {
   isProfileName,
   WORKSPACE_DIR,
   guardStopAt,
-  readGrantsState,
   readWornPersonaId,
   writeResting,
   writeWornPersonaId,
@@ -157,6 +156,7 @@ import { checkCodexNow, codexForWindow } from './codex/ready'
 import { codexPathNow } from './codex/ready'
 import { migrateGrants } from './store/grants'
 import { legacyGrants } from './store/worn'
+import { WITHHELD_GRANTS } from '@shared/grants'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
 // application's identity is how a notification arrives attributed to nothing and
@@ -1087,7 +1087,17 @@ const ledger = createLedger({
    */
   used: (name, at) => {
     const userData = app.getPath('userData')
-    if (!allowsCapability(readGrants(userData, wornId()), name)) return
+    /*
+      The LIVE persona, not whoever is worn now.
+
+      The two diverge on purpose after a shelf switch — the comment above says
+      so — and authorising against `wornId()` meant a session belonging to the
+      old character was checked against the new character's permissions. No
+      live persona is no authority at all, so it fails closed.
+    */
+    const live = sessionPersona
+    if (live === null) return
+    if (!allowsCapability(readGrants(userData, live), name)) return
     try {
       noteUsed(userData, name, at)
     } catch (error: unknown) {
@@ -1507,15 +1517,24 @@ ipcMain.handle('voice:config', () => {
    * simply stop hearing, and nothing on screen would say why. This is the one
    * place with a `problems` sink to hand, and it runs on every wake.
    */
-  const held = readGrantsState(userData)
-  const grants = held.grants
-  if (!held.readable) {
-    console.error('[grants] preferences.json could not be read; everything is withheld')
+  /*
+    HER file, not the one global setting.
+
+    This read was left on `readGrantsState` when permissions became per
+    character, so the session she actually runs with carried whatever the old
+    global blob said — a character whose `speak_first` had been withheld would
+    still greet, and the tools offered reflected the wrong policy entirely. The
+    per-character reader withholds on its own when a file cannot be read, so
+    the fail-closed direction is the same; what changes is whose answer it is.
+  */
+  const grants = readGrants(userData, resolved.persona.id)
+  if (grants === WITHHELD_GRANTS) {
+    console.error(`[grants] ${resolved.persona.id}'s permissions could not be read; withholding`)
     problems.note(
       'settings',
       null,
-      'your preferences file could not be read, so every permission is withheld until it can be ' +
-        '— she cannot hear you, greet you, look anything up, or keep a note',
+      'her permissions file could not be read, so every permission is withheld until it can be ' +
+        '— she cannot greet you, look anything up, or keep a note',
     )
   }
   const mayDo = whatSheMayDo(
@@ -1603,10 +1622,15 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
        * mid-conversation, and a snapshot taken when this listener was
        * registered would honour a grant that has since been taken away.
        */
-      withheld: (capability) =>
-        allowsCapability(readGrants(app.getPath('userData'), wornId()), capability)
+      withheld: (capability) => {
+        // Same rule as `used` above: the session's own character decides, and
+        // no live character withholds rather than guessing.
+        const live = sessionPersona
+        if (live === null) return withheldGuidance(capability)
+        return allowsCapability(readGrants(app.getPath('userData'), live), capability)
           ? null
-          : withheldGuidance(capability),
+          : withheldGuidance(capability)
+      },
       log: (line) => console.log(line),
       warn: (line, error) => {
         if (error === undefined) console.error(line)
@@ -2165,6 +2189,18 @@ ipcMain.handle('shelf:forget-kept', (_event, action: unknown): SettingsWrite => 
   const worn = activePersona(catalogue(userData), readWornPersonaId(userData)).persona.id
   const store = transcripts()
   if (store === null) return refuse('Her store could not be opened.')
+  /*
+    The sheet says who it was drawn for, and a stale answer is refused.
+
+    Without this the window resolves "her" at CLICK time: switching character
+    between drawing the button and pressing it would clear the store of
+    whoever is worn now, which is precisely the irreversible mistake this
+    section exists to make safe.
+  */
+  const meant = (action as { personaId?: unknown }).personaId
+  if (typeof meant !== 'string' || meant !== worn) {
+    return refuse('That was for a different character. Look again and repeat it.')
+  }
 
   if (kind === 'all') {
     store.kept.forgetAll(worn)
@@ -3095,13 +3131,26 @@ const startup = app.whenReady().then(
       */
       {
         const userData = app.getPath('userData')
-        const seeded = migrateGrants(
-          userData,
-          catalogue(userData).personas.keys(),
-          legacyGrants(userData),
-        )
-        if (seeded.length > 0) {
-          console.log(`[grants] carried the global setting to ${seeded.join(', ')}`)
+        try {
+          const seeded = migrateGrants(
+            userData,
+            catalogue(userData).personas.keys(),
+            legacyGrants(userData),
+          )
+          if (seeded.length > 0) {
+            console.log(`[grants] carried the global setting to ${seeded.join(', ')}`)
+          }
+        } catch (error: unknown) {
+          // Its own try, not shared with the migration above it: a failure here
+          // leaves characters unseeded, and an unseeded character reads as
+          // permissive. That is worth a line somebody can see.
+          console.error('[grants] could not carry the global setting forward:', error)
+          problems.note(
+            'settings',
+            null,
+            'her permissions could not be carried forward from the previous version — check them ' +
+              'on the shelf before trusting what she may do',
+          )
         }
       }
     } catch (error: unknown) {

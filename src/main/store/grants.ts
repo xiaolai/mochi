@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, unlinkSync } from 'node:fs'
+import { mkdirSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { DEFAULT_GRANTS, WITHHELD_GRANTS, isGrant, parseGrants } from '@shared/grants'
@@ -52,12 +52,10 @@ function grantsPath(userData: string, id: string): string {
 
 /** Whether anybody has chosen for her yet. ABSENT is the only answer meaning no. */
 export function hasGrants(userData: string, id: string): boolean {
-  const read = readBounded(grantsPath(userData, id))
-  // EXISTENCE, not readability — the `hasOwnFace` lesson. `readBounded` says
-  // `!ok` for absent and for oversized, symlinked or permission-denied alike,
-  // so treating every failure as "nobody has chosen" would let the migration
-  // overwrite a file it merely could not open.
-  return read.ok || read.reason.kind !== 'absent'
+  // EXISTENCE, not readability — the `hasOwnFace` lesson. Treating every
+  // failure as "nobody has chosen" would let the migration overwrite a file it
+  // merely could not open.
+  return grantsState(userData, id).kind !== 'absent'
 }
 
 /**
@@ -67,33 +65,82 @@ export function hasGrants(userData: string, id: string): boolean {
  * direction the global reader failed in: a permissions file this process cannot
  * read is not permission.
  */
-export function readGrants(userData: string, id: string): Grants {
+/**
+ * Absent, usable, or there-but-unusable — three answers, not two.
+ *
+ * `readGrants` collapses the last two to `WITHHELD_GRANTS`, which is the right
+ * answer to "may she?" and the wrong base for a merge: writing one switch on
+ * top of it would persist all-withheld and discard every other choice. Both
+ * callers need the distinction, so it is made once here.
+ */
+type GrantsState =
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'held'; readonly grants: Grants }
+  | { readonly kind: 'unusable'; readonly why: string }
+
+function grantsState(userData: string, id: string): GrantsState {
   const read = readBounded(grantsPath(userData, id))
   if (!read.ok) {
-    if (read.reason.kind === 'absent') return DEFAULT_GRANTS
-    console.warn(`[grants] ${id} ${logBoundedRead(read.reason)}; withholding everything`)
-    return WITHHELD_GRANTS
+    if (read.reason.kind === 'absent') return { kind: 'absent' }
+    return { kind: 'unusable', why: logBoundedRead(read.reason) }
   }
   try {
-    return parseGrants(JSON.parse(read.text))
+    return { kind: 'held', grants: parseGrants(JSON.parse(read.text)) }
   } catch (error: unknown) {
-    console.warn(`[grants] ${id} is not valid JSON; withholding everything:`, error)
+    return { kind: 'unusable', why: `is not valid JSON: ${String(error)}` }
+  }
+}
+
+export function readGrants(userData: string, id: string): Grants {
+  const held = grantsState(userData, id)
+  if (held.kind === 'absent') return DEFAULT_GRANTS
+  if (held.kind === 'unusable') {
+    console.warn(`[grants] ${id} ${held.why}; withholding everything`)
     return WITHHELD_GRANTS
   }
+  return held.grants
 }
 
 /** Set one permission for one character, leaving the rest as they were. */
 export function writeGrant(userData: string, id: string, grant: Grant, allowed: boolean): void {
   if (!isGrant(grant)) throw new Error(`not a grant: ${JSON.stringify(grant)}`)
-  const path = grantsPath(userData, id)
+  /*
+    Refuse to write over a file that could not be read.
+
+    `readGrants` answers `WITHHELD_GRANTS` when a file is there and unreadable,
+    which is the right answer for "may she?" and the wrong base for a merge:
+    toggling one switch would persist all-withheld and silently discard every
+    other choice somebody had made. The global writer this replaced refused for
+    exactly this reason, and dropping the refusal alongside the file layout was
+    a regression rather than a decision.
+  */
+  const held = grantsState(userData, id)
+  if (held.kind === 'unusable') {
+    throw new Error(`refusing to rewrite ${id}'s permissions over a file that ${held.why}`)
+  }
+  const base = held.kind === 'absent' ? DEFAULT_GRANTS : held.grants
   mkdirSync(grantsRoot(userData), { recursive: true })
-  writeJsonAtomically(path, { ...readGrants(userData, id), [grant]: allowed })
+  writeJsonAtomically(grantsPath(userData, id), { ...base, [grant]: allowed })
 }
 
 /** Her permissions die with her. Called from `finishDeletion`. */
 export function forgetGrants(userData: string, id: string): void {
-  const path = grantsPath(userData, id)
-  if (existsSync(path)) unlinkSync(path)
+  /*
+    Unlink and ignore only ENOENT.
+
+    `existsSync` answers false for a permission error and for a dangling
+    symlink as readily as for absence, so guarding on it would let deletion
+    report success, release the slug, and leave the file for whoever gets the
+    name next. This is the third instance of that shape in this repository --
+    `hasOwnFace` and `hasPolicy` were the first two -- and the rule they settled
+    is that when the question is "is there a file", absent is the only answer
+    that means no.
+  */
+  try {
+    unlinkSync(grantsPath(userData, id))
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
 }
 
 /**
@@ -111,8 +158,14 @@ export function forgetGrants(userData: string, id: string): void {
 export function migrateGrants(
   userData: string,
   ids: Iterable<string>,
-  legacy: Grants | null,
+  legacy: Grants | null | undefined,
 ): readonly string[] {
+  // `undefined` means the legacy file is THERE and unreadable. Seeding from it
+  // is impossible and skipping it silently grants everything, so it throws and
+  // the caller reports it rather than starting permissive.
+  if (legacy === undefined) {
+    throw new Error('refusing to migrate permissions from a file that cannot be read')
+  }
   if (legacy === null) return []
   const seeded: string[] = []
   for (const id of ids) {
