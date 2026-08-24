@@ -24,14 +24,10 @@ import {
   stepMonth,
   weekdayInitials,
 } from './month'
-import {
-  assembledPanel,
-  castActions,
-  characterCards,
-  characterSheet,
-  faceTile,
-  type ShelfHandlers,
-} from './shelf'
+import { assembledPanel, characterCards, characterSheet } from './shelf'
+import { castActions } from './sheet/cast'
+import { faceTile } from './sheet/face-tile'
+import { type ShelfHandlers } from './sheet/row'
 import { installLogStamp } from '@shared/log'
 import { SAYS } from './main-says'
 

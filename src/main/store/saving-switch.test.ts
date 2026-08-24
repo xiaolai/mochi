@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -86,16 +86,26 @@ describe('turning the saving of conversations off', () => {
 
 describe('the control that sets it', () => {
   /*
-    The shelf surface is two files: `shelf.ts` draws it, `shelf-says.ts` holds
-    every sentence that is ABOUT her. Both are read and joined, because which
-    of the two a given phrase sits in is a fact about where the words are
-    stored, not about what the control tells the user -- and this test is
-    about the latter. Splitting them further must not be able to make this
-    pass by moving a sentence out of view.
+    The shelf surface is a directory: `shelf.ts` keeps the order, each section
+    is a sibling under `sheet/`, and `shelf-says.ts` holds every sentence that
+    is ABOUT her. All of it is read and joined, because which file a phrase
+    sits in is a fact about where words are stored, not about what the control
+    tells the user -- and this test is about the latter. Walked rather than
+    listed, because a list of filenames is exactly how splitting it again would
+    make this pass by moving a sentence out of view.
   */
-  const shelf = ['shelf.ts', 'shelf-says.ts']
-    .map((file) =>
-      readFileSync(join(process.cwd(), 'src', 'renderer', 'history', file), 'utf8')
+  const shelfRoot = join(process.cwd(), 'src', 'renderer', 'history')
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory()
+        ? walk(join(dir, entry.name))
+        : entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')
+          ? [join(dir, entry.name)]
+          : [],
+    )
+  const shelf = walk(shelfRoot)
+    .map((path) =>
+      readFileSync(path, 'utf8')
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^[ \t]*\/\/.*$/gm, ''),
     )

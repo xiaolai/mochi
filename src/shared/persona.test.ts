@@ -9,7 +9,8 @@
  * last is the strongest position an instruction can occupy.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { PRONOUNS } from './pronoun'
@@ -1433,6 +1434,31 @@ describe('the document as prose, for a goodbye', () => {
  * perfectly while a surface ignores it, which is exactly what happened. So this
  * reads the two files and requires them to use it.
  */
+/**
+ * Her sheet is a directory now, not a file: `shelf.ts` keeps the order the
+ * sections appear in and each section is a sibling under `sheet/`.
+ *
+ * Read as ONE surface, because the question both assertions below ask is about
+ * what the sheet does, not about which file a line ended up in. Naming one file
+ * is how a split quietly satisfies an assertion by moving the line out of view.
+ */
+function sheetSurface(): string {
+  const root = fileURLToPath(new URL('../renderer/history/', import.meta.url))
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory()
+        ? walk(join(dir, entry.name))
+        : entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')
+          ? [join(dir, entry.name)]
+          : [],
+    )
+  return walk(root)
+    .map((path) => readFileSync(path, 'utf8'))
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+}
+
 describe('what the sides are called', () => {
   const source = (relative: string): string =>
     readFileSync(fileURLToPath(new URL(relative, import.meta.url)), 'utf8')
@@ -1448,8 +1474,8 @@ describe('what the sides are called', () => {
   })
 
   it('is read by the tray and by her sheet, and neither writes its own', () => {
-    for (const file of ['../main/tray.ts', '../renderer/history/shelf.ts']) {
-      const text = source(file)
+    for (const file of ['../main/tray.ts', 'her sheet']) {
+      const text = file === 'her sheet' ? sheetSurface() : source(file)
       expect(text, `${file} reads the shared names`).toContain('SIDE_NAMES')
       // The words themselves, spelled out in a surface, would be a second table
       // — which is the shape this replaced.
@@ -1486,7 +1512,7 @@ describe('when a change to her bubble lands', () => {
   })
 
   it('is said by the section that holds them, not by the one about her voice', () => {
-    const shelf = source('../renderer/history/shelf.ts')
+    const shelf = sheetSurface()
     // Its own heading, so the hint above it can cover both halves honestly.
     expect(shelf).toContain("section(\n    'Speech bubble',")
     // And Voice keeps its own, which is true of everything left in it.
