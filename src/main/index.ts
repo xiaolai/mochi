@@ -4,12 +4,11 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import {
   BUBBLE_SIDES,
   BUILT_IN_ID,
-  greetingFor,
   PERSONA_LIMITS,
-  PROMPT_SLOTS,
   RECOMMENDED_VOICES,
   VOICE_NAMES,
 } from '@shared/persona'
+import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
 import { whatToFile } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'

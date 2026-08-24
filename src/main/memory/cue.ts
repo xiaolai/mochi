@@ -31,7 +31,7 @@
  */
 
 import type { Hit } from '../store/transcripts'
-import { fenced } from '@shared/persona'
+import { fenced } from '@shared/instructions'
 import { elapsedWords } from './elapsed'
 import { oneLine } from '@shared/text'
 

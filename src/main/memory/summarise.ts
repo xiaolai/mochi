@@ -55,7 +55,8 @@
  */
 
 import type { Turn } from '../store/transcripts'
-import { PERSONA_LIMITS, fenced } from '@shared/persona'
+import { PERSONA_LIMITS } from '@shared/persona'
+import { fenced } from '@shared/instructions'
 import { oneLine } from '@shared/text'
 
 /** How many entries any one section may hold. */

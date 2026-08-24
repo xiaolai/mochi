@@ -1,4 +1,5 @@
-import { instructionsFor, type Persona } from '@shared/persona'
+import { type Persona } from '@shared/persona'
+import { instructionsFor } from '@shared/instructions'
 import { allowsCapability, grantsNotice, type Grants } from '@shared/grants'
 import type { WireTool } from '@shared/capability/registry'
 

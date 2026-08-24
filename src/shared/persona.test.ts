@@ -16,9 +16,6 @@ import { PRONOUNS } from './pronoun'
 import { EMOTIONS } from './avatar'
 import { DEFAULT_PRONOUN } from './pronoun'
 import {
-  wearName,
-  NAME_TOKEN,
-  promptProse,
   DEFAULT_PERSONA,
   PERSONA_FORMAT,
   PERSONA_LIMITS,
@@ -26,15 +23,20 @@ import {
   isPersonaId,
   RECOMMENDED_VOICES,
   VOICE_NAMES,
-  farewellFor,
-  fenced,
-  greetingFor,
-  instructionsFor,
   parsePersona,
   type Persona,
   BUBBLE_SIDES,
   SIDE_NAMES,
 } from './persona'
+import {
+  wearName,
+  NAME_TOKEN,
+  promptProse,
+  farewellFor,
+  fenced,
+  greetingFor,
+  instructionsFor,
+} from './instructions'
 
 const tutor: Persona = {
   version: PERSONA_FORMAT,
