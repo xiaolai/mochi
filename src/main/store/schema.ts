@@ -137,4 +137,30 @@ export function applySchema(db: DatabaseSync): void {
     SET ended_at = coalesce((SELECT max(at) FROM turn WHERE session_id = session.id), started_at)
     WHERE ended_at IS NULL
   `)
+
+  /*
+    Where a persona keeps what she was asked to keep.
+
+    A FIXED schema with model-supplied keys, not a table she may create. Letting
+    a model emit DDL means letting it emit a table name, and a name is the one
+    thing a prepared statement cannot parameterise -- and a schema this repo did
+    not define is a schema `applySchema` cannot migrate.
+
+    `previous` holds one step back per key, for the reason `memory.ts` gives
+    about notes: one step back is what makes an automatic rewrite reviewable,
+    and it is the whole safety story for letting a model maintain a document.
+  */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS kept (
+      persona_id TEXT    NOT NULL,
+      collection TEXT    NOT NULL,
+      key        TEXT    NOT NULL,
+      value      TEXT    NOT NULL,
+      previous   TEXT,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (persona_id, collection, key)
+    );
+    CREATE INDEX IF NOT EXISTS kept_by_collection
+      ON kept (persona_id, collection, updated_at DESC);
+  `)
 }

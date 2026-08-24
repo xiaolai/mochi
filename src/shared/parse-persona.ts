@@ -159,7 +159,7 @@ const UNITS_PER_GRAPHEME = 16
  * Graphemes for the limit a person reads, code units for the one the wire
  * pays for. A value that passes one and not the other is refused.
  */
-function tooLong(value: string, limit: number): boolean {
+export function tooLong(value: string, limit: number): boolean {
   return value.length > limit * UNITS_PER_GRAPHEME || characters(value) > limit
 }
 

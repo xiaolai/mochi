@@ -155,6 +155,18 @@ const KNOWN_DEBT: readonly string[] = [
   // nothing asks -- which is why deleting the live conversation was able to
   // become defect A-4 unnoticed.
   'conversation.ts: isLive',
+  // The store landed in phase 1 of `plan-kept.md` with no tools, deliberately:
+  // the data model is committed and verifiable before a model can reach it.
+  // These lines are that plan's progress bar — phase 2 wired `forgetAll`
+  // into `finishDeletion` and its line is gone; phase 4 adds the
+  // capability that calls them, and deleting them is how it proves it landed.
+  'kept.ts: collections',
+  'kept.ts: forgetCollection',
+  'kept.ts: forgetOne',
+  'kept.ts: inCollection',
+  'kept.ts: one',
+  'kept.ts: put',
+
   // No caller and no work item. The archive can be exported and cannot be
   // imported back: the reader exists, is transactional, is tested, and no
   // surface offers it. Recorded here rather than fixed, because an import

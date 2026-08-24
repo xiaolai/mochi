@@ -53,6 +53,7 @@ import { endFor, sameConversation } from './archive'
 import { toTurn } from './turn-row'
 import { applySchema } from './schema'
 import { prepareAll } from './statements'
+import { type Kept, createKept } from './kept'
 
 export const TRANSCRIPTS_FILE = 'transcripts.db'
 
@@ -204,6 +205,16 @@ export interface Transcripts {
     above are the mechanism; they are the two that get controls.
   */
   close(): void
+
+  /**
+   * Her own store — the one place a persona may write.
+   *
+   * A property rather than a family of methods on this interface, which is
+   * already a hundred lines: `kept.ts` owns its own contract and this is the
+   * handle to it. It rides this database for `secure_delete` and the WAL
+   * checkpoint on close, which are exactly the properties her data wants.
+   */
+  readonly kept: Kept
 }
 
 /**
@@ -479,7 +490,10 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       }))
   }
 
+  const kept = createKept(stmt)
+
   return {
+    kept,
     begin(personaId, at = now()) {
       // Refused rather than shifted. See the interface: advancing the stored
       // time to dodge the unique constraint would date a conversation after

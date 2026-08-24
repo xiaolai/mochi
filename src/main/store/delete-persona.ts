@@ -64,7 +64,7 @@ export function deletePersona(
   userData: string,
   catalog: PersonaCatalog,
   id: string,
-  history: Pick<Transcripts, 'forget'>,
+  history: Pick<Transcripts, 'forget' | 'kept'>,
 ): void {
   const source = catalog.sources.get(id)
   if (source === undefined) throw new Error(`${id} has no file to remove`)
@@ -107,9 +107,22 @@ function finishDeletion(
   userData: string,
   id: string,
   source: string,
-  history: Pick<Transcripts, 'forget'>,
+  history: Pick<Transcripts, 'forget' | 'kept'>,
 ): void {
   forgetMemory(userData, id)
+  /*
+    Her store dies here, ABOVE `clearTombstone`.
+
+    Persona ids are derived name slugs and are handed out again once free, so a
+    store that outlives its owner is handed to the next character of the same
+    name. `PersonaCatalog.reserved` holds the id while the tombstone exists, so
+    everything removed before that last line is covered -- and a crash here
+    leaves the tombstone, which `sweepDeletions` retries next launch.
+
+    Ordering is the whole guarantee. `kept.test.ts` asserts a recreated `ada`
+    reads empty, which is what stops a later edit reversing this silently.
+  */
+  history.kept.forgetAll(id)
   // Her CONVERSATIONS too, and the store is a required argument rather than
   // something the caller might remember. This was missed once already: memory
   // was forgotten and transcripts were not, so deleting `ada` and letting the
@@ -140,7 +153,10 @@ function finishDeletion(
  * deletion is recovered rather than left as a persona whose memory is gone and
  * whose conversations are not.
  */
-export function sweepDeletions(userData: string, history: Pick<Transcripts, 'forget'>): void {
+export function sweepDeletions(
+  userData: string,
+  history: Pick<Transcripts, 'forget' | 'kept'>,
+): void {
   for (const [id, source] of readTombstones(userData)) {
     try {
       finishDeletion(userData, id, source, history)

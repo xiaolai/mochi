@@ -841,6 +841,10 @@ describe('deleting a persona takes her notes with her', () => {
       forget: () => {
         throw new Error('SQLITE_BUSY')
       },
+      // Her store clears before the transcripts do, so this stub has to answer
+      // for the step that now runs first. It succeeds; the point of the test is
+      // that a LATER failure leaves her intact.
+      kept: { forgetAll: () => 0 } as unknown as Transcripts['kept'],
     }
 
     expect(() => deletePersona(dir, loadPersonas(dir, {}, true), 'ada', refuses)).toThrow(/BUSY/)
