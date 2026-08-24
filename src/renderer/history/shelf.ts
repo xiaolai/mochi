@@ -107,9 +107,9 @@ const SAYS = {
     it: 'its notes and its conversations',
   },
   assembled: {
-    she: 'Write the prompt; Sent is the exact string she is handed once her character, her notes and her tools are folded in. Saving lands on her next wake.',
-    he: 'Write the prompt; Sent is the exact string he is handed once his character, his notes and his tools are folded in. Saving lands on his next wake.',
-    it: 'Write the prompt; Sent is the exact string it is handed once its character, its notes and its tools are folded in. Saving lands on its next wake.',
+    she: 'Write the prompt; Sent is the exact string she is handed once her character and her notes are folded in; Tools is the rest of what she is told, which is not editable. Saving lands on her next wake.',
+    he: 'Write the prompt; Sent is the exact string he is handed once his character and his notes are folded in; Tools is the rest of what he is told, which is not editable. Saving lands on his next wake.',
+    it: 'Write the prompt; Sent is the exact string it is handed once its character and its notes are folded in; Tools is the rest of what it is told, which is not editable. Saving lands on its next wake.',
   },
 } as const satisfies Readonly<Record<string, ByPronoun>>
 
@@ -1240,6 +1240,20 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
   sent.append(body)
 
   /*
+    The other half of what she is handed, and it used to be shown nowhere.
+
+    `whatSheMayDo` returns `{ instructions, tools }`; this panel drew the first
+    and the second went on the wire unseen. Those descriptions are the largest
+    body of model-facing prose in the app and none of it is editable — which is
+    argued and deliberate, and is not a reason to hide it. `textContent`, like
+    everything else here.
+  */
+  const toolsBox = element('div', 'wake-box')
+  const toolsBody = element('pre')
+  toolsBody.textContent = view.toolsSent
+  toolsBox.append(toolsBody)
+
+  /*
     One pane at a time, and WRITE is not the default.
 
     Opening on the editor would put a text box where a readout used to be, on a
@@ -1254,32 +1268,37 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
   actions.append(save, cancel)
 
   const tabs = element('div', 'switchers wake-tabs')
-  let writing = false
+  /** Which pane is up. Three now, so no longer a boolean. */
+  let showing: 'sent' | 'tools' | 'write' = 'sent'
 
   const draw = (): void => {
     tabs.replaceChildren()
     for (const [id, label] of [
       ['sent', 'Sent'],
+      ['tools', 'Tools'],
       ['write', 'Write'],
     ] as const) {
       const button = element('button', undefined, label)
       button.type = 'button'
-      button.setAttribute('aria-current', String((id === 'write') === writing))
+      button.setAttribute('aria-current', String(id === showing))
       button.addEventListener('click', () => {
-        if ((id === 'write') === writing) return
-        writing = id === 'write'
+        if (id === showing) return
+        showing = id
         // The draft survives the switch. Looking at what it produces and coming
         // back is exactly what somebody does while writing one.
         draw()
       })
       tabs.append(button)
     }
-    sent.hidden = writing
-    editor.hidden = !writing
-    actions.hidden = !writing
-    count.textContent = writing
-      ? `${String(editor.value.length)} chars`
-      : `${String(view.assembled.length)} sent`
+    sent.hidden = showing !== 'sent'
+    toolsBox.hidden = showing !== 'tools'
+    editor.hidden = showing !== 'write'
+    actions.hidden = showing !== 'write'
+    // The count names the pane's own quantity rather than one number for all
+    // three — "sent" beside a tool list would be counting the wrong thing.
+    if (showing === 'write') count.textContent = `${String(editor.value.length)} chars`
+    else if (showing === 'tools') count.textContent = `${String(view.toolsSent.length)} chars`
+    else count.textContent = `${String(view.assembled.length)} sent`
   }
 
   editor.addEventListener('input', () => {
@@ -1324,5 +1343,5 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
   where.append(element('code', undefined, view.prompt.path))
 
   draw()
-  return [head, note, where, sent, editor, actions]
+  return [head, note, where, sent, toolsBox, editor, actions]
 }

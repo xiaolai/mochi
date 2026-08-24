@@ -13,6 +13,7 @@ import {
 import { createRegistry } from '@shared/capability/registry'
 import { whatToFile } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'
+import { renderTools } from './tools-sent'
 import {
   REVEALABLE,
   type GrantChange,
@@ -1979,6 +1980,15 @@ ipcMain.handle('shelf:read', (): ShelfView => {
   // string that document produces, and reading it twice would let the two
   // disagree by whatever happened between them.
   const prompt = readPrompt(userData)
+  /*
+    ONE call, and both halves of its answer are drawn.
+
+    `assembled` is `whatSheMayDo(...).instructions`; the tool list is the other
+    half of the same return. Calling it twice — once per half — is the shape
+    `assembled`'s own comment warns about, one level along: the two renderings
+    would drift the first time anything between them changed.
+  */
+  const mayDo = whatSheMayDo(worn, note, readGrants(userData), registry.tools, prompt)
   return {
     face: resolveFaceFor(
       avatarsRoot(userData),
@@ -2017,7 +2027,10 @@ ipcMain.handle('shelf:read', (): ShelfView => {
       worn.avatarId,
       worn.theme,
     ).source,
-    assembled: whatSheMayDo(worn, note, readGrants(userData), registry.tools, prompt).instructions,
+    assembled: mayDo.instructions,
+    // The other half of the same answer. Rendered here rather than in the
+    // window because the window must not re-derive what goes on the wire.
+    toolsSent: renderTools(mayDo.tools),
     prompt: { text: prompt, path: promptFile(userData), slots: [...PROMPT_SLOTS] },
     note: { text: note, previous: previousNote(userData, worn.id) },
   }

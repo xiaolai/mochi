@@ -1252,6 +1252,27 @@ export interface ShelfView {
    */
   readonly assembled: string
   /**
+   * The tools as they go on the wire, rendered for reading.
+   *
+   * **Hardcoded prose is still prose she is handed**, and until this existed
+   * none of it was visible anywhere. `assembled` is only half of
+   * `whatSheMayDo`'s answer: the other half is a `tools` array whose
+   * `description` fields are the largest body of model-facing text in the app,
+   * written in each capability's own `capability.ts` and settable by nobody.
+   *
+   * That they are not editable is deliberate and argued — a description that
+   * drifts from what the tool does makes her misreport the machine, which is
+   * §11's measured failure — but not editable is a different claim from not
+   * visible, and the second does not follow from the first. You cannot reason
+   * about why she did something without seeing what she was told.
+   *
+   * From the SAME `whatSheMayDo` call as `assembled`, for that field's own
+   * reason: two renderings of one answer is where the two quietly diverge.
+   * Already narrowed and filtered — a withheld capability is absent here
+   * exactly as it is absent on the wire.
+   */
+  readonly toolsSent: string
+  /**
    * The system prompt document — the thing that is EDITED, beside the string it
    * produces.
    *
