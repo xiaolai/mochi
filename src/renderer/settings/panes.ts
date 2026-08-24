@@ -10,6 +10,7 @@ import type {
 import { CODEX_SAYS, REMEDY_SAYS } from '@shared/delegation'
 import { GRANT_SPECS } from '@shared/grants'
 import { forPronoun, type ByPronoun } from '@shared/pronoun'
+import { element } from '../element'
 
 /**
  * The six groups, one at a time.
@@ -222,17 +223,6 @@ export interface Pane {
   /** Why this group needs looking at, or null. Drives the dot in the nav. */
   readonly attention: (view: SettingsView) => string | null
   readonly render: (view: SettingsView, handlers: PaneHandlers) => readonly Node[]
-}
-
-function element<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string,
-): HTMLElementTagNameMap[K] {
-  const made = document.createElement(tag)
-  if (className !== undefined) made.className = className
-  if (text !== undefined) made.textContent = text
-  return made
 }
 
 function field(label: string, control: HTMLElement): HTMLElement {

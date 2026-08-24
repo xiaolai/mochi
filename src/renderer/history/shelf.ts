@@ -12,6 +12,7 @@ import type { FaceSpec } from '@shared/avatar-spec'
 import { applyTheme, THEME_IDS } from '@shared/theme'
 import { MochiAvatar } from '../companion/rig/mochi'
 import { drawCentred } from './centre'
+import { element } from '../element'
 
 /**
  * Every sentence on this pane that is ABOUT her, one phrasing per pronoun.
@@ -173,17 +174,6 @@ export interface ShelfHandlers {
   readonly prompt: (text: string) => void
   /** Say what happened. Silence after a write reads as the write not landing. */
   readonly say: (text: string, bad?: boolean) => void
-}
-
-function element<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  text?: string,
-): HTMLElementTagNameMap[K] {
-  const made = document.createElement(tag)
-  if (className !== undefined) made.className = className
-  if (text !== undefined) made.textContent = text
-  return made
 }
 
 /** A caps heading, a hint in mono beside it, and the control underneath. */
