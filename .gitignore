@@ -30,7 +30,13 @@ dev-docs/
 
 # Assistant tooling, settings, and worktrees. The worktrees are checkouts of
 # this same repo, so git reports them as untracked nested repos unless ignored.
-.claude/
+.claude/*
+# Except the LOC gate's config, which is not personal setting but project
+# policy: the limit, the argument for the number, the extraction rules and the
+# three files the limit is knowingly wrong about. Ignored, it was one rm from
+# gone and invisible in review -- and it had already drifted far enough to name
+# a file that no longer exists.
+!.claude/loc-guardian.local.md
 
 # VMark editor session state
 .vmark/
