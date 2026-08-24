@@ -1,10 +1,5 @@
-import type {
-  NoteAction,
-  PersonaAction,
-  PersonaChange,
-  ShelfCharacter,
-  ShelfView,
-} from '@shared/ipc'
+import type { NoteAction, PersonaAction, PersonaChange } from '@shared/ipc'
+import type { ShelfCharacter, ShelfView } from '@shared/history-window'
 import { forPronoun, PRONOUNS, type ByPronoun, type Pronoun } from '@shared/pronoun'
 import { SIDE_NAMES } from '@shared/persona'
 import { EMOTIONS, type Emotion } from '@shared/avatar'

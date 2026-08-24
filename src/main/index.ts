@@ -25,15 +25,14 @@ import {
 import {
   REVEALABLE,
   type GrantChange,
-  type HistoryExport,
   type PersonaAction,
   type PersonaChange,
   type Revealable,
   type SettingsView,
   type SettingsWrite,
-  type ShelfView,
   type VoiceReport,
 } from '@shared/ipc'
+import { type HistoryExport, type ShelfView } from '@shared/history-window'
 import type { Pronoun } from '@shared/pronoun'
 import { CAPABILITIES } from '../capabilities'
 import { createLedger, type AnswerFrame } from './capability/ledger'

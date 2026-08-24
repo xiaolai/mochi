@@ -1,14 +1,12 @@
+import type { MochiSettingsApi, SettingsView, SettingsWrite } from '@shared/ipc'
 import type {
   HistoryConversation,
   HistoryHit,
   HistoryProblem,
   HistoryTurn,
   MochiHistoryApi,
-  MochiSettingsApi,
-  SettingsView,
-  SettingsWrite,
   ShelfView,
-} from '@shared/ipc'
+} from '@shared/history-window'
 import { DEFAULT_PRONOUN, forPronoun, label as paneLabel, type Pronoun } from '@shared/pronoun'
 import { applyAccent } from '../design/apply-accent'
 import { PANES, type PaneHandlers } from '../settings/panes'

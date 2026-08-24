@@ -3,15 +3,9 @@ import {
   isCompanionChannel,
   isSettingsChannel,
   isShelfChannel,
-  type HistoryConversation,
   type ForgetTalk,
   type Forgotten,
-  type HistoryHit,
-  type HistoryExport,
-  type HistoryProblem,
-  type HistoryTurn,
   type MochiApi,
-  type MochiHistoryApi,
   type MochiSettingsApi,
   type GrantChange,
   type LookupChange,
@@ -25,9 +19,17 @@ import {
   type SettingsView,
   type SettingsWrite,
   type SessionConfig,
-  type ShelfView,
   type VoiceReport,
 } from '@shared/ipc'
+import {
+  type HistoryConversation,
+  type HistoryHit,
+  type HistoryExport,
+  type HistoryProblem,
+  type HistoryTurn,
+  type MochiHistoryApi,
+  type ShelfView,
+} from '@shared/history-window'
 
 /**
  * The only path between the page and the main process.
