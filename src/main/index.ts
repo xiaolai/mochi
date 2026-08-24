@@ -58,10 +58,8 @@ import {
   isProfileName,
   WORKSPACE_DIR,
   guardStopAt,
-  readGrants,
   readGrantsState,
   readWornPersonaId,
-  writeGrant,
   writeResting,
   writeWornPersonaId,
   readSleepAfterMinutes,
@@ -78,6 +76,7 @@ import {
   writeHerPlace,
   type Resting,
 } from './store/worn'
+import { readGrants, writeGrant } from './store/grants'
 import { claimShortcuts, releaseShortcuts, type ShortcutOutcome } from './shortcuts'
 import { MOST_LANGUAGES, OFFERED_LANGUAGES, TRANSCRIPTION_MODEL } from '@shared/transcription'
 import { SHORTCUTS } from '@shared/shortcuts'
@@ -156,6 +155,8 @@ import { previousNote, recall, recallState, remember } from './store/memory'
 import { createCompanionWindow, showHistoryWindow } from './window'
 import { checkCodexNow, codexForWindow } from './codex/ready'
 import { codexPathNow } from './codex/ready'
+import { migrateGrants } from './store/grants'
+import { legacyGrants } from './store/worn'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
 // application's identity is how a notification arrives attributed to nothing and
@@ -1086,7 +1087,7 @@ const ledger = createLedger({
    */
   used: (name, at) => {
     const userData = app.getPath('userData')
-    if (!allowsCapability(readGrants(userData), name)) return
+    if (!allowsCapability(readGrants(userData, wornId()), name)) return
     try {
       noteUsed(userData, name, at)
     } catch (error: unknown) {
@@ -1596,7 +1597,7 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
        * registered would honour a grant that has since been taken away.
        */
       withheld: (capability) =>
-        allowsCapability(readGrants(app.getPath('userData')), capability)
+        allowsCapability(readGrants(app.getPath('userData'), wornId()), capability)
           ? null
           : withheldGuidance(capability),
       log: (line) => console.log(line),
@@ -1836,7 +1837,7 @@ ipcMain.handle('settings:read', (): SettingsView => {
     // and her own can never disagree about who is worn.
     pronoun: wornPronoun(userData),
     capabilities: listCapabilities(registry),
-    grants: listGrants(readGrants(userData), readUsage(userData)),
+    grants: listGrants(readGrants(userData, wornId()), readUsage(userData)),
     lookup: listLookup({
       workspace: readWorkspace(userData),
       defaultWorkspace: join(userData, WORKSPACE_DIR),
@@ -1971,7 +1972,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     `assembled`'s own comment warns about, one level along: the two renderings
     would drift the first time anything between them changed.
   */
-  const mayDo = whatSheMayDo(worn, note, readGrants(userData), registry.tools, prompt)
+  const mayDo = whatSheMayDo(worn, note, readGrants(userData, worn.id), registry.tools, prompt)
   return {
     face: resolveFaceFor(
       avatarsRoot(userData),
@@ -2367,7 +2368,7 @@ ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
 
   const userData = app.getPath('userData')
   try {
-    writeGrant(userData, asked.id, asked.allowed)
+    writeGrant(userData, wornId(), asked.id, asked.allowed)
   } catch (error: unknown) {
     // Loud, and where somebody will see it. A permission that silently did not
     // change is the worst failure this window can have: the switch says one
@@ -2428,7 +2429,7 @@ function tellTheSession(): boolean {
   // She was deleted while her own session was up. There is nothing to re-tell,
   // and the next wake resolves somebody who exists.
   if (persona === undefined) return false
-  const grants = readGrants(userData)
+  const grants = readGrants(userData, persona.id)
   const mayDo = whatSheMayDo(
     persona,
     recall(userData, live),
@@ -3034,6 +3035,28 @@ const startup = app.whenReady().then(
 
     try {
       migrateBubbleSide()
+      /*
+        Carry the one global permissions setting forward to everybody.
+
+        Permissions became per character in 2026-08. Without this every
+        character falls back to DEFAULT_GRANTS on first launch after the
+        upgrade, and whatever somebody withheld is silently regranted -- which
+        is the worst direction for this particular value to fail in.
+
+        Idempotent: a character who already has a file is skipped, so this runs
+        on every launch and stops mattering once everybody is seeded.
+      */
+      {
+        const userData = app.getPath('userData')
+        const seeded = migrateGrants(
+          userData,
+          catalogue(userData).personas.keys(),
+          legacyGrants(userData),
+        )
+        if (seeded.length > 0) {
+          console.log(`[grants] carried the global setting to ${seeded.join(', ')}`)
+        }
+      }
     } catch (error: unknown) {
       // Never a reason not to start. The cost of not carrying it over is one
       // trip to a dropdown; the cost of refusing to launch is the app.

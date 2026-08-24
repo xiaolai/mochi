@@ -4,14 +4,7 @@ import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
 import { BUBBLE_SIDES, type BubbleSide } from '@shared/persona'
 import { isHaloWhen, type HaloWhen } from '@shared/ipc'
 import { readLanguages } from '@shared/transcription'
-import {
-  DEFAULT_GRANTS,
-  WITHHELD_GRANTS,
-  isGrant,
-  parseGrants,
-  type Grant,
-  type Grants,
-} from '@shared/grants'
+import { DEFAULT_GRANTS, WITHHELD_GRANTS, parseGrants, type Grants } from '@shared/grants'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { writeJsonAtomically } from './json-file'
 
@@ -217,30 +210,19 @@ export function readGrantsState(userData: string): {
   }
 }
 
-export function readGrants(userData: string): Grants {
-  return readGrantsState(userData).grants
-}
-
 /**
- * Allow one, or take it away. One at a time, like every other control here.
+ * The one global setting, as it was before permissions became per character.
  *
- * The WHOLE set is written back rather than the single key, so a file holding a
- * misspelt or half-written `grants` object is replaced by one that says exactly
- * what is in force.
- *
- * REFUSED outright when the file could not be read. `readGrants` answers "all
- * withheld" for one of those, and writing that back would put four refusals
- * nobody made on disk — permanently, over a failure that may have been a
- * moment's. The caller reports it and the file is left for somebody to look at,
- * which is `remember_this`'s rule for an unreadable note arriving here.
+ * Kept only so `migrateGrants` can carry it forward. Null when nobody ever
+ * chose, so an install that never touched a grant seeds nothing and everybody
+ * starts at `DEFAULT_GRANTS` — which is what they already had.
  */
-export function writeGrant(userData: string, grant: Grant, allowed: boolean): void {
-  if (!isGrant(grant)) throw new Error(`not a grant: ${JSON.stringify(grant)}`)
+export function legacyGrants(userData: string): Grants | null {
   const held = readGrantsState(userData)
-  if (!held.readable) {
-    throw new Error('refusing to rewrite permissions over a preferences file that cannot be read')
-  }
-  writeMerged(userData, { grants: { ...held.grants, [grant]: allowed } })
+  // Unreadable seeds nothing. Seeding `WITHHELD_GRANTS` from a file this
+  // process merely could not open would revoke everybody's permissions on the
+  // strength of a transient read failure, and there is no way back from it.
+  return held.readable ? held.grants : null
 }
 
 /**

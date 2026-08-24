@@ -17,6 +17,7 @@ import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { claimedId } from './persona-files'
 import { clearTombstone, readTombstones, writeTombstone } from './unfinished'
+import { forgetGrants } from './grants'
 /**
  * Remove a persona file that was just written and must not survive.
  *
@@ -136,6 +137,7 @@ function finishDeletion(
   // write: the tombstone makes her deleted from the moment it lands, so there
   // is no state in which she is loaded again and needs her opt-out back.
   forgetPolicy(userData, id)
+  forgetGrants(userData, id)
   // The WHOLE package. Her face lives in there too, and leaving an orphaned
   // folder behind would be read as a persona that failed to load rather than
   // one that was deleted.
