@@ -27,16 +27,14 @@
 
 import { cpSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
+import { DEFAULT_PERSONA, PERSONA_FORMAT, type Persona } from '@shared/persona'
 import {
   BUILT_IN_ID,
-  DEFAULT_PERSONA,
-  PERSONA_FORMAT,
   deriveId,
   isPersonaId,
   parsePersona,
-  type Persona,
   type PersonaLoadProblem,
-} from '@shared/persona'
+} from '@shared/parse-persona'
 import { writeJsonAtomically } from './json-file'
 import { PACKAGE_FACE } from './avatars'
 import { readBounded } from './read-bounded'

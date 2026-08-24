@@ -25,7 +25,8 @@ import { createTranscripts, type Transcripts } from './transcripts'
 import { hasPolicy, policyRoot, readPolicy, retentionMigrated, writePolicy } from './policy'
 import { DEFAULT_POLICY } from '@shared/policy'
 import { PACKAGE_FACE } from './avatars'
-import { BUILT_IN_ID, DEFAULT_PERSONA, type Persona } from '@shared/persona'
+import { DEFAULT_PERSONA, type Persona } from '@shared/persona'
+import { BUILT_IN_ID } from '@shared/parse-persona'
 import {
   LEGACY_FILE,
   EDITS,

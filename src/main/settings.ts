@@ -26,11 +26,11 @@ import {
   BUBBLE_SIDES,
   PERSONA_LIMITS,
   VOICE_NAMES,
-  isPersonaId,
   type Persona,
   type VoiceName,
   type BubbleSide,
 } from '@shared/persona'
+import { isPersonaId } from '@shared/parse-persona'
 import { HALO_WHEN, isHaloWhen, type HaloWhen } from '@shared/ipc'
 import type {
   GrantUse,

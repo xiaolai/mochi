@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { isPersonaId } from '@shared/persona'
+import { isPersonaId } from '@shared/parse-persona'
 import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
 import { BUBBLE_SIDES, type BubbleSide } from '@shared/persona'
 import { isHaloWhen, type HaloWhen } from '@shared/ipc'

@@ -19,15 +19,13 @@ import {
   DEFAULT_PERSONA,
   PERSONA_FORMAT,
   PERSONA_LIMITS,
-  deriveId,
-  isPersonaId,
   RECOMMENDED_VOICES,
   VOICE_NAMES,
-  parsePersona,
   type Persona,
   BUBBLE_SIDES,
   SIDE_NAMES,
 } from './persona'
+import { deriveId, isPersonaId, parsePersona } from './parse-persona'
 import {
   wearName,
   NAME_TOKEN,

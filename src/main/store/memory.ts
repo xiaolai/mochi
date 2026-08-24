@@ -35,7 +35,8 @@
 import { unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { logBoundedRead, readBounded } from './read-bounded'
-import { PERSONA_LIMITS, isPersonaId } from '@shared/persona'
+import { PERSONA_LIMITS } from '@shared/persona'
+import { isPersonaId } from '@shared/parse-persona'
 import { boundedHead } from '@shared/text'
 import { writeJsonAtomically } from './json-file'
 

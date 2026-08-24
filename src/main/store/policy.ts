@@ -15,7 +15,7 @@
 
 import { unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { isPersonaId } from '@shared/persona'
+import { isPersonaId } from '@shared/parse-persona'
 import { DEFAULT_POLICY, UNREADABLE_POLICY, parsePolicy, type Policy } from '@shared/policy'
 import { writeJsonAtomically } from './json-file'
 import { logBoundedRead, readBounded } from './read-bounded'

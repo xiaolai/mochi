@@ -1,13 +1,8 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import {
-  BUBBLE_SIDES,
-  BUILT_IN_ID,
-  PERSONA_LIMITS,
-  RECOMMENDED_VOICES,
-  VOICE_NAMES,
-} from '@shared/persona'
+import { BUBBLE_SIDES, PERSONA_LIMITS, RECOMMENDED_VOICES, VOICE_NAMES } from '@shared/persona'
+import { BUILT_IN_ID } from '@shared/parse-persona'
 import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
 import { whatToFile } from './heard'

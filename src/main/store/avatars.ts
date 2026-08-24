@@ -27,7 +27,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MOCHI, parseFaceSpec, type FaceSpec } from '@shared/avatar-spec'
-import { isPersonaId } from '@shared/persona'
+import { isPersonaId } from '@shared/parse-persona'
 import { applyTheme, type Theme } from '@shared/theme'
 import { logBoundedRead, readBounded } from './read-bounded'
 
