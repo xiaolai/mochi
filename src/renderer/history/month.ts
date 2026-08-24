@@ -115,3 +115,34 @@ export function weekdayInitials(): readonly string[] {
     new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'narrow' }),
   )
 }
+
+/** How many conversations fall on each local day. */
+export function countByDay(
+  conversations: readonly { readonly startedAt: number }[],
+): ReadonlyMap<number, number> {
+  const found = new Map<number, number>()
+  for (const one of conversations) {
+    const key = dayKey(one.startedAt)
+    found.set(key, (found.get(key) ?? 0) + 1)
+  }
+  return found
+}
+
+/**
+ * Which day to open on: today, or the last one there is anything on.
+ *
+ * Today FIRST, because that is what somebody opening the Archive means. The
+ * fallback matters on every other day: an app used twice a week would otherwise
+ * open on an empty column most of the time, which reads as "nothing was kept"
+ * rather than as "nothing today".
+ */
+export function openingDay(
+  conversations: readonly { readonly startedAt: number }[],
+  now: number,
+): number | null {
+  const today = startOfDay(now)
+  const counts = countByDay(conversations)
+  if (counts.has(today)) return today
+  const days = [...counts.keys()].sort((a, b) => b - a)
+  return days[0] ?? null
+}

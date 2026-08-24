@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
@@ -121,12 +122,37 @@ describe.each(DOCUMENTS)('$name', ({ file, ids }) => {
   })
 })
 
+/** Every non-test `.ts` under a window's directory, at any depth. */
+function sourcesUnder(relative: string): string[] {
+  const root = fileURLToPath(new URL(relative, import.meta.url))
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory()
+        ? walk(join(dir, entry.name))
+        : entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')
+          ? [join(dir, entry.name)]
+          : [],
+    )
+  return walk(root)
+}
+
 describe('the renderers agree with the documents about what is required', () => {
   it.each(DOCUMENTS)('$name asks for nothing the document does not have', ({ file, ids }) => {
     // The other direction, and the one that catches a renderer growing a new
     // requirement without the markup: every `#id` the entry module looks up has
     // to be one this document actually carries.
-    const module = documentAt(file.replace('/index.html', '/main.ts'))
+    /*
+      The whole window, not just its entry file.
+
+      `history/` keeps its element handles in `elements.ts` now, so scanning
+      `main.ts` alone found no `need(` at all and this assertion passed on an
+      empty list -- which is the failure mode a `toBeGreaterThan(0)` exists to
+      catch. Naming one file is how a split makes this test stop testing
+      anything while staying green.
+    */
+    const module = sourcesUnder(file.replace('/index.html', '/'))
+      .map((path) => readFileSync(path, 'utf8'))
+      .join('\n')
     // Both spellings: the direct `querySelector('#x')` the companion uses, and
     // the `need('x')` helper the two bigger windows use to fail loud.
     const asked = [

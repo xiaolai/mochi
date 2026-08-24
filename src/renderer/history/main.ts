@@ -12,9 +12,9 @@ import { applyAccent } from '../design/apply-accent'
 import { PANES } from '../settings/panes'
 import { type PaneHandlers } from '../settings/pane'
 import { MochiAvatar } from '../companion/rig/mochi'
-import { byDay, clockLabel, dayLabel, highlight, interruptions, lengthLabel } from './format'
+import { byDay, clockLabel, dayLabel, interruptions, lengthLabel } from './format'
 import { drawCentred } from './centre'
-import { CUT, fact, RAN_FOR, TURNS } from './glyph'
+import { CUT, fact } from './glyph'
 import {
   dayHeadingLabel,
   dayKey,
@@ -30,6 +30,44 @@ import { faceTile } from './sheet/face-tile'
 import { type ShelfHandlers } from './sheet/row'
 import { installLogStamp } from '@shared/log'
 import { SAYS } from './main-says'
+import {
+  calEl,
+  castEl,
+  charactersCountEl,
+  charactersEl,
+  contextEl,
+  countEl,
+  dropHersEl,
+  dropSomeEl,
+  exportEl,
+  listEl,
+  machineEl,
+  markEl,
+  micEl,
+  micLabelEl,
+  navEl,
+  need,
+  paneEl,
+  pickEl,
+  pickOffEl,
+  queryEl,
+  shellTabsEl,
+  stateEl,
+  stateHowEl,
+  sureEl,
+  sureNoEl,
+  sureWhatEl,
+  sureWhyEl,
+  sureYesEl,
+  talkEl,
+  toolsEl,
+  troublesEl,
+  troublesLabelEl,
+  wakeEl,
+} from './elements'
+import { say } from './status'
+import { empty, facts, iconButton, marked } from './bits'
+import { countByDay, openingDay } from './month'
 
 /*
   A wall clock on every line this window prints, installed before it prints one.
@@ -83,50 +121,6 @@ declare global {
  * here is either a person's words or hers, which is exactly the input a
  * transcript viewer must not evaluate.
  */
-
-function need<T extends Element>(id: string, kind: new () => T): T {
-  const found = document.querySelector(`#${id}`)
-  // Fail loud. Rendering into nothing is indistinguishable from a slow start,
-  // and `documents.test.ts` is what stops this being discovered at runtime.
-  if (!(found instanceof kind)) throw new Error(`shelf: the document has no usable #${id}`)
-  return found
-}
-
-const markEl = need('mark', HTMLCanvasElement)
-const stateEl = need('state', HTMLElement)
-const stateHowEl = need('state-how', HTMLElement)
-const micEl = need('mic', HTMLElement)
-const micLabelEl = need('mic-label', HTMLElement)
-const countEl = need('count', HTMLElement)
-const charactersEl = need('characters', HTMLElement)
-const charactersCountEl = need('characters-count', HTMLElement)
-const castEl = need('cast-actions', HTMLElement)
-const paneEl = need('pane', HTMLElement)
-const wakeEl = need('panel-wake', HTMLElement)
-const talkEl = need('talk', HTMLElement)
-const shellTabsEl = need('shell-tabs', HTMLElement)
-const navEl = need('nav-groups', HTMLElement)
-const toolsEl = need('machine-tools', HTMLElement)
-const contextEl = need('topbar-context', HTMLElement)
-const machineEl = need('machine-pane', HTMLElement)
-const queryEl = need('q', HTMLInputElement)
-const listEl = need('list', HTMLElement)
-const calEl = need('calendar', HTMLElement)
-const troublesEl = need('troubles', HTMLButtonElement)
-const troublesLabelEl = need('troubles-label', HTMLElement)
-const exportEl = need('export', HTMLButtonElement)
-const pickEl = need('pick', HTMLButtonElement)
-const pickOffEl = need('pick-off', HTMLButtonElement)
-const dropSomeEl = need('drop-some', HTMLButtonElement)
-const dropHersEl = need('drop-hers', HTMLButtonElement)
-const sureEl = need('sure', HTMLDialogElement)
-const sureWhatEl = need('sure-what', HTMLElement)
-const sureWhyEl = need('sure-why', HTMLElement)
-const sureNoEl = need('sure-no', HTMLButtonElement)
-const sureYesEl = need('sure-yes', HTMLButtonElement)
-const saidEl = need('said', HTMLElement)
-const saidWhatEl = need('said-what', HTMLElement)
-const saidShutEl = need('said-shut', HTMLButtonElement)
 
 /** Which conversation is open, so re-rendering the list does not lose it. */
 let open: string | null = null
@@ -305,83 +299,6 @@ let showingCharacter = true
  * timers; it does nothing about a query already in flight.
  */
 let generation = 0
-
-/**
- * Say what happened. Silence after a write reads as the write not landing.
- *
- * Its own strip on its own opaque surface, rather than a button's label — the
- * handoff's structural rule, and it stops a character rename reporting itself
- * inside a control marked "Export…".
- *
- * ## It goes away
- *
- * It used to stay until the next write replaced it, so the last thing you did
- * sat over the window for the rest of the session — and a message about a
- * character you have since switched away from is worse than no message.
- *
- * Ten seconds, and the same ten for a failure. A failure that vanished with
- * nothing behind it would be a different argument, but everything reported here
- * as bad is ALSO in the problems strip, which does not time out.
- *
- * ## `hidden`, not empty
- *
- * The strip used to hide by way of `#said:empty`, which stopped being true the
- * moment it held a dismiss button. `[hidden]` is a state the renderer sets, and
- * `tokens.css` makes it beat any `display` an author writes.
- *
- * Shown BEFORE the text is set, deliberately: a live region that is not rendered
- * when its content changes is not announced, so setting the words first and
- * revealing after is a message a screen reader never hears.
- */
-const SAID_FOR_MS = 10_000
-let saidTimer: number | null = null
-
-function hush(): void {
-  if (saidTimer !== null) clearTimeout(saidTimer)
-  saidTimer = null
-  saidEl.hidden = true
-  saidWhatEl.textContent = ''
-  saidWhatEl.title = ''
-}
-
-function say(text: string, bad = false): void {
-  if (saidTimer !== null) clearTimeout(saidTimer)
-  saidEl.classList.toggle('bad', bad)
-  saidEl.hidden = false
-  saidWhatEl.textContent = text
-  // The drawer is one line tall, so a long message is ellipsed — and a message
-  // that is only half available is a message somebody has to guess at. The
-  // tooltip carries the rest; the live region still announces the whole thing,
-  // because that reads `textContent` rather than what is painted.
-  saidWhatEl.title = text
-  saidTimer = window.setTimeout(hush, SAID_FOR_MS)
-}
-
-saidShutEl.addEventListener('click', hush)
-
-function empty(parent: HTMLElement, text: string): void {
-  const said = document.createElement('p')
-  said.className = 'empty'
-  said.textContent = text
-  parent.replaceChildren(said)
-}
-
-/** One line, with the query marked inside it. See `highlight` for why not HTML. */
-function marked(text: string, term: string): DocumentFragment {
-  const fragment = document.createDocumentFragment()
-  for (const segment of highlight(text, term)) {
-    if (!segment.hit) {
-      fragment.append(document.createTextNode(segment.text))
-      continue
-    }
-    const hit = document.createElement('mark')
-    hit.textContent = segment.text
-    fragment.append(hit)
-  }
-  return fragment
-}
-
-/* ---- her state, across the top ----------------------------------------- */
 
 /**
  * The strip the handoff puts first, and the reason it is first.
@@ -825,59 +742,6 @@ function row(
   return button
 }
 
-/**
- * Take one turn's words, on hover.
- *
- * The bubbles are selectable — `user-select: text` — but selecting one by hand
- * means dragging across a rounded shape and stopping before the next, and the
- * thing people want from a transcript is almost always one whole turn.
- *
- * The RAW text, not what is on screen. The rendered bubble is chopped into
- * `<mark>` elements when a search term is live, so reading it back out of the
- * DOM would copy the words with the highlighting's seams in them.
- *
- * Reachable by keyboard as well as by pointer: it is revealed on `:focus-within`
- * as well as on `:hover`, so tabbing through a transcript surfaces it rather
- * than moving focus to a control nobody can see.
- */
-/**
- * A small square button whose whole content is an SVG path or two.
- *
- * `copyButton` and `arrow` each rebuilt the namespace, the viewBox, the sizing,
- * the `aria-hidden` on the graphic and the accessible name on the button — the
- * same eight lines twice, and the accessibility half is exactly the part that
- * is quietly dropped when somebody adds a third by copying one of them.
- *
- * The LABEL is on the button and the graphic is hidden, always. A path with no
- * name announces as "button", and a name on both announces twice.
- */
-function iconButton(
-  className: string,
-  label: string,
-  paths: readonly string[],
-  px: number,
-): HTMLButtonElement {
-  const NS = 'http://www.w3.org/2000/svg'
-  const button = document.createElement('button')
-  button.className = className
-  button.type = 'button'
-  button.title = label
-  button.setAttribute('aria-label', label)
-
-  const svg = document.createElementNS(NS, 'svg')
-  svg.setAttribute('viewBox', '0 0 16 16')
-  svg.setAttribute('width', String(px))
-  svg.setAttribute('height', String(px))
-  svg.setAttribute('aria-hidden', 'true')
-  for (const d of paths) {
-    const path = document.createElementNS(NS, 'path')
-    path.setAttribute('d', d)
-    svg.append(path)
-  }
-  button.append(svg)
-  return button
-}
-
 function copyButton(text: string): HTMLButtonElement {
   const button = iconButton(
     'copy',
@@ -1067,32 +931,6 @@ function dayHeading(day: string): HTMLElement {
 let picked: number | null = null
 let onMonth: { readonly year: number; readonly month: number } | null = null
 
-/** How many conversations fall on each local day. */
-function countByDay(): ReadonlyMap<number, number> {
-  const found = new Map<number, number>()
-  for (const one of conversations) {
-    const key = dayKey(one.startedAt)
-    found.set(key, (found.get(key) ?? 0) + 1)
-  }
-  return found
-}
-
-/**
- * Which day to open on: today, or the last one there is anything on.
- *
- * Today FIRST, because that is what somebody opening the Archive means. The
- * fallback matters on every other day: an app used twice a week would otherwise
- * open on an empty column most of the time, which reads as "nothing was kept"
- * rather than as "nothing today".
- */
-function openingDay(now: number): number | null {
-  const today = startOfDay(now)
-  const counts = countByDay()
-  if (counts.has(today)) return today
-  const days = [...counts.keys()].sort((a, b) => b - a)
-  return days[0] ?? null
-}
-
 function arrow(direction: 'back' | 'on', label: string, go: () => void): HTMLButtonElement {
   const button = iconButton(
     'step',
@@ -1118,7 +956,7 @@ function arrow(direction: 'back' | 'on', label: string, go: () => void): HTMLBut
 function renderCalendar(now: number): void {
   if (onMonth === null) return
   const { year, month } = onMonth
-  const counts = countByDay()
+  const counts = countByDay(conversations)
   const today = startOfDay(now)
 
   const head = document.createElement('div')
@@ -1197,7 +1035,7 @@ function renderList(now: number): void {
     empty(listEl, forPronoun(SAYS.noTalks, saying()))
     return
   }
-  picked ??= openingDay(now)
+  picked ??= openingDay(conversations, now)
   const opened = new Date(picked ?? now)
   onMonth ??= { year: opened.getFullYear(), month: opened.getMonth() }
   renderCalendar(now)
@@ -1240,42 +1078,6 @@ function renderList(now: number): void {
       ),
     ),
   )
-}
-
-/**
- * How many turns, and how long — as glyphs, in the two places that draw them.
- *
- * ## Why not the words
- *
- * `14 turns · 7 min` on every row of a day's list is the same two nouns down
- * the whole column, and the numbers are what somebody is actually comparing.
- * The glyph carries the noun once, in a shape, and the sentence survives as the
- * accessible name — see `glyph.ts`, which states the rule the microphone in the
- * top strip already follows.
- *
- * ## The mark is per ROW, not per format
- *
- * The first version tested whether the label started with a digit, which left
- * `under a minute` — the one phrase `lengthLabel` used to return — bare, on the
- * grounds that a glyph belongs beside a number. A photograph of the column
- * settled it the other way: one row without the mark its six neighbours carry
- * reads as a row missing something, and the clock is not a unit — it is the
- * word "for". That phrase is gone and every answer is now `7 min` or `1 h 20
- * min`, so the case cannot recur; the rule it settled is what is kept.
- *
- * ## One function, called from both places
- *
- * These two facts were built as strings in the list and again in the transcript
- * header, so a change to one of them was a change to one of them.
- */
-function facts(turns: number, length: string | null): readonly Node[] {
-  const said: Node[] = [
-    fact(TURNS, String(turns), `${String(turns)} ${turns === 1 ? 'turn' : 'turns'}`),
-  ]
-  // Null while she is still awake in it — see `lengthLabel`, which refuses to
-  // answer at all rather than reporting a backwards span as a real duration.
-  if (length !== null) said.push(fact(RAN_FOR, length, `ran for ${length}`))
-  return said
 }
 
 interface HitGroup {

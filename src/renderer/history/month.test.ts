@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  countByDay,
   dayHeadingLabel,
   dayKey,
   monthGrid,
   monthLabel,
+  openingDay,
   startOfDay,
   stepMonth,
   weekdayInitials,
@@ -108,5 +110,53 @@ describe('what the labels say', () => {
     expect(initials[6]).toBe(
       new Date(2024, 0, 7).toLocaleDateString(undefined, { weekday: 'narrow' }),
     )
+  })
+})
+
+/**
+ * Which days had conversations, and which one the window opens on.
+ *
+ * ## Why these had no test until now
+ *
+ * They lived in `history/main.ts`, which resolves the document at load and so
+ * cannot be imported. `openingDay` decides what somebody sees when the window
+ * opens; getting it wrong shows an empty day to a person with a full archive.
+ */
+describe('counting the days conversations fall on', () => {
+  const at = (iso: string): { readonly startedAt: number } => ({ startedAt: Date.parse(iso) })
+
+  it('groups by local day, not by timestamp', () => {
+    const counts = countByDay([at('2026-03-04T01:00:00'), at('2026-03-04T23:30:00')])
+    expect([...counts.values()]).toEqual([2])
+  })
+
+  it('keeps separate days separate', () => {
+    const counts = countByDay([at('2026-03-04T12:00:00'), at('2026-03-05T12:00:00')])
+    expect(counts.size).toBe(2)
+  })
+
+  it('has nothing to say about an empty archive', () => {
+    expect(countByDay([]).size).toBe(0)
+  })
+})
+
+describe('choosing the day the window opens on', () => {
+  const at = (iso: string): { readonly startedAt: number } => ({ startedAt: Date.parse(iso) })
+  const now = Date.parse('2026-03-10T09:00:00')
+
+  it('opens on today when today has conversations', () => {
+    const day = openingDay([at('2026-03-10T08:00:00'), at('2026-03-01T08:00:00')], now)
+    expect(day).toBe(startOfDay(now))
+  })
+
+  it('falls back to the most recent day, not the oldest', () => {
+    // The archive is read newest-first everywhere else; opening on the oldest
+    // day would show somebody their first conversation and nothing since.
+    const day = openingDay([at('2026-03-01T08:00:00'), at('2026-03-08T08:00:00')], now)
+    expect(day).toBe(startOfDay(Date.parse('2026-03-08T08:00:00')))
+  })
+
+  it('answers null when there is nothing to open', () => {
+    expect(openingDay([], now)).toBeNull()
   })
 })
