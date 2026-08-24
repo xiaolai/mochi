@@ -1,35 +1,23 @@
 import { MochiAvatar } from './rig/mochi'
-import { builtInReach } from './rig/motion'
 import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
 import type { Emotion } from '@shared/avatar'
 import type { HaloWhen } from '@shared/ipc'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createRepose, type Ambient } from './repose'
-import { BUBBLE_REACH, createBubble, WIDEST_BUBBLE } from './bubble'
+import { createBubble } from './bubble'
 import { resolvePalette, whenSchemeChanges, type Palette } from '../design/resolve'
-import {
-  fullPad,
-  STATUS_ROOM,
-  STATUS_UNDER,
-  WINDOW_H,
-  WINDOW_W,
-  type Pad,
-} from '@shared/avatar-layout'
+import { fullPad, type Pad } from '@shared/avatar-layout'
 import { createUtterance } from './utterance'
 import { createAttending, levelOf, type Attention } from './attending'
 import { createLoopback } from './loopback'
 import { createBeat, type Beat } from './beat'
-import { chipRect, drawChip, hits as chipHits, visible as chipVisible } from './chip'
-import { drawHalo, haloFor, haloRect, haloReach } from './halo'
-import {
-  placeBubble,
-  roomFor,
-  sidesThatFit,
-  type Room,
-  type Side,
-  type SidePreference,
-} from './place'
+import { drawChip, hits as chipHits, visible as chipVisible } from './chip'
+import { drawHalo, haloFor } from './halo'
+import { type SidePreference } from './place'
 import { layoutFor, FEET_FROM_TOP } from '@shared/avatar-layout'
+import { bodyOf, boxFor, padFor } from './her-geometry'
+import { roomOnScreen, sidesFor } from './screen-room'
+import { padChange } from './pad-change'
 
 /**
  * Her, on screen.
@@ -207,20 +195,8 @@ export interface Face {
   dispose(): void
 }
 
-/** How close to the edge of the display a bubble may sit. */
-const SCREEN_INSET = 8
-
 /** Long enough to read as a fade, short enough not to feel like a delay. */
 const CHIP_FADE_S = 0.12
-
-/**
- * How long a smaller window has to stay the right answer before it is taken.
- *
- * Past the 0.12s bubble fade and past the gap between two sentences of the same
- * reply, so an ordinary conversation resizes her window twice — once up when she
- * starts speaking, once down when she has finished — rather than on every pause.
- */
-const SHRINK_SETTLE_MS = 400
 
 /**
  * The perk on waking: how long she looks pleased to see you.
@@ -286,165 +262,14 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   let worn: FaceSpec = MOCHI
   const avatar = new MochiAvatar(ctx, { size: worn.size, face: worn })
 
-  /**
-   * Where she actually is on the canvas, from the module that decides it.
-   *
-   * She is horizontally centred and rests one clearance above the bottom, so
-   * her corner follows from the layout rather than from a guess. Recomputed on
-   * resize rather than cached at construction, because `fit()` changes the
-   * canvas and a stale corner would leave the chip behind.
-   */
-  /**
-   * Her whole body in the canvas, which is what the bubble is placed AROUND.
-   *
-   * This used to be `herHead` — her centre and the top of her head — which is
-   * everything a bubble above her needs and not enough for one anywhere else.
-   */
-  /**
-   * Her BODY out of a layout, named because the layout also has `width` and
-   * `height` and they are the WINDOW's.
-   *
-   * `fullPad(layout)` typechecks — the shapes are structurally identical — and
-   * silently passes 980x560 as her body, which yields a negative `top` that
-   * main's validator then refuses, so the window never resizes and nothing says
-   * why. Two pairs of numbers with the same names and different meanings is the
-   * kind of thing a type cannot catch, so it gets a function instead.
-   */
-  function bodyOf(layout: { bodyWidth: number; bodyHeight: number }): {
-    width: number
-    height: number
-  } {
-    return { width: layout.bodyWidth, height: layout.bodyHeight }
-  }
-
+  /** Her rectangle inside her own window. See `boxFor`. */
   function herBox(): { left: number; top: number; width: number; height: number } {
-    const layout = layoutFor(worn, worn.size)
-    /*
-      Where the PAD puts her, not where a fixed window used to.
-
-      This was `centred, feetY(canvasHeight, ...)`, which is the right answer for
-      a window sized once for the worst case and the wrong one for a window that
-      fits what is drawn: her offset inside her own window is exactly the room
-      reserved on her left and above her, because that is what the pad means.
-
-      `feet` still has the last word when the drag pushes her against the top of
-      the display — that is `standingRoom`, and it is about the screen rather
-      than about this window, so it survives.
-    */
-    /*
-      `feet` has the last word only while the window is the BIG one.
-
-      `standingRoom` exists because macOS will not put a window's top edge above
-      the work area, so a 560-tall window could not carry her close to the menu
-      bar and she had to stand higher inside it instead. A window that fits her
-      is ~140 tall and can be placed anywhere she needs to be, so the stance has
-      nothing to correct for — and honouring it here would jump her by hundreds
-      of pixels inside a window with no room to hold her.
-    */
-    const top = roomy ? Math.max(0, feet - layout.bodyHeight) : pad.top
-    return {
-      left: pad.left,
-      top,
-      width: layout.bodyWidth,
-      height: layout.bodyHeight,
-    }
+    return boxFor(worn, pad, feet, roomy)
   }
 
-  /**
-   * The room everything drawn AROUND her needs, on each side of her body.
-   *
-   * Measured from the rectangles that will actually be drawn rather than from a
-   * table of constants, which is the difference between "the window fits what is
-   * drawn" and "the window fits what somebody once wrote down". While a bubble
-   * is up it is `fullPad`, because the bubble's rectangle is computed inside
-   * `bubble.ts` at draw time and reaching for it here would put that geometry in
-   * two places.
-   */
+  /** The room she needs right now. See `padFor`. */
   function padNeeded(): Pad {
-    const layout = layoutFor(worn, worn.size)
-    const body = bodyOf(layout)
-    // While it FADES, not merely while it has text: shrinking on the frame the
-    // text is cleared would clip the last 0.35s of the bubble going away.
-    if (showingWords && bubble.opacity() > 0) return fullPad(body)
-
-    // Her box as it would be with no padding, so the rects below place
-    // themselves relative to her rather than to whatever window she is in now.
-    const her = { left: 0, top: 0, width: body.width, height: body.height }
-    /*
-      The chip, and the halo's bounding box.
-
-      The halo is narrower than she is, so it never widens her window — but it
-      sits ABOVE her head, and the room for that is reserved here rather than
-      assumed to fit inside what the chip already needs. It is close: the chip
-      wants 26px above her and the halo wants about 27.
-    */
-    const ring = haloRect(her)
-    /*
-      Room for her to MOVE, reserved whether or not she is moving.
-
-      `lift` and `shift` translate her inside this window, and a window fitted
-      to her standing still clips her the moment she uses either — she walks
-      into the edge of a transparent rectangle and is cut in half by it.
-
-      Reserved as a CONSTANT, from the worst case across every built-in clip,
-      rather than tracked per motion. Growing the window when a clip starts and
-      shrinking it when it ends means resizing a window during an animation,
-      sixty times a second, against a shrink that is deliberately delayed —
-      three moving parts to save about forty transparent pixels. The pixels are
-      free; the state machine is not.
-
-      `up` only for the vertical half. She hops rather than sinking, and
-      reserving room below would push her down inside her own window to hold a
-      clearance nothing ever uses.
-    */
-    const reach = builtInReach()
-    const travel = {
-      x: -reach.x * body.width,
-      y: -reach.up * body.height,
-      w: body.width * (1 + reach.x * 2),
-      h: body.height * (1 + reach.up),
-    }
-    const around = [
-      chipRect(her),
-      {
-        x: ring.x - ring.rx,
-        y: ring.y - haloReach(),
-        w: ring.rx * 2,
-        h: haloReach() * 2,
-      },
-      travel,
-    ]
-    const pad = {
-      left: Math.max(0, ...around.map((one) => -one.x)),
-      top: Math.max(0, ...around.map((one) => -one.y)),
-      right: Math.max(0, ...around.map((one) => one.x + one.w - her.width)),
-      bottom: Math.max(0, ...around.map((one) => one.y + one.h - her.height)),
-    }
-    // The status line is DOM and main places it; one constant, read by both, so
-    // it cannot be positioned outside the window that was sized for it.
-    /*
-      SYMMETRIC horizontally, and that is not tidiness — it is what makes the pad
-      true.
-
-      `MochiAvatar` centres her in the canvas; it is not told a left offset. So
-      `herBox()` saying she is at `pad.left` is only correct when the padding is
-      equal on both sides. It was not — the chip needs 26px on her right and
-      nothing on her left — and she was painted 12px right of where every other
-      thing in this file believed she was. The chip, the bubble's placement and
-      the click-through rectangle were all measured against a box she was not in.
-      Measured: painted left 12.0, `herBox()` left 0.
-
-      The cost is 26px of transparent pixels on her left. The alternative is
-      teaching the rig a horizontal offset, which is a second place her position
-      is decided.
-    */
-    const side = Math.max(pad.left, pad.right)
-    return {
-      ...pad,
-      left: side,
-      right: side,
-      bottom: Math.max(pad.bottom, body.height * STATUS_UNDER + STATUS_ROOM),
-    }
+    return padFor(worn, showingWords, bubble.opacity())
   }
 
   /**
@@ -458,39 +283,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    */
   function fitToContent(): void {
     const wanted = padNeeded()
-    const same =
-      pad.left === wanted.left &&
-      pad.top === wanted.top &&
-      pad.right === wanted.right &&
-      pad.bottom === wanted.bottom
-    if (same) {
-      shrinkWantedSince = null
-      return
-    }
-
-    /*
-      Grow at once, shrink only after it has stayed wanted.
-
-      A bubble appearing and going is two resizes, and back-to-back utterances
-      would be four in a couple of seconds — a window changing size that often is
-      the flicker this whole arrangement was supposed to avoid. Growing late
-      clips what is being drawn, so growth is immediate and only shrinking waits.
-
-      The timer is a wall clock rather than a frame count because the render loop
-      runs at whatever rate the compositor gives it, and "a quarter of a second"
-      should not mean something different when she is occluded.
-    */
-    const grows =
-      wanted.left > pad.left ||
-      wanted.top > pad.top ||
-      wanted.right > pad.right ||
-      wanted.bottom > pad.bottom
-    if (!grows) {
-      const now = performance.now()
-      shrinkWantedSince ??= now
-      if (now - shrinkWantedSince < SHRINK_SETTLE_MS) return
-    }
-    shrinkWantedSince = null
+    const settled = padChange(pad, wanted, shrinkWantedSince, performance.now())
+    shrinkWantedSince = settled.shrinkWantedSince
+    if (!settled.apply) return
     const was = herBox()
     pad = wanted
     /*
@@ -553,117 +348,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       was: { left: was.left, top: was.top },
     })
   }
-  /**
-   * Where the bubble may go, in canvas pixels — read from the DOM, not from main.
-   *
-   * `screenX`/`screenY` and `screen.avail*` are standard and available here, so
-   * the renderer already knows where its window sits and where the usable
-   * screen is. Asking main for it would be a message, a cache and a staleness
-   * question, for an answer the page can read directly on the frame it needs it.
-   *
-   * Read every frame rather than on a move event: she is dragged by main
-   * repositioning the window, so there is no event here to hang it on, and the
-   * read is two properties.
-   */
-  /**
-   * Which sides the menu may offer, asked EVERY frame and about the widest
-   * bubble that can exist.
-   *
-   * ## What it replaces, and the two things that were wrong with it
-   *
-   * This was `bubble.offered()`, set inside the drawing. `draw` returns early
-   * when there is nothing to say — `if (text === '') return false` — without
-   * touching it, so the answer froze at her last utterance and stopped tracking
-   * her the moment she went quiet. Dragged across the display, the menu went on
-   * describing the corner she had spoken from.
-   *
-   * And it measured the box she HAPPENED to say, so the same position offered
-   * different sides for a short reply and a long one.
-   *
-   * ## Why the geometry is the big window's, not the one she is in
-   *
-   * With nothing on screen her window is about 146px wide, and no bubble fits
-   * beside her in that at any position — which is exactly why the question used
-   * to be asked only while a bubble was already up and the window was already
-   * big. The menu is about where her NEXT words go, so it asks against the
-   * window she will have when she has some: `fullPad`, which is what
-   * `padNeeded` returns the instant there is text.
-   *
-   * `screenX` is sound here, and that is worth stating because it was not
-   * always: an unshown window reports 0, which is why she used to be placed at
-   * the pad's own offsets from an origin nobody had seen. She is only shown once
-   * she has been fitted now, so by the time this runs the window is on screen
-   * and reporting its real position.
-   */
-  function sidesForTheMenu(): {
-    available: readonly Side[]
-    using: Side
-    /** What it decided from, so a surprising answer can be checked at a glance. */
-    from: { her: string; box: string; room: string }
-  } | null {
-    const box = herBox()
-    const full = fullPad({ width: box.width, height: box.height })
-    // Where the big window would sit to leave her exactly where she is.
-    const origin = {
-      x: window.screenX + box.left - full.left,
-      y: window.screenY + box.top - full.top,
-    }
-    const room = roomFor(
-      { width: WINDOW_W, height: WINDOW_H },
-      origin,
-      availableScreen(),
-      SCREEN_INSET,
-    )
-    const her = { left: full.left, top: full.top, width: box.width, height: box.height }
-    const available = sidesThatFit(her, WIDEST_BUBBLE, room, BUBBLE_REACH)
-    if (available.length === 0) return null
-    /*
-      What it WOULD use, from the same call that listed them.
-
-      The menu marks what was asked for and the bubble goes where it fits, and
-      those differ whenever a chosen side stopped fitting. `placeBubble` is the
-      one function that decides, so asking it here rather than reading back what
-      the last drawing chose keeps the two from ever disagreeing.
-    */
-    return {
-      available,
-      using: placeBubble(her, WIDEST_BUBBLE, room, BUBBLE_REACH, bubbleSide).side,
-      from: {
-        her: `${String(her.left)},${String(her.top)} ${String(her.width)}x${String(her.height)}`,
-        box: `${String(WIDEST_BUBBLE.w)}x${String(WIDEST_BUBBLE.h)}`,
-        room: `${String(room.left)},${String(room.top)} to ${String(room.right)},${String(room.bottom)}`,
-      },
-    }
-  }
-
-  /**
-   * The usable screen, read once for the two callers that need it.
-   *
-   * `roomOnScreen` places the bubble that is being drawn; `sidesForTheMenu`
-   * asks what could be drawn. Two copies of this read would be two answers to
-   * where the screen ends, and the menu would be entitled to disagree with the
-   * drawing about it.
-   */
-  function availableScreen(): { x: number; y: number; width: number; height: number } {
-    return {
-      // `availLeft`/`availTop` are real and implemented, and are missing from
-      // the DOM lib's `Screen` — they are in the CSSOM View spec's appendix
-      // rather than its interface. Read through a narrow cast rather than
-      // widening `Screen` globally, which would let a typo elsewhere compile.
-      x: (window.screen as unknown as { availLeft?: number }).availLeft ?? 0,
-      y: (window.screen as unknown as { availTop?: number }).availTop ?? 0,
-      width: window.screen.availWidth,
-      height: window.screen.availHeight,
-    }
-  }
-
-  function roomOnScreen(): Room {
-    return roomFor(
-      { width: canvas.clientWidth, height: canvas.clientHeight },
-      { x: window.screenX, y: window.screenY },
-      availableScreen(),
-      SCREEN_INSET,
-    )
+  /** The sides a bubble would fit on, for the tray menu. See `sidesFor`. */
+  function sidesForTheMenu(): ReturnType<typeof sidesFor> {
+    return sidesFor(herBox(), bubbleSide)
   }
 
   /**
@@ -1068,7 +755,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       return
     }
     if (chip <= 0) return
-    if (!chipHits(event.clientX, event.clientY, herBox(), roomOnScreen())) return
+    if (!chipHits(event.clientX, event.clientY, herBox(), roomOnScreen(canvas))) return
     window.mochi.history()
   })
 
@@ -1213,7 +900,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         utterance.text(),
         utterance.at(),
         herBox(),
-        roomOnScreen(),
+        roomOnScreen(canvas),
         bubbleSide,
         overBubble,
         troubles,
@@ -1278,7 +965,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
      */
     const inBubble = bubble.controls() !== null
     const wanted =
-      shoulderChip && !inBubble && chipVisible(at, onHer, herBox(), roomOnScreen()) ? 1 : 0
+      shoulderChip && !inBubble && chipVisible(at, onHer, herBox(), roomOnScreen(canvas)) ? 1 : 0
     chip =
       wanted > chip
         ? Math.min(1, chip + seconds / CHIP_FADE_S)
@@ -1332,7 +1019,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       )
     }
 
-    drawChip(ctx, herBox(), palette, chip, troubles, roomOnScreen())
+    drawChip(ctx, herBox(), palette, chip, troubles, roomOnScreen(canvas))
 
     // Only when it CHANGES. Asking main to toggle the window flag sixty times a
     // second would be sixty IPC messages a second for an answer that changes
@@ -1342,7 +1029,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // one deliberate exception to "only painted pixels take the mouse" — a
     // control nobody can click is not a control. It is exactly the size of the
     // control and disappears with it.
-    const onChip = chip > 0 && at !== null && chipHits(at.x, at.y, herBox(), roomOnScreen())
+    const onChip = chip > 0 && at !== null && chipHits(at.x, at.y, herBox(), roomOnScreen(canvas))
     // Only the bubble's CONTROLS, never its text. The design's rule is that
     // only painted pixels of HERS take the mouse; two small buttons are the
     // same deliberate exception the chip already makes, and the paragraph
