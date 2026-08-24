@@ -47,6 +47,17 @@ const TOKENS = read('./design/tokens.css')
 // Two, since settings became a tab rather than a window.
 const WINDOWS = ['companion', 'history'] as const
 
+/** Every non-test `.ts` under a directory, at any depth. */
+function sourcesUnder(dir: string): string[] {
+  const found: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = `${dir}${entry.name}`
+    if (entry.isDirectory()) found.push(...sourcesUnder(`${path}/`))
+    else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) found.push(path)
+  }
+  return found
+}
+
 /** Everything between `<style>` and `</style>`. */
 function inlineStyleOf(window: string): string {
   const html = read(`./${window}/index.html`)
@@ -290,13 +301,15 @@ describe('a class the stylesheet styles is a class something creates', () => {
       for (const word of (one[1] ?? '').trim().split(/\s+/)) add(word)
     }
 
-    const paths = readdirSync(dir)
-      .filter((one) => one.endsWith('.ts') && !one.endsWith('.test.ts'))
-      .map((one) => `${dir}${one}`)
-    // `panes.ts` is authored beside the settings pane and rendered INTO this
-    // window, so its classes are created here even though the file is not.
+    const paths = sourcesUnder(dir)
+    // The settings panes are authored beside the settings window and rendered
+    // INTO this one, so their classes are created here even though the files
+    // are not. Walked rather than named: `panes.ts` was one file and is now a
+    // directory of one-pane-per-file, and a list of names would have silently
+    // stopped covering the panes that moved -- which is exactly how ten live
+    // classes came to look dead.
     if (window === 'history') {
-      paths.push(fileURLToPath(new URL('./settings/panes.ts', import.meta.url)))
+      paths.push(...sourcesUnder(fileURLToPath(new URL('./settings/', import.meta.url))))
     }
 
     for (const path of paths) {
