@@ -31,10 +31,9 @@ import type { Capability, CapabilityDeps, CapabilityOutput } from '../../capabil
 import type { Arrival, Ledger } from './ledger'
 
 /** What settles a call that could not be run at all. */
-const COULD_NOT = 'That did not work just now. Say so plainly rather than guessing at a result.'
-
-/** What settles a deferred call whose lookup died after she said she would look. */
-const DID_NOT_FINISH = 'The lookup did not finish. Say so plainly rather than guessing at a result.'
+// Both settle-strings are catalogued now, so they can be read and rewritten
+// rather than only read here. Resolved through `deps.prompt` at the moment they
+// are needed, like every other prompt in a capability's path.
 
 export interface Dispatch {
   /** Every capability in this build, by the name it declared. */
@@ -202,7 +201,9 @@ export function handleCall(
     // refused rather than run.
     quietly(() => warn(`[capability] ${name}: could not read what is allowed:`, error))
     quietly(() => note(name, `could not read what is allowed: ${String(error)}`))
-    settle(name, note, () => ledger.answer(callId, { status: 'unavailable', guidance: COULD_NOT }))
+    settle(name, note, () =>
+      ledger.answer(callId, { status: 'unavailable', guidance: deps.prompt('dispatch.couldNot') }),
+    )
     return
   }
   if (refusal !== null) {
@@ -219,7 +220,9 @@ export function handleCall(
     // is an unreachable branch that hangs the conversation.
     quietly(() => warn(`[capability] ${name} is on the wire with no handler`))
     quietly(() => note(name, 'declared with no handler — this is a bug in the build'))
-    settle(name, note, () => ledger.answer(callId, { status: 'unavailable', guidance: COULD_NOT }))
+    settle(name, note, () =>
+      ledger.answer(callId, { status: 'unavailable', guidance: deps.prompt('dispatch.couldNot') }),
+    )
     return
   }
 
@@ -239,7 +242,10 @@ export function handleCall(
         quietly(() => warn(`[capability] ${name} threw:`, error))
         quietly(() => note(name, String(error)))
         settle(name, note, () =>
-          ledger.answer(callId, { status: 'unavailable', guidance: COULD_NOT }),
+          ledger.answer(callId, {
+            status: 'unavailable',
+            guidance: deps.prompt('dispatch.couldNot'),
+          }),
         )
         return
       }
@@ -277,7 +283,10 @@ export function handleCall(
           quietly(() => note(name, String(error)))
           if (
             settle(name, note, () =>
-              ledger.deliver(callId, { status: 'unavailable', guidance: DID_NOT_FINISH }),
+              ledger.deliver(callId, {
+                status: 'unavailable',
+                guidance: deps.prompt('dispatch.didNotFinish'),
+              }),
             )
           ) {
             // A refusal is an answer too. She said she would look; "it did not

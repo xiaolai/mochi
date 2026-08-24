@@ -307,6 +307,19 @@ export const SETTINGS_CHANNELS = [
    * looking for the fix back to the one place the fix cannot be applied.
    */
   'settings:codex-recheck',
+  /**
+   * Rewrite one catalogued prompt, or reset it to what the app ships.
+   *
+   * Every string this app puts in front of a model is in that catalogue — the
+   * tool descriptions, the guidance she is handed when something fails, the
+   * framing on a workspace lookup, the note rewriter's instruction. All of it
+   * was a literal in the module that used it, readable only in the source.
+   *
+   * `null` resets. It deletes the override rather than writing the default
+   * back, so a prompt reset today keeps improving with the app instead of
+   * freezing at this release's wording — see `store/prompts.ts`.
+   */
+  'settings:prompt',
 ] as const
 
 export type SettingsChannel = (typeof SETTINGS_CHANNELS)[number]
@@ -709,6 +722,27 @@ export interface LookupChange {
  * avatars and the note went to the shelf with the controls that edit them —
  * see `ShelfView` and `plan-shell.md`'s split.
  */
+/** One catalogued prompt, as the pane draws it. See `store/prompts.ts`. */
+export interface SettingsPrompt {
+  readonly key: string
+  readonly title: string
+  readonly purpose: string
+  /** What is sent today — the override when there is one, the default otherwise. */
+  readonly text: string
+  /** What the app ships, so the pane can show the difference and offer a reset. */
+  readonly fallback: string
+  readonly edited: boolean
+  /**
+   * Required phrases this override has dropped.
+   *
+   * Shown, never enforced. `askWorkspace.framing` carries the `sources`
+   * contract `parseFields` checks, and the summariser names the fenced blocks
+   * it is told to distrust — dropping one is very likely a mistake and is
+   * occasionally exactly what somebody meant.
+   */
+  readonly missing: readonly string[]
+}
+
 export interface SettingsView {
   /**
    * The worn face, resolved — so the window can take HER colour.
@@ -736,6 +770,14 @@ export interface SettingsView {
   readonly lookup: SettingsLookup
   readonly screen: SettingsScreen
   readonly hearing: SettingsHearing
+  /**
+   * Every string this app puts in front of a model, and what it says today.
+   *
+   * The whole catalogue rather than the edited ones: a pane that listed only
+   * overrides would answer "what have I changed" when the question somebody
+   * opens it with is "what is she told".
+   */
+  readonly prompts: readonly SettingsPrompt[]
   readonly keys: readonly SettingsKey[]
   readonly about: SettingsAbout
   /** Named for display. Opening one goes through `settings:reveal` by kind. */
@@ -816,6 +858,8 @@ export interface MochiSettingsApi {
   lookup(change: LookupChange): Promise<SettingsWrite>
   screen(change: ScreenChange): Promise<SettingsWrite>
   hearing(change: HearingChange): Promise<SettingsWrite>
+  /** Rewrite one catalogued prompt; `null` resets it. See `settings:prompt`. */
+  prompt(key: string, text: string | null): Promise<SettingsWrite>
   grant(change: GrantChange): Promise<SettingsWrite>
   reveal(what: Revealable): void
   /**

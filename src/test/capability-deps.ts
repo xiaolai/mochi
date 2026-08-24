@@ -14,12 +14,22 @@
 
 import { EMOTIONS } from '@shared/avatar'
 import type { CapabilityDeps } from '../capabilities/kind'
+import { promptsFor } from '@shared/prompts'
 
 /** A fixed instant, so nothing here depends on how fast the suite runs. */
 export const TEST_NOW = 1_755_432_000_000
 
 export function stubDeps(overrides: Partial<CapabilityDeps> = {}): CapabilityDeps {
   return {
+    /*
+      The REAL catalogue text, not a stub string.
+
+      A test asserting on what she is handed should see what ships, so a
+      capability's own description and guidance stay under test. `promptsFor([])`
+      is the fixed half; a case that cares about a tool's own entry overrides
+      this.
+    */
+    prompt: (key) => promptsFor([]).find((spec) => spec.key === key)?.text ?? '',
     userData: () => '/nowhere',
     wearing: () => null,
     transcripts: () => null,

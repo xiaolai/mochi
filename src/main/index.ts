@@ -14,6 +14,14 @@ import { createRegistry } from '@shared/capability/registry'
 import { whatToFile } from './heard'
 import { whenToReconnect } from '@shared/realtime/reconnect'
 import { renderTools } from './tools-sent'
+import { promptsFor } from '@shared/prompts'
+import {
+  promptRows,
+  readPromptOverrides,
+  resolvePrompts,
+  writePromptOverride,
+  type Prompts,
+} from './store/prompts'
 import {
   REVEALABLE,
   type GrantChange,
@@ -1387,7 +1395,46 @@ function currentProfile(): string | null {
  * file. A capability reaching back into main is how a bundle ends up with a
  * module that is undefined at load.
  */
+/**
+ * The prompt catalogue as it currently stands, defaults plus your overrides.
+ *
+ * A function rather than a value: the file is hand-editable and every other
+ * reader in this process re-reads on use for that reason. An unreadable file
+ * falls back to the defaults and SAYS so — running the shipped wording over
+ * somebody's edited prompts silently is the app disagreeing with the screen
+ * that shows them.
+ */
+/**
+ * The overrides on disk, or none when the file cannot be read.
+ *
+ * `promptsNow` has already reported the failure; this is the same fallback in
+ * the same state, so the pane shows what she is actually being sent rather than
+ * what the unreadable file was supposed to say.
+ */
+function overridesOrDefaults(userData: string): Readonly<Record<string, string>> {
+  const read = readPromptOverrides(userData)
+  return read.ok ? read.overrides : {}
+}
+
+function promptsNow(): Prompts {
+  const read = readPromptOverrides(app.getPath('userData'))
+  if (!read.ok) {
+    console.error(`[prompts] ${read.why}; running on the defaults`)
+    problems.note('prompts', null, `your edited prompts could not be read (${read.why})`)
+    return resolvePrompts(promptsFor(CAPABILITIES.manifests), {})
+  }
+  return resolvePrompts(promptsFor(CAPABILITIES.manifests), read.overrides)
+}
+
 const capabilityDeps: CapabilityDeps = {
+  /*
+    Read at CALL time, not captured at session open.
+
+    Every other reader in this file follows the same rule — `webSearch`,
+    `workspace`, `codexPath` are all thunks — and it is what makes an edit land
+    on the next lookup rather than on the next wake.
+  */
+  prompt: (key) => promptsNow()(key),
   userData: () => app.getPath('userData'),
   wearing: () => sessionPersona,
   /**
@@ -1913,6 +1960,15 @@ ipcMain.handle('settings:read', (): SettingsView => {
       choices: OFFERED_LANGUAGES,
       most: MOST_LANGUAGES,
     },
+    /*
+      The whole catalogue, resolved against what is on disk.
+
+      An unreadable overrides file has already been reported by `promptsNow`;
+      here it falls back to the defaults, which is what the app is actually
+      sending in that state — the pane must show what she gets, not what the
+      file was supposed to say.
+    */
+    prompts: promptRows(promptsFor(CAPABILITIES.manifests), overridesOrDefaults(userData)),
     keys: listKeys(claimed),
     about: {
       name: app.getName(),
@@ -1959,6 +2015,31 @@ function wearPersona(id: unknown): SettingsWrite {
   tray?.refresh()
   return { ok: true }
 }
+
+/**
+ * Rewrite one catalogued prompt, or reset it.
+ *
+ * `null` resets, and it DELETES the override rather than writing the default
+ * back — see `store/prompts.ts`. A key that is not in the catalogue is refused
+ * rather than stored: the file is a map, and an unknown key would sit in it for
+ * ever answering a question nothing asks.
+ */
+ipcMain.handle('settings:prompt', (_event, key: unknown, text: unknown): SettingsWrite => {
+  if (typeof key !== 'string') return { ok: false, why: 'That does not name a prompt.' }
+  if (text !== null && typeof text !== 'string') {
+    return { ok: false, why: 'A prompt has to be text.' }
+  }
+  const specs = promptsFor(CAPABILITIES.manifests)
+  if (!specs.some((spec) => spec.key === key)) {
+    return { ok: false, why: 'This build has no prompt by that name.' }
+  }
+  try {
+    writePromptOverride(app.getPath('userData'), specs, key, text)
+  } catch (error: unknown) {
+    return { ok: false, why: String(error) }
+  }
+  return { ok: true }
+})
 
 ipcMain.handle('shelf:wear', (_event, id: unknown): SettingsWrite => wearPersona(id))
 

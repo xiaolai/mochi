@@ -1650,6 +1650,22 @@ const machineHandlers: PaneHandlers = {
   grant: (change) => {
     void writeMachine(() => window.mochiSettings.grant(change), 'Saved.')
   },
+  prompt: (key, text) => {
+    /*
+      Its own sentence, for `hearing`'s reason and one more.
+
+      A capability's description reaches her in the next `session.update`, which
+      is her next wake; the guidance a capability hands back is read at CALL
+      time, so that half lands sooner. Saying "on her next wake" is the honest
+      floor — it is true of the slowest of them.
+    */
+    void writeMachine(
+      () => window.mochiSettings.prompt(key, text),
+      text === null
+        ? 'Reset. It takes effect on her next wake.'
+        : 'Saved. It takes effect on her next wake.',
+    )
+  },
   recheckCodex: async () => {
     const found = await window.mochiSettings.recheckCodex()
     /*

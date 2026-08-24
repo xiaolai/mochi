@@ -81,6 +81,8 @@ export interface Answer {
 export interface AskSettings {
   /** One of Codex's own values, or `follow` to send nothing. See `WEB_SEARCH_MODES`. */
   readonly webSearch: WebSearchMode
+  /** The framing, as `askWorkspace.framing` currently says. See `@shared/prompts`. */
+  readonly framing: string
   /** Null leaves the model to the user's `config.toml`, which is a real choice. */
   readonly model: string | null
   /**
@@ -109,17 +111,8 @@ export interface AskSettings {
  * "what is the current version of X" unanswerable while looking like a refusal
  * to help rather than a rule about sourcing.
  */
-export function framed(question: string): string {
-  return [
-    'Answer the question below for someone who will hear the answer spoken aloud.',
-    'Read the files in this directory, and search the web when the question needs',
-    'current information. Name every file or page you used in `sources`.',
-    'If you could not find out, say so plainly in `spoken` and leave `sources` empty.',
-    'Never present a guess as something you found.',
-    '',
-    'Question:',
-    question,
-  ].join('\n')
+export function framed(question: string, framing: string): string {
+  return [framing, '', 'Question:', question].join('\n')
 }
 
 export function argsFor(options: {
@@ -167,7 +160,7 @@ export function argsFor(options: {
     ...(settings.profile === null ? [] : ['-p', settings.profile]),
     ...(settings.model === null ? [] : ['-m', settings.model]),
     ...(settings.webSearch === 'follow' ? [] : ['-c', `web_search="${settings.webSearch}"`]),
-    framed(options.question),
+    framed(options.question, settings.framing),
   ]
 }
 

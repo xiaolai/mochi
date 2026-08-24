@@ -1,4 +1,5 @@
 import { EMOTIONS, type Emotion } from '@shared/avatar'
+import { fill } from '@shared/prompts'
 import type { Capability } from '../kind'
 
 /**
@@ -78,21 +79,31 @@ export const capability: Capability = {
       answer that ends the sequence.
     */
     if (allowed.length === 0) {
-      return cannot('You have no expressions to choose from; keep the face you have.')
+      return cannot(deps.prompt('setExpression.noFaces'))
     }
     if (!(EMOTIONS as readonly string[]).includes(face)) {
       // Names the ones she ACTUALLY has, which after narrowing is not the whole
       // tuple — a refusal listing faces she was never offered would send her
       // straight back to one that is not on her wire.
-      return cannot(`"${face}" is not one of your expressions. You have: ${allowed.join(', ')}.`)
+      return cannot(
+        fill(deps.prompt('setExpression.notAnExpression'), {
+          face,
+          faces: allowed.join(', '),
+        }),
+      )
     }
     if (!allowed.includes(face as Emotion)) {
-      return cannot(`This character does not use "${face}". You have: ${allowed.join(', ')}.`)
+      return cannot(
+        fill(deps.prompt('setExpression.notThisCharacter'), {
+          face,
+          faces: allowed.join(', '),
+        }),
+      )
     }
     if (!deps.wearExpression(face as Emotion)) {
       // She is not on screen. Saying so beats a silent success, which would have
       // her narrating a face nobody can see.
-      return cannot('Your face could not be changed just now; say what you mean in words.')
+      return cannot(deps.prompt('setExpression.couldNotChange'))
     }
     return { status: 'done', answer: { summary: `Now wearing ${face}.`, detail: '' } }
   },

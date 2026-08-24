@@ -48,6 +48,7 @@
 import { looksEmpty, oneLine } from '@shared/text'
 import { entryProblem, MAX_ENTRY_CHARS, noteWith } from '../../main/memory/summarise'
 import { recallState, remember } from '../../main/store/memory'
+import { fill } from '@shared/prompts'
 import type { Capability } from '../kind'
 
 function cannot(guidance: string): { status: 'refused'; guidance: string } {
@@ -82,22 +83,20 @@ export const capability: Capability = {
     // renders as nothing — a bullet in her memory that nobody can see or
     // remove. The repository already has this helper for exactly that.
     if (looksEmpty(line)) {
-      return cannot('Nothing was said to remember. Ask them what they want kept.')
+      return cannot(deps.prompt('rememberThis.nothingSaid'))
     }
     // The same ceiling the summariser's entries have, and the same constant. A
     // paragraph here would sit in the note until the next rewrite trimmed it,
     // and "one plain sentence" is what the manifest asked for.
     if (line.length > MAX_ENTRY_CHARS) {
-      return cannot(
-        'That is too long to keep as one note. Ask them for the short version — one sentence.',
-      )
+      return cannot(deps.prompt('rememberThis.tooLong'))
     }
 
     const personaId = deps.wearing()
     if (personaId === null) {
       // Nobody is worn, so there is no note this belongs to. Filing it under a
       // guess would put it in a stranger's memory.
-      return cannot('You could not save that just now. Say so plainly rather than pretending.')
+      return cannot(deps.prompt('rememberThis.couldNotSave'))
     }
 
     const why = entryProblem(line, deps.otherPersonaIds())
@@ -106,10 +105,8 @@ export const capability: Capability = {
       // being able to say what would work instead.
       return cannot(
         why === 'names-a-persona'
-          ? 'That names another character, and notes are kept per character. Say you cannot ' +
-              'keep that one, and offer to write it in your own words instead.'
-          : `That looks like a ${why} rather than something about them. Notes are about the ` +
-              'person — say so, and offer to keep the plain version.',
+          ? deps.prompt('rememberThis.namesAPersona')
+          : fill(deps.prompt('rememberThis.looksLike'), { why }),
       )
     }
 
@@ -118,11 +115,7 @@ export const capability: Capability = {
     if (!current.ok) {
       // REFUSED, and the file is left exactly as it is. Writing here would
       // replace something unreadable with one line and file "" as the undo.
-      return cannot(
-        'Your notes could not be read, so nothing was written — and nothing was ' +
-          'overwritten either. Say that plainly: the note is still on disk and needs ' +
-          'looking at before anything more can be kept.',
-      )
+      return cannot(deps.prompt('rememberThis.unreadable'))
     }
     const next = noteWith(current.notes, line)
     if (next === null) {
@@ -143,9 +136,7 @@ export const capability: Capability = {
       return {
         status: 'already-known',
         note: line,
-        guidance:
-          'That is already in your notes, so nothing was added. Say you already have it ' +
-          'rather than saying you have just written it down.',
+        guidance: deps.prompt('rememberThis.alreadyThere'),
       }
     }
 
@@ -153,9 +144,7 @@ export const capability: Capability = {
     return {
       status: 'saved',
       note: line,
-      guidance:
-        'It is written down and will still be there next time. Say so plainly and briefly ' +
-        '— do not read the whole note back.',
+      guidance: deps.prompt('rememberThis.kept'),
     }
   },
 }

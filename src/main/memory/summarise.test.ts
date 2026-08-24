@@ -1,4 +1,8 @@
+import { promptsFor } from '@shared/prompts'
 import { describe, expect, it, vi } from 'vitest'
+
+/** The shipped wording, so these assert against what Codex is actually sent. */
+const INSTRUCTION = promptsFor([]).find((s) => s.key === 'summariser.instruction')?.text ?? ''
 import {
   ASKED_HEADING,
   MAX_ENTRIES,
@@ -152,7 +156,7 @@ describe('asking for a rewritten note', () => {
   /** An `ask` that answers with these fields. */
   const answers = (fields: unknown) => (): Promise<unknown> => Promise.resolve(fields)
 
-  const deps = { ask: answers(GOOD), personaIds: IDS }
+  const deps = { ask: answers(GOOD), personaIds: IDS, instruction: INSTRUCTION }
 
   it('returns the rendered note, with the subjects inside it', async () => {
     // The table of contents the wake brief deferred is a SECTION of the note,

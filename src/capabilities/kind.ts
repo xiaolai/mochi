@@ -69,6 +69,18 @@ export type CapabilityArgs = Readonly<Record<string, string>>
  * receives what it needs and imports nothing from `src/main/index.ts`.
  */
 export interface CapabilityDeps {
+  /**
+   * What a catalogued prompt currently says. See `@shared/prompts`.
+   *
+   * Every string a capability puts in front of a model goes through here: its
+   * own description, its argument descriptions, and the guidance it hands back
+   * when it cannot do the thing. All of them were literals in these files and
+   * were therefore visible only by reading the source.
+   *
+   * Resolved by main at call time, not captured when the session opened: an
+   * edit lands on the next call rather than the next wake.
+   */
+  readonly prompt: (key: string) => string
   /** Where this person's own state lives — `app.getPath('userData')`. */
   readonly userData: () => string
   /** Whose archive and whose note. Null before a persona has been put on. */

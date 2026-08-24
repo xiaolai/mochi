@@ -54,6 +54,14 @@
 /** The order is the order they are drawn in. */
 import type { ByPronoun } from './pronoun'
 
+import { promptsFor, type PromptSpec } from './prompts'
+
+/** What `grantsNotice` reads a catalogued prompt with. See `@shared/prompts`. */
+export type Prompts = (key: string) => string
+
+const CATALOGUE: readonly PromptSpec[] = promptsFor([])
+const defaultPrompts: Prompts = (key) => CATALOGUE.find((spec) => spec.key === key)?.text ?? ''
+
 export const GRANTS = ['speak_first', 'ask_workspace', 'remember_this', 'set_expression'] as const
 
 export type Grant = (typeof GRANTS)[number]
@@ -258,12 +266,14 @@ export function withheldGuidance(name: string): string {
  * strongest instructional position — safe here in a way it would not be for
  * anything derived from what somebody said, because every word of it is ours.
  */
-export function grantsNotice(grants: Grants): string {
+export function grantsNotice(grants: Grants, prompts: Prompts = defaultPrompts): string {
   const off = GRANT_SPECS.filter((spec) => !grants[spec.id])
   if (off.length === 0) return ''
   return [
-    '# What you may not do right now',
-    'The person has turned these off. If one of them comes up, say plainly that you can no longer do it and that they switched it off. Do not try anyway, and do not report a result you did not get.',
+    prompts('grants.heading'),
+    prompts('grants.notice'),
     ...off.map((spec) => `- ${spec.withheld}`),
-  ].join('\n')
+  ]
+    .filter((line) => line !== '')
+    .join('\n')
 }

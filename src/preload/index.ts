@@ -229,6 +229,9 @@ const settings: MochiSettingsApi = {
   async hearing(change: HearingChange) {
     return (await ipcRenderer.invoke(guardSettings('settings:hearing'), change)) as SettingsWrite
   },
+  async prompt(key: string, text: string | null) {
+    return (await ipcRenderer.invoke(guardSettings('settings:prompt'), key, text)) as SettingsWrite
+  },
   async grant(change: GrantChange) {
     return (await ipcRenderer.invoke(guardSettings('settings:grant'), change)) as SettingsWrite
   },

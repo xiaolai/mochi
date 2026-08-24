@@ -35,6 +35,12 @@ export const capability: Capability = {
   },
   kind: 'immediate',
   handler: (args, deps) => {
+    /** The three sentences, resolved once for every path out of here. */
+    const guidance = {
+      found: deps.prompt('recall.guidance'),
+      nothing: deps.prompt('recall.nothing'),
+      unavailable: deps.prompt('recall.unavailable'),
+    }
     // A query with nothing searchable in it is NOT a search that found nothing.
     //
     // `transcripts.search` returns `[]` WITHOUT running a query when the words
@@ -51,7 +57,7 @@ export const capability: Capability = {
     // says produces a valid index, a valid query and an empty answer with
     // nothing failing anywhere.
     const query = args['query'] ?? ''
-    if (toMatchQuery(query) === null) return unavailable()
+    if (toMatchQuery(query) === null) return unavailable(guidance)
 
     const store = deps.transcripts()
     const personaId = deps.wearing()
@@ -61,6 +67,6 @@ export const capability: Capability = {
     // picks one of those at random, and only one of them is true.
     const search =
       store === null || personaId === null ? null : () => store.search(personaId, query)
-    return recallPayloadFor(search, deps.now())
+    return recallPayloadFor(search, deps.now(), guidance)
   },
 }

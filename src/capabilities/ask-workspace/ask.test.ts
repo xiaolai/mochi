@@ -1,9 +1,19 @@
 import { readFileSync, writeFileSync } from 'node:fs'
+import { promptsFor } from '@shared/prompts'
 import { describe, expect, it } from 'vitest'
+
+/**
+ * The shipped framing, so these hold what she is ACTUALLY sent.
+ *
+ * It moved to the prompt catalogue so it can be rewritten, and a test asserting
+ * on a stub would then be asserting on nothing — the property worth keeping is
+ * that the DEFAULT still asks for sources and still permits the web.
+ */
+const FRAMING = promptsFor([]).find((s) => s.key === 'askWorkspace.framing')?.text ?? ''
 import { argsFor, ask, framed, readAnswer, type AskSettings } from './ask'
 import type { RunHandle } from './spawn'
 
-const SETTINGS: AskSettings = { webSearch: 'live', model: null, profile: null }
+const SETTINGS: AskSettings = { webSearch: 'live', framing: FRAMING, model: null, profile: null }
 
 function argAfter(args: readonly string[], flag: string): string | undefined {
   const at = args.indexOf(flag)
@@ -48,7 +58,7 @@ describe('the invocation', () => {
       schemaPath: '/s',
       outPath: '/o',
       question: 'q',
-      settings: { webSearch: 'disabled', model: null, profile: null },
+      settings: { webSearch: 'disabled', framing: FRAMING, model: null, profile: null },
     })
     expect(off).toContain('web_search="disabled"')
   })
@@ -61,7 +71,7 @@ describe('the invocation', () => {
       schemaPath: '/s',
       outPath: '/o',
       question: 'q',
-      settings: { webSearch: 'follow', model: null, profile: null },
+      settings: { webSearch: 'follow', framing: FRAMING, model: null, profile: null },
     })
     expect(follow.join(' ')).not.toContain('web_search')
   })
@@ -73,7 +83,7 @@ describe('the invocation', () => {
       schemaPath: '/s',
       outPath: '/o',
       question: 'q',
-      settings: { webSearch: 'live', model: 'gpt-5.6-sol', profile: null },
+      settings: { webSearch: 'live', framing: FRAMING, model: 'gpt-5.6-sol', profile: null },
     })
     expect(argAfter(pinned, '-m')).toBe('gpt-5.6-sol')
   })
@@ -85,7 +95,7 @@ describe('the invocation', () => {
       schemaPath: '/s',
       outPath: '/o',
       question: 'q',
-      settings: { webSearch: 'live', model: null, profile: 'mochi' },
+      settings: { webSearch: 'live', framing: FRAMING, model: null, profile: 'mochi' },
     })
     expect(argAfter(layered, '-p')).toBe('mochi')
   })
@@ -103,7 +113,7 @@ describe('the invocation', () => {
       schemaPath: '/s',
       outPath: '/o',
       question: 'q',
-      settings: { webSearch: 'live', model: null, profile: 'mochi' },
+      settings: { webSearch: 'live', framing: FRAMING, model: null, profile: 'mochi' },
     })
     expect(layered).toContain('project_doc_fallback_filenames=[]')
     expect(layered).toContain('read-only')
@@ -111,7 +121,7 @@ describe('the invocation', () => {
   })
 
   it('puts the question last, framed', () => {
-    expect(args[args.length - 1]).toBe(framed('What changed today?'))
+    expect(args[args.length - 1]).toBe(framed('What changed today?', FRAMING))
   })
 })
 
@@ -120,7 +130,7 @@ describe('the framing', () => {
     // Codex is a general assistant. Handed a bare question it answers like one,
     // and the difference between that and a sourced answer is invisible once
     // she has said it aloud.
-    const text = framed('anything')
+    const text = framed('anything', FRAMING)
     expect(text).toContain('sources')
     expect(text.toLowerCase()).toContain('never present a guess')
   })
@@ -128,7 +138,7 @@ describe('the framing', () => {
   it('does NOT forbid the web', () => {
     // v1 tried forbidding everything but the files first. It made "what is the
     // current version of X" unanswerable while looking like a refusal to help.
-    expect(framed('anything').toLowerCase()).toContain('search the web')
+    expect(framed('anything', FRAMING).toLowerCase()).toContain('search the web')
   })
 })
 

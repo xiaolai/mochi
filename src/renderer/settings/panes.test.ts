@@ -53,12 +53,13 @@ function settled(): SettingsView {
       { id: 'hide', what: 'Hide her', accelerator: 'Control+Shift+M', refused: null },
     ],
     about: { name: 'Mochi', version: '0.0.1', electron: '43.0.0', userData: '/u' },
+    prompts: [],
     folders: { avatars: '/u/avatars', personas: '/u/personas' },
   }
 }
 
-describe('the six groups', () => {
-  it('is six, in the order they are drawn', () => {
+describe('the seven groups', () => {
+  it('is seven, in the order they are drawn', () => {
     /*
       `where` is gone, folded into `about`.
 
@@ -71,10 +72,16 @@ describe('the six groups', () => {
     // `hearing` sits after `looking` and before `on-screen`: both of the first
     // two are about what she does with the world outside this window, and
     // `on-screen` begins the ones about the window itself.
+    //
+    // `prompts` joins them rather than sitting with the window ones, and for
+    // the same test: what she is TOLD is about her dealings with the world, not
+    // about how this window looks.
     expect(PANES.map((one) => one.id)).toEqual([
       'may-do',
       'looking',
       'hearing',
+
+      'prompts',
       'on-screen',
       'keys',
       'about',

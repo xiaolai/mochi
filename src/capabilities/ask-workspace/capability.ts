@@ -22,6 +22,7 @@
  */
 
 import { readdir } from 'node:fs/promises'
+import { fill } from '@shared/prompts'
 import type { Capability } from '../kind'
 import { ask } from './ask'
 import { spawnCodex } from './spawn'
@@ -55,15 +56,12 @@ export const capability: Capability = {
   handler: async (args, deps) => {
     const question = (args['question'] ?? '').trim()
     if (question === '') {
-      return cannot('No question was asked. Ask her to say what she wants looked up.')
+      return cannot(deps.prompt('askWorkspace.noQuestion'))
     }
 
     const codexPath = deps.codexPath()
     if (codexPath === null) {
-      return cannot(
-        'The Codex CLI is not installed on this machine, so there is nothing to look with. ' +
-          'Say that plainly rather than answering from memory.',
-      )
+      return cannot(deps.prompt('askWorkspace.noCodex'))
     }
 
     const workspace = deps.workspace()
@@ -81,39 +79,32 @@ export const capability: Capability = {
     })
     if (!verdict.ok) {
       if (verdict.why === 'unreadable') {
-        return cannot(
-          `The workspace at ${verdict.path} could not be read, so she did not look. ` +
-            'Say so plainly.',
-        )
+        return cannot(fill(deps.prompt('askWorkspace.unreadable'), { path: verdict.path }))
       }
       const files = verdict.hazards.map((one) => one.path).join(', ')
-      return cannot(
-        `She did not look, because these files would give instructions to the tool ` +
-          `rather than be read as content: ${files}. Say which files, and that they ` +
-          'need to be moved out of the workspace first.',
-      )
+      return cannot(fill(deps.prompt('askWorkspace.hazards'), { files }))
     }
 
     const result = await ask(question, {
       codexPath,
       workspace,
-      settings: { webSearch: deps.webSearch(), model: null, profile: deps.codexProfile() },
+      settings: {
+        webSearch: deps.webSearch(),
+        model: null,
+        profile: deps.codexProfile(),
+        framing: deps.prompt('askWorkspace.framing'),
+      },
       run: spawnCodex,
     })
     if (!result.ok) {
-      return cannot(
-        `The lookup did not finish: ${result.why}. Say so plainly rather than ` +
-          'inventing an answer.',
-      )
+      return cannot(fill(deps.prompt('askWorkspace.didNotFinish'), { why: result.why }))
     }
     return {
       status: 'ok',
       answer: result.answer.spoken,
       detail: result.answer.detail,
       sources: result.answer.sources,
-      guidance:
-        'Report this in your own words and name where it came from. Do not present it ' +
-        'as something you already knew.',
+      guidance: deps.prompt('askWorkspace.report'),
     }
   },
 }
