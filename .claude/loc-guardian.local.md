@@ -2,8 +2,8 @@
 max_pure_loc: 350
 overrides:
   'src/main/index.ts': 1500
-  'src/renderer/history/main.ts': 1050
-  'src/renderer/companion/face.ts': 600
+  'src/renderer/history/main.ts': 975
+  'src/renderer/companion/face.ts': 500
 ---
 
 # loc-guardian — mochi
@@ -11,12 +11,15 @@ overrides:
 Electron 43 + TypeScript 7, three processes (`main`, `preload`, `renderer`),
 no UI framework — the renderer builds DOM through an `element()` helper.
 
-> **Note on `overrides`:** loc-guardian 0.1.5 does not read this field yet; it
-> applies `max_pure_loc` to every file. The three entries are recorded here
-> because the reasoning below is the part worth keeping, and because a limit
-> that is knowingly wrong about three files should say so in the file that sets
-> it rather than in somebody's memory. See the plugin's
-> `dev-docs/2026-08-24-improvements.md`, finding 7.
+> **On `overrides`:** each is a ceiling for one file that the flat limit is
+> knowingly wrong about, with the measurement for it below. They are set just
+> above where each file actually sits, not at a round number — a ceiling with a
+> hundred lines of slack in it stops being a gate for that file. Growth still
+> trips them.
+>
+> Requires loc-guardian with per-file ceilings (added 2026-08). Older versions
+> ignore this field and apply `max_pure_loc` to everything, which reports these
+> three as over rather than silently passing them — the safe direction.
 
 ## Why 350, and why PURE lines
 
@@ -50,7 +53,7 @@ explain.
 Each was measured rather than assumed. All three are one thing, not several
 things sharing a file — which is the case the limit cannot express.
 
-### `src/main/index.ts` — 1488
+### `src/main/index.ts` — 1488, was 1540
 
 The composition root. It holds **21 module-level mutable bindings** and wires 36
 IPC channels to them, with every `ipcMain` registration at column 0 closing over
@@ -63,11 +66,17 @@ elsewhere (`companion` 52 times, `archive` 42, `problems` 37, `conversation`
 setters because the handlers write that state. That is more lines than it
 removes and harder to read than what it replaces.
 
-`codex/ready.ts` came out of here in 2026-08 because it was genuinely
-self-contained — its state was read twice outside the three functions that own
-it. `flush` (24 lines, needs `conversation` and `shutDown`) and `bubble` (83
-lines, needs `catalogue`, `companion`, `fitted`, `tray`) were examined and
-rejected on the same test.
+`codex/ready.ts` came out of here because it was genuinely self-contained — its
+state was read twice outside the three functions that own it — and `problems`
+moved to its own module, because reporting a failure is not the composition
+root's business and routing every module back through here is what kept
+failures silent. `flush` (24 lines, needs `conversation` and `shutDown`) and
+`bubble` (83 lines, needs `catalogue`, `companion`, `fitted`, `tray`) were
+examined and rejected on the same test.
+
+The startup block is the largest single candidate left — 221 code lines — and
+is not taken because it writes twelve pieces of state and **nothing executes
+it**. A mistake there is a launch failure, and the suite would report green.
 
 Getting this under 350 needs the live state moved into an object the handler
 modules receive — a redesign of how every feature is written, not an extraction.
@@ -75,28 +84,38 @@ Note that **seven tests assert on this file's source text**, slicing it at a
 named `ipcMain.handle(...)`; they would not catch a runtime mistake made during
 that redesign.
 
-### `src/renderer/history/main.ts` — 1034
+### `src/renderer/history/main.ts` — 948, was 1034
 
-A window controller. Of its 35 functions, **exactly three are pure** (`empty`,
-`iconButton`, `facts`); the rest read the same module state — `conversations`,
-`open`, `shelf`, `place`, `generation`, `showingCharacter`.
+A window controller. The pure pieces are out: `bits.ts` holds the four builders
+that read no window state, and `countByDay`/`openingDay` moved to `month.ts` as
+functions OF the conversations rather than readers of a module-level list —
+`openingDay` decides what somebody sees when the window opens and now has six
+tests, having had none.
 
-Splitting the render functions from that state produces import cycles, which
-this file already forbids below. Extracting the 35 DOM handles into their own
-module was tried and reverted: it moved 36 declarations out and added 36 import
-lines back, for a net of **1034 → 1032**. That is the shape this document warns
-against, and it did not even satisfy the number.
+What is left reads shared state. Of the original 35 functions exactly three
+were pure; the rest read `conversations`, `open`, `shelf`, `place`,
+`generation`, `showingCharacter`. Splitting those from the state produces
+import cycles. Giving each concern a factory that owns its slice was measured:
+a deps interface plus accessors costs roughly what it removes, and the calendar
+alone needed a seven-method surface for sixty lines moved.
 
-### `src/renderer/companion/face.ts` — 593
+Extracting the DOM handles ALONE was tried and reverted first: 36 declarations
+out, 36 import lines back, **1034 → 1032**. They earn their place only
+alongside other extractions, which is why `elements.ts` exists now and did not
+then.
 
-One render loop. `tick` is 339 lines capturing **34** closure variables;
-`fitToContent` captures 10. The genuinely pure candidates — `bodyOf`,
-`availableScreen`, `roomOnScreen` — total about 30 lines between them.
+### `src/renderer/companion/face.ts` — 472, was 593
 
-`padNeeded` (6 captures) is the one worthwhile extraction here, on rule 1
-grounds rather than line-count grounds: it holds the horizontal-symmetry rule
-that was once wrong by 12px, and no test can reach it while it lives inside a
-closure in a module that resolves a palette off `document` at load.
+Everything that was a DECISION has been taken out and given a test:
+`her-geometry.ts` (how much room she needs, where in it she stands),
+`screen-room.ts` (how much screen there is, which sides a bubble fits on) and
+`pad-change.ts` (grow at once, shrink only after it has stayed wanted).
+
+What is left is one render loop. `tick` is 339 code lines capturing **34**
+closure variables, and the pointer block captures 11. Splitting either means
+passing a context object of fifteen fields, and **no test executes `showFace`**
+— the sub-components each have one, the loop composing them cannot, which is
+why the decisions were worth extracting and the drawing is not.
 
 ## Extraction rules
 
