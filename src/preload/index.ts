@@ -30,6 +30,7 @@ import {
   type MochiHistoryApi,
   type ShelfView,
 } from '@shared/history-window'
+import { type KeptAction } from '@shared/history-window'
 
 /**
  * The only path between the page and the main process.
@@ -206,6 +207,9 @@ const history: MochiHistoryApi = {
   },
   async memory(action: NoteAction) {
     return (await ipcRenderer.invoke(guardShelf('shelf:memory'), action)) as SettingsWrite
+  },
+  async forgetKept(action: KeptAction) {
+    return (await ipcRenderer.invoke(guardShelf('shelf:forget-kept'), action)) as SettingsWrite
   },
   async prompt(text: string) {
     return (await ipcRenderer.invoke(guardShelf('shelf:prompt'), text)) as SettingsWrite

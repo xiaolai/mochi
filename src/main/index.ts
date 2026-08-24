@@ -1518,7 +1518,14 @@ ipcMain.handle('voice:config', () => {
         '— she cannot hear you, greet you, look anything up, or keep a note',
     )
   }
-  const mayDo = whatSheMayDo(resolved.persona, note, grants, registry.tools, readPrompt(userData))
+  const mayDo = whatSheMayDo(
+    resolved.persona,
+    note,
+    grants,
+    registry.tools,
+    readPrompt(userData),
+    transcripts()?.kept.collections(resolved.persona.id) ?? [],
+  )
   console.log(
     `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars, bubble ${resolved.persona.bubble ? 'on' : 'off'}`,
   )
@@ -1972,8 +1979,19 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     `assembled`'s own comment warns about, one level along: the two renderings
     would drift the first time anything between them changed.
   */
-  const mayDo = whatSheMayDo(worn, note, readGrants(userData, worn.id), registry.tools, prompt)
+  // Empty when she has kept nothing: the sheet renders no section, and the
+  // prompt carries no index.
+  const kept = transcripts()?.kept.collections(worn.id) ?? []
+  const mayDo = whatSheMayDo(
+    worn,
+    note,
+    readGrants(userData, worn.id),
+    registry.tools,
+    prompt,
+    kept,
+  )
   return {
+    kept,
     face: resolveFaceFor(
       avatarsRoot(userData),
       packageFolder(worn.id, catalog.sources),
@@ -2133,6 +2151,34 @@ ipcMain.handle('settings:lookup', (_event, change: unknown): SettingsWrite => {
  * `remember` THROWS rather than overwrite a note it could not read, so a corrupt
  * file is reported here instead of being silently replaced by an empty one.
  */
+/**
+ * Clear part of her store, or all of it.
+ *
+ * The sweeping gestures live here rather than in a tool, for the reason
+ * `history:forget` gives about permanent deletion: they are the ones that want
+ * to be seen before they happen, by the person whose data it is.
+ */
+ipcMain.handle('shelf:forget-kept', (_event, action: unknown): SettingsWrite => {
+  if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
+  const kind = (action as { kind?: unknown }).kind
+  const userData = app.getPath('userData')
+  const worn = activePersona(catalogue(userData), readWornPersonaId(userData)).persona.id
+  const store = transcripts()
+  if (store === null) return refuse('Her store could not be opened.')
+
+  if (kind === 'all') {
+    store.kept.forgetAll(worn)
+    return { ok: true }
+  }
+  if (kind === 'collection') {
+    const collection = (action as { collection?: unknown }).collection
+    if (typeof collection !== 'string') return refuse('That is not something to forget.')
+    store.kept.forgetCollection(worn, collection)
+    return { ok: true }
+  }
+  return refuse('That is not something to do.')
+})
+
 ipcMain.handle('shelf:memory', (_event, action: unknown): SettingsWrite => {
   if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
   const kind = (action as { kind?: unknown }).kind
@@ -2436,6 +2482,7 @@ function tellTheSession(): boolean {
     grants,
     registry.tools,
     readPrompt(userData),
+    transcripts()?.kept.collections(persona.id) ?? [],
   )
   companion.webContents.send('voice:send', {
     type: '__mochi_grants__',

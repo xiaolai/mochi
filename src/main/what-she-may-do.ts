@@ -91,9 +91,11 @@ export function whatSheMayDo(
    * is the shelf, which draws the same string back.
    */
   template: string = '',
+  /** An index of what she has kept — names and counts, never contents. */
+  kept: readonly { readonly collection: string; readonly entries: number }[] = [],
 ): WhatSheMayDo {
   const notice = grantsNotice(grants)
-  const instructions = instructionsFor(persona, note, '', template)
+  const instructions = instructionsFor(persona, note, '', template, undefined, kept)
   return {
     instructions: notice === '' ? instructions : `${instructions}\n\n${notice}`,
     // NOT OFFERED, rather than offered and refused. A description she cannot

@@ -157,10 +157,6 @@ const KNOWN_DEBT: readonly string[] = [
   'conversation.ts: isLive',
   // The store landed in phase 1 of `plan-kept.md` with no tools, deliberately:
   // the data model is committed and verifiable before a model can reach it.
-  // The last of `plan-kept.md`'s progress bar. Phase 2 wired `forgetAll`,
-  // phase 4 wired the five the capabilities call. `forgetCollection` is the
-  // shelf's clear-a-collection button, which is phase 5.
-  'kept.ts: forgetCollection',
 
   // No caller and no work item. The archive can be exported and cannot be
   // imported back: the reader exists, is transactional, is tested, and no

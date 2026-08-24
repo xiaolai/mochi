@@ -135,6 +135,15 @@ export function instructionsFor(
    * it from what is on disk.
    */
   prompts: Prompts = defaultPrompts,
+  /**
+   * An INDEX of what she has kept — names and counts, never the contents.
+   *
+   * The contents would grow this prompt with everything she has ever written,
+   * on every wake and on every hourly reconnect, which is the unbounded request
+   * `PERSONA_LIMITS` exists to prevent. What this buys is the thing the tool
+   * alone cannot: she cannot ask for a name she does not know she filed.
+   */
+  kept: readonly { readonly collection: string; readonly entries: number }[] = [],
 ): string {
   /*
     Each piece once: at its slot if the document names one, at its default
@@ -154,6 +163,17 @@ export function instructionsFor(
           .filter((line) => line !== '')
           .join('\n'),
     brief: brief.trim(),
+    // Empty means ABSENT, for the reason the memory section gives: a heading
+    // with nothing under it invites the model to invent something to put there.
+    kept:
+      kept.length === 0
+        ? ''
+        : [
+            prompts('kept.heading'),
+            kept.map((one) => `- ${one.collection} (${String(one.entries)})`).join('\n'),
+          ]
+            .filter((line) => line !== '')
+            .join('\n'),
     /*
       Which faces she has, and only when it is not all of them.
 
@@ -217,7 +237,7 @@ export function instructionsFor(
   // text derived from what somebody said must never occupy the strongest
   // instructional position in the prompt. `briefFor` already fences the quoted
   // half; the ordering is what keeps the rules downstream of it.
-  for (const slot of ['notes', 'brief', 'faces'] as const) {
+  for (const slot of ['notes', 'brief', 'faces', 'kept'] as const) {
     if (placed.has(slot)) continue
     if (pieces[slot] !== '') sections.push(pieces[slot])
   }
@@ -285,7 +305,7 @@ export const NAME_TOKEN = '{name}'
  * and the fence is what survives it. That is a real cost of handing the layout
  * over, and it is stated rather than prevented: it is their prompt.
  */
-export const PROMPT_SLOTS = ['style', 'address', 'notes', 'brief', 'faces'] as const
+export const PROMPT_SLOTS = ['style', 'address', 'notes', 'brief', 'faces', 'kept'] as const
 
 export type PromptSlot = (typeof PROMPT_SLOTS)[number]
 

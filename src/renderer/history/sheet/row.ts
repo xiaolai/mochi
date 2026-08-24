@@ -10,6 +10,7 @@
 import { element } from '../../element'
 import { type Emotion } from '@shared/avatar'
 import { type NoteAction, type PersonaAction, type PersonaChange } from '@shared/ipc'
+import { type KeptAction } from '@shared/history-window'
 export interface ShelfHandlers {
   readonly wear: (id: string) => void
   /**
@@ -23,6 +24,8 @@ export interface ShelfHandlers {
   readonly save: (change: PersonaChange) => void
   readonly persona: (action: PersonaAction) => void
   readonly memory: (action: NoteAction) => void
+  /** Clear one collection of what she kept, or all of it. */
+  readonly forgetKept: (action: KeptAction) => void
   /** Store the system prompt document. Empty is a real answer. */
   readonly prompt: (text: string) => void
   /** Say what happened. Silence after a write reads as the write not landing. */

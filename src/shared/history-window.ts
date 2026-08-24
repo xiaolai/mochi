@@ -27,6 +27,24 @@ import type { Pronoun } from './pronoun'
  * the shelf reuses. `ipc.ts` names `ShelfView` and `ShelfCharacter` only in
  * prose, never in code, so nothing here needs importing back.
  */
+/** One collection in her store, as the sheet lists it. */
+export interface KeptSummary {
+  readonly collection: string
+  readonly entries: number
+  readonly newest: number
+}
+
+/**
+ * Clearing part of her store, or all of it.
+ *
+ * One ENTRY is absent on purpose, the same way `history:forget` has no `one`:
+ * removing a single thing is a conversation she can have — `forget_kept` — and
+ * the sheet is where the sweeping gestures live, because those are the ones
+ * that want to be seen before they happen.
+ */
+export type KeptAction =
+  { readonly kind: 'collection'; readonly collection: string } | { readonly kind: 'all' }
+
 /** One conversation, as the window lists it. */
 export interface HistoryConversation {
   /** Opaque; holding it authorises nothing. Every read still checks the persona. */
@@ -205,6 +223,8 @@ export interface ShelfView {
     readonly slots: readonly string[]
   }
   readonly note: SettingsNote
+  /** What she has kept, by collection. Empty when she has kept nothing. */
+  readonly kept: readonly KeptSummary[]
 }
 
 /**
@@ -250,6 +270,8 @@ export interface MochiHistoryApi {
   character(action: PersonaAction): Promise<SettingsWrite>
   /** Undo the last change to her note, or clear it. */
   memory(action: NoteAction): Promise<SettingsWrite>
+  /** Clear one collection of what she kept, or all of it. */
+  forgetKept(action: KeptAction): Promise<SettingsWrite>
   /** Store the system prompt document. Empty is a real answer and is allowed. */
   prompt(text: string): Promise<SettingsWrite>
   /** Put one turn's words on the clipboard. See `shelf:copy`. */

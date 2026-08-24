@@ -257,6 +257,14 @@ const FIXED: readonly PromptSpec[] = [
     requires: [],
   },
   {
+    key: 'kept.heading',
+    title: 'Kept — the index she is handed',
+    purpose:
+      'Introduces the list of collections she has kept. Names and counts only; the contents are read with look_up.',
+    text: 'You have kept things under these names. Read one with look_up before saying you do not know it.',
+    requires: [],
+  },
+  {
     key: 'kept.badName',
     title: 'Keep — the name will not do',
     purpose: 'Handed back when a collection or key is not a plain lowercase name.',

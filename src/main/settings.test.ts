@@ -319,7 +319,9 @@ describe('the four standing grants, as the window draws them', () => {
     // Derived from the specs rather than named, so a grant that stops being a
     // tool call is covered without anybody remembering to add it here.
     const rows = listGrants(DEFAULT_GRANTS, readable())
-    const untracked = GRANT_SPECS.filter((one) => one.capability === null).map((one) => one.id)
+    const untracked = GRANT_SPECS.filter((one) => one.capabilities.length === 0).map(
+      (one) => one.id,
+    )
     expect(untracked).not.toEqual([])
     for (const id of untracked) {
       expect(rows.find((one) => one.id === id)?.lastUsed).toEqual({ kind: 'not-recorded' })

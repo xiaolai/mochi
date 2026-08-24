@@ -62,7 +62,13 @@ export type Prompts = (key: string) => string
 const CATALOGUE: readonly PromptSpec[] = promptsFor([])
 const defaultPrompts: Prompts = (key) => CATALOGUE.find((spec) => spec.key === key)?.text ?? ''
 
-export const GRANTS = ['speak_first', 'ask_workspace', 'remember_this', 'set_expression'] as const
+export const GRANTS = [
+  'speak_first',
+  'ask_workspace',
+  'remember_this',
+  'keep_things',
+  'set_expression',
+] as const
 
 export type Grant = (typeof GRANTS)[number]
 
@@ -83,7 +89,7 @@ export interface GrantSpec {
    */
   readonly detail: ByPronoun
   /**
-   * The capability this withdraws from the wire, or null when it governs
+   * The capabilities this withdraws from the wire, or empty when it governs
    * something that is not a tool call.
    *
    * Null is also what says the row has no "last used" to show: the ledger
@@ -91,7 +97,7 @@ export interface GrantSpec {
    * column is real or the row does not claim it, so this is what the window
    * branches on rather than on a time that happens to be missing.
    */
-  readonly capability: string | null
+  readonly capabilities: readonly string[]
   /** What she is told while it is off. One line, in the second person. */
   readonly withheld: string
 }
@@ -105,7 +111,7 @@ export const GRANT_SPECS: readonly GrantSpec[] = [
       he: 'Say hello when he wakes, without being spoken to.',
       it: 'Say hello when it wakes, without being spoken to.',
     },
-    capability: null,
+    capabilities: [],
     withheld: 'You may not speak before you are spoken to. Wait to be addressed.',
   },
   {
@@ -116,7 +122,7 @@ export const GRANT_SPECS: readonly GrantSpec[] = [
       he: 'Look things up in the one folder he is pointed at.',
       it: 'Look things up in the one folder it is pointed at.',
     },
-    capability: 'ask_workspace',
+    capabilities: ['ask_workspace'],
     withheld: 'You can no longer look anything up in their workspace.',
   },
   {
@@ -127,8 +133,19 @@ export const GRANT_SPECS: readonly GrantSpec[] = [
       he: 'Write a fact into his long-term notes when asked to.',
       it: 'Write a fact into its long-term notes when asked to.',
     },
-    capability: 'remember_this',
+    capabilities: ['remember_this'],
     withheld: 'You can no longer write anything into your long-term notes.',
+  },
+  {
+    id: 'keep_things',
+    label: 'Keep things',
+    detail: {
+      she: 'Write things into her own notes, and read them back later.',
+      he: 'Write things into his own notes, and read them back later.',
+      it: 'Write things into its own notes, and read them back later.',
+    },
+    capabilities: ['keep', 'look_up', 'forget_kept'],
+    withheld: 'You can no longer keep anything, or read back what you kept.',
   },
   {
     id: 'set_expression',
@@ -138,7 +155,7 @@ export const GRANT_SPECS: readonly GrantSpec[] = [
       he: 'Choose one of his expressions for a reply.',
       it: 'Choose one of its expressions for a reply.',
     },
-    capability: 'set_expression',
+    capabilities: ['set_expression'],
     withheld: 'You can no longer change your expression; you keep the one face.',
   },
 ]
@@ -157,6 +174,7 @@ export const DEFAULT_GRANTS: Grants = {
   speak_first: true,
   ask_workspace: true,
   remember_this: true,
+  keep_things: true,
   set_expression: true,
 }
 
@@ -179,6 +197,7 @@ export const WITHHELD_GRANTS: Grants = {
   speak_first: false,
   ask_workspace: false,
   remember_this: false,
+  keep_things: false,
   set_expression: false,
 }
 
@@ -233,7 +252,7 @@ export function parseGrants(value: unknown): Grants {
 
 /** Whether a capability may be offered and may run. Unknown names are allowed. */
 export function allowsCapability(grants: Grants, name: string): boolean {
-  const spec = GRANT_SPECS.find((one) => one.capability === name)
+  const spec = GRANT_SPECS.find((one) => one.capabilities.includes(name))
   // Not every capability has a grant — `recall_conversations` reads her own
   // archive and is not one of the five. A capability with no switch is governed
   // by nothing here, which is a different answer from being switched off.
@@ -249,7 +268,7 @@ export function allowsCapability(grants: Grants, name: string): boolean {
  * that must not happen is her declining as though it were her own choice.
  */
 export function withheldGuidance(name: string): string {
-  const spec = GRANT_SPECS.find((one) => one.capability === name)
+  const spec = GRANT_SPECS.find((one) => one.capabilities.includes(name))
   const what = spec === undefined ? 'That' : spec.withheld
   return (
     `${what} They turned it off in settings. Say so plainly — that you cannot do it any ` +

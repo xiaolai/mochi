@@ -13,6 +13,7 @@ import { type ShelfHandlers } from './sheet/row'
 import { bubbleSection, savingSection } from './sheet/saving'
 import { voiceSection } from './sheet/voice'
 import { whoBand } from './sheet/who'
+import { keptSection } from './sheet/kept'
 
 /**
  * The characters half of the shelf.
@@ -145,6 +146,11 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
     promptSection(view, worn, handlers),
     memorySection(view, handlers),
   )
+  // Absent rather than empty when she has kept nothing — the section decides,
+  // and answers null. `append` will not take a null, and filtering here keeps
+  // that decision in one place rather than two.
+  const kept = keptSection(view, handlers)
+  if (kept !== null) page.append(kept)
   return page
 }
 

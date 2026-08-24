@@ -166,9 +166,14 @@ export function listGrants(grants: Grants, used: Usage): readonly SettingsGrant[
       // Nothing writes a time for the microphone or for speaking first, and a
       // record nobody can read is the same answer for a different reason: in
       // both cases this does not know, and saying "never" would be a claim.
-      if (spec.capability === null || !used.ok) return { kind: 'not-recorded' }
-      const at = used.used.get(spec.capability)
-      return at === undefined ? { kind: 'never' } : { kind: 'at', at }
+      if (spec.capabilities.length === 0 || !used.ok) return { kind: 'not-recorded' }
+      // The most recent across everything this switch governs. One grant may
+      // cover several tools, and the honest answer to "when was this last
+      // used" is the latest of them, not the first one that happens to match.
+      const times = spec.capabilities
+        .map((name) => used.used.get(name))
+        .filter((at): at is number => at !== undefined)
+      return times.length === 0 ? { kind: 'never' } : { kind: 'at', at: Math.max(...times) }
     })()
     return { id: spec.id, allowed: grants[spec.id], lastUsed }
   })
