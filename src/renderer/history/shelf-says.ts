@@ -1,0 +1,111 @@
+import type { ByPronoun } from '@shared/pronoun'
+
+/**
+ * What the shelf says about her, kept apart from what the shelf draws.
+ *
+ * The table is per-surface on purpose. The READER is already shared —
+ * `pronoun.ts` owns `forPronoun` — so what lives here is only this pane's
+ * wording, and a fourth pronoun still lands in one place. What it buys by
+ * sitting in its own module is that `shelf.ts` can be read as a sequence of
+ * sections without a hundred lines of prose between the imports and the first
+ * one.
+ */
+/**
+ * Every sentence on this pane that is ABOUT her, one phrasing per pronoun.
+ *
+ * Collected here rather than written at each site because that is what makes
+ * them reviewable as a set: a translator, or anybody adding a fourth pronoun,
+ * has one list to read instead of a dozen. Nothing that is not about her is
+ * here -- "calls you", "on waking", "colour" are labels for fields and are the
+ * same words whoever is worn.
+ */
+export const SAYS = {
+  noFile: {
+    she: 'the built-in, with no file of her own',
+    he: 'the built-in, with no file of his own',
+    it: 'the built-in, with no file of its own',
+  },
+  nextWake: {
+    she: 'ten · a change is a reconnect, so it lands on her next wake',
+    he: 'ten · a change is a reconnect, so it lands on his next wake',
+    it: 'ten · a change is a reconnect, so it lands on its next wake',
+  },
+  bubbleWhen: {
+    she: 'off by default · the switch lands on her next wake, a side moves them now',
+    he: 'off by default · the switch lands on his next wake, a side moves them now',
+    it: 'off by default · the switch lands on its next wake, a side moves them now',
+  },
+  keeps: {
+    she: 'What she is told and what she says are written to this machine, and stay there until you delete them.',
+    he: 'What he is told and what he says are written to this machine, and stay there until you delete them.',
+    it: 'What it is told and what it says are written to this machine, and stay there until you delete them.',
+  },
+  keptAlready: {
+    she: 'Turning this off stops NEW conversations being written. It does not delete the ones already here — the Archive is where those are removed.',
+    he: 'Turning this off stops NEW conversations being written. It does not delete the ones already here — the Archive is where those are removed.',
+    it: 'Turning this off stops NEW conversations being written. It does not delete the ones already here — the Archive is where those are removed.',
+  },
+  bubbleSide: {
+    she: 'A side that will not fit is not honoured — dragged into a corner she puts her words wherever there is room.',
+    he: 'A side that will not fit is not honoured — dragged into a corner he puts his words wherever there is room.',
+    it: 'A side that will not fit is not honoured — dragged into a corner it puts its words wherever there is room.',
+  },
+  moods: {
+    she: 'eight drawn · she picks one per reply',
+    he: 'eight drawn · he picks one per reply',
+    it: 'eight drawn · it picks one per reply',
+  },
+  moodsHow: {
+    she: 'A set_expression tool, offered on the wire like any other. She chooses from the ones left on; the rest are never in her tool list, so she cannot reach for a face this character does not use.',
+    he: 'A set_expression tool, offered on the wire like any other. He chooses from the ones left on; the rest are never in his tool list, so he cannot reach for a face this character does not use.',
+    it: 'A set_expression tool, offered on the wire like any other. It chooses from the ones left on; the rest are never in its tool list, so it cannot reach for a face this character does not use.',
+  },
+  noMoods: {
+    she: 'None left on. She will be told she has no expressions to choose from, and will keep whatever face she has.',
+    he: 'None left on. He will be told he has no expressions to choose from, and will keep whatever face he has.',
+    it: 'None left on. It will be told it has no expressions to choose from, and will keep whatever face it has.',
+  },
+  colour: {
+    she: 'eight themes · retints this window and her',
+    he: 'eight themes · retints this window and him',
+    it: 'eight themes · retints this window and it',
+  },
+  colourAuthored: {
+    she: 'Her avatar file names its own five colours, so a theme would overwrite what somebody drew. Clear the file below to choose one.',
+    he: 'His avatar file names its own five colours, so a theme would overwrite what somebody drew. Clear the file below to choose one.',
+    it: 'Its avatar file names its own five colours, so a theme would overwrite what somebody drew. Clear the file below to choose one.',
+  },
+  whoSheIs: { she: 'Who she is', he: 'Who he is', it: 'What it is' },
+  whoSheIsHint: {
+    she: 'her manner, sent as the session instructions',
+    he: 'his manner, sent as the session instructions',
+    it: 'its manner, sent as the session instructions',
+  },
+  remembers: { she: 'What she remembers', he: 'What he remembers', it: 'What it remembers' },
+  wroteThese: { she: 'she wrote these', he: 'he wrote these', it: 'it wrote these' },
+  noNotes: {
+    she: 'She has not written anything down about you yet.',
+    he: 'He has not written anything down about you yet.',
+    it: 'It has not written anything down about you yet.',
+  },
+  restore: {
+    she: 'Put the built-in back as she ships',
+    he: 'Put the built-in back as he ships',
+    it: 'Put the built-in back as it ships',
+  },
+  ownHue: {
+    she: 'She wears a hue of her own; none of the eight is stored.',
+    he: 'He wears a hue of his own; none of the eight is stored.',
+    it: 'It wears a hue of its own; none of the eight is stored.',
+  },
+  deleting: {
+    she: 'her notes and her conversations',
+    he: 'his notes and his conversations',
+    it: 'its notes and its conversations',
+  },
+  assembled: {
+    she: 'Write the prompt; Sent is the exact string she is handed once her character and her notes are folded in; Tools is the rest of what she is told, which is not editable. Saving lands on her next wake.',
+    he: 'Write the prompt; Sent is the exact string he is handed once his character and his notes are folded in; Tools is the rest of what he is told, which is not editable. Saving lands on his next wake.',
+    it: 'Write the prompt; Sent is the exact string it is handed once its character and its notes are folded in; Tools is the rest of what it is told, which is not editable. Saving lands on its next wake.',
+  },
+} as const satisfies Readonly<Record<string, ByPronoun>>

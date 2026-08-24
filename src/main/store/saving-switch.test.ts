@@ -85,9 +85,21 @@ describe('turning the saving of conversations off', () => {
 })
 
 describe('the control that sets it', () => {
-  const shelf = readFileSync(join(process.cwd(), 'src', 'renderer', 'history', 'shelf.ts'), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^[ \t]*\/\/.*$/gm, '')
+  /*
+    The shelf surface is two files: `shelf.ts` draws it, `shelf-says.ts` holds
+    every sentence that is ABOUT her. Both are read and joined, because which
+    of the two a given phrase sits in is a fact about where the words are
+    stored, not about what the control tells the user -- and this test is
+    about the latter. Splitting them further must not be able to make this
+    pass by moving a sentence out of view.
+  */
+  const shelf = ['shelf.ts', 'shelf-says.ts']
+    .map((file) =>
+      readFileSync(join(process.cwd(), 'src', 'renderer', 'history', file), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^[ \t]*\/\/.*$/gm, ''),
+    )
+    .join('\n')
 
   it('says NEW conversations, not "retention"', () => {
     expect(shelf).toContain("'Save new conversations'")
