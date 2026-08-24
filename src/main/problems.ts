@@ -86,3 +86,14 @@ export function createProblems(now: () => number = Date.now): Problems {
     },
   }
 }
+
+/**
+ * The one collector this process reports into.
+ *
+ * A singleton here rather than a `const` in `index.ts` because reporting a
+ * problem is not the composition root's business -- any module that can fail
+ * in a way a person should hear about needs to reach this, and routing every
+ * one of them back through `index.ts` is what kept failures silent in modules
+ * that had no reason to import it.
+ */
+export const problems = createProblems()

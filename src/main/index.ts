@@ -84,18 +84,9 @@ import { SHORTCUTS } from '@shared/shortcuts'
 import { allowsCapability, isGrant, withheldGuidance, GRANT_SPECS } from '@shared/grants'
 import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
-import { createProblems } from './problems'
+import { problems } from './problems'
 import { leftoverCapabilities, legacyCapabilitiesRoot } from './capability/legacy'
 import type { CapabilityDeps } from '../capabilities/kind'
-import {
-  checkCodex,
-  describeStatus,
-  pathOf,
-  readinessOf,
-  remedyFor,
-  type CodexStatus,
-} from './codex/status'
-import { CODEX_SAYS, REMEDY_SAYS } from '@shared/delegation'
 import { EMOTIONS } from '@shared/avatar'
 import type { Forgotten, SettingsCodex } from '@shared/ipc'
 import {
@@ -163,6 +154,8 @@ import { whatSheMayDo } from './what-she-may-do'
 import { createConversation, type Conversation } from './store/conversation'
 import { previousNote, recall, recallState, remember } from './store/memory'
 import { createCompanionWindow, showHistoryWindow } from './window'
+import { checkCodexNow, codexForWindow } from './codex/ready'
+import { codexPathNow } from './codex/ready'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
 // application's identity is how a notification arrives attributed to nothing and
@@ -219,7 +212,6 @@ if (process.platform === 'darwin') {
  * every one of these paths falls back to something that works — so from the
  * outside a rejected file is indistinguishable from the app ignoring it.
  */
-const problems = createProblems()
 
 /**
  * What she can do, decided at build time.
@@ -230,76 +222,6 @@ const problems = createProblems()
  * a fork-and-build project is the build system.
  */
 const registry = createRegistry(CAPABILITIES.manifests)
-
-/**
- * Where the Codex CLI is, found once and remembered.
- *
- * Resolved rather than shelled out to — see `ask-workspace/locate.ts` for why, and for the
- * machine on the fleet where every shell-based lookup reports it missing. Null
- * means genuinely absent, which she says out loud rather than answering from
- * memory.
- */
-let codexPath: string | null = null
-
-/**
- * What the last check made of the local Codex, and why it is held rather than
- * asked for.
- *
- * `checkCodex` spawns two child processes with a deadline each. `settings:read`
- * runs whenever the window redraws, so probing there would put two spawns
- * behind a tab change — and the answer barely moves: it changes when somebody
- * installs the CLI, signs in, or lets a token expire, none of which happen
- * while a pane is being looked at.
- *
- * Null until the first check completes. The window is told `timed-out` for that
- * window of a second or two, which is the one state whose remedy is "ask
- * again" — the honest answer for "the check has not finished".
- */
-let codexStatus: CodexStatus | null = null
-
-/** The last answer, reduced to what a renderer may hear. See `SettingsCodex`. */
-function codexForWindow(): SettingsCodex {
-  if (codexStatus === null) return { readiness: 'timed-out', remedy: 'retry' }
-  return { readiness: readinessOf(codexStatus), remedy: remedyFor(codexStatus) }
-}
-
-/**
- * Run the whole check, take its two consequences, and answer.
- *
- * TWO consequences, and they are different in kind. `codexPath` is what
- * `ask-workspace` spawns, so it must follow the check rather than a separate
- * search — there were two answers to "where is Codex" and only one of them
- * looked at whether the binary runs. The problems note is what somebody sees
- * without opening the settings window at all.
- *
- * `describeStatus` goes to the LOG and nothing else: it carries the resolved
- * path and every directory searched, which is a home directory, which is a
- * username. What reaches the window is `readinessOf`, which is seven words.
- */
-async function checkCodexNow(): Promise<SettingsCodex> {
-  const status = await checkCodex({
-    platform: process.platform,
-    env: process.env,
-    home: app.getPath('home'),
-  })
-  codexStatus = status
-  // From the check that RAN it, not from a second search. There were two
-  // answers to "where is Codex" and only this one knows the file is executable.
-  codexPath = pathOf(status)
-  console.log(`[codex] ${describeStatus(status)}`)
-  if (status.kind !== 'ready') {
-    // Loud, and reported. Without a usable Codex she cannot look anything up,
-    // and the failure otherwise presents as her declining to help.
-    problems.note('codex', null, `${CODEX_SAYS[readinessOf(status)]} ${remedySentence(status)}`)
-  }
-  return codexForWindow()
-}
-
-/** The remedy as words, or nothing when there is none. See `REMEDY_SAYS`. */
-function remedySentence(status: CodexStatus): string {
-  const remedy = remedyFor(status)
-  return remedy === null ? '' : REMEDY_SAYS[remedy]
-}
 
 console.log(
   `[capability] ${registry.tools.length} available: ${registry.tools.map((t) => t.name).join(', ')}`,
@@ -1461,7 +1383,7 @@ const capabilityDeps: CapabilityDeps = {
     if (sessionPersona !== null) ids.delete(sessionPersona)
     return ids
   },
-  codexPath: () => codexPath,
+  codexPath: codexPathNow,
   workspace: () => readWorkspace(app.getPath('userData')),
   guardStopAt: () => {
     const userData = app.getPath('userData')
