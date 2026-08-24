@@ -27,27 +27,12 @@ import { DEFAULT_POLICY } from '@shared/policy'
 import { PACKAGE_FACE } from './avatars'
 import { DEFAULT_PERSONA, type Persona } from '@shared/persona'
 import { BUILT_IN_ID } from '@shared/parse-persona'
-import {
-  LEGACY_FILE,
-  EDITS,
-  activePersona,
-  builtInPersona,
-  copyPersonaTo,
-  deletePersona,
-  discardWrite,
-  editsFrom,
-  loadPersonas,
-  readEdits,
-  restoreBuiltIn,
-  migrateLegacyPersona,
-  migrateLooseFiles,
-  MANIFEST,
-  hasOwnFace,
-  personasRoot,
-  savePersonaTo,
-  sweepDeletions,
-  type PersonaEdits,
-} from './personas'
+import { activePersona, copyPersonaTo, loadPersonas, hasOwnFace, savePersonaTo } from './personas'
+import { LEGACY_FILE, MANIFEST, personasRoot } from './persona-files'
+import { EDITS, builtInPersona, type PersonaEdits } from './her-edits'
+import { deletePersona, discardWrite, sweepDeletions } from './delete-persona'
+import { editsFrom, readEdits, restoreBuiltIn } from './her-edits'
+import { migrateLegacyPersona, migrateLooseFiles } from './migrate-personas'
 
 const roots: string[] = []
 

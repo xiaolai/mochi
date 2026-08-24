@@ -38,20 +38,11 @@ import {
   readBearer,
   type Minted,
 } from './voice/credential'
-import {
-  activePersona,
-  copyPersonaTo,
-  deletePersona,
-  discardWrite,
-  loadPersonas,
-  readEdits,
-  migrateLegacyPersona,
-  migrateLooseFiles,
-  personasRoot,
-  restoreBuiltIn,
-  savePersonaTo,
-  sweepDeletions,
-} from './store/personas'
+import { activePersona, copyPersonaTo, loadPersonas, savePersonaTo } from './store/personas'
+import { personasRoot } from './store/persona-files'
+import { deletePersona, discardWrite, sweepDeletions } from './store/delete-persona'
+import { readEdits, restoreBuiltIn } from './store/her-edits'
+import { migrateLegacyPersona, migrateLooseFiles } from './store/migrate-personas'
 import type { PersonaCatalog } from './store/personas'
 import { keepsFor, writePolicy } from './store/policy'
 import type { Policy } from '@shared/policy'

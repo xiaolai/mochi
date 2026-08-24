@@ -55,7 +55,8 @@ import { MOST_LANGUAGES, isLanguageCode } from '@shared/transcription'
 import type { Usage } from './store/usage'
 import { WEB_SEARCH_MODES, isWebSearchMode, type WebSearchMode } from '@shared/delegation'
 import type { Registry } from '@shared/capability/registry'
-import { PERSONAS_DIR, type PersonaCatalog } from './store/personas'
+import { type PersonaCatalog } from './store/personas'
+import { PERSONAS_DIR } from './store/persona-files'
 import { AVATARS_DIR } from './store/avatars'
 
 /**

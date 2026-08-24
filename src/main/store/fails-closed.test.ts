@@ -8,7 +8,9 @@ import { DEFAULT_PERSONA } from '@shared/persona'
 import type { Policy } from '@shared/policy'
 
 import { createConversation } from './conversation'
-import { LEGACY_FILE, loadPersonas, migrateLegacyPersona, personasRoot } from './personas'
+import { loadPersonas } from './personas'
+import { LEGACY_FILE, personasRoot } from './persona-files'
+import { migrateLegacyPersona } from './migrate-personas'
 import { keepsFor, policyRoot } from './policy'
 import { createTranscripts } from './transcripts'
 

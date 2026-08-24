@@ -4,7 +4,9 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { loadPersonas, personasRoot, readEdits } from './store/personas'
+import { loadPersonas } from './store/personas'
+import { personasRoot } from './store/persona-files'
+import { readEdits } from './store/her-edits'
 
 /**
  * Her own edits are loaded, and there is one place that loads them.
