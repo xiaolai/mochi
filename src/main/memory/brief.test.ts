@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_BRIEF_CHARS, briefFor } from './brief'
-import type { Turn } from '../store/transcripts'
+import type { Turn } from '../store/turn-row'
 
 const NOW = 1_700_000_000_000
 const HOUR = 3_600_000

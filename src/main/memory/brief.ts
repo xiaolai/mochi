@@ -30,7 +30,7 @@
  * for one.
  */
 
-import type { Turn } from '../store/transcripts'
+import type { Turn } from '../store/turn-row'
 import { fenced } from '@shared/instructions'
 import { elapsedWords } from './elapsed'
 import { oneLine } from '@shared/text'

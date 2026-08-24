@@ -13,14 +13,13 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  ARCHIVE_FORMAT,
   boundedForgetSet,
   createTranscripts,
   MOST_AT_ONCE,
-  parseArchive,
   TRANSCRIPTS_FILE,
   type Transcripts,
 } from './transcripts'
+import { ARCHIVE_FORMAT, parseArchive } from './archive'
 
 const open: Transcripts[] = []
 const homes = new WeakMap<Transcripts, string>()

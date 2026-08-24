@@ -54,7 +54,7 @@
  * awake; that is the same failure the delegation hold has from the other side.
  */
 
-import type { Turn } from '../store/transcripts'
+import type { Turn } from '../store/turn-row'
 import { PERSONA_LIMITS } from '@shared/persona'
 import { fenced } from '@shared/instructions'
 import { oneLine } from '@shared/text'

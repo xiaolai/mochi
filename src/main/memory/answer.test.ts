@@ -10,7 +10,7 @@ const GUIDANCE = {
   unavailable: say('recall.unavailable'),
 }
 import { MAX_HITS, MAX_HIT_CHARS, answerFor, recallPayloadFor, unavailable } from './answer'
-import type { Hit } from '../store/transcripts'
+import type { Hit } from '../store/turn-row'
 
 const NOW = 1_700_000_000_000
 const DAY = 86_400_000

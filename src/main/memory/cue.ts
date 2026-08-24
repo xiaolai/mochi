@@ -30,7 +30,7 @@
  * inside the code -- it only shows up as somebody finding her exhausting.
  */
 
-import type { Hit } from '../store/transcripts'
+import type { Hit } from '../store/turn-row'
 import { fenced } from '@shared/instructions'
 import { elapsedWords } from './elapsed'
 import { oneLine } from '@shared/text'

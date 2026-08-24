@@ -15,7 +15,7 @@ import {
   summarise,
 } from './summarise'
 import { PERSONA_LIMITS } from '@shared/persona'
-import type { Turn } from '../store/transcripts'
+import type { Turn } from '../store/turn-row'
 
 // The OTHER characters on this machine. The worn persona's own id is never in
 // here -- see `entryProblem`.

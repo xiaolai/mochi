@@ -156,12 +156,8 @@ import {
   refuse,
 } from './settings'
 import { packageFolder } from './store/personas'
-import {
-  boundedForgetSet,
-  createTranscripts,
-  type SessionToken,
-  type Transcripts,
-} from './store/transcripts'
+import { boundedForgetSet, createTranscripts, type Transcripts } from './store/transcripts'
+import { type SessionToken } from './store/turn-row'
 import { noteUsed, readUsage } from './store/usage'
 import { whatSheMayDo } from './what-she-may-do'
 import { createConversation, type Conversation } from './store/conversation'

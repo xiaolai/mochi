@@ -30,7 +30,7 @@
  * later turn of it. The archive is unbounded by design; what leaves it is not.
  */
 
-import type { Hit } from '../store/transcripts'
+import type { Hit } from '../store/turn-row'
 import { fenced } from '@shared/instructions'
 import { elapsedWords } from './elapsed'
 import { oneLine } from '@shared/text'

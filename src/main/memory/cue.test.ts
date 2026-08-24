@@ -8,7 +8,7 @@ import {
   cueFor,
   keyOf,
 } from './cue'
-import type { Hit } from '../store/transcripts'
+import type { Hit } from '../store/turn-row'
 
 const NOW = 1_700_000_000_000
 const OLD = NOW - MIN_HIT_AGE_MS * 72

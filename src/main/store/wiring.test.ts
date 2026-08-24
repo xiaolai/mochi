@@ -202,7 +202,13 @@ function receiversOf(surfaceType: string): Set<string> {
 function isCalled(surface: Surface): boolean {
   const pattern =
     surface.kind === 'function'
-      ? new RegExp(`(?<!function )(?<![A-Za-z0-9_$.])${surface.name}\\s*\\(`)
+      ? // The leading `.` exclusion is there to reject `obj.name(` -- a method
+        // call is not a call to the free function of the same name. But it also
+        // rejected `...name(`, because a spread's third dot is a dot: `toTurn`
+        // was called three times and reported as having no caller at all. The
+        // alternative branch lets a spread through without letting a property
+        // access through.
+        new RegExp(`(?:(?<!function )(?<![A-Za-z0-9_$.])|(?<=\\.\\.\\.))${surface.name}\\s*\\(`)
       : new RegExp(`([A-Za-z][A-Za-z0-9_$]*)(?:\\(\\))?\\??\\s*\\.\\s*${surface.name}\\s*\\(`)
   const receivers = surface.kind === 'method' ? receiversOf(surface.owner) : null
   for (const path of tsFilesUnder(SRC)) {

@@ -1,4 +1,5 @@
-import type { Speaker, Transcripts } from './transcripts'
+import type { Transcripts } from './transcripts'
+import type { Speaker } from './turn-row'
 
 /**
  * The conversation currently being written down.
