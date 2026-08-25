@@ -653,6 +653,14 @@ believed.
 
 Every item traces to a finding above. Nothing here is invented.
 
+**Five findings are absent because they are already fixed**, not because they
+were dropped: H13 (`look_up` key truncation) in `9eb91eb`, H17 (`kept` deletions
+armed no scrub retry) and H18 (`transcripts.db` unguarded against a symlink at
+its own path) in `d740762`, and the two smaller ones listed `[FIXED]` in §2.
+They stay in the report with their evidence because the pattern that produced
+them — four of the five introduced by an earlier fix in the same session — is
+§1's headline.
+
 ### Phase 1 — Critical (do immediately)
 
 | Finding                                                               | Fix                                                                                                                                                          | Effort  | Files                                                |
@@ -705,7 +713,16 @@ Grouped, ~4 days: **fail-open cluster** — `readTombstones` (`unfinished.ts:91`
 
 - **`claims.test.ts` (§1)** — Medium effort, and it is the only item that prevents recurrence rather than fixing an instance. Start with the eight comments naming a mechanism.
 - **Handler tests for `keep` and `forget-kept` (§5)** — Small; `look_up` now has 8.
-- **Extract the three state clusters (§3.5)** — Medium; 236 lines, then revert the 1530 override.
+- **Extract the three state clusters (§3.5)** — Medium; 236 lines.
+- **Extract the `voice:*` block from `index.ts`** — Medium; lines 1409–1775, 367
+  lines, 5 channels. Re-measured 2026-08-26 after the note in
+  `.claude/loc-guardian.local.md` was found to overstate the cost: 20 external
+  names, of which **one** is written (`sessionPersona`), not "roughly a third
+  setters". `minted` and `reconnectTimer` are declared inside the block and
+  travel with it. Eleven of the twenty are functions better imported than
+  injected. Do this **with** C4 — C4 rekeys `minted`, which is one of the two
+  bindings moving. Lower the ceiling from 1530 to ~1160 in the same change,
+  never before it.
 
 ### Dependency graph
 
@@ -713,6 +730,10 @@ Grouped, ~4 days: **fail-open cluster** — `readTombstones` (`unfinished.ts:91`
 - H5 (re-check before delivery) depends on H4 — the delivery path must know its generation.
 - H11 (`put()` reports) should land before C1's fix, so the grant path can distinguish "revoked" from "frame dropped".
 - §3.5 extraction should land before any further `index.ts` growth; the file sits at 1,521 of 1,530.
+- The `voice:*` extraction and **C4** touch the same two bindings (`minted`,
+  `reconnectTimer`). Doing them separately means rekeying `minted` in `index.ts`
+  and then moving it; do C4 first inside the extraction, or the extraction first
+  and C4 in its new home. Not both independently.
 
 ### Estimated total effort
 
