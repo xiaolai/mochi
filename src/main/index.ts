@@ -17,6 +17,7 @@ import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
 import { whatToFile } from './heard'
 import { readVoiceReport } from '@shared/voice-report'
+import { grantOutcome } from './grant-outcome'
 import { createMintSlot } from './voice/mint-slot'
 import { createNextSession } from './voice/next-session'
 import { renderTools } from './tools-sent'
@@ -2455,8 +2456,12 @@ ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
   if (typeof asked.allowed !== 'boolean') return refuse('That is not a yes or a no.')
 
   const userData = app.getPath('userData')
+  // Held, because the answer below depends on WHICH character this was written
+  // for -- and `wornId()` reads from disk on every call, so asking twice can
+  // give two answers if the shelf moves in between.
+  const writtenFor = wornId()
   try {
-    writeGrant(userData, wornId(), asked.id, asked.allowed, legacyGrants(userData))
+    writeGrant(userData, writtenFor, asked.id, asked.allowed, legacyGrants(userData))
   } catch (error: unknown) {
     // Loud, and where somebody will see it. A permission that silently did not
     // change is the worst failure this window can have: the switch says one
@@ -2481,11 +2486,18 @@ ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
     problems.note('settings', asked.id, `saved, but she was not told: ${String(error)}`)
     told = false
   }
-  // There may simply be no session — she is asleep, or has never woken. That is
-  // not a failure, and the next wake reads this from disk.
-  if (!told && sessionPersona !== null) {
-    return refuse('Saved, but she could not be told just now — it applies from her next wake.')
-  }
+  /*
+    The answer is a DECISION, and it has two persona ids in it.
+
+    This used to be `if (!told && sessionPersona !== null)`, which misses the
+    case that matters: the shelf can change who is worn while a session is up,
+    so the grant is written for the newly worn character while dispatch goes on
+    consulting the one the session was configured as. The frame is delivered,
+    `told` is true, and the capability keeps running -- and the window said the
+    change was in force. See `grant-outcome.ts`.
+  */
+  const outcome = grantOutcome({ writtenFor, live: sessionPersona, told })
+  if (!outcome.ok) return refuse(outcome.why)
   return { ok: true }
 })
 
