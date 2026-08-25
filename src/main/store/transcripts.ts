@@ -490,7 +490,7 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       }))
   }
 
-  const kept = createKept(stmt)
+  const kept = createKept(stmt, scrub)
 
   return {
     kept,

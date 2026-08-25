@@ -21,6 +21,19 @@ import type { ByPronoun } from '@shared/pronoun'
  */
 export const SAYS = {
   mayDo: { she: 'What she may do', he: 'What he may do', it: 'What it may do' },
+  /*
+    Says WHOSE answer this is.
+
+    Permissions became per character in 2026-08 and this pane did not say so, so
+    somebody withholding the workspace here would reasonably believe they had
+    withheld it everywhere. The switches are the same; what changed is who they
+    are about, and a pane that does not say that is a pane that misleads.
+  */
+  mayDoWhose: {
+    she: 'These are for the character she is wearing. Each one has her own.',
+    he: 'These are for the character he is wearing. Each one has his own.',
+    it: 'These are for the character it is wearing. Each one has its own.',
+  },
   atOnce: {
     she:
       'Turning one off takes effect at once, and she is told — she will say she can no longer ' +

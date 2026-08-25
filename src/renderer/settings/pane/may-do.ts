@@ -58,13 +58,23 @@ export const MAY_DO: Pane = {
       return row
     })
 
+    // Above the switches, not below them: whose answer this is has to be read
+    // before they are operated, not after.
+    const whose = element('p', 'note', forPronoun(SAYS.mayDoWhose, view.pronoun))
     const note = element('p', 'note', forPronoun(SAYS.atOnce, view.pronoun))
 
     const heading = element('h3', undefined, forPronoun(SAYS.told, view.pronoun))
     if (view.capabilities.length === 0) {
-      return [...rows, note, heading, element('p', 'note', forPronoun(SAYS.noTools, view.pronoun))]
+      return [
+        whose,
+        ...rows,
+        note,
+        heading,
+        element('p', 'note', forPronoun(SAYS.noTools, view.pronoun)),
+      ]
     }
     return [
+      whose,
       ...rows,
       note,
       heading,

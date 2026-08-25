@@ -197,3 +197,18 @@ describe('the three legacy states, which the third audit separated', () => {
     expect(after.ask_workspace).toBe(false)
   })
 })
+
+describe('a character created after the upgrade', () => {
+  it('starts at the defaults rather than inheriting the old global answer', async () => {
+    // The hole the fallback opened. A character created today would otherwise
+    // reach the pre-upgrade global setting — a permission decision made about
+    // somebody else, before per-character permissions existed.
+    const { copyPersonaTo, loadPersonas } = await import('./personas')
+    const { DEFAULT_PERSONA } = await import('@shared/persona')
+    const legacy = { ...DEFAULT_GRANTS, ask_workspace: false }
+
+    const made = copyPersonaTo(userData, loadPersonas(userData, {}, true), DEFAULT_PERSONA, 'Ada')
+    expect(hasGrants(userData, made.id)).toBe(true)
+    expect(readGrants(userData, made.id, legacy).ask_workspace).toBe(true)
+  })
+})

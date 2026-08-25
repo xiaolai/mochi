@@ -166,6 +166,19 @@ export function writeGrant(
   writeJsonAtomically(grantsPath(userData, id), { ...base, [grant]: allowed })
 }
 
+/**
+ * Give a brand-new character her own file, holding the defaults.
+ *
+ * So she never reaches the legacy fallback. Quiet when she already has one —
+ * this is called on a path that may be retried, and overwriting would discard a
+ * choice rather than seed one.
+ */
+export function seedGrants(userData: string, id: string): void {
+  if (hasGrants(userData, id)) return
+  mkdirSync(grantsRoot(userData), { recursive: true })
+  writeJsonAtomically(grantsPath(userData, id), DEFAULT_GRANTS)
+}
+
 /** Her permissions die with her. Called from `finishDeletion`. */
 export function forgetGrants(userData: string, id: string): void {
   /*

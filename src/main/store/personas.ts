@@ -38,6 +38,7 @@ import { EDITS, type PersonaEdits, builtInPersona, writeEdits } from './her-edit
 import { PENDING_POLICY, migratePolicy, readTombstones, settlePendingPolicy } from './unfinished'
 import { MANIFEST, claimedId, personasRoot, reservePackage, writeManifest } from './persona-files'
 import { MAX_PERSONAS } from './persona-files'
+import { seedGrants } from './grants'
 
 /**
  * The folder a persona is stored in, having checked it is still HERS.
@@ -564,6 +565,17 @@ export function copyPersonaTo(
     rmSync(join(root, id), { recursive: true, force: true })
     throw error
   }
+  /*
+    A NEW character starts at the defaults, not at somebody else's answer.
+
+    `readGrants` falls back to the one pre-upgrade global setting when a
+    character has no file, which is what stops an unfinished migration granting
+    everything. Left unseeded, a character created today would inherit that
+    fallback — a permission decision made about a different character, before
+    per-character permissions existed. Writing her own file is what makes the
+    fallback mean only "from before the upgrade".
+  */
+  seedGrants(userData, id)
   return { id, source: id }
 }
 

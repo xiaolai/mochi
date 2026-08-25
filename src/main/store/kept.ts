@@ -72,6 +72,17 @@ export interface Kept {
 
 export function createKept(
   stmt: ReturnType<typeof prepareAll>,
+  /**
+   * Truncate the write-ahead log after a delete.
+   *
+   * `secure_delete` zeroes a freed page in the FILE; in WAL mode the words go
+   * on sitting in `transcripts.db-wal` until a checkpoint. Every other
+   * destructive operation in this store already calls this — `forget`,
+   * `forgetEverything` and `close` — and these three were the only ones that
+   * did not, in the one store whose entire justification is that deleting is
+   * real.
+   */
+  scrub: () => void = () => {},
   now: () => number = Date.now,
 ): Kept {
   const rows = (personaId: string): number =>
@@ -138,16 +149,22 @@ export function createKept(
 
     forgetOne(personaId, collection, key) {
       if (!NAME.test(collection) || !NAME.test(key)) return false
-      return Number(stmt.keptForgetOne.run(personaId, collection, key).changes) > 0
+      const gone = Number(stmt.keptForgetOne.run(personaId, collection, key).changes) > 0
+      if (gone) scrub()
+      return gone
     },
 
     forgetCollection(personaId, collection) {
       if (!NAME.test(collection)) return 0
-      return Number(stmt.keptForgetCollection.run(personaId, collection).changes)
+      const gone = Number(stmt.keptForgetCollection.run(personaId, collection).changes)
+      if (gone) scrub()
+      return gone
     },
 
     forgetAll(personaId) {
-      return Number(stmt.keptForgetAll.run(personaId).changes)
+      const gone = Number(stmt.keptForgetAll.run(personaId).changes)
+      if (gone) scrub()
+      return gone
     },
   }
 }

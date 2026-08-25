@@ -4,7 +4,11 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { KEPT_LIMITS } from './kept'
+import { DatabaseSync } from 'node:sqlite'
+
+import { KEPT_LIMITS, createKept } from './kept'
+import { applySchema } from './schema'
+import { prepareAll } from './statements'
 import { createTranscripts } from './transcripts'
 import type { Transcripts } from './transcripts'
 
@@ -15,6 +19,13 @@ import type { Transcripts } from './transcripts'
  * supplied by the caller and never by an argument the model fills in, and these
  * are what say that stayed true.
  */
+/** A throwaway in-memory database, so the scrub can be observed in isolation. */
+function openDb(): DatabaseSync {
+  const db = new DatabaseSync(':memory:')
+  applySchema(db)
+  return db
+}
+
 let userData = ''
 let store: Transcripts
 
@@ -189,5 +200,37 @@ describe('what the second audit found', () => {
     for (let i = 0; i < 30; i++) store.kept.put('ada', 'c', `k${String(i)}`, 'v')
     expect(store.kept.inCollection('ada', 'c', 5)).toHaveLength(5)
     expect(store.kept.inCollection('ada', 'c')).toHaveLength(30)
+  })
+})
+
+describe('deleting from her store', () => {
+  it('truncates the write-ahead log, like every other delete in this store', () => {
+    // `secure_delete` zeroes a freed page in the FILE; in WAL mode the words go
+    // on sitting in `transcripts.db-wal` until a checkpoint. `forget`,
+    // `forgetEverything` and `close` all scrub; these three did not.
+    let scrubs = 0
+    const spy = createKept(prepareAll(openDb()), () => {
+      scrubs += 1
+    })
+    spy.put('ada', 'c', 'k', 'v')
+    expect(scrubs).toBe(0)
+    expect(spy.forgetOne('ada', 'c', 'k')).toBe(true)
+    expect(scrubs).toBe(1)
+    spy.put('ada', 'c', 'k', 'v')
+    spy.forgetCollection('ada', 'c')
+    expect(scrubs).toBe(2)
+    spy.put('ada', 'c', 'k', 'v')
+    spy.forgetAll('ada')
+    expect(scrubs).toBe(3)
+  })
+
+  it('does not scrub when nothing was removed', () => {
+    // A checkpoint per no-op delete is work with nothing behind it.
+    let scrubs = 0
+    const spy = createKept(prepareAll(openDb()), () => {
+      scrubs += 1
+    })
+    expect(spy.forgetOne('ada', 'c', 'nothing')).toBe(false)
+    expect(scrubs).toBe(0)
   })
 })
