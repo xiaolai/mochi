@@ -35,7 +35,7 @@
  * transcripts is the outcome per-id filing exists to prevent.
  */
 
-import { mkdirSync, realpathSync } from 'node:fs'
+import { lstatSync, mkdirSync, realpathSync, type Stats } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
@@ -237,6 +237,16 @@ const open = new Set<string>()
  * business, not the caller's. Refuses a second connection to a file this
  * process already has open; see `open`.
  */
+/** `lstat`, or null when there is nothing there. Does NOT follow a link. */
+function statSyncOrNull(path: string): Stats | null {
+  try {
+    return lstatSync(path)
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
 export function createTranscripts(userData: string): Transcripts {
   mkdirSync(userData, { recursive: true })
   // CANONICAL, not the joined string. The registry's whole claim is "one
@@ -248,6 +258,21 @@ export function createTranscripts(userData: string): Transcripts {
   // Resolved AFTER the directory is created, because `realpath` needs the path
   // to exist; the file itself may not yet, so the directory is what is resolved.
   const path = join(realpathSync(userData), TRANSCRIPTS_FILE)
+  /*
+    The FILE, not just the directory it sits in.
+
+    `realpathSync` above resolves `userData`; the filename is appended after,
+    so a symbolic link AT `transcripts.db` is neither detected nor resolved —
+    every conversation and the write-ahead log land wherever it points, with
+    this process's privileges. Every other store in this app refuses that shape
+    loudly via `storeRoot`; the database was the one that did not.
+
+    Absent is fine: creating it is the ordinary first launch.
+  */
+  const held = statSyncOrNull(path)
+  if (held !== null && !held.isFile()) {
+    throw new Error(`refusing to open ${TRANSCRIPTS_FILE}: it is not a regular file`)
+  }
   if (open.has(path)) {
     throw new Error(`${path} is already open in this process`)
   }
@@ -490,7 +515,24 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       }))
   }
 
-  const kept = createKept(stmt, scrub)
+  /*
+    Her store gets `scrub` WITH the retry counter armed.
+
+    `retryScrubSoon` bails on `scrubsLeft <= 0`, and only the three transcript
+    deletes set it. `kept` was handed the bare `scrub`, so a checkpoint that
+    lost the race to a live reader warned once and scheduled nothing — the
+    documents stayed in the write-ahead log until an unrelated delete or a
+    clean quit. That is the exact defect the retry was written for, in the one
+    store whose whole justification is that deleting is real.
+
+    Armed here rather than inside `scrub()` itself, because `scrub` is also
+    what the retry timer calls: arming there would reset the budget on every
+    attempt and never stop.
+  */
+  const kept = createKept(stmt, () => {
+    scrubsLeft = SCRUB_TRIES
+    scrub()
+  })
 
   return {
     kept,

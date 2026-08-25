@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -232,5 +232,40 @@ describe('deleting from her store', () => {
     })
     expect(spy.forgetOne('ada', 'c', 'nothing')).toBe(false)
     expect(scrubs).toBe(0)
+  })
+})
+
+describe('a scrub that loses the race to a reader', () => {
+  it('arms the retry, rather than warning once and scheduling nothing', () => {
+    // `retryScrubSoon` bails on `scrubsLeft <= 0`, and only the three transcript
+    // deletes set it. `kept` was handed the bare `scrub`, so a busy checkpoint
+    // left the documents in the write-ahead log until an unrelated delete or a
+    // clean quit — in the one store whose justification is that deleting is real.
+    let armed = 0
+    const spy = createKept(prepareAll(openDb()), () => {
+      armed += 1
+    })
+    spy.put('ada', 'c', 'k', 'v')
+    spy.forgetAll('ada')
+    // The wrapper transcripts.ts hands in is what arms the counter; assert the
+    // store calls it rather than reaching past it.
+    expect(armed).toBe(1)
+  })
+})
+
+describe('the database file itself', () => {
+  it('is refused when it is not a regular file', () => {
+    // Every other store refuses a redirected root loudly via `storeRoot`. The
+    // database appended its filename AFTER resolving the directory, so a link
+    // at `transcripts.db` was neither detected nor resolved.
+    const elsewhere = mkdtempSync(join(tmpdir(), 'mochi-elsewhere-'))
+    const home = mkdtempSync(join(tmpdir(), 'mochi-dbguard-'))
+    try {
+      symlinkSync(join(elsewhere, 'real.db'), join(home, 'transcripts.db'))
+      expect(() => createTranscripts(home)).toThrow(/not a regular file/)
+    } finally {
+      rmSync(elsewhere, { recursive: true, force: true })
+      rmSync(home, { recursive: true, force: true })
+    }
   })
 })
