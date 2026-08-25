@@ -21,14 +21,28 @@ import { looksEmpty } from '@shared/text'
  * character's rows because she is never asked which rows to reach for.
  */
 
-/** Bounds. An unbounded store is an unbounded prompt; see `PERSONA_LIMITS`. */
+/** Bounds. Each one says what it actually holds back; see `PERSONA_LIMITS`. */
 export const KEPT_LIMITS = {
   /** A collection or key name, in graphemes. */
   name: 64,
   /** One document, in graphemes. Same as `style`, because it is prompt-adjacent. */
   value: 4000,
-  /** Rows one persona may hold, so a runaway loop is visible rather than costly. */
-  rows: 500,
+  /**
+   * Rows one persona may hold.
+   *
+   * A backstop against a runaway loop, and NOT a bound on her prompt — which is
+   * what this comment used to claim. It stopped being true the moment the
+   * index became names-and-counts and `look_up` bounded its own output: a
+   * thousand rows in one collection reach her prompt as a single line. What
+   * actually bounds the recurring cost is `MOST_COLLECTIONS` in
+   * `instructions.ts`, because the prompt grows with COLLECTIONS and never with
+   * rows.
+   *
+   * So this guards disk and a loop, both of which a thousand covers as well as
+   * five hundred did while leaving more room for somebody who genuinely uses
+   * it.
+   */
+  rows: 1_000,
 } as const
 
 /**

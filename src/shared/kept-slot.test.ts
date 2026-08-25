@@ -55,3 +55,37 @@ describe('the index she is handed', () => {
     expect(said.indexOf('projects (3)')).toBeGreaterThan(0)
   })
 })
+
+describe('a character who has kept a great many things', () => {
+  const many = (n: number): { collection: string; entries: number }[] =>
+    Array.from({ length: n }, (_, i) => ({ collection: `c${String(i)}`, entries: 1 }))
+
+  it('does not put five hundred lines in front of the model', () => {
+    // The path that was actually unbounded. The index grows with COLLECTIONS
+    // and never with rows, so the row cap never held this back — and this is
+    // the cost paid on every wake AND every hourly reconnect.
+    const said = instructionsFor(DEFAULT_PERSONA, '', '', '', undefined, many(500))
+    const listed = said.split('\n').filter((line) => line.startsWith('- c')).length
+    expect(listed).toBe(20)
+  })
+
+  it('counts what it left out rather than implying there was nothing', () => {
+    const said = instructionsFor(DEFAULT_PERSONA, '', '', '', undefined, many(500))
+    expect(said).toContain('480 more')
+  })
+
+  it('says nothing about a remainder when there is none', () => {
+    const said = instructionsFor(DEFAULT_PERSONA, '', '', '', undefined, many(3))
+    expect(said).not.toContain('more, which look_up')
+    expect(said.split('\n').filter((line) => line.startsWith('- c')).length).toBe(3)
+  })
+
+  it('grows with collections, not with rows', () => {
+    // A thousand entries under one name is one line. This is why the row cap
+    // was never the thing bounding her prompt.
+    const one = instructionsFor(DEFAULT_PERSONA, '', '', '', undefined, [
+      { collection: 'projects', entries: 1_000 },
+    ])
+    expect(one.split('\n').filter((line) => line.startsWith('- ')).length).toBe(1)
+  })
+})

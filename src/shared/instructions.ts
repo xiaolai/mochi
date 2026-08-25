@@ -99,6 +99,40 @@ export function fenced(tag: string, text: string): string {
  * now it could forge a heading, which is the same class of thing the fence
  * already only mitigates.
  */
+/**
+ * The most collections her prompt will ever list.
+ *
+ * The index grows with COLLECTIONS, not with rows — a thousand entries under
+ * one name is one line. So this is the number that bounds what she costs on
+ * every wake and every hourly reconnect, and the row cap never was: nothing
+ * stopped a character holding five hundred collections of one row each and
+ * putting five hundred lines in front of the model, for ever.
+ *
+ * Twenty is enough that a real store is described rather than sampled, and
+ * small enough that the section stays a glance.
+ */
+const MOST_COLLECTIONS = 20
+
+/**
+ * Names and counts, never contents, and never more than a screen of them.
+ *
+ * The remainder is COUNTED rather than dropped. A list that looks complete is
+ * how she comes to say confidently that something is not there — the same
+ * reason `look_up` reports what it did not read.
+ */
+function keptIndex(
+  kept: readonly { readonly collection: string; readonly entries: number }[],
+  prompts: Prompts,
+): string {
+  if (kept.length === 0) return ''
+  const shown = kept.slice(0, MOST_COLLECTIONS)
+  const lines = shown.map((one) => `- ${one.collection} (${String(one.entries)})`)
+  if (kept.length > shown.length) {
+    lines.push(`- and ${String(kept.length - shown.length)} more, which look_up will list`)
+  }
+  return [prompts('kept.heading'), lines.join('\n')].filter((line) => line !== '').join('\n')
+}
+
 export function instructionsFor(
   persona: Persona,
   memory: string,
@@ -165,15 +199,7 @@ export function instructionsFor(
     brief: brief.trim(),
     // Empty means ABSENT, for the reason the memory section gives: a heading
     // with nothing under it invites the model to invent something to put there.
-    kept:
-      kept.length === 0
-        ? ''
-        : [
-            prompts('kept.heading'),
-            kept.map((one) => `- ${one.collection} (${String(one.entries)})`).join('\n'),
-          ]
-            .filter((line) => line !== '')
-            .join('\n'),
+    kept: keptIndex(kept, prompts),
     /*
       Which faces she has, and only when it is not all of them.
 
