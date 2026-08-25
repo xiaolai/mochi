@@ -146,3 +146,26 @@ describe('the failure modes the audit found', () => {
     }
   })
 })
+
+describe('an unseeded character is never permissive', () => {
+  it('falls back to the global setting when she has no file yet', () => {
+    // The hole the second audit found: migration was the only thing standing
+    // between an upgrade and DEFAULT_GRANTS, so a migration that threw — or had
+    // simply not reached her — handed back every permission somebody withheld.
+    const legacy = { ...DEFAULT_GRANTS, ask_workspace: false }
+    expect(hasGrants(userData, 'ada')).toBe(false)
+    expect(readGrants(userData, 'ada', legacy).ask_workspace).toBe(false)
+  })
+
+  it('prefers her own file once she has one', () => {
+    writeGrant(userData, 'ada', 'ask_workspace', true)
+    const legacy = { ...DEFAULT_GRANTS, ask_workspace: false }
+    expect(readGrants(userData, 'ada', legacy).ask_workspace).toBe(true)
+  })
+
+  it('still withholds when her file is there and unusable, fallback or not', () => {
+    mkdirSync(join(userData, 'grants'), { recursive: true })
+    writeFileSync(join(userData, 'grants', 'ada.json'), '{not json')
+    expect(readGrants(userData, 'ada', DEFAULT_GRANTS)).toEqual(WITHHELD_GRANTS)
+  })
+})

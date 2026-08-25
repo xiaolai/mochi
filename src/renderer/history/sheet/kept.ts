@@ -17,6 +17,35 @@ import type { ShelfView } from '@shared/history-window'
  * where they can be seen before they happen; removing one entry is a
  * conversation she can have, and `forget_kept` is where that lives.
  */
+/**
+ * A destructive button that has to be pressed twice.
+ *
+ * Two gestures, per this project's rule that permanent deletion needs one — and
+ * these are permanent: there is no undo copy of her store, deliberately, since
+ * a hidden copy would contradict the promise the delete button is there to
+ * keep. The second press is a different word in a different colour, so it
+ * cannot be reached by a double-click on the first.
+ *
+ * Disabled the moment it dispatches. Without that, a slow write leaves a live
+ * button whose second press asks again for something already happening.
+ */
+function twicePlease(label: string, sure: string, act: () => void): HTMLButtonElement {
+  const button = element('button', 'btn', label)
+  button.type = 'button'
+  let armed = false
+  button.addEventListener('click', () => {
+    if (!armed) {
+      armed = true
+      button.textContent = sure
+      button.classList.add('arming')
+      return
+    }
+    button.disabled = true
+    act()
+  })
+  return button
+}
+
 export function keptSection(view: ShelfView, handlers: ShelfHandlers): HTMLElement | null {
   // Nothing kept renders as no section at all, not as an empty heading. The
   // same reason `instructions.ts` omits an empty notes block: a heading with
@@ -42,9 +71,7 @@ export function keptSection(view: ShelfView, handlers: ShelfHandlers): HTMLEleme
     return row
   })
 
-  const all = element('button', 'btn', 'Forget everything she has kept')
-  all.type = 'button'
-  all.addEventListener('click', () => {
+  const all = twicePlease('Forget everything she has kept', 'Really forget all of it?', () => {
     handlers.forgetKept({ personaId: view.wornId, kind: 'all' })
   })
 

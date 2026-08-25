@@ -171,3 +171,23 @@ describe('deleting a character', () => {
     expect(store.kept.collections(second.id)).toHaveLength(0)
   })
 })
+
+describe('what the second audit found', () => {
+  it('binds a name on every path, not only on write', () => {
+    // Reads and deletes used to pass unbounded model-supplied strings straight
+    // into SQLite while `put` was checked.
+    store.kept.put('ada', 'c', 'k', 'v')
+    expect(store.kept.one('ada', '../etc', 'k')).toBeNull()
+    expect(store.kept.inCollection('ada', 'NOT A NAME')).toHaveLength(0)
+    expect(store.kept.forgetOne('ada', 'c', 'BAD KEY')).toBe(false)
+    expect(store.kept.forgetCollection('ada', '../..')).toBe(0)
+    // and the real entry is untouched by any of it
+    expect(store.kept.one('ada', 'c', 'k')?.value).toBe('v')
+  })
+
+  it('bounds the listing in SQL rather than after materialising it', () => {
+    for (let i = 0; i < 30; i++) store.kept.put('ada', 'c', `k${String(i)}`, 'v')
+    expect(store.kept.inCollection('ada', 'c', 5)).toHaveLength(5)
+    expect(store.kept.inCollection('ada', 'c')).toHaveLength(30)
+  })
+})

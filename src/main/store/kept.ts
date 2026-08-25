@@ -63,7 +63,7 @@ export interface KeptWrite {
 export interface Kept {
   put(personaId: string, collection: string, key: string, value: string): KeptWrite
   one(personaId: string, collection: string, key: string): KeptEntry | null
-  inCollection(personaId: string, collection: string): readonly KeptEntry[]
+  inCollection(personaId: string, collection: string, most?: number): readonly KeptEntry[]
   collections(personaId: string): readonly KeptCollection[]
   forgetOne(personaId: string, collection: string, key: string): boolean
   forgetCollection(personaId: string, collection: string): number
@@ -102,20 +102,28 @@ export function createKept(
     },
 
     one(personaId, collection, key) {
+      // The same grammar `put` enforces. A read is not a write, but binding an
+      // unbounded model-supplied string into SQLite on every lookup is work
+      // somebody else chose the size of.
+      if (!NAME.test(collection) || !NAME.test(key)) return null
       const row = stmt.keptOne.get(personaId, collection, key) as
         { value: unknown; updated_at: unknown } | undefined
       if (row === undefined) return null
       return { key, value: String(row.value), updatedAt: Number(row.updated_at) }
     },
 
-    inCollection(personaId, collection) {
-      return (stmt.keptIn.all(personaId, collection) as readonly Record<string, unknown>[]).map(
-        (row) => ({
-          key: String(row['key']),
-          value: String(row['value']),
-          updatedAt: Number(row['updated_at']),
-        }),
-      )
+    inCollection(personaId, collection, most = KEPT_LIMITS.rows) {
+      if (!NAME.test(collection)) return []
+      // Bounded in SQL rather than after the fact: materialising 500 rows of
+      // 4,000 graphemes to then keep 25 of them is work nobody asked for, and
+      // the caller's cap cannot undo the allocation.
+      return (
+        stmt.keptIn.all(personaId, collection, most) as readonly Record<string, unknown>[]
+      ).map((row) => ({
+        key: String(row['key']),
+        value: String(row['value']),
+        updatedAt: Number(row['updated_at']),
+      }))
     },
 
     collections(personaId) {
@@ -129,10 +137,12 @@ export function createKept(
     },
 
     forgetOne(personaId, collection, key) {
+      if (!NAME.test(collection) || !NAME.test(key)) return false
       return Number(stmt.keptForgetOne.run(personaId, collection, key).changes) > 0
     },
 
     forgetCollection(personaId, collection) {
+      if (!NAME.test(collection)) return 0
       return Number(stmt.keptForgetCollection.run(personaId, collection).changes)
     },
 

@@ -91,14 +91,24 @@ function grantsState(userData: string, id: string): GrantsState {
   }
 }
 
-export function readGrants(userData: string, id: string): Grants {
+export function readGrants(userData: string, id: string, legacy?: Grants | null): Grants {
   const held = grantsState(userData, id)
-  if (held.kind === 'absent') return DEFAULT_GRANTS
   if (held.kind === 'unusable') {
     console.warn(`[grants] ${id} ${held.why}; withholding everything`)
     return WITHHELD_GRANTS
   }
-  return held.grants
+  if (held.kind === 'held') return held.grants
+  /*
+    Absent falls back to the one global setting, when there is one.
+
+    This is what stops a failed or incomplete migration from GRANTING
+    everything. Seeding used to be the only thing standing between an upgrade
+    and `DEFAULT_GRANTS`, so a migration that threw — or simply had not reached
+    a character yet — quietly handed back every permission somebody had
+    withheld. With the fallback here, migration is an optimisation that makes
+    the answer durable, not the thing the answer depends on.
+  */
+  return legacy ?? DEFAULT_GRANTS
 }
 
 /** Set one permission for one character, leaving the rest as they were. */

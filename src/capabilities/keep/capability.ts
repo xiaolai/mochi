@@ -87,6 +87,9 @@ export const capability: Capability = {
       // handing it back raw is a way for stored content to read as a new
       // instruction on every overwrite.
       replaced: wrote.previous === null ? null : fenced('kept', wrote.previous),
+      // AFTER the block, not before it. Guidance that precedes untrusted text
+      // is guidance the untrusted text gets to argue with.
+      ...(wrote.previous === null ? {} : { note: deps.prompt('kept.isData') }),
       room: KEPT_LIMITS.rows,
     }
   },

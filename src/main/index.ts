@@ -1097,7 +1097,7 @@ const ledger = createLedger({
     */
     const live = sessionPersona
     if (live === null) return
-    if (!allowsCapability(readGrants(userData, live), name)) return
+    if (!allowsCapability(readGrants(userData, live, legacyGrants(userData) ?? null), name)) return
     try {
       noteUsed(userData, name, at)
     } catch (error: unknown) {
@@ -1527,7 +1527,7 @@ ipcMain.handle('voice:config', () => {
     per-character reader withholds on its own when a file cannot be read, so
     the fail-closed direction is the same; what changes is whose answer it is.
   */
-  const grants = readGrants(userData, resolved.persona.id)
+  const grants = readGrants(userData, resolved.persona.id, legacyGrants(userData) ?? null)
   if (grants === WITHHELD_GRANTS) {
     console.error(`[grants] ${resolved.persona.id}'s permissions could not be read; withholding`)
     problems.note(
@@ -1627,7 +1627,8 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
         // no live character withholds rather than guessing.
         const live = sessionPersona
         if (live === null) return withheldGuidance(capability)
-        return allowsCapability(readGrants(app.getPath('userData'), live), capability)
+        const at = app.getPath('userData')
+        return allowsCapability(readGrants(at, live, legacyGrants(at) ?? null), capability)
           ? null
           : withheldGuidance(capability)
       },
@@ -1868,7 +1869,10 @@ ipcMain.handle('settings:read', (): SettingsView => {
     // and her own can never disagree about who is worn.
     pronoun: wornPronoun(userData),
     capabilities: listCapabilities(registry),
-    grants: listGrants(readGrants(userData, wornId()), readUsage(userData)),
+    grants: listGrants(
+      readGrants(userData, wornId(), legacyGrants(userData) ?? null),
+      readUsage(userData),
+    ),
     lookup: listLookup({
       workspace: readWorkspace(userData),
       defaultWorkspace: join(userData, WORKSPACE_DIR),
@@ -2009,7 +2013,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
   const mayDo = whatSheMayDo(
     worn,
     note,
-    readGrants(userData, worn.id),
+    readGrants(userData, worn.id, legacyGrants(userData) ?? null),
     registry.tools,
     prompt,
     kept,
@@ -2511,7 +2515,7 @@ function tellTheSession(): boolean {
   // She was deleted while her own session was up. There is nothing to re-tell,
   // and the next wake resolves somebody who exists.
   if (persona === undefined) return false
-  const grants = readGrants(userData, persona.id)
+  const grants = readGrants(userData, persona.id, legacyGrants(userData) ?? null)
   const mayDo = whatSheMayDo(
     persona,
     recall(userData, live),

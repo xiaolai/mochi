@@ -61,7 +61,7 @@ export function prepareAll(db: DatabaseSync) {
       'SELECT value, previous, updated_at FROM kept WHERE persona_id = ? AND collection = ? AND key = ?',
     ),
     keptIn: db.prepare(
-      'SELECT key, value, updated_at FROM kept WHERE persona_id = ? AND collection = ? ORDER BY updated_at DESC',
+      'SELECT key, value, updated_at FROM kept WHERE persona_id = ? AND collection = ? ORDER BY updated_at DESC LIMIT ?',
     ),
     keptCollections: db.prepare(
       `SELECT collection, count(*) AS entries, max(updated_at) AS newest
