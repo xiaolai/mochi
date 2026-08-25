@@ -28,6 +28,7 @@ import {
   readShelfPlace,
   writeShelfPlace,
   V1_KEYS,
+  guardStopAt,
 } from './worn'
 
 let userData = ''
@@ -475,5 +476,67 @@ describe('the v1-era keys nothing reads', () => {
     >
     for (const key of V1_KEYS) expect(after[key], key).toBe(`v1-${key}`)
     expect(after['activePersonaId']).toBe('ada')
+  })
+})
+
+describe('how far up the workspace guard walks', () => {
+  /**
+   * `workspace.ts` says why the walk exists: Codex reads `AGENTS.md` from the
+   * working root UPWARD, so *"guarding only the leaf would leave a hole one
+   * directory up"*. This function used to return the workspace itself for every
+   * workspace outside our data directory — which is every workspace a user
+   * picks — so that hole was the ordinary case.
+   */
+  const home = '/Users/somebody'
+  const userData = '/Users/somebody/Library/Application Support/mochi'
+
+  it('walks up to, but not into, the home directory', () => {
+    // THE BUG: this used to be '/Users/somebody/projects/thing'.
+    expect(guardStopAt(userData, '/Users/somebody/projects/thing', home)).toBe(
+      '/Users/somebody/projects',
+    )
+  })
+
+  it('stops below home however deep the workspace is', () => {
+    expect(guardStopAt(userData, '/Users/somebody/a/b/c/d', home)).toBe('/Users/somebody/a')
+  })
+
+  it('does not walk into home for a workspace one level down', () => {
+    // The walk includes `stopAt`, so returning home here would scan every file
+    // they own — and `workspace.ts` says refusing over an `AGENTS.md` in `~`
+    // punishes somebody for a file that predates this app.
+    expect(guardStopAt(userData, '/Users/somebody/thing', home)).toBe('/Users/somebody/thing')
+  })
+
+  it('does not walk at all when the workspace IS home', () => {
+    expect(guardStopAt(userData, home, home)).toBe(home)
+  })
+
+  it('does not walk outside home at all', () => {
+    // A mounted volume or /tmp: no user boundary to reason about, and walking
+    // to `/` would scan the machine.
+    expect(guardStopAt(userData, '/Volumes/disk/work', home)).toBe('/Volumes/disk/work')
+    expect(guardStopAt(userData, '/tmp/scratch', home)).toBe('/tmp/scratch')
+  })
+
+  it('still stops at our own data directory for a workspace we own', () => {
+    const ours = join(userData, 'workspace', 'notes')
+    expect(guardStopAt(userData, ours, home)).toBe(userData)
+  })
+
+  it('never returns something that is not an ancestor of the workspace', () => {
+    // `chain()` throws when `stopAt` is not on the path, which would turn a
+    // guard into a crash. Asserted as a property over every shape above.
+    for (const workspace of [
+      '/Users/somebody/projects/thing',
+      '/Users/somebody/a/b/c/d',
+      '/Users/somebody/thing',
+      home,
+      '/Volumes/disk/work',
+      join(userData, 'workspace', 'notes'),
+    ]) {
+      const stop = guardStopAt(userData, workspace, home)
+      expect(workspace === stop || workspace.startsWith(stop + '/')).toBe(true)
+    }
   })
 })

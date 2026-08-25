@@ -1,4 +1,5 @@
-import { join } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
+import { homedir } from 'node:os'
 import { isPersonaId } from '@shared/parse-persona'
 import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
 import { BUBBLE_SIDES, type BubbleSide } from '@shared/persona'
@@ -320,13 +321,52 @@ export function writeWorkspace(userData: string, path: string): void {
 /**
  * Where the guard stops walking up.
  *
- * Our own data directory when the workspace is inside it — that is the boundary
- * v1 chose and the reasoning holds: above it is somebody's home. For a
- * workspace anywhere else, the directory itself, because there is no ancestor
- * we have any business scanning.
+ * ## The hole this used to leave
+ *
+ * `workspace.ts`'s own header says why the walk exists: *"Codex reads
+ * `AGENTS.md` from the working root UPWARD. Guarding only the leaf would leave
+ * a hole one directory up."* This function then returned the workspace ITSELF
+ * for every workspace outside our data directory — which is every workspace a
+ * user picks — so the guard walked exactly one directory and the hole the
+ * header describes was the ordinary case, not the exception.
+ *
+ * An `AGENTS.md` in `~/projects` reaches a run pointed at `~/projects/thing`.
+ * Codex reads it; this guard did not look at it.
+ *
+ * ## Where it stops now, and why not higher
+ *
+ * At the deepest ancestor that is still strictly BELOW the home directory. So
+ * `~/projects/thing` walks `thing` and `projects`, and stops before `~`.
+ *
+ * Not `~` itself, deliberately, and `workspace.ts` states the reason: refusing
+ * to work because somebody keeps an `AGENTS.md` in their home directory would
+ * be punishing them for a file that predates this application. That limit is
+ * real and is still documented there. What was NOT defensible was extending it
+ * from "we do not scan your home directory" to "we do not scan anything".
+ *
+ * A workspace that is not under home at all — a mounted volume, `/tmp` — stops
+ * at itself, because there is no user boundary to reason about and walking to
+ * `/` would scan the machine.
  */
-export function guardStopAt(userData: string, workspace: string): string {
-  return workspace.startsWith(join(userData, WORKSPACE_DIR)) ? userData : workspace
+export function guardStopAt(userData: string, workspace: string, home = homedir()): string {
+  if (workspace.startsWith(join(userData, WORKSPACE_DIR))) return userData
+
+  const top = resolve(home)
+  let current = resolve(workspace)
+  // Not under home: nothing to walk toward.
+  if (current !== top && !current.startsWith(top + sep)) return current
+
+  // The workspace IS home. Walking would scan every file they own.
+  if (current === top) return current
+
+  for (;;) {
+    const parent = dirname(current)
+    if (parent === top) return current
+    // `dirname('/')` is `/`. Unreachable given the prefix check above, and a
+    // loop with no exit is worse than a redundant guard.
+    if (parent === current) return current
+    current = parent
+  }
 }
 
 /**
