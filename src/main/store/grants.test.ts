@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -210,5 +210,26 @@ describe('a character created after the upgrade', () => {
     const made = copyPersonaTo(userData, loadPersonas(userData, {}, true), DEFAULT_PERSONA, 'Ada')
     expect(hasGrants(userData, made.id)).toBe(true)
     expect(readGrants(userData, made.id, legacy).ask_workspace).toBe(true)
+  })
+})
+
+describe('a key written by a newer build', () => {
+  it('survives this build writing a switch', () => {
+    // Rolling back, or running an older window against the same profile, would
+    // otherwise erase somebody's choice about a feature this build has never
+    // heard of. `preferences.json` already had this; the per-character files
+    // did not.
+    mkdirSync(join(userData, 'grants'), { recursive: true })
+    writeFileSync(
+      join(userData, 'grants', 'ada.json'),
+      JSON.stringify({ ...DEFAULT_GRANTS, may_fly: false }),
+    )
+    writeGrant(userData, 'ada', 'speak_first', false)
+    const after = JSON.parse(readFileSync(join(userData, 'grants', 'ada.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >
+    expect(after['may_fly']).toBe(false)
+    expect(after['speak_first']).toBe(false)
   })
 })

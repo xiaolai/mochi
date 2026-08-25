@@ -14,6 +14,7 @@
  * merely current.
  */
 import { writeJsonAtomically } from './json-file'
+import { storeRoot } from './store-root'
 import { PERSONA_FORMAT, type Persona } from '@shared/persona'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -58,7 +59,7 @@ export function claimedId(text: string): string | null {
 }
 
 export function personasRoot(userData: string): string {
-  return join(userData, PERSONAS_DIR)
+  return storeRoot(userData, PERSONAS_DIR)
 }
 
 /**

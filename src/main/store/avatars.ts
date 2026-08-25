@@ -25,6 +25,7 @@
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { storeRoot } from './store-root'
 import { join } from 'node:path'
 import { MOCHI, parseFaceSpec, type FaceSpec } from '@shared/avatar-spec'
 import { isPersonaId } from '@shared/parse-persona'
@@ -144,7 +145,7 @@ export interface ResolvedAvatar {
 
 /** The avatars folder inside a userData directory. */
 export function avatarsRoot(userData: string): string {
-  return join(userData, AVATARS_DIR)
+  return storeRoot(userData, AVATARS_DIR)
 }
 
 /**
@@ -217,6 +218,15 @@ export function resolveFaceFor(
   packageFolder: string | null,
   avatarId: string | null,
   theme: Theme,
+  /**
+   * Her own answer about how big she is drawn, or null to accept the face's.
+   *
+   * Applied HERE rather than at each call site, because there are three and a
+   * forgotten one is a window sized from a number nothing else in the app
+   * agrees with — which is the class of mistake `padNeeded` and `herBox`
+   * already cost twelve pixels to learn.
+   */
+  size: number | null = null,
 ): ResolvedAvatar {
   const found = readFaceFor(avatarsFolder, packageFolder, avatarId)
   /*
@@ -234,8 +244,18 @@ export function resolveFaceFor(
     defect this fixes, pointed the other way. The Cast pane says so rather than
     showing swatches that would do nothing.
   */
-  if (found.source !== null) return found
-  return { ...found, face: applyTheme(found.face, theme) }
+  /*
+    Her size wins over the face's, and applies whichever face was found.
+
+    Both branches, because a package face and a shared one are equally
+    somebody's declared default and equally something a person may disagree
+    with. `resized` before the theme so the theme still sees the face it would
+    have seen — the two do not interact, and keeping the order fixed means
+    nobody has to check whether they do.
+  */
+  const resized = size === null ? found.face : { ...found.face, size }
+  if (found.source !== null) return { ...found, face: resized }
+  return { ...found, face: applyTheme(resized, theme) }
 }
 
 function readFaceFor(

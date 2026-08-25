@@ -33,6 +33,7 @@
  */
 
 import { unlinkSync } from 'node:fs'
+import { storeRoot } from './store-root'
 import { join } from 'node:path'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { PERSONA_LIMITS } from '@shared/persona'
@@ -43,7 +44,7 @@ import { writeJsonAtomically } from './json-file'
 export const MEMORY_DIR = 'memory'
 
 export function memoryRoot(userData: string): string {
-  return join(userData, MEMORY_DIR)
+  return storeRoot(userData, MEMORY_DIR)
 }
 
 /**

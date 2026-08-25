@@ -92,7 +92,12 @@ export function listAvatars(avatarsFolder: string): readonly SettingsAvatar[] {
 /** The personas on the shelf, in a shape a page can draw and nothing more. */
 export function listPersonas(
   catalog: PersonaCatalog,
-  faceFor: (persona: { id: string; avatarId: string | null; theme: Theme }) => FaceSpec,
+  faceFor: (persona: {
+    id: string
+    avatarId: string | null
+    theme: Theme
+    size: number | null
+  }) => FaceSpec,
   /**
    * Whether her conversations are being written down.
    *
@@ -110,6 +115,7 @@ export function listPersonas(
       bubble: persona.bubble,
       bubbleSide: persona.bubbleSide,
       bubbleSides: [...BUBBLE_SIDES],
+      size: persona.size,
       keeps: keepsFor(persona.id),
       avatarId: persona.avatarId,
       source: catalog.sources.get(persona.id) ?? null,
@@ -485,6 +491,9 @@ function isVoice(value: unknown): value is VoiceName {
  * transcripts: a change to it is not an edit, it is a new persona plus an
  * orphaned history.
  */
+/** The band a person may choose from, matching what the face format refuses. */
+const SIZE_BAND = { min: 50, max: 200 } as const
+
 export function applyChange(
   persona: Persona,
   change: PersonaChange,
@@ -507,6 +516,31 @@ export function applyChange(
     // in the file that owns the format.
     if (name.length > PERSONA_LIMITS.name) return { ok: false, why: 'That name is too long.' }
     next = { ...next, name }
+  }
+
+  if (change.size !== undefined) {
+    /*
+      Null puts her back to the size her face declares.
+
+      Refused rather than clamped when it is outside the band, for the reason
+      `readSize` gives: a number somebody got wrong should be said, not quietly
+      turned into a different number they did not choose.
+    */
+    if (change.size === null) {
+      next = { ...next, size: null }
+    } else if (
+      typeof change.size !== 'number' ||
+      !Number.isFinite(change.size) ||
+      change.size < SIZE_BAND.min ||
+      change.size > SIZE_BAND.max
+    ) {
+      return {
+        ok: false,
+        why: `Her size has to be between ${String(SIZE_BAND.min)} and ${String(SIZE_BAND.max)}.`,
+      }
+    } else {
+      next = { ...next, size: change.size }
+    }
   }
 
   if (change.voice !== undefined) {

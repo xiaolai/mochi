@@ -209,6 +209,17 @@ export interface Persona {
    */
   readonly bubbleSide: BubbleSide
   /**
+   * How big she is drawn, overriding what her face declares. Null to accept it.
+   *
+   * The FACE already says a size — that is what stopped it being a code change.
+   * What was missing is somebody being able to disagree with it without editing
+   * a file by hand, which is the exact thing the face format exists to prevent
+   * one level up. Per character rather than per install, because the value it
+   * overrides is per character: a tiny sprite and a large figure want different
+   * answers, and one global number would fight whichever face it did not suit.
+   */
+  readonly size: number | null
+  /**
    * Character and manner, sent as `session.instructions`.
    *
    * Two constraints belong here that text chat never needs: no emoji and no
@@ -273,6 +284,8 @@ export const DEFAULT_PERSONA: Persona = {
   // adding it here is also what stops `bubble` reading as an unknown field.
   bubble: false,
   bubbleSide: 'auto',
+  // Null: accept whatever her face declares.
+  size: null,
   pronoun: 'she',
   theme: DEFAULT_THEME,
   // Character only -- and the speech rules are part of that character rather

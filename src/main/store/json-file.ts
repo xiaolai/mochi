@@ -16,6 +16,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { readBounded } from './read-bounded'
 
 /**
  * Write it through a temporary file and a rename.
@@ -88,3 +89,31 @@ export type JsonRead =
   and two vocabularies for "absent, unreadable, malformed" is how the next
   reader comes to disagree with this one about what a missing file means.
 */
+
+/**
+ * The object as it is ON DISK, before any parser normalised it.
+ *
+ * Every per-file store here reads, validates into a known shape, and writes
+ * that shape back — which silently drops any key this build does not know
+ * about. That is fine until a NEWER build has written one: rolling back, or
+ * running an older window against the same profile, erases somebody's opt-out
+ * from a feature this build has never heard of.
+ *
+ * `preferences.json` already avoids this with `writeMerged`. This is the same
+ * idea for the per-character files, and the reason writes merge onto this
+ * rather than onto the parsed value.
+ *
+ * An unreadable or non-object file answers `{}`: there is nothing to preserve,
+ * and the caller has already decided what to do about the failure itself.
+ */
+export function rawObject(path: string): Record<string, unknown> {
+  const read = readBounded(path)
+  if (!read.ok) return {}
+  try {
+    const held: unknown = JSON.parse(read.text)
+    if (typeof held !== 'object' || held === null || Array.isArray(held)) return {}
+    return held as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}

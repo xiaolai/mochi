@@ -141,6 +141,9 @@ function surfaces(): Surface[] {
 const WIRED_ELSEWHERE: Readonly<Record<string, string>> = {
   // Test seams and shapes the app builds rather than calls.
   editsFrom: 'the inverse of `builtInPersona`, used to write edits back out',
+  forgetVerifiedRoots:
+    'a test seam: the root check is remembered for the life of the process, and a ' +
+    'suite that builds a fresh tree per case needs it forgotten between them',
 }
 
 /**

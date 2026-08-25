@@ -1,4 +1,5 @@
 import { mkdirSync, unlinkSync } from 'node:fs'
+import { storeRoot } from './store-root'
 import { join } from 'node:path'
 
 import { DEFAULT_GRANTS, WITHHELD_GRANTS, isGrant, parseGrants } from '@shared/grants'
@@ -8,6 +9,7 @@ import { isPersonaId } from '@shared/parse-persona'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { writeJsonAtomically } from './json-file'
 import { type LegacyGrants } from './worn'
+import { rawObject } from './json-file'
 
 /**
  * What each character may do, filed under her id.
@@ -33,7 +35,7 @@ import { type LegacyGrants } from './worn'
 const GRANTS_DIR = 'grants'
 
 function grantsRoot(userData: string): string {
-  return join(userData, GRANTS_DIR)
+  return storeRoot(userData, GRANTS_DIR)
 }
 
 /**
@@ -162,8 +164,11 @@ export function writeGrant(
     per-character move was made to prevent.
   */
   const base = held.kind === 'absent' ? fallbackFor(legacy) : held.grants
+  // Merged onto the RAW file, so a key written by a newer build survives an
+  // older one writing a switch. `parseGrants` keeps only what this build knows.
+  const onDisk = rawObject(grantsPath(userData, id))
   mkdirSync(grantsRoot(userData), { recursive: true })
-  writeJsonAtomically(grantsPath(userData, id), { ...base, [grant]: allowed })
+  writeJsonAtomically(grantsPath(userData, id), { ...onDisk, ...base, [grant]: allowed })
 }
 
 /**

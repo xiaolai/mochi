@@ -14,16 +14,18 @@
  */
 
 import { unlinkSync } from 'node:fs'
+import { storeRoot } from './store-root'
 import { join } from 'node:path'
 import { isPersonaId } from '@shared/parse-persona'
 import { DEFAULT_POLICY, UNREADABLE_POLICY, parsePolicy, type Policy } from '@shared/policy'
 import { writeJsonAtomically } from './json-file'
 import { logBoundedRead, readBounded } from './read-bounded'
+import { rawObject } from './json-file'
 
 export const POLICY_DIR = 'policies'
 
 export function policyRoot(userData: string): string {
-  return join(userData, POLICY_DIR)
+  return storeRoot(userData, POLICY_DIR)
 }
 
 /** Marks that retention has been carried out of old manifests, once, ever. */
@@ -127,7 +129,14 @@ export function readPolicy(userData: string, id: string): Policy {
  * stored — and the caller can only honour that if it learns the write failed.
  */
 export function writePolicy(userData: string, id: string, policy: Policy): void {
-  writeJsonAtomically(policyPath(userData, id), policy)
+  // Merged onto the RAW file for the reason `rawObject` gives: `parsePolicy`
+  // keeps only what this build understands, so writing its result back drops a
+  // field a newer build wrote — and rolling back would erase somebody's choice
+  // about a feature this build has never heard of.
+  writeJsonAtomically(policyPath(userData, id), {
+    ...rawObject(policyPath(userData, id)),
+    ...policy,
+  })
 }
 
 /**

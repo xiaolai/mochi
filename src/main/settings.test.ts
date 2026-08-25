@@ -716,3 +716,30 @@ describe('which languages she should expect to hear', () => {
     })
   })
 })
+
+describe('her size, which had no control at all', () => {
+  const at = (size: number | null): Persona => ({ ...DEFAULT_PERSONA, size })
+
+  it('accepts a size inside the band the face format allows', () => {
+    const done = applyChange(at(null), { id: 'ada', size: 80 }, [])
+    expect(done.ok && done.persona.size).toBe(80)
+  })
+
+  it('accepts null, which is the way back to her face’s own answer', () => {
+    // `undefined` is "unchanged"; null is a real choice. Without the
+    // distinction there is no way back once somebody has disagreed once.
+    const done = applyChange(at(80), { id: 'ada', size: null }, [])
+    expect(done.ok && done.persona.size).toBeNull()
+  })
+
+  it.each([49, 201, Number.NaN])('refuses %p rather than clamping it', (size) => {
+    // Said, not silently turned into a different number they did not choose.
+    const done = applyChange(at(null), { id: 'ada', size }, [])
+    expect(done.ok).toBe(false)
+  })
+
+  it('leaves it alone when the change does not mention it', () => {
+    const done = applyChange(at(120), { id: 'ada', name: 'Ada' }, [])
+    expect(done.ok && done.persona.size).toBe(120)
+  })
+})

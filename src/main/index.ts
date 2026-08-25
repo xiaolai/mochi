@@ -1231,6 +1231,7 @@ function wornFace(userData: string): FaceSpec {
     packageFolder(worn.id, catalog.sources),
     worn.avatarId,
     worn.theme,
+    worn.size,
   ).face
 }
 
@@ -1498,6 +1499,7 @@ ipcMain.handle('voice:config', () => {
     packageFolder(resolved.persona.id, catalog.sources),
     resolved.persona.avatarId,
     resolved.persona.theme,
+    resolved.persona.size,
   )
   // LOUD, and per file. An avatar that silently did not load presents as "the
   // app ignored my file", which the store's own comment calls the least
@@ -2022,6 +2024,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
       packageFolder(worn.id, catalog.sources),
       worn.avatarId,
       worn.theme,
+      worn.size,
     ).face,
     pronoun: worn.pronoun,
     // Her state, for the strip across the top. `resting` is held in this
@@ -2039,6 +2042,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
           packageFolder(one.id, catalog.sources),
           one.avatarId,
           one.theme,
+          one.size,
         ).face,
       (id) => keepsFor(userData, id, carriedPolicies),
     ),
@@ -2053,6 +2057,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
       packageFolder(worn.id, catalog.sources),
       worn.avatarId,
       worn.theme,
+      worn.size,
     ).source,
     assembled: mayDo.instructions,
     // The other half of the same answer. Rendered here rather than in the

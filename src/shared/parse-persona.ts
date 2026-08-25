@@ -427,6 +427,7 @@ export function parsePersona(value: unknown): PersonaParse {
   const style = readText(problems, source, 'style', true)
   const avatarId = readAvatarId(problems, source)
   const bubbleSide = readBubbleSide(problems, source)
+  const size = readSize(problems, source)
   const pronoun = readPronoun(problems, source)
   const theme = readTheme(problems, source)
   const voice = readVoice(problems, source)
@@ -509,6 +510,7 @@ export function parsePersona(value: unknown): PersonaParse {
       style,
       avatarId,
       bubbleSide,
+      size,
       faces,
       greeting,
       farewell,
@@ -626,6 +628,35 @@ function readBubbleSide(problems: SaveProblem[], source: Record<string, unknown>
   }
   problems.push({ kind: 'unknown-value', field: 'bubbleSide', allowed: BUBBLE_SIDES.join(', ') })
   return DEFAULT_PERSONA.bubbleSide
+}
+
+/**
+ * Her drawn size, or null to accept whatever her face declares.
+ *
+ * Bounded to the same band the face format states and `clampSizePercent`
+ * enforces — stated here because this is where a user-supplied value is
+ * refused — and REFUSED rather than clamped when a manifest is outside it: a
+ * file saying 900 is a file somebody got wrong, and silently drawing her at 200
+ * hides that from the person who wrote it.
+ */
+const SIZE = { min: 50, max: 200 } as const
+
+function readSize(problems: SaveProblem[], source: Record<string, unknown>): number | null {
+  const held = source['size']
+  if (held === undefined || held === null) return null
+  if (typeof held !== 'number' || !Number.isFinite(held)) {
+    problems.push({ kind: 'field', field: 'size', reason: 'malformed' })
+    return null
+  }
+  if (held < SIZE.min || held > SIZE.max) {
+    problems.push({
+      kind: 'unknown-value',
+      field: 'size',
+      allowed: `${String(SIZE.min)} to ${String(SIZE.max)}`,
+    })
+    return null
+  }
+  return held
 }
 
 /** Which voice the service is asked for. A closed set the service owns. */

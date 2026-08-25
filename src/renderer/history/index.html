@@ -689,6 +689,22 @@
         color: var(--red);
         border-color: var(--red);
       }
+      /* Her size: a slider and the number it is showing. */
+      .size-row {
+        display: flex;
+        align-items: center;
+        gap: var(--s3);
+      }
+      .size-slider {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .size-reading {
+        color: var(--ink-2);
+        font-variant-numeric: tabular-nums;
+        min-width: 4ch;
+        text-align: right;
+      }
       /* One collection she has kept, and how much is in it. */
       .kept-row {
         display: flex;

@@ -535,6 +535,8 @@ export interface SettingsPersona {
   readonly farewell: string
   /** Which of her eight faces this character uses, in `EMOTIONS` order. */
   readonly faces: readonly Emotion[]
+  /** Her own answer about how big she is drawn, or null to accept her face's. */
+  readonly size: number | null
 }
 
 /**
@@ -819,6 +821,14 @@ export interface PersonaChange {
   readonly greeting?: string
   readonly farewell?: string
   readonly faces?: readonly string[]
+  /**
+   * How big she is drawn, or null to go back to what her face declares.
+   *
+   * Null is a real answer here, not "unchanged" — `undefined` is unchanged.
+   * Without the distinction there would be no way back to the face's own
+   * number once somebody had disagreed with it once.
+   */
+  readonly size?: number | null
 }
 
 /**

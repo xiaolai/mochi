@@ -47,6 +47,7 @@ const tutor: Persona = {
   // pass every test that never reads the field.
   bubble: true,
   bubbleSide: 'auto',
+  size: null,
   // A second persona with a DIFFERENT pronoun, deliberately: the whole reason
   // the pronoun lives here rather than in app settings is that switching
   // persona has to switch it too.
@@ -1517,5 +1518,32 @@ describe('when a change to her bubble lands', () => {
     expect(shelf).toContain("section(\n    'Speech bubble',")
     // And Voice keeps its own, which is true of everything left in it.
     expect(shelf).toMatch(/section\('Voice', forPronoun\(SAYS\.nextWake/)
+  })
+})
+
+describe('a size a manifest declares', () => {
+  it('is read when it is inside the band', () => {
+    const read = parsePersona({ ...tutor, size: 75 })
+    expect(read.ok && read.persona.size).toBe(75)
+  })
+
+  it('is null when the manifest says nothing, so her face decides', () => {
+    const read = parsePersona(tutor)
+    expect(read.ok && read.persona.size).toBeNull()
+  })
+
+  it.each([900, 10, 'big', true])('refuses the whole manifest over %p', (size) => {
+    /*
+      The FILE is refused, not the field.
+
+      Every other field works this way — a problem anywhere means the manifest
+      does not load — and size is not the one to make an exception for. A file
+      saying 900 is a file somebody got wrong; drawing her at 200 instead, or
+      at the face's number, hides that from whoever wrote it and leaves them
+      wondering why their edit did nothing.
+    */
+    const read = parsePersona({ ...tutor, size })
+    expect(read.ok).toBe(false)
+    expect(!read.ok && read.problems.some((one) => one.field === 'size')).toBe(true)
   })
 })

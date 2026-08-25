@@ -14,6 +14,7 @@ import { bubbleSection, savingSection } from './sheet/saving'
 import { voiceSection } from './sheet/voice'
 import { whoBand } from './sheet/who'
 import { keptSection } from './sheet/kept'
+import { sizeSection } from './sheet/size'
 
 /**
  * The characters half of the shelf.
@@ -138,6 +139,7 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
   page.append(
     whoBand(view, worn, handlers),
     colourSection(view, worn, handlers),
+    sizeSection(view, worn, handlers),
     moodSection(view, worn, handlers),
     voiceSection(view, worn, handlers),
     bubbleSection(view, worn, handlers),
