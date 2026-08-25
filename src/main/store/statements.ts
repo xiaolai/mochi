@@ -20,6 +20,13 @@ export function prepareAll(db: DatabaseSync) {
       'SELECT id, started_at FROM session WHERE token = ? AND ended_at IS NULL',
     ),
     say: db.prepare('INSERT INTO turn (session_id, at, who, text, cut) VALUES (?, ?, ?, ?, ?)'),
+    // The floor a new turn -- or an `ended_at` -- may not go below.
+    //
+    // `parseArchive` refuses three shapes: an end before its beginning, a turn
+    // outside its conversation, and turns that jump backwards. Clamping to
+    // `started_at` alone satisfies the first two and BREAKS the third, so the
+    // floor has to be the latest instant already committed, not the earliest.
+    lastTurnAt: db.prepare('SELECT MAX(at) AS at FROM turn WHERE session_id = ?'),
     index: db.prepare('INSERT INTO turn_fts (body, turn_id, persona_id) VALUES (?, ?, ?)'),
     taken: db.prepare('SELECT 1 FROM session WHERE persona_id = ? AND started_at = ?'),
     sessions: db.prepare(`

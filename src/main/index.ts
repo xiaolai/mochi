@@ -6,6 +6,7 @@ import { BUILT_IN_ID } from '@shared/parse-persona'
 import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
 import { whatToFile } from './heard'
+import { readVoiceReport } from '@shared/voice-report'
 import { whenToReconnect } from '@shared/realtime/reconnect'
 import { renderTools } from './tools-sent'
 import { promptsFor } from '@shared/prompts'
@@ -24,7 +25,6 @@ import {
   type Revealable,
   type SettingsView,
   type SettingsWrite,
-  type VoiceReport,
 } from '@shared/ipc'
 import { type HistoryExport, type ShelfView } from '@shared/history-window'
 import type { Pronoun } from '@shared/pronoun'
@@ -1646,12 +1646,29 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
 })
 
 ipcMain.on('voice:report', (_event, report: unknown) => {
-  const event = report as VoiceReport
-  if (event?.kind === 'flushed') {
+  /*
+    CHECKED, not cast.
+
+    This was `report as VoiceReport`, which is a claim about what the author
+    believed rather than a check on what arrived -- and every field went
+    straight to the idle clock, the reconnect timer and SQLite. `at` is the one
+    that bit: `node:sqlite` throws when READING BACK an INTEGER outside +/-2^53,
+    for the whole result set rather than the row, so one turn filed at 1e17
+    makes the conversation list throw on every launch. That list is the pane
+    holding the delete buttons, so there is no way back from inside the app.
+
+    Dropped silently at the boundary would be its own defect, so it is noted.
+  */
+  const event = readVoiceReport(report)
+  if (event === null) {
+    problems.note('voice', null, 'the renderer reported something unreadable; it was ignored')
+    return
+  }
+  if (event.kind === 'flushed') {
     conversationFlushed()
     return
   }
-  if (event?.kind === 'expiry') {
+  if (event.kind === 'expiry') {
     const schedule = whenToReconnect({ expiresAt: event.expiresAt, now: Date.now() })
     if (reconnectTimer !== null) clearTimeout(reconnectTimer)
     if (schedule.kind === 'unusable') {
@@ -1683,7 +1700,7 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
     }, ms)
     return
   }
-  if (event?.kind === 'heard') {
+  if (event.kind === 'heard') {
     console.log(`[voice] heard: ${event.transcript}`)
     conversation().file('you', event.transcript)
     // Somebody is talking to her, so the silence being counted starts again.
@@ -1692,7 +1709,7 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
     stirred()
     return
   }
-  if (event?.kind === 'said') {
+  if (event.kind === 'said') {
     // HER turns count too, and this is the line that stops a long answer being
     // timed out from underneath: `heard` arrives when they finish speaking and
     // this arrives when she does, which on a lookup can be half a minute later.

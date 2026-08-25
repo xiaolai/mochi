@@ -1068,12 +1068,45 @@ describe('writing into a conversation that has already ended', () => {
     expect(parseArchive(JSON.parse(JSON.stringify(t.exportFor('ada'))) as unknown).ok).toBe(true)
   })
 
-  it('refuses a turn dated before the conversation began', () => {
+  it('keeps a turn dated before the conversation began, at the start', () => {
+    /*
+      CHANGED FROM "refuses" ON 2026-08-26, and the reason it guarded is kept.
+
+      This asserted that such a turn is DROPPED. The concern behind it was that
+      the archive parser in this file refuses `at < started_at`, so storing one
+      produces an export this store cannot read back -- and that concern is
+      real, which is why the round-trip below is asserted rather than removed.
+
+      Dropping was the wrong way to satisfy it. The value arrives from the
+      renderer via `Date.now()`, and the ordinary way it goes backwards is an
+      NTP correction: after one, EVERY remaining turn is dated before the
+      start, so the conversation records nothing for as long as the offset
+      lasts and nothing surfaces it. Clamping keeps the words and still exports
+      cleanly, which is what this now checks.
+    */
     const t = store()
     const live = t.begin('ada', 1_000)
     if (live === null) throw new Error('that instant was already taken')
     t.say(live, 'you', 'from before', 500)
-    expect(t.turns('ada', live)).toHaveLength(0)
+
+    const turns = t.turns('ada', live)
+    expect(turns).toHaveLength(1)
+    expect(turns[0]?.text).toBe('from before')
+    expect(turns[0]?.at).toBe(1_000)
+    // The original concern, still guarded.
+    expect(parseArchive(JSON.parse(JSON.stringify(t.exportFor('ada'))) as unknown).ok).toBe(true)
+  })
+
+  it('keeps an end dated before the beginning readable, at the start', () => {
+    // `say` argued this case at length and `end` did not apply its own
+    // argument. One session with `ended_at < started_at` makes the user's
+    // WHOLE export unimportable, not just that conversation.
+    const t = store()
+    const live = t.begin('ada', 10_000)
+    if (live === null) throw new Error('that instant was already taken')
+    t.say(live, 'you', 'hello', 10_010)
+    t.end(live, 5_000)
+    expect(parseArchive(JSON.parse(JSON.stringify(t.exportFor('ada'))) as unknown).ok).toBe(true)
   })
 })
 

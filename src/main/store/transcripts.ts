@@ -51,6 +51,13 @@ import {
 } from './turn-row'
 import { endFor, sameConversation } from './archive'
 import { toTurn } from './turn-row'
+// Imported directly, and it is the only non-store module this file knows.
+// `problems.ts` imports nothing at all, so there is no cycle to make -- and a
+// store that can only reach the console is a store whose failures nobody sees,
+// which is the whole reason these guards exist rather than the reason to skip
+// reporting them.
+import { problems } from '../problems'
+import { readableInstant } from './instant'
 import { applySchema } from './schema'
 import { prepareAll } from './statements'
 import { type Kept, createKept } from './kept'
@@ -484,6 +491,22 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
     }))
   }
 
+  /**
+   * The latest instant already committed to this conversation.
+   *
+   * `started_at` when it holds nothing yet. Used by `end` alone: `parseArchive`
+   * refuses a turn dated after its conversation's end, so an `ended_at`
+   * clamped only to the START would still exclude every turn already written.
+   *
+   * NOT used by `say`, which clamps to the start. Turns are filed out of order
+   * on purpose and both readers sort by `at`.
+   */
+  function floorFor(sessionId: number, startedAt: number): number {
+    const last = stmt.lastTurnAt.get(sessionId) as { at: number | null } | undefined
+    const at = last?.at
+    return typeof at === 'number' && at > startedAt ? at : startedAt
+  }
+
   /** What was said in one of hers. Closed over for the reason `sessionsOf` is. */
   function turnsOf(personaId: string, token: SessionToken): readonly Turn[] {
     return stmt.turns.all(token, personaId).map(toTurn)
@@ -537,6 +560,19 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
   return {
     kept,
     begin(personaId, at = now()) {
+      /*
+        Checked FIRST, before the row exists.
+
+        `started_at` is the value every later guard compares against, so a
+        poisoned one breaks the comparison as well as every read of the row --
+        and unlike a turn, there is no larger thing still readable without it.
+        See `instant.ts` for what `node:sqlite` does with the value itself.
+      */
+      if (!readableInstant(at)) {
+        console.error(`[transcripts] refusing to begin ${personaId} at an unusable instant`)
+        problems.note('transcripts', personaId, 'a conversation was refused an unusable start time')
+        return null
+      }
       // Refused rather than shifted. See the interface: advancing the stored
       // time to dodge the unique constraint would date a conversation after
       // the things said in it, and throwing would fail her wake.
@@ -569,19 +605,86 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         )
         return
       }
-      // Nothing can be said before the conversation began. The archive parser
-      // in this file refuses that shape, so accepting it here produces an
-      // export this store cannot read back -- and the value arrives from the
-      // renderer, which is the least trusted process in the app.
-      if (at < row.startedAt) {
-        console.error(`[transcripts] a turn dated before conversation ${token} began was dropped`)
+      // Unreadable instants are dropped, not clamped. A turn whose time is
+      // NaN or 1e17 carries no information about when it happened, so there is
+      // nothing to preserve -- and writing it costs every future read of this
+      // conversation. See `instant.ts`.
+      if (!readableInstant(at)) {
+        console.error(`[transcripts] a turn with an unusable time was dropped from ${token}`)
+        problems.note('transcripts', null, 'a turn arrived with an unusable time and was dropped')
         return
       }
-      atomically(() => recordTurn(row.id, who, text, at, cut))
+      /*
+        CLAMPED, not dropped.
+
+        Nothing can be said before the conversation began: the archive parser in
+        this file refuses that shape, so storing it produces an export this
+        store cannot read back.
+
+        But dropping was the wrong answer to that. The value arrives from the
+        renderer via `Date.now()`, and the ordinary way it goes backwards is an
+        NTP correction -- after which EVERY remaining turn is dated before the
+        start, the conversation records nothing for as long as the offset
+        lasts, and `Conversation` never learns because this path returns
+        normally. An hour of somebody's conversation lost to a clock step is a
+        worse outcome than a turn whose order within its conversation is
+        approximate.
+
+        Noted rather than logged, because the console is not somewhere anybody
+        looks and this one is invisible from the outside.
+      */
+      /*
+        Clamped to the START, deliberately NOT to the latest turn already
+        written.
+
+        Turns arrive out of order by design: an interrupted turn settles when
+        its `conversation.item.truncated` verdict arrives, which is after the
+        turn that interrupted it (§58). `turns()` and `exportFor` both sort by
+        `at`, so write order never reaches a reader -- clamping to the latest
+        instead would drag every late-settling turn forward and destroy the
+        one ordering this store works to preserve. Measured: it reorders the
+        interruption case in `transcripts.test.ts`.
+      */
+      const stamped = at < row.startedAt ? row.startedAt : at
+      if (stamped !== at) {
+        problems.note(
+          'transcripts',
+          null,
+          'the clock went backwards mid-conversation; a turn was filed at its start instead',
+        )
+      }
+      atomically(() => recordTurn(row.id, who, text, stamped, cut))
     },
     end(token, at = now()) {
-      const row = rowidOf(token)
-      if (row !== null) stmt.end.run(at, row)
+      /*
+        The guard `say` argues for at length, finally applied here too.
+
+        `say` refuses a turn dated before its conversation because that shape
+        "produces an export this store cannot read back". A session whose
+        `ended_at` precedes its `started_at` is the same defect one level up,
+        and worse in effect: `parseArchive` rejects the whole file, so one such
+        row makes the user's ENTIRE export unimportable rather than one
+        conversation unreadable.
+
+        Clamped to the start for the same reason `say` clamps -- a backward
+        clock step should not decide that a conversation never ended, because
+        an unended conversation is what the schema repair rewrites at launch.
+      */
+      if (!readableInstant(at)) {
+        console.error(`[transcripts] refusing to end ${token} at an unusable instant`)
+        problems.note('transcripts', null, 'a conversation was refused an unusable end time')
+        return
+      }
+      const row = openSession(token)
+      if (row === null) {
+        // Already ended, or gone. `end` is idempotent by way of the statement's
+        // own `ended_at IS NULL`, so this is not an error.
+        const id = rowidOf(token)
+        if (id !== null) stmt.end.run(at, id)
+        return
+      }
+      const floor = floorFor(row.id, row.startedAt)
+      stmt.end.run(at < floor ? floor : at, row.id)
     },
     sessions: sessionsOf,
     turns: turnsOf,
