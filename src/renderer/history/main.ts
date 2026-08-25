@@ -270,13 +270,36 @@ function saidOf(result: { gone: number | null; pending: boolean }, about: Doomed
 }
 
 async function deleteThem(about: Doomed): Promise<void> {
-  const result = await window.mochiHistory.forget(
-    about.kind === 'some'
-      ? { kind: 'some', id: about.id, tokens: about.tokens }
-      : about.kind === 'hers'
-        ? { kind: 'hers', id: about.id }
-        : { kind: 'everything' },
-  )
+  /*
+    WRAPPED, for the reason `write()` above is wrapped.
+
+    The only failure handled here was a refusal main chose to send. The `await`
+    itself can reject -- a dead channel, a handler that threw, main gone -- and
+    the caller is `void deleteThem(about)`, which discards the rejection
+    entirely. So the destructive path was the one path in this window with no
+    way to say it failed: the dialog closed, the rows stayed, and nothing said
+    why.
+
+    That is the worst place in the app for silence. Somebody who asked for
+    something to be deleted and saw no error will believe it is gone.
+  */
+  let result: Awaited<ReturnType<typeof window.mochiHistory.forget>>
+  try {
+    result = await window.mochiHistory.forget(
+      about.kind === 'some'
+        ? { kind: 'some', id: about.id, tokens: about.tokens }
+        : about.kind === 'hers'
+          ? { kind: 'hers', id: about.id }
+          : { kind: 'everything' },
+    )
+  } catch (error: unknown) {
+    say(`They could not be deleted: ${String(error)}`, true)
+    // Re-read for the same reason `write()` does after a throw: the rows on
+    // screen are from the last read, and a delete that did not happen leaves a
+    // window whose contents nobody has re-checked.
+    await reload()
+    return
+  }
   if (!result.ok) {
     say(result.why ?? 'They could not be deleted.', true)
     return

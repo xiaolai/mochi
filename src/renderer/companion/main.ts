@@ -223,7 +223,29 @@ async function open(): Promise<void> {
   let next: Session
   try {
     next = await openSession({
-      onState: (state) => show(describe(state)),
+      onState: (state) => {
+        show(describe(state))
+        /*
+          A DEAD SESSION IS RELEASED HERE, not only in the `catch` below.
+
+          The catch covers a negotiation that never completed. This covers one
+          that completed and then died -- an ICE failure, the peer dropping,
+          the hour running out -- which arrives as a state and nothing else.
+          Without it `session` stayed non-null over a connection that no longer
+          existed, so `applyMicrophone()` went on calling `listen(true)` into
+          it and the halo went on showing a microphone she did not have. The
+          ring said she was listening and nothing was.
+
+          Guarded by the generation, for the reason the catch is: a state from
+          a session that has already been replaced must not release the one
+          that replaced it.
+        */
+        const dead = state === 'closed' || (typeof state === 'object' && 'failed' in state)
+        if (dead && mine === opening) {
+          session = null
+          applyMicrophone()
+        }
+      },
       onRemote: (stream) => {
         speaker.srcObject = stream
         // The same stream, tapped twice: played, and measured for the mouth.

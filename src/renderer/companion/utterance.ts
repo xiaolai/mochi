@@ -52,6 +52,16 @@ export interface Utterance {
   text(): string
   /** How far into it she is estimated to have got. */
   at(): number
+  /**
+   * WHICH response `at()` is a position in, or null before one has begun.
+   *
+   * Exposed because a cursor without its response is a number that looks usable
+   * and is not: a short barge-in starts the next response and resets the cursor
+   * to zero before the previous response's truncation is handled (§58), so a
+   * caller reading `at()` alone can date a cut by a response that had barely
+   * started.
+   */
+  respondingTo(): string | null
   /** Whether this response's audio has ever started. The fade needs it. */
   begun(): boolean
 }
@@ -117,6 +127,7 @@ export function createUtterance(): Utterance {
     },
     text: () => text,
     at: () => pacer.at(),
+    respondingTo: () => responseId,
     begun: () => begun,
   }
 }

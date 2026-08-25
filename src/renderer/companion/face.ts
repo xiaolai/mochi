@@ -82,7 +82,7 @@ export interface Face {
    * own truncated audio: −3% to −22%, always short, against +446% to +513% for
    * filing everything she generated.
    */
-  heard(): { text: string; at: number }
+  heard(): { text: string; at: number; responseId: string | null }
   /**
    * A different character is being worn: her face, and a new voice.
    *
@@ -1113,7 +1113,12 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     },
     finished: (responseId: string, interrupted: boolean) =>
       utterance.finished(responseId, interrupted),
-    heard: () => ({ text: utterance.text(), at: utterance.at() }),
+    heard: () => ({
+      text: utterance.text(),
+      at: utterance.at(),
+      // Carried WITH the cursor, so a caller cannot read one without the other.
+      responseId: utterance.respondingTo(),
+    }),
     prefersBubble: (side: SidePreference) => {
       bubbleSide = side
     },

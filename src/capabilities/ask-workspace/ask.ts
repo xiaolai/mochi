@@ -201,6 +201,15 @@ export interface AskDeps {
   readonly run: (path: string, args: readonly string[]) => RunHandle
   /** How long to wait before giving up. §8 measured a twenty-second floor. */
   readonly timeoutMs?: number
+  /**
+   * How long SIGTERM gets before SIGKILL.
+   *
+   * SIGTERM is a request a process may ignore, and the ones that ignore it are
+   * the ones this timeout is for. Five seconds is enough for a child that is
+   * merely finishing a write and short enough that a wedged one does not hold
+   * the call open.
+   */
+  readonly graceMs?: number
 }
 
 export type AskResult =
@@ -231,11 +240,28 @@ export async function ask(question: string, deps: AskDeps): Promise<AskResult> {
       }),
     )
 
+    /*
+      SIGTERM, then SIGKILL, because SIGTERM is a REQUEST.
+
+      A process is free to ignore it -- and the ones that do are exactly the
+      ones this timeout exists for: a child wedged in an uninterruptible read,
+      or one that installed a handler and is stuck before reaching it. The
+      timeout used to send SIGTERM and then go on awaiting `finished` for ever,
+      so a child that declined to die held the await, the tool call, and the
+      ledger entry open with nothing left to time it out.
+    */
+    const grace = deps.graceMs ?? 5_000
+    let escalation: ReturnType<typeof setTimeout> | null = null
     const deadline = setTimeout(() => {
       handle.kill('SIGTERM')
+      escalation = setTimeout(() => {
+        // Nothing to ask any more. The child had its grace period.
+        handle.kill('SIGKILL')
+      }, grace)
     }, deps.timeoutMs ?? 180_000)
     const finished = await handle.finished
     clearTimeout(deadline)
+    if (escalation !== null) clearTimeout(escalation)
 
     if (finished.code !== 0) {
       // Its stderr, trimmed. A non-zero exit with nothing to say is still worth

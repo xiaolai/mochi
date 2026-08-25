@@ -313,3 +313,45 @@ describe('closing the session', () => {
     expect(p.responseFor('i1199')).toBe('r1199')
   })
 })
+
+describe('a cut whose cursor belongs to another response', () => {
+  /**
+   * §58 measured a short barge-in starting her NEXT response and resetting the
+   * cursor to zero before the previous response's truncation is handled. The
+   * caller used to read the cursor unconditionally, so a turn she was most of
+   * the way through was filed as though she had said almost none of it.
+   *
+   * `session.ts` compares the response ids and passes null when they disagree.
+   * This asserts the store treats null as "nothing is known" rather than as
+   * the position zero.
+   */
+  it('files the whole turn rather than a cut of it', () => {
+    const p = createPending()
+    p.began('item-1', 'response-1', null)
+    p.said('item-1', 'the whole of what she generated', 1_000)
+    const spoken = p.truncated('item-1', 2_000, null)
+    expect(spoken).not.toBeNull()
+    // Null, not 0. Zero is a position -- "cut off before saying anything" --
+    // and main files a cut turn differently from a whole one.
+    expect(spoken?.heardAt).toBeNull()
+  })
+
+  it('keeps the estimate when the cursor does belong to this response', () => {
+    const p = createPending()
+    p.began('item-2', 'response-2', null)
+    p.said('item-2', 'the whole of what she generated', 1_000)
+    const spoken = p.truncated('item-2', 2_000, 12)
+    expect(spoken?.heardAt).toBe(12)
+  })
+
+  it('carries a null cursor through a truncation that arrives first', () => {
+    // The other order: the verdict lands before the transcript. The null must
+    // survive being recorded and replayed, or the distinction is lost exactly
+    // where §19 says the unusual case lives.
+    const p = createPending()
+    p.began('item-3', 'response-3', null)
+    expect(p.truncated('item-3', 2_000, null)).toBeNull()
+    const spoken = p.said('item-3', 'what she generated', 3_000)
+    expect(spoken?.heardAt).toBeNull()
+  })
+})

@@ -63,7 +63,15 @@ export interface Session {
    * what "takes effect on her next turn" means; asking for one while she is
    * speaking is refused intermittently (§1).
    */
-  mayDo(change: { readonly instructions: string; readonly tools: readonly unknown[] }): void
+  /**
+   * Tell the live session what she may now do.
+   *
+   * Returns whether the frame actually went. False means the data channel was
+   * not open, so the change is on disk and she does not know it — which is a
+   * different thing from "applied", and the caller must not report the two the
+   * same way.
+   */
+  mayDo(change: { readonly instructions: string; readonly tools: readonly unknown[] }): boolean
   /**
    * A late answer has landed; ask her to say it when she can.
    *
@@ -134,7 +142,7 @@ export interface SessionCallbacks {
    */
   readonly onFinished: (responseId: string, interrupted: boolean) => void
   /** Where the cursor has reached, right now. See `Pending`'s `heardAt`. */
-  readonly heard: () => { text: string; at: number }
+  readonly heard: () => { text: string; at: number; responseId: string | null }
 }
 
 const CHANNEL = 'oai-events'
@@ -312,8 +320,22 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
 
   // BEFORE the offer, or it is not in it.
   const channel = peer.createDataChannel(CHANNEL)
-  const put = (frame: unknown): void => {
-    if (channel.readyState === 'open') channel.send(JSON.stringify(frame))
+  /**
+   * Send a frame, and SAY whether it went.
+   *
+   * It used to return void and drop silently on a channel that was not open.
+   * Every caller therefore reported success it had not observed — the grant
+   * path told the settings window a permission was "in force now" over a frame
+   * that never left the process, which is the one thing that panel promises.
+   *
+   * A boolean rather than a throw: the callers are event handlers and a
+   * shutdown path, none of which can usefully unwind, and all of which can say
+   * something.
+   */
+  const put = (frame: unknown): boolean => {
+    if (channel.readyState !== 'open') return false
+    channel.send(JSON.stringify(frame))
+    return true
   }
 
   peer.addEventListener('track', (event) => {
@@ -387,7 +409,24 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
           stops the cursor a quarter-second later anyway.
         */
         const responseId = pending.responseFor(frame.itemId)
-        const spoken = pending.truncated(frame.itemId, Date.now(), callbacks.heard().at)
+        /*
+          The cursor is read only when it still belongs to THIS response.
+
+          §58 measured a short barge-in starting her next response and resetting
+          the cursor to zero before the truncation for the previous one is
+          handled. Reading it then dates the cut by a response that had barely
+          begun, so a turn she was most of the way through is filed as though
+          she had said almost none of it.
+
+          `heard()` carries the response it belongs to, so the two can be
+          compared rather than assumed. When they disagree the estimate is
+          dropped: `pending.truncated` already treats a null cursor as "nothing
+          is known about where she got to", which is the honest answer and the
+          behaviour before any estimate existed.
+        */
+        const cursor = callbacks.heard()
+        const stillOurs = responseId !== null && cursor.responseId === responseId
+        const spoken = pending.truncated(frame.itemId, Date.now(), stillOurs ? cursor.at : null)
         if (responseId !== null) callbacks.onFinished(responseId, true)
         file(spoken)
         break
@@ -547,7 +586,21 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
    */
   stopListening = window.mochi.onSend((frame) => {
     if (isPrivateFrame(frame)) return
-    put(frame)
+    /*
+      A DROP IS REPORTED, because main cannot see one.
+
+      `put` returns false on a channel that is not open. This path is main
+      sending into the session, over IPC, with no answer coming back -- so main
+      counts the send as delivered and the settings window tells somebody a
+      permission is "in force now" over a frame that never left the process.
+      The report is the only route by which that becomes visible.
+    */
+    if (!put(frame)) {
+      window.mochi.report({
+        kind: 'note',
+        text: 'a frame could not be delivered: the data channel is not open',
+      })
+    }
   })
 
   /**
@@ -730,7 +783,9 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     asleep: config.asleep,
     mayDo(change) {
       mayDo = { instructions: change.instructions, tools: change.tools }
-      put(sessionUpdate())
+      // Returned, so a caller that promises the change is in force has
+      // something to check rather than an assumption to make.
+      return put(sessionUpdate())
     },
     volunteer() {
       if (nudge.wanted()) askForTurn()

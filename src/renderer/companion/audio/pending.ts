@@ -122,7 +122,16 @@ export interface Pending {
    */
   said(itemId: string, transcript: string, at: number): Spoken | null
   /** She was cut off. `heardAt` is the cursor NOW; see the header. */
-  truncated(itemId: string, at: number, heardAt: number): Spoken | null
+  /**
+   * `heardAt` is **null** when nothing is known about where she got to.
+   *
+   * Not zero. Zero is a position — "she was cut off before saying anything" —
+   * and null is the absence of an estimate, which is what the caller has when
+   * the cursor it can see belongs to a different response (§58). Main already
+   * distinguishes them: a null `heardAt` files the whole turn rather than a cut
+   * of it, which is the behaviour from before any estimate existed.
+   */
+  truncated(itemId: string, at: number, heardAt: number | null): Spoken | null
   /**
    * Her audio for a RESPONSE ended naturally — `output_audio_buffer.stopped`.
    *
@@ -160,7 +169,14 @@ interface Held {
   /** When the transcript arrived — the instant a finished turn is filed under. */
   saidAt?: number
   interruptedAt?: number
-  heardAt?: number
+  /**
+   * Null and absent mean different things here, and both occur.
+   *
+   * Absent: no truncation has been seen for this item. Null: one has, and the
+   * cursor it arrived with belonged to another response, so there is no usable
+   * estimate. `settle` already collapses both to null on the way out.
+   */
+  heardAt?: number | null
   /** Her audio for this item ended naturally, before its transcript arrived. */
   finishedNaturally?: boolean
 }
@@ -224,7 +240,7 @@ export function createPending(): Pending {
       record(itemId, { ...it, transcript, saidAt: at })
       return null
     },
-    truncated(itemId: string, at: number, heardAt: number) {
+    truncated(itemId: string, at: number, heardAt: number | null) {
       const it = held.get(itemId) ?? {}
       if (it.transcript === undefined) {
         record(itemId, { ...it, interruptedAt: at, heardAt })

@@ -259,3 +259,73 @@ describe('one question, end to end', () => {
     expect(result.ok).toBe(false)
   })
 })
+
+describe('a child that will not die', () => {
+  /**
+   * SIGTERM is a REQUEST, and the processes that ignore it are exactly the ones
+   * a timeout exists for — one wedged in an uninterruptible read, or stuck
+   * before it reaches the handler it installed.
+   *
+   * Before the escalation, the timeout sent SIGTERM and went on awaiting
+   * `finished` for ever. A child that declined to die held the await, the tool
+   * call and its ledger entry open, with nothing left to time it out.
+   */
+  function stubborn(): {
+    run: (path: string, args: readonly string[]) => RunHandle
+    signals: NodeJS.Signals[]
+    die: () => void
+  } {
+    const signals: NodeJS.Signals[] = []
+    let settle: (value: { code: number; stderr: string }) => void = () => undefined
+    const finished = new Promise<{ code: number; stderr: string }>((resolve) => {
+      settle = resolve
+    })
+    return {
+      signals,
+      die: () => {
+        settle({ code: 143, stderr: 'killed' })
+      },
+      run: () => ({
+        finished,
+        kill: (signal?: NodeJS.Signals) => {
+          signals.push(signal ?? 'SIGTERM')
+          // Ignores SIGTERM, as the wedged case does. Only SIGKILL settles it.
+          if (signal === 'SIGKILL') settle({ code: 137, stderr: '' })
+          return true
+        },
+      }),
+    }
+  }
+
+  it('escalates to SIGKILL when SIGTERM is ignored', async () => {
+    const child = stubborn()
+    const result = await ask('q', {
+      codexPath: '/bin/codex',
+      workspace: '/work',
+      settings: SETTINGS,
+      run: child.run,
+      timeoutMs: 5,
+      graceMs: 5,
+    })
+    expect(child.signals).toEqual(['SIGTERM', 'SIGKILL'])
+    expect(result.ok).toBe(false)
+  })
+
+  it('does not send SIGKILL to a child that went quietly', async () => {
+    // The escalation must be cancelled when `finished` settles, or every
+    // ordinary run signals a process that is already gone — and that pid may
+    // by then belong to somebody else.
+    const child = stubborn()
+    const running = ask('q', {
+      codexPath: '/bin/codex',
+      workspace: '/work',
+      settings: SETTINGS,
+      run: child.run,
+      timeoutMs: 10_000,
+      graceMs: 10,
+    })
+    child.die()
+    await running
+    expect(child.signals).toEqual([])
+  })
+})
