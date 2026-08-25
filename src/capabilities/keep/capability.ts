@@ -90,7 +90,12 @@ export const capability: Capability = {
       // AFTER the block, not before it. Guidance that precedes untrusted text
       // is guidance the untrusted text gets to argue with.
       ...(wrote.previous === null ? {} : { note: deps.prompt('kept.isData') }),
-      room: KEPT_LIMITS.rows,
+      // What is LEFT, not what the cap is. Reporting the constant meant she was
+      // told `room: 1000` on the write immediately before being refused for
+      // having no room — two contradictory facts about one quantity.
+      room:
+        KEPT_LIMITS.rows -
+        store.kept.collections(personaId).reduce((sum, one) => sum + one.entries, 0),
     }
   },
 }

@@ -69,7 +69,12 @@ export const capability: Capability = {
     }
 
     if (key === '') {
-      const entries = store.kept.inCollection(personaId, collection, MOST_ENTRIES)
+      // NOT capped in the query. Passing MOST_ENTRIES here made `keys` a list of
+      // twenty-five and `unread` a difference computed inside that cap, so a
+      // collection of forty reported twenty-five names and nothing unread —
+      // which is the exact failure the comment below claims to have fixed,
+      // introduced by the same commit that wrote it.
+      const entries = store.kept.inCollection(personaId, collection)
       if (entries.length === 0) return cannot(deps.prompt('kept.nothingUnderThatName'))
       /*
         Every KEY, always. Only the documents are cut.
@@ -83,7 +88,12 @@ export const capability: Capability = {
       const shown: { key: string; value: string }[] = []
       let spent = 0
       for (const entry of entries) {
-        if (spent + entry.value.length > MOST_CHARACTERS) break
+        if (shown.length >= MOST_ENTRIES) break
+        // `continue`, not `break`. A value may legally be 4,000 GRAPHEMES,
+        // which is up to 64,000 code units, so one oversized document as the
+        // newest row would end the loop on its first iteration and return no
+        // values at all for the collection.
+        if (spent + entry.value.length > MOST_CHARACTERS) continue
         spent += entry.value.length
         shown.push({ key: entry.key, value: fenced('kept', entry.value) })
       }
