@@ -1477,6 +1477,19 @@ ipcMain.handle('voice:open', async () => {
     schedule the moment a deadline actually arrives.
   */
   nextSession.opened()
+  /*
+    The ledger is told too, and it is NOT reset.
+
+    A deferred call is a promise to come back, and `ask_workspace` has three
+    minutes to keep it -- long enough for the hourly reconnect to replace the
+    session underneath it. `call_id` is scoped to a session, so an answer
+    delivered into the new one addresses a call it never issued.
+
+    The records stay, so `undelivered()` still names what she promised and did
+    not return with. Clearing them would make the ledger report a clean sheet
+    for a broken promise.
+  */
+  ledger.opened()
   const session = mint.hold(result.value)
   console.log(`[voice] minted for ${result.value.model}`)
   // The KEY does not go back. The renderer gets the token identifying this

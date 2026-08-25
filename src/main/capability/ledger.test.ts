@@ -468,3 +468,61 @@ describe('what is still owed, for the bead on her halo', () => {
     expect(working).toEqual([0])
   })
 })
+
+describe('a deferred answer that outlived its session', () => {
+  /**
+   * `ask_workspace` may take three minutes, and the session is replaced every
+   * hour (§53). `call_id` is scoped to a session, so an answer delivered after
+   * the swap addresses a call the new session never issued — at best ignored,
+   * at worst attributed to whatever now holds that id.
+   */
+  function stocked() {
+    const kit = ledgerWithSpy()
+    kit.ledger.arrived(CALL)
+    kit.ledger.defer(CALL.callId, { ok: true })
+    return kit
+  }
+
+  it('is refused after the session is replaced', () => {
+    const { ledger, frames } = stocked()
+    const before = frames.length
+    ledger.opened()
+    expect(ledger.deliver(CALL.callId, { answer: 'late' })).toEqual({
+      ok: false,
+      reason: 'stale-session',
+    })
+    // And nothing went out. `emit` sends before it books, so a check after it
+    // would be a check on a frame already on the wire.
+    expect(frames).toHaveLength(before)
+  })
+
+  it('still reports the promise she did not keep', () => {
+    // The records are not cleared on a new session. Clearing them would have
+    // the ledger report a clean sheet for a broken promise, which is the one
+    // thing `undelivered()` exists to prevent.
+    const { ledger } = stocked()
+    ledger.opened()
+    ledger.deliver(CALL.callId, { answer: 'late' })
+    expect(ledger.undelivered()).toContain(CALL.callId)
+  })
+
+  it('delivers normally within the same session', () => {
+    const { ledger, frames } = stocked()
+    const before = frames.length
+    expect(ledger.deliver(CALL.callId, { answer: 'in time' })).toEqual({ ok: true })
+    expect(frames.length).toBe(before + 1)
+    expect(ledger.undelivered()).not.toContain(CALL.callId)
+  })
+
+  it('scopes the generation to when the call ARRIVED, not to the newest session', () => {
+    // A call arriving in the new session must be deliverable even though an
+    // older one is now stale. Otherwise one reconnect poisons every later call.
+    const { ledger } = stocked()
+    ledger.opened()
+    const fresh = { ...CALL, callId: 'call_2' }
+    ledger.arrived(fresh)
+    ledger.defer(fresh.callId, { ok: true })
+    expect(ledger.deliver(fresh.callId, { answer: 'fresh' })).toEqual({ ok: true })
+    expect(ledger.deliver(CALL.callId, { answer: 'stale' }).ok).toBe(false)
+  })
+})

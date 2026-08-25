@@ -267,6 +267,43 @@ export function handleCall(
       void (async () => {
         try {
           const output = await capability.handler(arrival.args, deps)
+          /*
+            CHECKED AGAIN, because the first check is up to three minutes old.
+
+            `ask_workspace` runs for up to 180 seconds and the permission
+            switch is in a window somebody can open mid-conversation -- the
+            same sentence that justifies checking per call justifies checking
+            again here. Somebody who revokes a capability while it is running
+            has said they do not want its result, and delivering it anyway
+            makes the revoke advisory.
+
+            A refusal is DELIVERED rather than dropped: the call is already
+            deferred, and `undelivered()` exists because a promise she never
+            returns from is worse than a no.
+
+            The limit, stated: this stops the ANSWER, not the work. The child
+            process runs to completion and the file it read has already been
+            read. Killing it needs an abort signal threaded through every
+            handler, which is a larger change than this one; what this
+            guarantees is that a revoked capability's output never reaches her.
+          */
+          let revoked: string | null = null
+          try {
+            revoked = withheld(name)
+          } catch (error: unknown) {
+            // Fail closed, exactly as the first check does. A permission this
+            // process cannot read is not one it may act on.
+            quietly(() => warn(`[capability] ${name}: could not re-read what is allowed:`, error))
+            revoked = deps.prompt('dispatch.couldNot')
+          }
+          if (revoked !== null) {
+            quietly(() => log(`[capability] ${name} was withheld while it ran; not delivered`))
+            quietly(() => note(name, 'the permission was withdrawn while this was running'))
+            settle(name, note, () =>
+              ledger.deliver(callId, { status: 'not-allowed', guidance: revoked }),
+            )
+            return
+          }
           if (settle(name, note, () => ledger.deliver(callId, output))) {
             quietly(() => log(`[capability] ${name} delivered ${forLog(output)}`))
             // AFTER the answer is on the wire, so the turn she is asked for can

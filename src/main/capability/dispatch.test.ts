@@ -522,3 +522,50 @@ describe('asking her to volunteer a late answer', () => {
     expect(volunteered).toHaveLength(0)
   })
 })
+
+describe('a permission withdrawn while a deferred call was running', () => {
+  /**
+   * `ask_workspace` runs for up to 180 seconds and the switch is in a window
+   * somebody can open mid-conversation. The check that justifies itself as
+   * "per call, not held" ran once and then not again for three minutes, so a
+   * revoke during the run was advisory: the answer was delivered anyway.
+   */
+  async function ranThenRevoked() {
+    let allowed = true
+    const kit = harness([
+      deferred('slow', async () => {
+        // Revoked while the handler is in flight.
+        allowed = false
+        return await Promise.resolve({ status: 'ok', answer: 'THE-WORKSPACE-CONTENTS' })
+      }),
+    ])
+    // Rebuilt rather than assigned: `withheld` is readonly on `Dispatch`, and
+    // that is the point of the field -- a dispatch whose permission source can
+    // be swapped after construction is one whose checks mean less.
+    const dispatch = { ...kit.dispatch, withheld: () => (allowed ? null : 'not just now') }
+    handleCall(dispatch, { name: 'slow', callId: 'call_slow', args: JSON.stringify({}) })
+    // Let the deferred body run to completion.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    return kit
+  }
+
+  it('does not put the answer on the wire', async () => {
+    const kit = await ranThenRevoked()
+    const wire = JSON.stringify(outputs(kit.frames, 'call_slow'))
+    expect(wire).not.toContain('THE-WORKSPACE-CONTENTS')
+  })
+
+  it('delivers a refusal rather than leaving the promise open', async () => {
+    // The call is already deferred. `undelivered()` exists because a promise
+    // she never returns from is worse than a no.
+    const kit = await ranThenRevoked()
+    const wire = JSON.stringify(outputs(kit.frames, 'call_slow'))
+    expect(wire).toContain('not-allowed')
+    expect(kit.ledger.undelivered()).not.toContain('call_slow')
+  })
+
+  it('says so where somebody can see it', async () => {
+    const kit = await ranThenRevoked()
+    expect(kit.noted.join(' ')).toContain('withdrawn while this was running')
+  })
+})

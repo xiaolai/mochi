@@ -93,6 +93,19 @@ export type Refusal =
   | 'already-acknowledged'
   /** `deliver` on a call that was settled outright, or already delivered. */
   | 'not-awaiting-delivery'
+  /**
+   * The session that asked is gone; this answer has nowhere to land.
+   *
+   * A deferred call is a promise to come back, and `ask_workspace` may take
+   * three minutes to keep it — long enough for the hourly reconnect (§53) to
+   * replace the session underneath it. `call_id` is scoped to a session, so
+   * delivering into the new one addresses a call it has never heard of: at
+   * best ignored, at worst an answer attributed to whatever now holds that id.
+   *
+   * Reported rather than dropped, because a promise she made and did not keep
+   * is exactly what `undelivered()` exists to surface.
+   */
+  | 'stale-session'
 
 export type Outcome = { readonly ok: true } | { readonly ok: false; readonly reason: Refusal }
 
@@ -105,6 +118,15 @@ export interface Ledger {
   defer(callId: string, acknowledgement: unknown): Outcome
   /** The late result for a deferred call, on the original `call_id`. */
   deliver(callId: string, output: unknown): Outcome
+  /**
+   * A new session has been minted; calls from the previous one can no longer
+   * be delivered.
+   *
+   * Not a reset. The records stay, so `undelivered()` still names what she
+   * promised and never returned with — clearing them would make the ledger
+   * report a clean sheet for a promise that was broken.
+   */
+  opened(): void
 
   /** Arrived, never acknowledged — the conversation is hanging on these. */
   unanswered(): readonly string[]
@@ -146,6 +168,15 @@ export interface LedgerCall {
   readonly arrivedAt: number
   /** Null while anything is still owed on it. See above. */
   readonly settledAt: number | null
+  /**
+   * WHICH session this call belongs to.
+   *
+   * `call_id` is unique within a session and means nothing outside one. A
+   * deferred call can outlive its session — `ask_workspace` has three minutes
+   * and the session is replaced every hour (§53) — so the id alone is not
+   * enough to decide where an answer may be sent.
+   */
+  readonly generation: number
 }
 
 /** What goes in `output`, which must be a string on every path. */
@@ -220,6 +251,14 @@ export function createLedger(input: {
   const working = input.working
   /** A `call_id` is never removed. The map IS the record. */
   const calls = new Map<string, LedgerCall>()
+  /**
+   * Which session is live, counted rather than named.
+   *
+   * A counter, not the session token: this only ever has to answer "is this the
+   * same session the call arrived in", and a number that only goes up cannot
+   * be confused by a token being reused or arriving late.
+   */
+  let generation = 0
   let sent = 0
 
   /**
@@ -305,6 +344,7 @@ export function createLedger(input: {
         state: 'pending',
         arrivedAt,
         settledAt: null,
+        generation,
       })
 
       const manifest = registry.get(call.name)
@@ -341,11 +381,28 @@ export function createLedger(input: {
     },
 
     deliver(callId, output) {
-      const state = calls.get(callId)?.state
-      if (state === undefined) return { ok: false, reason: 'unknown-call' }
-      if (state !== 'deferred') return { ok: false, reason: 'not-awaiting-delivery' }
+      const held = calls.get(callId)
+      if (held === undefined) return { ok: false, reason: 'unknown-call' }
+      if (held.state !== 'deferred') return { ok: false, reason: 'not-awaiting-delivery' }
+      /*
+        THE SESSION IT WAS ASKED IN, or nothing.
+
+        `call_id` is scoped to a session. `ask_workspace` has three minutes to
+        answer and the session is replaced every hour, so this window is not
+        hypothetical -- and before this check the answer went out on the new
+        session's data channel, addressing a call that session had never
+        issued.
+
+        Checked before `emit`, because `emit` sends first and books second;
+        once the frame is out there is nothing to take back.
+      */
+      if (held.generation !== generation) return { ok: false, reason: 'stale-session' }
       emit(callId, 'delivered', output)
       return { ok: true }
+    },
+
+    opened() {
+      generation += 1
     },
 
     unanswered: () => idsIn('pending'),
