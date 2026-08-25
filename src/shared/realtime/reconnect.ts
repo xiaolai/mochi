@@ -39,6 +39,35 @@ export const SETUP_MS = 6_000
  */
 export const MARGIN_MS = 9_000
 
+/**
+ * How long after a session opens to reconnect when it never announced a
+ * deadline.
+ *
+ * ## Why a floor is needed at all
+ *
+ * Everything above assumes `expires_at` arrives. It rides `session.created`,
+ * the first frame — so a session that dies *before* that frame announces
+ * nothing, and the scheduler that only ever runs on the announcement never
+ * runs at all. There was exactly one trigger, and it was downstream of the
+ * thing most likely to fail.
+ *
+ * The failure is silent and total: no timer is set, so she does not come back
+ * on her own. Nothing is logged, because nothing happened. From the outside it
+ * is indistinguishable from a quiet room.
+ *
+ * ## Why 50 minutes
+ *
+ * The service's session lifetime is an hour (§21, §53). This is that hour less
+ * ten minutes, which is far more slack than the ~15s `SETUP_MS + MARGIN_MS`
+ * the announced path uses — deliberately, because this path is running blind.
+ * It is a backstop, not a schedule: whenever `expires_at` does arrive, the
+ * precise timer replaces this one and this number stops mattering.
+ *
+ * Erring early is nearly free (one extra reconnect, unnoticeable) and erring
+ * late is a session that drops audibly, so the asymmetry points down.
+ */
+export const FLOOR_MS = 50 * 60 * 1_000
+
 export type Schedule =
   /** Set a timer for this many milliseconds. */
   | { readonly kind: 'in'; readonly ms: number }

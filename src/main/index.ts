@@ -1,5 +1,15 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Menu,
+  powerMonitor,
+  screen,
+  shell,
+} from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { BUBBLE_SIDES, PERSONA_LIMITS, RECOMMENDED_VOICES, VOICE_NAMES } from '@shared/persona'
 import { BUILT_IN_ID } from '@shared/parse-persona'
@@ -8,7 +18,7 @@ import { createRegistry } from '@shared/capability/registry'
 import { whatToFile } from './heard'
 import { readVoiceReport } from '@shared/voice-report'
 import { createMintSlot } from './voice/mint-slot'
-import { whenToReconnect } from '@shared/realtime/reconnect'
+import { createNextSession } from './voice/next-session'
 import { renderTools } from './tools-sent'
 import { promptsFor } from '@shared/prompts'
 import {
@@ -424,8 +434,7 @@ function setAsleep(asleep: boolean): void {
     // Nothing to reconnect TO. Left standing, the timer fires an hour later and
     // opens a session behind her closed eyes — the exact thing this change is
     // removing.
-    if (reconnectTimer !== null) clearTimeout(reconnectTimer)
-    reconnectTimer = null
+    nextSession.cancel()
     stopIdleSleep()
     tellCompanion({ type: '__mochi_close__' })
     endWhenFlushed()
@@ -1410,7 +1419,25 @@ const capabilityDeps: CapabilityDeps = {
  * handed its credential to the first renderer. See `voice/mint-slot.ts`.
  */
 const mint = createMintSlot()
-let reconnectTimer: NodeJS.Timeout | null = null
+
+/**
+ * When she opens her next session — and the guarantee that she opens one.
+ *
+ * This was a bare `reconnectTimer` armed in exactly one place: the `expiry`
+ * report, which rides `session.created`. A session dying before its first
+ * frame therefore scheduled nothing at all, silently. See
+ * `voice/next-session.ts`.
+ */
+const nextSession = createNextSession({
+  reconnect: () => {
+    tellCompanion({ type: '__mochi_reconnect__' })
+  },
+  awake: () => !resting.asleep,
+  note: (why) => {
+    console.error(`[voice] ${why}`)
+    problems.note('voice', null, why)
+  },
+})
 
 ipcMain.handle('voice:open', async () => {
   const bearer = readBearer()
@@ -1425,6 +1452,16 @@ ipcMain.handle('voice:open', async () => {
     console.error(`[voice] ${why}`)
     return { ok: false, why }
   }
+  /*
+    Armed BEFORE the session has produced a single frame.
+
+    This is the whole of C3. `expires_at` rides `session.created`, so every
+    way a session can die during the handshake -- ICE, the data channel, the
+    network going away -- used to leave no timer at all and nothing in the log,
+    because nothing had happened. A floor set here is replaced by the precise
+    schedule the moment a deadline actually arrives.
+  */
+  nextSession.opened()
   const session = mint.hold(result.value)
   console.log(`[voice] minted for ${result.value.model}`)
   // The KEY does not go back. The renderer gets the token identifying this
@@ -1678,35 +1715,9 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
     return
   }
   if (event.kind === 'expiry') {
-    const schedule = whenToReconnect({ expiresAt: event.expiresAt, now: Date.now() })
-    if (reconnectTimer !== null) clearTimeout(reconnectTimer)
-    if (schedule.kind === 'unusable') {
-      // Never silently "then never reconnect": the session still dies in an hour.
-      console.error(`[voice] cannot schedule a reconnect: ${schedule.why}`)
-      problems.note('voice', null, `cannot schedule a reconnect: ${schedule.why}`)
-      return
-    }
-    const ms = schedule.kind === 'in' ? schedule.ms : 0
-    console.log(
-      `[voice] session expires in ${event.expiresAt - Date.now() / 1000}s; reconnect in ${Math.round(ms / 1000)}s`,
-    )
-    reconnectTimer = setTimeout(() => {
-      reconnectTimer = null
-      /*
-        Checked AT THE FIRING, not only when it was set.
-
-        An hour is long enough for her to have been put to rest since — by the
-        key, the menu, or the idle timeout — and `setAsleep` clears this timer,
-        so the two agree. Checking again costs one comparison and closes the
-        window between "the timer is about to fire" and "the clear arrives".
-      */
-      if (resting.asleep) {
-        console.log('[voice] reconnect due, and she is resting; nothing opened')
-        return
-      }
-      console.log('[voice] reconnect due')
-      tellCompanion({ type: '__mochi_reconnect__' })
-    }, ms)
+    // The good path: the service said when this session ends, so the blind
+    // floor armed at `voice:open` is replaced by the real schedule.
+    nextSession.announced(event.expiresAt)
     return
   }
   if (event.kind === 'heard') {
@@ -2825,6 +2836,26 @@ ipcMain.handle('history:search', (_event, query: unknown) => {
  */
 const startup = app.whenReady().then(
   () => {
+    /*
+      THE OTHER HALF OF THE RECONNECT, and the one no timer can do for itself.
+
+      `setTimeout` does not run while the machine is asleep and does not catch
+      up afterwards. A laptop closed for two hours reopens with a timer that
+      still believes it has forty minutes left, on a session that expired
+      ninety minutes ago -- so she sits there, apparently awake, connected to
+      nothing, until something else happens to open a session.
+
+      `resumed()` re-decides against the wall clock, which is the only thing
+      that knows time passed. It does nothing when no reconnect is pending, so
+      opening the lid is not a way to wake her from rest.
+
+      Registered inside `whenReady` because `powerMonitor` is not usable before
+      it.
+    */
+    powerMonitor.on('resume', () => {
+      nextSession.resumed()
+    })
+
     /**
      * v1's leftovers, moved aside before anything reads this directory.
      *
