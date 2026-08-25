@@ -5,14 +5,14 @@ date: 2026-08-26
 target: /Users/joker/github/xiaolai/myprojects/mochi
 style: Select All (Architecture Review, Hard-Nosed Critique, Multi-Perspective Panel, ADR, Paranoid Mode)
 addons: scale stress, hidden costs, principle violations, strangler fig, success metrics, before-vs-after, assumptions audit, compact & optimize
-agents: recon, architecture, error-handling, realtime-voice, capability-dispatch, untested-surface
+agents: recon, architecture, error-handling, realtime-voice, capability-dispatch, untested-surface, sqlite-store
 ---
 
 # Grill report — mochi
 
 ## 0. Coverage and honesty about it
 
-Eleven agent runs were attempted. **Six completed**; five parent agents died with
+Twelve agent runs were attempted. **Seven completed**; five parent agents died with
 `API Error: Connection lost mid-response` after two attempts each, plus three
 sub-agents.
 
@@ -24,6 +24,7 @@ sub-agents.
 | Realtime voice / WebRTC        | complete    | sub-agent of `security`                               |
 | Capability dispatch & ledger   | complete    | sub-agent of `security`                               |
 | Untested surface & coverage    | complete    | sub-agent of `testing`                                |
+| SQLite persistence layer       | complete    | sub-agent of `edge-cases`                             |
 | **Security synthesis**         | **MISSING** | parent died ×2                                        |
 | **Edge-case matrix**           | **PARTIAL** | parent died ×2; dispatch sub-agent covered much of it |
 | **CI/CD analysis**             | **MISSING** | testing parent died ×2 before reaching it             |
@@ -35,9 +36,11 @@ incidentally, and their findings are included — but nobody audited the preload
 allowlist or the credential path end to end. **Treat the security section as
 partial.** A report with a silent hole is worse than a short one.
 
-Three defects found during the run were fixed and committed before this report
-was written (`9eb91eb`); they are listed in §2 as `[FIXED]` with their evidence
-intact, because the pattern that produced them is the report's headline finding.
+Five defects found during the run were fixed and committed before this report
+was finished (`9eb91eb`, `d740762`); they are listed in §2 as `[FIXED]` with
+their evidence intact, because the pattern that produced them is the report's
+headline finding. All five were in code merged the same day, and four of the
+five were introduced by an earlier fix in this same session.
 
 ---
 
@@ -134,6 +137,20 @@ this is held "so a second open replaces the first rather than racing it" — the
 code makes the second mint win the first open's exchange.
 _Effort: Medium._
 
+**C5 — A renderer-supplied timestamp past 2^53 permanently kills the archive.**
+`main/index.ts:1648-1649`, `store/transcripts.ts:534-538`, `store/schema.ts:135-139`
+`voice:report` does `const event = report as VoiceReport` — a bare cast, no
+validation — and `event.at` originates in the **renderer**. The only guard is
+`at < row.startedAt`, which an enormous value passes. `node:sqlite` **throws**
+when materialising an INTEGER outside ±2^53, and it kills the entire result set,
+not the one row. Reproduced end to end against the real schema: file a turn at
+`1e17` → `history:turns` throws → force-quit so `ended_at` stays NULL → next
+launch `applySchema`'s repair sets `ended_at = 1e17` → **`history:list` throws
+for that persona's whole conversation list, on every launch, for ever.** The pane
+holding the delete buttons is the pane that no longer renders, so there is no
+in-app recovery. `search` dies the same way whenever the poisoned turn matches.
+_Effort: Small — `Number.isSafeInteger` at the `voice:report` boundary._
+
 ### HIGH
 
 **H1 — No last-resort handler in either process.**
@@ -204,6 +221,35 @@ and the turn nudge.
 `conversation.item.truncated` parses as malformed → `pending.truncated` is never
 called → items file as `whole`, a silent return of the +446%–513% over-filing
 that §60 removed.
+
+**H14 — Nothing scrubs at open.** `store/transcripts.ts:276-292`
+`forgetSessions` commits, then scrubs. A crash between the two leaves the deleted
+words in `transcripts.db-wal` across launches, and `pendingScrub` initialises
+`false` — so `history:forget` reports the file clean the whole time. _One
+`scrub()` at the end of `buildTranscripts`._
+
+**H15 — A backward clock step silently drops every remaining turn.**
+`store/transcripts.ts:534-537`, `store/conversation.ts:117-136`
+`say` refuses `at < startedAt` with a `console.error` and a `return`;
+`Conversation` never learns, `live` stays set, nothing restarts the session. NTP
+steps the clock back an hour → she talks for an hour → nothing is recorded and
+nothing surfaces it.
+
+**H16 — `end()` will write `ended_at < started_at`.** `store/statements.ts:13`
+No `AND ? >= started_at`. `say` argues at length that a pre-start timestamp
+"produces an export this store cannot read back" — and `end` does not apply its
+own argument. One such row makes `parseArchive` reject the user's **entire**
+export (`archive.ts:251`).
+
+**H17 — `kept` deletions armed no scrub retry.** `[FIXED] d740762`
+`retryScrubSoon` bails on `scrubsLeft <= 0`, set only by the three transcript
+deletes. `kept` got the bare `scrub`, so a checkpoint losing the race to a live
+reader warned once and scheduled nothing.
+
+**H18 — `transcripts.db` was the one store with no guard on its file.**
+`[FIXED] d740762` `realpathSync` resolved the directory; the filename was
+appended after, so a symlink _at_ `transcripts.db` was neither detected nor
+resolved. Every other store refuses that shape loudly.
 
 **H13 — `look_up` truncated keys at 25 while claiming otherwise.** `[FIXED] 9eb91eb`
 See §1 item 11.
@@ -600,3 +646,85 @@ this cannot happen. The defect and the reassurance that it is impossible ship in
 the same repository. That is the failure mode this codebase is uniquely exposed
 to, because it is the one codebase where the comments are good enough to be
 believed.
+
+---
+
+## Fixing Plan
+
+Every item traces to a finding above. Nothing here is invented.
+
+### Phase 1 — Critical (do immediately)
+
+| Finding                                                               | Fix                                                                                                                                                          | Effort  | Files                                                |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ---------------------------------------------------- |
+| **C1** revoke reports success, does not take effect                   | Panel and dispatch agree on one persona id; or the panel states plainly that a change applies from her next wake when the worn character is not the live one | Small   | `main/index.ts` (2422, 1875, 1628)                   |
+| **C2** `session_expired` tears down nothing                           | Call `shutdown()` in the `session-expired` branch                                                                                                            | Trivial | `renderer/companion/audio/session.ts:435`            |
+| **C3** one reconnect trigger; pre-`session.created` failures terminal | Unconditional ~50-min floor timer + `powerMonitor.on('resume')` re-evaluation, independent of `session.created`                                              | Small   | `main/index.ts:1654`, `shared/realtime/reconnect.ts` |
+| **C4** concurrent opens share one `minted` slot                       | Key the mint by open-generation; `voice:sdp` uses the caller's mint                                                                                          | Medium  | `main/index.ts:1411-1436`                            |
+| **C5** timestamp > 2^53 bricks the archive read path                  | `Number.isSafeInteger` + plausible-epoch check at the `voice:report` boundary; clamp in `say` beside the existing guard                                      | Small   | `main/index.ts:1649`, `store/transcripts.ts:534`     |
+
+**Phase 1 total: ~1 day.** C2 alone is a two-line change against a Critical.
+
+### Phase 2 — High (this sprint)
+
+| Finding                                     | Fix                                                                                                                                           | Effort  | Files                                   |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------- |
+| H1 no last-resort handler                   | `process.on('uncaughtException'/'unhandledRejection')` in main; `window.onerror`/`unhandledrejection` in both renderers, routed to `problems` | Small   | `main/index.ts`, `renderer/*/main.ts`   |
+| H2 `voice:report` unguarded                 | Wrap the listener body in `try`, note the failure                                                                                             | Trivial | `main/index.ts:1648`                    |
+| H3 silent delete failure                    | `catch` + `say()`, matching `write()`                                                                                                         | Trivial | `renderer/history/main.ts:253`          |
+| H4 deferred answer lost across reconnect    | Session-generation tag on `call_id`; `deliver` refuses a stale generation and reports it                                                      | Medium  | `main/capability/ledger.ts:252`         |
+| H5 180s TOCTOU                              | Re-check `withheld` before delivery; kill the child on revoke                                                                                 | Medium  | `main/capability/dispatch.ts:267`       |
+| H6 SIGTERM with no escalation               | SIGKILL after a grace period                                                                                                                  | Trivial | `capabilities/ask-workspace/ask.ts:234` |
+| H7 guard does not walk ancestors            | Walk the chain for any workspace, or state the limit honestly and narrow the claim                                                            | Medium  | `store/worn.ts:328`                     |
+| H8 `set_expression` worn-vs-wire divergence | Validate against the persona the wire enum was built from                                                                                     | Small   | `main/index.ts:1362`                    |
+| H9 ICE failure leaves halo/mic lit          | Call `applyMicrophone()` and null `session` on the failed path                                                                                | Small   | `renderer/companion/main.ts:226`        |
+| H10 barge-in cursor from the next response  | Compare `responseId` before reading the cursor                                                                                                | Trivial | `audio/session.ts:389`                  |
+| H11 `put()` drops silently                  | Return a boolean; grant path stops claiming "in force now" on a drop                                                                          | Small   | `audio/session.ts:315`                  |
+| H12 `audio_end_ms` required, unread         | Make it optional, or read it                                                                                                                  | Trivial | `shared/realtime/frames.ts:280`         |
+| H14 nothing scrubs at open                  | One `scrub()` at the end of `buildTranscripts`                                                                                                | Trivial | `store/transcripts.ts:276`              |
+| H15 backward clock drops turns              | Clamp to `startedAt` or re-`begin`; route through `problems`                                                                                  | Small   | `store/transcripts.ts:534`              |
+| H16 `ended_at < started_at`                 | `AND ? >= started_at` on the statement                                                                                                        | Trivial | `store/statements.ts:13`                |
+
+**Phase 2 total: ~3 days.** Six are Trivial.
+
+### Phase 3 — Medium (next sprint)
+
+Grouped, ~4 days: **fail-open cluster** — `readTombstones` (`unfinished.ts:91`), `writeMerged` over an unreadable file (`worn.ts:130`), withheld-by-identity (`index.ts:1534`); **observability cluster** — retention, prompt-load, voice-failure and scrub-exhaustion each reaching only a console; **dispatch cluster** — duplicate `callId` dropped silently, wrong-typed args producing a false refusal, no size bound before the handler, orphaned child on quit, unlimited concurrent lookups, unbounded `readFileSync`; **store cluster** — `atomically` masking the real error and wedging later writes, export snapshot taken before the dialog await, `history:forget {hers}` releasing another persona's live conversation, `writeTextAtomically` without fsync, `storeRoot` not checking the parent chain, pragmas set without read-back; **voice cluster** — nudge consumed on a refusal, late truncation resurrecting a settled item, hourly re-greeting, `setTimeout` overflow, unvalidated control frames.
+
+### Phase 4 — Low (when touching these files)
+
+- `store/transcripts.ts` — `close()` re-arming past `db.close()`; `ROLLBACK` outside a try; `matching()` preparing per call; `open`-set key case-sensitivity; WAL truncate unlinks rather than zeroes (one honest sentence).
+- `main/capability/ledger.ts` — map never pruned.
+- `renderer/companion/` — `void audio?.close()`; `pacer.wrote()` O(n²); `shutdown()` reading a later `const`.
+- `store/unfinished.ts` — `clearTombstone` swallowing every errno.
+- `shared/text.ts` — U+3164 / U+2800 pass `looksEmpty`.
+- `shared/prompts.ts` ↔ `prompts-kept.ts` — the one real cycle; move `PromptSpec` to a leaf.
+- `store/kept.ts` — `put` depends on dynamic `this`; add `this: void` as `exportFor` already does.
+
+### Cross-cutting
+
+- **`claims.test.ts` (§1)** — Medium effort, and it is the only item that prevents recurrence rather than fixing an instance. Start with the eight comments naming a mechanism.
+- **Handler tests for `keep` and `forget-kept` (§5)** — Small; `look_up` now has 8.
+- **Extract the three state clusters (§3.5)** — Medium; 236 lines, then revert the 1530 override.
+
+### Dependency graph
+
+- H4 (generation tags) depends on C4 (`minted` per open) — both need a notion of session generation; do C4 first.
+- H5 (re-check before delivery) depends on H4 — the delivery path must know its generation.
+- H11 (`put()` reports) should land before C1's fix, so the grant path can distinguish "revoked" from "frame dropped".
+- §3.5 extraction should land before any further `index.ts` growth; the file sits at 1,521 of 1,530.
+
+### Estimated total effort
+
+| Phase              | Effort                |
+| ------------------ | --------------------- |
+| Phase 1 (Critical) | ~1 day                |
+| Phase 2 (High)     | ~3 days               |
+| Phase 3 (Medium)   | ~4 days               |
+| Phase 4 (Low)      | ~1 day, opportunistic |
+| Cross-cutting      | ~1.5 days             |
+| **Total**          | **~10.5 days**        |
+
+Agent-time, not person-time. Clock-time is dominated by the two items that need a
+running app to confirm — C1 through a real character switch, and H4's ~5%
+delivery window.

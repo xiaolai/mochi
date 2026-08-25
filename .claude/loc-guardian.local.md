@@ -23,24 +23,30 @@ no UI framework — the renderer builds DOM through an `element()` helper.
 
 ## Why 350, and why PURE lines
 
-This codebase is **58% comments and blanks** by design: `AGENTS.md` requires
-comments explain _why_ a path was chosen, what was rejected, and what breaks
-otherwise. Raw line counts are therefore meaningless here — `shared/ipc.ts` is
-708 raw lines and 284 lines of code.
+This codebase is **57% comments and blanks** by convention — comments here
+explain _why_ a path was chosen, what was rejected, and what breaks otherwise.
+That convention lives in the comments themselves and in review, not in a
+contributing document; this file is the only place it is written down. (An
+earlier version of this note cited `AGENTS.md` as the source. **There is no
+`AGENTS.md` in this repository** — the citation was invented, and is removed
+rather than satisfied by creating the file it named.)
 
-Measured 2026-08-24 across 149 TypeScript source files (15,671 pure / 37,357
-raw), 350 flags exactly three:
+Raw line counts are meaningless under that convention: `shared/ipc.ts` is 708
+raw lines and 287 lines of code.
 
-| pure | file                             |
-| ---- | -------------------------------- |
-| 1488 | `src/main/index.ts`              |
-| 1034 | `src/renderer/history/main.ts`   |
-| 593  | `src/renderer/companion/face.ts` |
+Measured 2026-08-26 across 169 TypeScript source files, tests excluded (16,618
+pure / 39,302 raw), 350 flags exactly three:
 
-The next file down is **336**, and nothing sits between 336 and 593. That gap
-is the argument for the number: every file this project considers healthy is at
-or under 336, so 350 has no false positives today and roughly fifteen lines of
-headroom above the largest healthy file. A lower limit would flag files that
+| pure | file                             | was (2026-08-24) |
+| ---- | -------------------------------- | ---------------- |
+| 1521 | `src/main/index.ts`              | 1488             |
+| 960  | `src/renderer/history/main.ts`   | 1034             |
+| 472  | `src/renderer/companion/face.ts` | 593              |
+
+The next file down is **317** (`shared/parse-persona.ts`), and nothing sits
+between 317 and 472. That gap is the argument for the number: every file this
+project considers healthy is at or under 317, so 350 has no false positives
+today and thirty-three lines of headroom above the largest healthy file. A lower limit would flag files that
 need no action, and a gate that is usually wrong is a gate people learn to
 ignore.
 
@@ -55,16 +61,34 @@ things sharing a file — which is the case the limit cannot express.
 
 ### `src/main/index.ts` — 1521, was 1540
 
-The composition root. It holds **21 module-level mutable bindings** and wires 36
+The composition root. It holds **19 module-level mutable bindings** and wires 36
 IPC channels to them, with every `ipcMain` registration at column 0 closing over
 that state.
 
-The measurement that settles it: the voice group — the largest contiguous block
-of handlers — references **22 module-level bindings**, most of them heavily used
-elsewhere (`companion` 52 times, `archive` 42, `problems` 37, `conversation`
-35). Extracting it means a 22-entry dependency interface, roughly a third of it
-setters because the handlers write that state. That is more lines than it
-removes and harder to read than what it replaces.
+**Corrected 2026-08-26 — the measurement that used to sit here was wrong, and it
+was wrong in the direction that excused the file.** It claimed the voice group
+needs "a 22-entry dependency interface, roughly a third of it setters because
+the handlers write that state". Re-measured against lines 1409–1775 (the five
+`voice:*` channels, 367 lines):
+
+| what it takes                                   | count |
+| ----------------------------------------------- | ----- |
+| external names referenced                       | 20    |
+| of those, module-level **state** it reads       | 6     |
+| of those, module-level state it **writes**      | **1** |
+| functions (behaviour, not state)                | 11    |
+| consts (`registry`, `ledger`, `capabilityDeps`) | 3     |
+
+The count was roughly right; **"roughly a third of it setters" was not.** Exactly
+one binding is written — `sessionPersona`. The block's other two mutable
+bindings, `minted` and `reconnectTimer`, are declared _inside_ it at lines
+1411–1412 and would travel with the code rather than appear in any interface.
+
+Seven setters would make an extraction ugly. One does not. **So this exception
+is no longer settled — it is open**, and the grill report's cross-cutting item
+tracks it. What remains true is that twenty entries is a wide seam and eleven of
+them are functions that would be better imported than injected; that is an
+argument about _how_ to extract, not about whether.
 
 `codex/ready.ts` came out of here because it was genuinely self-contained — its
 state was read twice outside the three functions that own it — and `problems`
@@ -85,20 +109,28 @@ the shelf view, and the grants migration. The handler came out to
 `ipc/forget-kept.ts` — it reaches exactly two things and neither is state it
 writes, which is what made it the one worth lifting — and the grants migration
 went to `carryGrantsForward` in the module that owns its format. That is 40
-lines. What is left is threading, which is what a composition root IS.
+lines.
 
 The number is 1521 today and the ceiling is 1530, so it still bites at nine
 lines. A ceiling raised to whatever the file happens to be is not a gate; this
 one was raised once, after the extraction, and the extraction is named above so
 the next person can check the claim rather than trust it.
 
+**The ceiling is left at 1530 rather than lowered, and that is a deliberate
+choice, not an oversight.** The correction above reopens the voice extraction;
+until it is actually done the file really is 1521 lines, and dropping the ceiling
+under it would turn the gate red without removing a single line. A red gate
+nobody can act on is how gates get ignored. Lower it to ~1160 **in the same
+change** that lifts `voice:*` out — not before, and not instead.
+
 Getting this under 350 needs the live state moved into an object the handler
 modules receive — a redesign of how every feature is written, not an extraction.
-Note that **seven tests assert on this file's source text**, slicing it at a
-named `ipcMain.handle(...)`; they would not catch a runtime mistake made during
-that redesign.
+Note that **six test files assert on this file's source text** — `forget-handler`,
+`her-edits`, `sleep-ends-it`, `saving-switch`, `fails-closed`, `closed-cleanly` —
+slicing it at a named `ipcMain.handle(...)`; they would not catch a runtime
+mistake made during that redesign.
 
-### `src/renderer/history/main.ts` — 948, was 1034
+### `src/renderer/history/main.ts` — 960, was 1034
 
 A window controller. The pure pieces are out: `bits.ts` holds the four builders
 that read no window state, and `countByDay`/`openingDay` moved to `month.ts` as
@@ -218,8 +250,11 @@ decodes to in another is the same separation wearing a different hat.
 
 ## Tests that read source text
 
-Thirty-two test files read source as text and assert on it, because the module
-under test cannot be imported outside Electron. They are load-bearing —
+**Twenty-one** test files read source as text and assert on it, because the
+module under test cannot be imported outside Electron: fourteen read a named
+file, and eleven walk a directory (some do both). An earlier version of this
+note said thirty-two, which counted every test importing `readFileSync` —
+including those reading their own temp-directory fixtures. They are load-bearing —
 `saving-switch.test.ts` says its assertion was "found by mutation, not by
 review" — and they break whenever code moves.
 
