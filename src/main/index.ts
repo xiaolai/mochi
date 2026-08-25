@@ -1097,7 +1097,7 @@ const ledger = createLedger({
     */
     const live = sessionPersona
     if (live === null) return
-    if (!allowsCapability(readGrants(userData, live, legacyGrants(userData) ?? null), name)) return
+    if (!allowsCapability(readGrants(userData, live, legacyGrants(userData)), name)) return
     try {
       noteUsed(userData, name, at)
     } catch (error: unknown) {
@@ -1527,7 +1527,7 @@ ipcMain.handle('voice:config', () => {
     per-character reader withholds on its own when a file cannot be read, so
     the fail-closed direction is the same; what changes is whose answer it is.
   */
-  const grants = readGrants(userData, resolved.persona.id, legacyGrants(userData) ?? null)
+  const grants = readGrants(userData, resolved.persona.id, legacyGrants(userData))
   if (grants === WITHHELD_GRANTS) {
     console.error(`[grants] ${resolved.persona.id}'s permissions could not be read; withholding`)
     problems.note(
@@ -1628,7 +1628,7 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
         const live = sessionPersona
         if (live === null) return withheldGuidance(capability)
         const at = app.getPath('userData')
-        return allowsCapability(readGrants(at, live, legacyGrants(at) ?? null), capability)
+        return allowsCapability(readGrants(at, live, legacyGrants(at)), capability)
           ? null
           : withheldGuidance(capability)
       },
@@ -1869,10 +1869,7 @@ ipcMain.handle('settings:read', (): SettingsView => {
     // and her own can never disagree about who is worn.
     pronoun: wornPronoun(userData),
     capabilities: listCapabilities(registry),
-    grants: listGrants(
-      readGrants(userData, wornId(), legacyGrants(userData) ?? null),
-      readUsage(userData),
-    ),
+    grants: listGrants(readGrants(userData, wornId(), legacyGrants(userData)), readUsage(userData)),
     lookup: listLookup({
       workspace: readWorkspace(userData),
       defaultWorkspace: join(userData, WORKSPACE_DIR),
@@ -2013,7 +2010,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
   const mayDo = whatSheMayDo(
     worn,
     note,
-    readGrants(userData, worn.id, legacyGrants(userData) ?? null),
+    readGrants(userData, worn.id, legacyGrants(userData)),
     registry.tools,
     prompt,
     kept,
@@ -2454,7 +2451,7 @@ ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
 
   const userData = app.getPath('userData')
   try {
-    writeGrant(userData, wornId(), asked.id, asked.allowed)
+    writeGrant(userData, wornId(), asked.id, asked.allowed, legacyGrants(userData))
   } catch (error: unknown) {
     // Loud, and where somebody will see it. A permission that silently did not
     // change is the worst failure this window can have: the switch says one
@@ -2515,7 +2512,7 @@ function tellTheSession(): boolean {
   // She was deleted while her own session was up. There is nothing to re-tell,
   // and the next wake resolves somebody who exists.
   if (persona === undefined) return false
-  const grants = readGrants(userData, persona.id, legacyGrants(userData) ?? null)
+  const grants = readGrants(userData, persona.id, legacyGrants(userData))
   const mayDo = whatSheMayDo(
     persona,
     recall(userData, live),

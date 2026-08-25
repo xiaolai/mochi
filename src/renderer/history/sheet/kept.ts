@@ -17,6 +17,11 @@ import type { ShelfView } from '@shared/history-window'
  * where they can be seen before they happen; removing one entry is a
  * conversation she can have, and `forget_kept` is where that lives.
  */
+/** Long enough that a fast second click is a slip rather than an answer. */
+const SETTLE_MS = 350
+/** After this an armed button has been forgotten about, and disarms itself. */
+const FORGETS_MS = 8_000
+
 /**
  * A destructive button that has to be pressed twice.
  *
@@ -32,15 +37,34 @@ import type { ShelfView } from '@shared/history-window'
 function twicePlease(label: string, sure: string, act: () => void): HTMLButtonElement {
   const button = element('button', 'btn', label)
   button.type = 'button'
-  let armed = false
-  button.addEventListener('click', () => {
-    if (!armed) {
-      armed = true
+  let armedAt: number | null = null
+  const disarm = (): void => {
+    armedAt = null
+    button.textContent = label
+    button.classList.remove('arming')
+  }
+  button.addEventListener('blur', disarm)
+  button.addEventListener('click', (event) => {
+    /*
+      A double-click must not be able to confirm.
+
+      Arming on the first press and acting on the second means an ordinary
+      double-click deletes everything, which is the opposite of a confirmation.
+      `event.detail` counts the clicks in a sequence, so anything past the first
+      of a rapid pair is refused outright — and the window below is what stops
+      an armed button sitting there for the rest of the session waiting to be
+      pressed by somebody who has forgotten it.
+    */
+    if (event.detail > 1) return
+    const now = performance.now()
+    if (armedAt === null || now - armedAt < SETTLE_MS || now - armedAt > FORGETS_MS) {
+      armedAt = now
       button.textContent = sure
       button.classList.add('arming')
       return
     }
     button.disabled = true
+    disarm()
     act()
   })
   return button
@@ -58,16 +82,15 @@ export function keptSection(view: ShelfView, handlers: ShelfHandlers): HTMLEleme
       element('span', 'grow', one.collection),
       element('span', 'kept-count', String(one.entries)),
     )
-    const forget = element('button', 'btn', 'Forget these')
-    forget.type = 'button'
-    forget.addEventListener('click', () => {
-      handlers.forgetKept({
-        personaId: view.wornId,
-        kind: 'collection',
-        collection: one.collection,
-      })
-    })
-    row.append(forget)
+    row.append(
+      twicePlease('Forget these', 'Really forget them?', () => {
+        handlers.forgetKept({
+          personaId: view.wornId,
+          kind: 'collection',
+          collection: one.collection,
+        })
+      }),
+    )
     return row
   })
 

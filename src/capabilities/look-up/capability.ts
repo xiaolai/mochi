@@ -69,26 +69,42 @@ export const capability: Capability = {
     }
 
     if (key === '') {
-      const entries = store.kept.inCollection(personaId, collection)
+      const entries = store.kept.inCollection(personaId, collection, MOST_ENTRIES)
       if (entries.length === 0) return cannot(deps.prompt('kept.nothingUnderThatName'))
+      /*
+        Every KEY, always. Only the documents are cut.
+
+        Truncating the list hid names permanently: there is no cursor, so one
+        oversized document could push every remaining name out of reach and she
+        would report them as not existing. Names are cheap — 500 of them at 64
+        graphemes is nothing next to one document — so they all come back.
+      */
+      const keys = entries.map((one) => one.key)
       const shown: { key: string; value: string }[] = []
       let spent = 0
-      for (const entry of entries.slice(0, MOST_ENTRIES)) {
+      for (const entry of entries) {
         if (spent + entry.value.length > MOST_CHARACTERS) break
         spent += entry.value.length
         shown.push({ key: entry.key, value: fenced('kept', entry.value) })
       }
       return {
         status: 'done',
+        keys,
         entries: shown,
         // Said rather than implied: a truncated list that looks complete is how
         // she comes to state confidently that something is not there.
-        more: entries.length - shown.length,
+        unread: keys.length - shown.length,
+        guidance: deps.prompt('kept.isData'),
       }
     }
 
     const one = store.kept.one(personaId, collection, key)
     if (one === null) return cannot(deps.prompt('kept.nothingUnderThatName'))
-    return { status: 'done', key: one.key, value: fenced('kept', one.value) }
+    return {
+      status: 'done',
+      key: one.key,
+      value: fenced('kept', one.value),
+      guidance: deps.prompt('kept.isData'),
+    }
   },
 }

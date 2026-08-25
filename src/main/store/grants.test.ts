@@ -129,7 +129,7 @@ describe('the failure modes the audit found', () => {
   it('refuses to migrate from a legacy file that is there and unreadable', () => {
     // Seeding is impossible and skipping is permissive, so it says so instead
     // of quietly choosing the worse direction.
-    expect(() => migrateGrants(userData, ['ada'], undefined)).toThrow(/cannot be read/)
+    expect(() => migrateGrants(userData, ['ada'], 'unreadable')).toThrow(/cannot be read/)
   })
 
   it('reports a removal it could not perform, rather than reporting success', () => {
@@ -167,5 +167,33 @@ describe('an unseeded character is never permissive', () => {
     mkdirSync(join(userData, 'grants'), { recursive: true })
     writeFileSync(join(userData, 'grants', 'ada.json'), '{not json')
     expect(readGrants(userData, 'ada', DEFAULT_GRANTS)).toEqual(WITHHELD_GRANTS)
+  })
+})
+
+describe('the three legacy states, which the third audit separated', () => {
+  const legacy = { ...DEFAULT_GRANTS, ask_workspace: false }
+
+  it('inherits a legacy denial when she has no file yet', () => {
+    expect(readGrants(userData, 'ada', legacy).ask_workspace).toBe(false)
+  })
+
+  it('uses the defaults when there is no legacy policy at all', () => {
+    expect(readGrants(userData, 'ada', null)).toEqual(DEFAULT_GRANTS)
+  })
+
+  it('withholds when the legacy policy is there and unreadable', () => {
+    // `undefined` is the unreadable case. Coalescing it to `null` at the call
+    // site — which every caller did — turned the safest state into the most
+    // permissive one.
+    expect(readGrants(userData, 'ada', 'unreadable')).toEqual(WITHHELD_GRANTS)
+  })
+
+  it('writes onto the same base a read would have answered', () => {
+    // Reads inherited legacy, writes merged onto the defaults, so toggling one
+    // switch silently re-granted every legacy denial.
+    writeGrant(userData, 'ada', 'speak_first', false, legacy)
+    const after = readGrants(userData, 'ada', legacy)
+    expect(after.speak_first).toBe(false)
+    expect(after.ask_workspace).toBe(false)
   })
 })

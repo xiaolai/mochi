@@ -211,13 +211,22 @@ export function readGrantsState(userData: string): {
 }
 
 /**
+ * The one global setting: a policy, nothing at all, or a file that cannot be read.
+ *
+ * A named sentinel rather than `undefined`, because `undefined` is also what an
+ * omitted argument looks like — and a caller that simply did not pass one would
+ * otherwise be read as "the legacy file is unreadable", which withholds.
+ */
+export type LegacyGrants = Grants | null | 'unreadable'
+
+/**
  * The one global setting, as it was before permissions became per character.
  *
  * Kept only so `migrateGrants` can carry it forward. Null when nobody ever
  * chose, so an install that never touched a grant seeds nothing and everybody
  * starts at `DEFAULT_GRANTS` — which is what they already had.
  */
-export function legacyGrants(userData: string): Grants | null | undefined {
+export function legacyGrants(userData: string): LegacyGrants {
   const held = readGrantsState(userData)
   /*
     Unreadable is NOT "nobody chose", and the difference decides a default.
@@ -231,7 +240,7 @@ export function legacyGrants(userData: string): Grants | null | undefined {
     So it answers `undefined` for unreadable and `null` only for absent, and the
     caller keeps the legacy policy in force rather than picking either.
   */
-  if (!held.readable) return undefined
+  if (!held.readable) return 'unreadable'
   return held.grants
 }
 

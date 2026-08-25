@@ -7,6 +7,7 @@ import { isPersonaId } from '@shared/parse-persona'
 
 import { logBoundedRead, readBounded } from './read-bounded'
 import { writeJsonAtomically } from './json-file'
+import { type LegacyGrants } from './worn'
 
 /**
  * What each character may do, filed under her id.
@@ -91,7 +92,25 @@ function grantsState(userData: string, id: string): GrantsState {
   }
 }
 
-export function readGrants(userData: string, id: string, legacy?: Grants | null): Grants {
+/**
+ * The grants in force for a character who has no file of her own yet.
+ *
+ * Three legacy states, not two, and the difference decides a default:
+ *   - a legacy policy      → inherit it, so an unfinished migration cannot grant
+ *   - no legacy at all     → `DEFAULT_GRANTS`, which is what a fresh install has
+ *   - legacy UNREADABLE    → withhold, because "cannot tell" is not "allowed"
+ *
+ * The unreadable case is a named sentinel, not `undefined`: coalescing it to
+ * `null` at a call site — which every caller did until the third audit found it
+ * — turns the safest of the three into the most permissive, and an omitted
+ * argument would have done the same by accident.
+ */
+function fallbackFor(legacy: LegacyGrants): Grants {
+  if (legacy === 'unreadable') return WITHHELD_GRANTS
+  return legacy ?? DEFAULT_GRANTS
+}
+
+export function readGrants(userData: string, id: string, legacy: LegacyGrants = null): Grants {
   const held = grantsState(userData, id)
   if (held.kind === 'unusable') {
     console.warn(`[grants] ${id} ${held.why}; withholding everything`)
@@ -108,11 +127,17 @@ export function readGrants(userData: string, id: string, legacy?: Grants | null)
     withheld. With the fallback here, migration is an optimisation that makes
     the answer durable, not the thing the answer depends on.
   */
-  return legacy ?? DEFAULT_GRANTS
+  return fallbackFor(legacy)
 }
 
 /** Set one permission for one character, leaving the rest as they were. */
-export function writeGrant(userData: string, id: string, grant: Grant, allowed: boolean): void {
+export function writeGrant(
+  userData: string,
+  id: string,
+  grant: Grant,
+  allowed: boolean,
+  legacy: LegacyGrants = null,
+): void {
   if (!isGrant(grant)) throw new Error(`not a grant: ${JSON.stringify(grant)}`)
   /*
     Refuse to write over a file that could not be read.
@@ -128,7 +153,15 @@ export function writeGrant(userData: string, id: string, grant: Grant, allowed: 
   if (held.kind === 'unusable') {
     throw new Error(`refusing to rewrite ${id}'s permissions over a file that ${held.why}`)
   }
-  const base = held.kind === 'absent' ? DEFAULT_GRANTS : held.grants
+  /*
+    The base is what a READ would have answered, not `DEFAULT_GRANTS`.
+
+    They diverged: reads inherited the legacy policy for a character with no
+    file, writes merged onto the defaults. Toggling one switch therefore
+    re-granted every legacy denial silently, which is the exact failure the
+    per-character move was made to prevent.
+  */
+  const base = held.kind === 'absent' ? fallbackFor(legacy) : held.grants
   mkdirSync(grantsRoot(userData), { recursive: true })
   writeJsonAtomically(grantsPath(userData, id), { ...base, [grant]: allowed })
 }
@@ -168,12 +201,12 @@ export function forgetGrants(userData: string, id: string): void {
 export function migrateGrants(
   userData: string,
   ids: Iterable<string>,
-  legacy: Grants | null | undefined,
+  legacy: LegacyGrants,
 ): readonly string[] {
   // `undefined` means the legacy file is THERE and unreadable. Seeding from it
   // is impossible and skipping it silently grants everything, so it throws and
   // the caller reports it rather than starting permissive.
-  if (legacy === undefined) {
+  if (legacy === 'unreadable') {
     throw new Error('refusing to migrate permissions from a file that cannot be read')
   }
   if (legacy === null) return []
