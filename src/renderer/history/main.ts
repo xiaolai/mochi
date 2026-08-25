@@ -68,6 +68,7 @@ import {
 import { say } from './status'
 import { empty, facts, iconButton, marked } from './bits'
 import { countByDay, openingDay } from './month'
+import { sureExportEl } from './elements'
 
 /*
   A wall clock on every line this window prints, installed before it prints one.
@@ -187,6 +188,11 @@ function askFirst(about: Doomed, what: string, why: string): void {
   doomed = about
   sureWhatEl.textContent = what
   sureWhyEl.textContent = why
+  // Reset, because a "Saved 12" left from the last time would read as a copy
+  // taken of THESE conversations.
+  sureExportEl.textContent = 'Save a copy first'
+  sureExportEl.disabled = false
+  sureYesEl.disabled = false
   sureEl.showModal()
 }
 
@@ -234,6 +240,37 @@ sureNoEl.addEventListener('click', () => {
 // dropped here too rather than left to be acted on by a later confirmation.
 sureEl.addEventListener('close', () => {
   doomed = null
+})
+
+/*
+  Export from inside the confirmation, at the one moment it is obviously wanted.
+
+  The dialog STAYS OPEN and the deletion is not cancelled: saving a copy is a
+  step before deciding, not a decision. It disables while the save runs so the
+  destructive button cannot be reached during a write, and the outcome is said
+  out loud — an export somebody believes happened and did not is worse than no
+  export offered at all.
+*/
+sureExportEl.addEventListener('click', () => {
+  sureExportEl.disabled = true
+  sureYesEl.disabled = true
+  void window.mochiHistory
+    .exportAll()
+    .then((result) => {
+      if (result.ok) {
+        sureExportEl.textContent = `Saved ${String(result.conversations)}`
+        say(`Exported ${String(result.conversations)} to ${result.path}`)
+      } else if (!result.cancelled) {
+        say(`Could not export: ${result.why}`, true)
+      }
+    })
+    .catch((error: unknown) => {
+      say(`Could not export: ${String(error)}`, true)
+    })
+    .finally(() => {
+      sureExportEl.disabled = false
+      sureYesEl.disabled = false
+    })
 })
 
 sureYesEl.addEventListener('click', () => {

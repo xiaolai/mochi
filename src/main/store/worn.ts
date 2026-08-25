@@ -91,9 +91,45 @@ export function writeWornPersonaId(userData: string, id: string): void {
  * file. Two callers now, which is why it is a function: a second one that
  * wrote only its own key would silently drop the first one's.
  */
+/**
+ * The keys this build does not write, and does not delete either.
+ *
+ * `preferences.json` is older than this application. Seven v1-era keys are
+ * still in it on any machine that has been upgraded, and `writeMerged`
+ * preserving unknown keys is what keeps them — deliberately, so that rolling
+ * back to a v1 build does not land on a file with its settings stripped.
+ *
+ * Named here because being undocumented was the defect, not being present: a
+ * reader finding `sizePercent` in a file no code mentions cannot tell a
+ * deliberate carry-forward from a leak, and the safe-looking move is to delete
+ * it.
+ *
+ * | key                | what it was in v1                          |
+ * | ------------------ | ------------------------------------------ |
+ * | `credentialSource` | where the API key was read from            |
+ * | `delegation`       | the lookup settings, now `lookup`          |
+ * | `idleMs`           | the sleep timer, now `sleepAfterMinutes`   |
+ * | `realtimeModel`    | the model id, now `shared/realtime-model`  |
+ * | `shortcuts`        | the chord table, now claimed at launch     |
+ * | `sizePercent`      | her size, now `FaceSpec.size`              |
+ * | `sound`            | an output device that was never wired      |
+ *
+ * None is read. If one is ever needed again, read it HERE and give it a name
+ * this build understands rather than reviving the old one.
+ */
+export const V1_KEYS = [
+  'credentialSource',
+  'delegation',
+  'idleMs',
+  'realtimeModel',
+  'shortcuts',
+  'sizePercent',
+  'sound',
+] as const
+
 function writeMerged(userData: string, changes: Record<string, unknown>): void {
-  // Everything already there, kept. See the note above: this file is older than
-  // this application and holds keys it does not understand.
+  // Everything already there, kept — including `V1_KEYS` above, which is why
+  // that list is documentation rather than a thing this function consults.
   let existing: Record<string, unknown> = {}
   const read = readBounded(join(userData, PREFERENCES))
   if (read.ok) {

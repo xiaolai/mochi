@@ -65,6 +65,9 @@ const DOCUMENTS: readonly {
       'sure-why',
       'sure-no',
       'sure-yes',
+      // Offered inside the confirmation, because that is the one moment
+      // somebody wants a copy before the irreversible click.
+      'sure-export',
       'mark',
       'state',
       'state-how',

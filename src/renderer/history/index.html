@@ -2350,6 +2350,15 @@
       <p id="sure-why"></p>
       <div class="sure-do">
         <button class="btn" id="sure-no" type="button" autofocus>Keep them</button>
+        <!--
+          Export sits BEFORE the destructive button and after the safe one.
+
+          The export path already existed and was reachable only from the
+          toolbar, which is nowhere near the moment somebody wants it. This is
+          the one point where the answer to "can I keep a copy first" decides
+          whether the next click is recoverable.
+        -->
+        <button class="btn" id="sure-export" type="button">Save a copy first</button>
         <button class="btn bad" id="sure-yes" type="button">Delete</button>
       </div>
     </dialog>

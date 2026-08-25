@@ -27,6 +27,7 @@ import {
   writeHerPlace,
   readShelfPlace,
   writeShelfPlace,
+  V1_KEYS,
 } from './worn'
 
 let userData = ''
@@ -455,5 +456,24 @@ describe('carrying the old bubble side over', () => {
     writeShoulderChip(userData, false)
     expect(bubbleSideMigrated(userData)).toBe(true)
     expect(readWornPersonaId(userData)).toBe('loki')
+  })
+})
+
+describe('the v1-era keys nothing reads', () => {
+  it('keeps every one of them through a write', () => {
+    // Documented rather than deleted, and this is what makes the documentation
+    // a guard: `writeMerged` preserving unknown keys is the mechanism, and a
+    // future writer that "tidied up" would break it silently otherwise.
+    const before = Object.fromEntries(V1_KEYS.map((key) => [key, `v1-${key}`]))
+    writeFileSync(join(userData, 'preferences.json'), JSON.stringify(before))
+
+    writeWornPersonaId(userData, 'ada')
+
+    const after = JSON.parse(readFileSync(join(userData, 'preferences.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >
+    for (const key of V1_KEYS) expect(after[key], key).toBe(`v1-${key}`)
+    expect(after['activePersonaId']).toBe('ada')
   })
 })

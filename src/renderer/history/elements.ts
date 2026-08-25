@@ -77,6 +77,7 @@ export const sureWhyEl = need('sure-why', HTMLElement)
 export const sureNoEl = need('sure-no', HTMLButtonElement)
 
 export const sureYesEl = need('sure-yes', HTMLButtonElement)
+export const sureExportEl = need('sure-export', HTMLButtonElement)
 
 export const saidEl = need('said', HTMLElement)
 
