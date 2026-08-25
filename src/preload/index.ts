@@ -100,8 +100,8 @@ const api: MochiApi = {
   async open() {
     return (await ipcRenderer.invoke(guard('voice:open'))) as Awaited<ReturnType<MochiApi['open']>>
   },
-  async sdp(offer: string) {
-    return (await ipcRenderer.invoke(guard('voice:sdp'), offer)) as Awaited<
+  async sdp(offer: string, session: string) {
+    return (await ipcRenderer.invoke(guard('voice:sdp'), offer, session)) as Awaited<
       ReturnType<MochiApi['sdp']>
     >
   },

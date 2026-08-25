@@ -7,6 +7,7 @@ import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
 import { whatToFile } from './heard'
 import { readVoiceReport } from '@shared/voice-report'
+import { createMintSlot } from './voice/mint-slot'
 import { whenToReconnect } from '@shared/realtime/reconnect'
 import { renderTools } from './tools-sent'
 import { promptsFor } from '@shared/prompts'
@@ -31,13 +32,7 @@ import type { Pronoun } from '@shared/pronoun'
 import { CAPABILITIES } from '../capabilities'
 import { createLedger, type AnswerFrame } from './capability/ledger'
 import { handleCall } from './capability/dispatch'
-import {
-  describeProblem,
-  exchangeSdp,
-  mintEphemeralKey,
-  readBearer,
-  type Minted,
-} from './voice/credential'
+import { describeProblem, exchangeSdp, mintEphemeralKey, readBearer } from './voice/credential'
 import { activePersona, copyPersonaTo, loadPersonas, savePersonaTo } from './store/personas'
 import { personasRoot } from './store/persona-files'
 import { deletePersona, discardWrite, sweepDeletions } from './store/delete-persona'
@@ -1407,8 +1402,14 @@ const capabilityDeps: CapabilityDeps = {
   now: () => Date.now(),
 }
 
-/** Held so a second open replaces the first rather than racing it. */
-let minted: Minted | null = null
+/**
+ * Which minted credential a given `voice:sdp` may use.
+ *
+ * A slot with IDENTITY rather than a bare binding. This was `let minted` and
+ * `voice:sdp` read whatever was in it, so a second open landing mid-handshake
+ * handed its credential to the first renderer. See `voice/mint-slot.ts`.
+ */
+const mint = createMintSlot()
 let reconnectTimer: NodeJS.Timeout | null = null
 
 ipcMain.handle('voice:open', async () => {
@@ -1424,17 +1425,25 @@ ipcMain.handle('voice:open', async () => {
     console.error(`[voice] ${why}`)
     return { ok: false, why }
   }
-  minted = result.value
-  console.log(`[voice] minted for ${minted.model}`)
-  // The KEY does not go back. The renderer gets only what it needs to know that
-  // the mint worked; `voice:sdp` is where the key is actually used, in main.
-  return { ok: true, key: '', model: minted.model }
+  const session = mint.hold(result.value)
+  console.log(`[voice] minted for ${result.value.model}`)
+  // The KEY does not go back. The renderer gets the token identifying this
+  // negotiation and nothing else; `voice:sdp` is where the key is used, in
+  // main. The token is not a secret -- it is an identity, and it is what stops
+  // a superseded renderer using a credential that is not its own.
+  return { ok: true, session, model: result.value.model }
 })
 
-ipcMain.handle('voice:sdp', async (_event, offer: unknown) => {
+ipcMain.handle('voice:sdp', async (_event, offer: unknown, session: unknown) => {
   if (typeof offer !== 'string' || offer.length === 0) return { ok: false, why: 'no offer' }
-  if (minted === null) return { ok: false, why: 'no session has been minted' }
-  const answered = await exchangeSdp({ offer, minted })
+  const claimed = mint.claim(session)
+  if (!claimed.ok) {
+    // Loud, because the superseded case is invisible from the renderer: its
+    // negotiation simply stops working and the reason is in another process.
+    console.error(`[voice] sdp refused: ${claimed.why}`)
+    return { ok: false, why: claimed.why }
+  }
+  const answered = await exchangeSdp({ offer, minted: claimed.value })
   if (!answered.ok) {
     const why = describeProblem(answered.problem)
     console.error(`[voice] ${why}`)

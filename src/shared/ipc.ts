@@ -1110,10 +1110,25 @@ export interface SessionConfig {
  * not — compile the preload. Shared is the only directory both sides build.
  */
 export interface MochiApi {
-  /** Mint a session. Returns a short-lived key, or a sentence saying why not. */
-  open(): Promise<{ ok: true; key: string; model: string } | { ok: false; why: string }>
-  /** Exchange the offer. Main holds the key; the renderer never sees it again. */
-  sdp(offer: string): Promise<{ ok: true; answer: string } | { ok: false; why: string }>
+  /**
+   * Mint a session. Returns the token identifying it, or a sentence saying why
+   * not.
+   *
+   * `session` is NOT the key and is worth nothing on its own -- the key stays
+   * in main. It says WHICH negotiation is speaking, so that a second open
+   * arriving mid-handshake cannot hand its credential to the first renderer.
+   */
+  open(): Promise<{ ok: true; session: string; model: string } | { ok: false; why: string }>
+  /**
+   * Exchange the offer. Main holds the key; the renderer never sees it.
+   *
+   * `session` is what `open` returned. A superseded one is refused rather than
+   * silently answered against the newer session's credential.
+   */
+  sdp(
+    offer: string,
+    session: string,
+  ): Promise<{ ok: true; answer: string } | { ok: false; why: string }>
   /** Everything `session.update` needs. See `voice:config`. */
   config(): Promise<SessionConfig>
   /** Forward a tool call to main. Fire and forget: the answer comes back as a frame. */

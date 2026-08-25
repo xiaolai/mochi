@@ -433,7 +433,29 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
         // one carrying the item id the archive needs.
         break
       case 'session-expired':
-        // Not a failure. An hour passed (§53), and main already has a timer.
+        /*
+          Not a failure -- an hour passed (§53) and main already has a timer --
+          but STILL a teardown, which is what this branch was missing.
+
+          Main's timer opens a NEW session. It cannot close this one: the peer,
+          the data channel, the frame subscription and the capture all live
+          here, and `shutdown()` is the only thing that stops them. Reporting
+          the state and returning left every one of them running and started
+          another beside it, once an hour, for as long as the window was open.
+
+          `shutdown` says the cost of exactly this, about the subscription:
+          "held that session's peer and data channel for the life of the
+          window -- once an hour, for ever". The expiry path was the one route
+          that got there without calling it.
+
+          The microphone is the visible part. The OS indicator stays lit for a
+          session nobody is in.
+
+          BEFORE the report, the order `fail()` and the connection-failure
+          handler both use: `shutdown` announces `closed` on its way out, so a
+          state reported first is overwritten by it.
+        */
+        shutdown()
         callbacks.onState({ expired: true })
         break
       case 'error':
@@ -581,8 +603,20 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
    */
   if (captured.status === 'fulfilled') media = captured.value
   if (captured.status === 'rejected') fail(`the microphone was refused: ${String(captured.reason)}`)
+  // Narrowed in two steps rather than one `&&`, so the compiler carries the
+  // result forward: `fail` returns `never`, and each check on its own line is
+  // what lets `minted.value.session` below be reached without a cast.
   if (minted.status === 'rejected') fail(`could not open a session: ${String(minted.reason)}`)
-  if (minted.status === 'fulfilled' && !minted.value.ok) fail(minted.value.why)
+  if (!minted.value.ok) fail(minted.value.why)
+  /*
+    Held so the SDP exchange can say which negotiation it belongs to.
+
+    Main used to keep one mint slot with no identity, so a second open landing
+    between this line and the exchange below handed ITS credential to this
+    renderer. Presenting the token main issued is what makes that case a
+    refusal instead of two renderers sharing one session.
+  */
+  const session = minted.value.session
 
   micTrack = media?.getAudioTracks()[0] ?? null
   // A device that opened and produced nothing. `getUserMedia` resolving with no
@@ -619,7 +653,7 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     const offer = peer.localDescription?.sdp
     if (offer === undefined) throw new Error('no local description')
 
-    const answered = await window.mochi.sdp(offer)
+    const answered = await window.mochi.sdp(offer, session)
     if (!answered.ok) throw new Error(answered.why)
     if (closed) throw new Error('the session was abandoned while opening')
     await peer.setRemoteDescription({ type: 'answer', sdp: answered.answer })
