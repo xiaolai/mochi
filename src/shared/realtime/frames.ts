@@ -47,15 +47,23 @@ export type ServerFrame =
    * `audio_end_ms`, and **no `response_id`**, which makes `item_id` the only key
    * that joins it to the transcript.
    *
-   * `audioEndMs` is the one signal about what she was actually HEARD saying.
-   * §58/§59 established that the truncated TEXT is not stored anywhere — this
-   * number is all there is.
+   * `audioEndMs` is the service's account of where the audio was cut.
+   *
+   * **Nothing in this app reads it**, and this comment used to say it "is the
+   * one signal about what she was actually HEARD saying" — which described an
+   * earlier design. The estimate actually used is the renderer's own cursor
+   * (`utterance.at()`), which is why `pending.truncated` takes `heardAt` as an
+   * argument rather than reaching for this.
+   *
+   * Kept in the shape because it is worth logging beside ours when the two
+   * disagree, and **optional** because a required field nobody reads can only
+   * ever reject a frame that mattered.
    */
   | {
       readonly kind: 'truncated'
       readonly itemId: string
       readonly contentIndex: number
-      readonly audioEndMs: number
+      readonly audioEndMs: number | null
     }
   /**
    * The hour is up. Its own kind because the remedy is completely different
@@ -275,16 +283,32 @@ export function parseServerFrame(text: string): ServerFrame {
   if (type === 'conversation.item.truncated') {
     const itemId = value['item_id']
     const audioEndMs = value['audio_end_ms']
-    // Written from a captured frame, not from a page: the observed keys are
-    // `[type, event_id, item_id, content_index, audio_end_ms]`.
-    if (typeof itemId !== 'string' || typeof audioEndMs !== 'number') {
-      return { kind: 'malformed', type, missing: ['item_id', 'audio_end_ms'] }
+    /*
+      `item_id` is REQUIRED and `audio_end_ms` is not, though both were.
+
+      Written from a captured frame, not from a page: the observed keys are
+      `[type, event_id, item_id, content_index, audio_end_ms]`. Requiring the
+      whole observed shape looks conservative and is not -- nothing in this app
+      reads `audioEndMs`. The cut is estimated from the renderer's own cursor,
+      which is what `pending.truncated` takes as an argument.
+
+      So a service that stops sending a field nobody uses would have made every
+      truncation `malformed`, and a malformed truncation means the turn is
+      never settled: `pending` holds it until session close and files it whole.
+      The frame that says she was CUT OFF is the last one that should be
+      rejected over an unused number.
+
+      Kept in the shape rather than dropped, because it is the service's own
+      account of the cut and belongs in the log beside ours when they disagree.
+    */
+    if (typeof itemId !== 'string') {
+      return { kind: 'malformed', type, missing: ['item_id'] }
     }
     return {
       kind: 'truncated',
       itemId,
       contentIndex: typeof value['content_index'] === 'number' ? value['content_index'] : 0,
-      audioEndMs,
+      audioEndMs: typeof audioEndMs === 'number' ? audioEndMs : null,
     }
   }
 

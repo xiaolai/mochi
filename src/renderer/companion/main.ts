@@ -524,3 +524,29 @@ window.mochi.onSend((frame) => {
   again on a reload, which is what makes a development refresh reconnect rather
   than sit there mute.
 */
+
+/*
+  THE LAST RESORT, and there was none.
+
+  Everything this window knows how to report goes through `say`/`show` -- and
+  every one of those is a path somebody thought of. An exception escaping a
+  listener, or a promise nobody awaited, reached the devtools console and
+  nothing else. In a packaged app nobody has devtools open, so the failures
+  with no handler were also the failures with no evidence.
+
+  Routed to main's `problems`, which is where the rest of the app's failures
+  already are, so one place answers "what has gone wrong".
+*/
+window.addEventListener('error', (event) => {
+  window.mochi.report({
+    kind: 'note',
+    text: `[companion] uncaught: ${event.message} (${event.filename}:${String(event.lineno)})`,
+  })
+})
+
+window.addEventListener('unhandledrejection', (event) => {
+  window.mochi.report({
+    kind: 'note',
+    text: `[companion] unhandled rejection: ${String(event.reason)}`,
+  })
+})

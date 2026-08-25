@@ -1684,3 +1684,28 @@ void readShelf()
   .finally(() => {
     void readConversations()
   })
+
+/*
+  THE LAST RESORT, and there was none.
+
+  Everything this window knows how to report goes through `say`/`show` -- and
+  every one of those is a path somebody thought of. An exception escaping a
+  listener, or a promise nobody awaited, reached the devtools console and
+  nothing else. In a packaged app nobody has devtools open, so the failures
+  with no handler were also the failures with no evidence.
+
+  Shown IN THIS WINDOW rather than routed to main's `problems`, unlike the
+  companion's. This window's preload exposes `mochiHistory`/`mochiSettings` and
+  NOT `mochi` -- `@shared/ipc` keeps those allowlists apart so that no window
+  drawing a transcript can mint a key -- so `window.mochi.report` here would
+  throw inside the error handler, which is strictly worse than having none.
+
+  `say` is the right destination anyway: somebody is looking at this window.
+*/
+window.addEventListener('error', (event) => {
+  say(`Something went wrong: ${event.message}`, true)
+})
+
+window.addEventListener('unhandledrejection', (event) => {
+  say(`Something went wrong: ${String(event.reason)}`, true)
+})

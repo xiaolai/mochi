@@ -557,6 +557,21 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
     scrub()
   })
 
+  /*
+    SCRUBBED AT OPEN, before the store is handed to anybody.
+
+    `forgetSessions` commits and then scrubs, which is the right order -- but a
+    crash between the two leaves the deleted words sitting in the write-ahead
+    log across launches. Nothing looked for them on the way back up, and
+    `pendingScrub` initialises `false`, so `history:forget` reported the file
+    clean for the whole of that time.
+
+    This is the one store whose entire justification is that deleting is real.
+    A checkpoint on a database with nothing to clear costs a single pragma.
+  */
+  scrubsLeft = SCRUB_TRIES
+  scrub()
+
   return {
     kept,
     begin(personaId, at = now()) {

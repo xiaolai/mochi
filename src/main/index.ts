@@ -1358,16 +1358,30 @@ const capabilityDeps: CapabilityDeps = {
   userData: () => app.getPath('userData'),
   wearing: () => sessionPersona,
   /**
-   * Which faces the WORN character uses.
+   * Which faces the character SHE IS SPEAKING AS uses — not the worn one.
    *
-   * Read from disk per call for the same reason `otherPersonaIds` is: the shelf
-   * is files, and she can be re-worn inside one session. `set_expression` is
-   * called a handful of times in a conversation at most.
+   * `moods.test.ts` calls this a join: the wire enum is built by `narrowFaces`
+   * from a persona's `faces`, and the handler checks this. Two answers to
+   * "which faces", and they have to be the same answer.
+   *
+   * They were not. The enum goes out at `voice:config`, built for the character
+   * the session is configured as; this read `wornId()` from disk. The shelf can
+   * change who is worn while a session is up, and after that she was OFFERED a
+   * face from her own enum and REFUSED it by the handler — which reads to her
+   * as the tool being broken, and to a log as her calling it wrong. The same
+   * divergence `grant-outcome.ts` describes, one process further in.
+   *
+   * `sessionPersona` is what the enum was built from, so `sessionPersona` is
+   * what validates it. Falls back to worn when no session is up, which is the
+   * case the tests exercise and the only one where the two cannot disagree.
+   *
+   * Still read from disk per call: a persona's faces can be edited inside one
+   * session, and `set_expression` is called a handful of times at most.
    */
   facesSheMayWear: () => {
     const userData = app.getPath('userData')
     const catalog = catalogue(userData)
-    return activePersona(catalog, readWornPersonaId(userData)).persona.faces
+    return activePersona(catalog, sessionPersona ?? readWornPersonaId(userData)).persona.faces
   },
   /**
    * The one dep that reaches the renderer, and it carries a single value.
@@ -3241,6 +3255,32 @@ void startup.catch((error: unknown) => {
   console.error('[main] startup threw', error)
   shutDownCleanly('startup threw')
   app.exit(1)
+})
+
+/*
+  THE LAST RESORT, and there was none.
+
+  Every failure this app knows how to report goes through `problems`, and every
+  one of those is a path somebody thought of. This is for the paths nobody
+  thought of: an exception escaping a listener, a promise nobody awaited.
+
+  Electron's default for an uncaught exception in main is a dialog and, for an
+  unhandled rejection, a warning on a console no user is reading. Neither
+  reaches `problems`, so the one class of failure with no handler was also the
+  only class invisible in the app's own account of itself.
+
+  NOT fatal. The alternative -- exiting -- turns a broken feature into a lost
+  conversation, and this process holds the archive. The exception has already
+  happened; the choice here is only whether anybody finds out.
+*/
+process.on('uncaughtException', (error: Error) => {
+  console.error('[main] uncaught', error)
+  problems.note('main', null, `something failed unexpectedly: ${error.message}`)
+})
+
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('[main] unhandled rejection', reason)
+  problems.note('main', null, `something failed unexpectedly: ${String(reason)}`)
 })
 
 app.on('window-all-closed', () => {
