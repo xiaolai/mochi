@@ -130,7 +130,6 @@ console.log(`[main] run ${runName(new Date())}`)
  */
 const NOMINAL_BODY = { left: (WINDOW_W - 94) / 2, top: FEET_FROM_TOP - 73, width: 94, height: 73 }
 import {
-  applyChange,
   applyHearing,
   applyLookup,
   applyScreen,
@@ -144,6 +143,7 @@ import {
   listPersonas,
   refuse,
 } from './settings'
+import { applyChange } from './store/persona-change'
 import { packageFolder } from './store/personas'
 import { boundedForgetSet, createTranscripts, type Transcripts } from './store/transcripts'
 import { type SessionToken } from './store/turn-row'
@@ -154,9 +154,10 @@ import { previousNote, recall, recallState, remember } from './store/memory'
 import { createCompanionWindow, showHistoryWindow } from './window'
 import { checkCodexNow, codexForWindow } from './codex/ready'
 import { codexPathNow } from './codex/ready'
-import { migrateGrants } from './store/grants'
+import { carryGrantsForward } from './store/grants'
 import { legacyGrants } from './store/worn'
 import { WITHHELD_GRANTS } from '@shared/grants'
+import { registerForgetKept } from './ipc/forget-kept'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
 // application's identity is how a notification arrives attributed to nothing and
@@ -2181,45 +2182,7 @@ ipcMain.handle('settings:lookup', (_event, change: unknown): SettingsWrite => {
  * `remember` THROWS rather than overwrite a note it could not read, so a corrupt
  * file is reported here instead of being silently replaced by an empty one.
  */
-/**
- * Clear part of her store, or all of it.
- *
- * The sweeping gestures live here rather than in a tool, for the reason
- * `history:forget` gives about permanent deletion: they are the ones that want
- * to be seen before they happen, by the person whose data it is.
- */
-ipcMain.handle('shelf:forget-kept', (_event, action: unknown): SettingsWrite => {
-  if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
-  const kind = (action as { kind?: unknown }).kind
-  const userData = app.getPath('userData')
-  const worn = activePersona(catalogue(userData), readWornPersonaId(userData)).persona.id
-  const store = transcripts()
-  if (store === null) return refuse('Her store could not be opened.')
-  /*
-    The sheet says who it was drawn for, and a stale answer is refused.
-
-    Without this the window resolves "her" at CLICK time: switching character
-    between drawing the button and pressing it would clear the store of
-    whoever is worn now, which is precisely the irreversible mistake this
-    section exists to make safe.
-  */
-  const meant = (action as { personaId?: unknown }).personaId
-  if (typeof meant !== 'string' || meant !== worn) {
-    return refuse('That was for a different character. Look again and repeat it.')
-  }
-
-  if (kind === 'all') {
-    store.kept.forgetAll(worn)
-    return { ok: true }
-  }
-  if (kind === 'collection') {
-    const collection = (action as { collection?: unknown }).collection
-    if (typeof collection !== 'string') return refuse('That is not something to forget.')
-    store.kept.forgetCollection(worn, collection)
-    return { ok: true }
-  }
-  return refuse('That is not something to do.')
-})
+registerForgetKept({ worn: wornId, store: transcripts })
 
 ipcMain.handle('shelf:memory', (_event, action: unknown): SettingsWrite => {
   if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
@@ -3135,30 +3098,9 @@ const startup = app.whenReady().then(
         Idempotent: a character who already has a file is skipped, so this runs
         on every launch and stops mattering once everybody is seeded.
       */
-      {
-        const userData = app.getPath('userData')
-        try {
-          const seeded = migrateGrants(
-            userData,
-            catalogue(userData).personas.keys(),
-            legacyGrants(userData),
-          )
-          if (seeded.length > 0) {
-            console.log(`[grants] carried the global setting to ${seeded.join(', ')}`)
-          }
-        } catch (error: unknown) {
-          // Its own try, not shared with the migration above it: a failure here
-          // leaves characters unseeded, and an unseeded character reads as
-          // permissive. That is worth a line somebody can see.
-          console.error('[grants] could not carry the global setting forward:', error)
-          problems.note(
-            'settings',
-            null,
-            'her permissions could not be carried forward from the previous version — check them ' +
-              'on the shelf before trusting what she may do',
-          )
-        }
-      }
+      carryGrantsForward(app.getPath('userData'), catalogue, (area, subject, said) => {
+        problems.note(area, subject, said)
+      })
     } catch (error: unknown) {
       // Never a reason not to start. The cost of not carrying it over is one
       // trip to a dropdown; the cost of refusing to launch is the app.

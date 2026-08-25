@@ -1,4 +1,5 @@
 import { mkdirSync, unlinkSync } from 'node:fs'
+import { legacyGrants } from './worn'
 import { storeRoot } from './store-root'
 import { join } from 'node:path'
 
@@ -236,4 +237,42 @@ export function migrateGrants(
     seeded.push(id)
   }
   return seeded
+}
+
+/**
+ * Carry the one global setting forward, once, at startup.
+ *
+ * Lives here rather than in the composition root because it is entirely about
+ * this module's format: what the old shape was, who still needs seeding, and
+ * what it means when the legacy file cannot be read. `index.ts` should say
+ * WHEN it happens, not how.
+ *
+ * A failure is reported rather than thrown. Seeding is an optimisation now —
+ * `readGrants` falls back to the legacy policy for anybody unseeded — so a
+ * failed pass leaves permissions correct and merely un-durable, which is worth
+ * a line somebody can see and not worth refusing to start over.
+ */
+export function carryGrantsForward(
+  userData: string,
+  catalogue: (userData: string) => { readonly personas: ReadonlyMap<string, unknown> },
+  note: (area: string, subject: string | null, said: string) => void,
+): void {
+  try {
+    const seeded = migrateGrants(
+      userData,
+      catalogue(userData).personas.keys(),
+      legacyGrants(userData),
+    )
+    if (seeded.length > 0) {
+      console.log(`[grants] carried the global setting to ${seeded.join(', ')}`)
+    }
+  } catch (error: unknown) {
+    console.error('[grants] could not carry the global setting forward:', error)
+    note(
+      'settings',
+      null,
+      'her permissions could not be carried forward from the previous version — check them ' +
+        'on the shelf before trusting what she may do',
+    )
+  }
 }

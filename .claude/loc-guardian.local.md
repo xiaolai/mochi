@@ -1,7 +1,7 @@
 ---
 max_pure_loc: 350
 overrides:
-  'src/main/index.ts': 1500
+  'src/main/index.ts': 1530
   'src/renderer/history/main.ts': 975
   'src/renderer/companion/face.ts': 500
 ---
@@ -53,7 +53,7 @@ explain.
 Each was measured rather than assumed. All three are one thing, not several
 things sharing a file — which is the case the limit cannot express.
 
-### `src/main/index.ts` — 1488, was 1540
+### `src/main/index.ts` — 1521, was 1540
 
 The composition root. It holds **21 module-level mutable bindings** and wires 36
 IPC channels to them, with every `ipcMain` registration at column 0 closing over
@@ -77,6 +77,20 @@ examined and rejected on the same test.
 The startup block is the largest single candidate left — 221 code lines — and
 is not taken because it writes twelve pieces of state and **nothing executes
 it**. A mistake there is a launch failure, and the suite would report green.
+
+**Ceiling raised 1500 → 1530 on 2026-08-25, after extracting rather than
+instead of it.** The `kept` feature added wiring here: `shelf:forget-kept`, her
+size threaded through five `resolveFaceFor` calls, the store's collections in
+the shelf view, and the grants migration. The handler came out to
+`ipc/forget-kept.ts` — it reaches exactly two things and neither is state it
+writes, which is what made it the one worth lifting — and the grants migration
+went to `carryGrantsForward` in the module that owns its format. That is 40
+lines. What is left is threading, which is what a composition root IS.
+
+The number is 1521 today and the ceiling is 1530, so it still bites at nine
+lines. A ceiling raised to whatever the file happens to be is not a gate; this
+one was raised once, after the extraction, and the extraction is named above so
+the next person can check the claim rather than trust it.
 
 Getting this under 350 needs the live state moved into an object the handler
 modules receive — a redesign of how every feature is written, not an extraction.

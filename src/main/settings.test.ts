@@ -14,7 +14,6 @@ import { forPronoun } from '@shared/pronoun'
 import { REVEALABLE } from '@shared/ipc'
 import { WEB_SEARCH_MODES } from '@shared/delegation'
 import {
-  applyChange,
   applyLookup,
   applyHearing,
   applyScreen,
@@ -26,6 +25,7 @@ import {
   listLookup,
   listScreen,
 } from './settings'
+import { applyChange } from './store/persona-change'
 import { DEFAULT_GRANTS, GRANTS, GRANT_SPECS } from '@shared/grants'
 import { HALO_WHEN } from '@shared/ipc'
 import type { Usage } from './store/usage'
