@@ -16,6 +16,7 @@ import { BUILT_IN_ID } from '@shared/parse-persona'
 import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
 import { grantOutcome } from './grant-outcome'
+import { running } from '../capabilities/ask-workspace/capability'
 import { createMintSlot } from './voice/mint-slot'
 import { reported } from './voice/reported'
 import { createNextSession } from './voice/next-session'
@@ -3250,6 +3251,24 @@ function shutDownCleanly(why: string): void {
   if (shutDown) return
   shutDown = true
   console.log(`[main] closing the archive (${why})`)
+  /*
+    THE CHILDREN FIRST, before anything that can throw.
+
+    This closed the archive and left every running Codex process alive. The app
+    leaves the Dock, the tray icon goes, and a subprocess goes on reading
+    somebody's workspace with nothing on screen to say it is there — and, on
+    the paths that reach here through `app.exit()`, no parent left to reap it.
+
+    Above the archive work because that work has two `try` blocks that can
+    both fail, and a child outliving the app is worse than an archive closed a
+    few milliseconds later.
+  */
+  try {
+    const stopped = running.stopAll()
+    if (stopped > 0) console.log(`[main] stopped ${String(stopped)} running lookup(s)`)
+  } catch (error: unknown) {
+    console.error('[main] a running lookup could not be stopped:', error)
+  }
   try {
     /*
       Only one that EXISTS. `conversation()` builds the archive on demand, and

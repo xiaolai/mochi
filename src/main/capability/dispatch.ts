@@ -28,6 +28,7 @@
  */
 
 import type { Capability, CapabilityDeps, CapabilityOutput } from '../../capabilities/kind'
+import { argProblems } from '@shared/capability/args'
 import type { Arrival, Ledger } from './ledger'
 
 /** What settles a call that could not be run at all. */
@@ -176,7 +177,34 @@ export function handleCall(
     // Already settled or already seen. `arrived` emits the refusal for an
     // unknown name itself, so there is nothing left to answer here.
     quietly(() => log(`[capability] ${name}: ${arrival.kind}`))
+    // A repeated `call_id` is not harmless-by-construction, it is harmless
+    // because the FIRST one was answered. Which means it is either the
+    // renderer sending twice or the model reusing an id, and both are worth
+    // knowing about rather than inferring from a quiet log.
+    if (arrival.kind === 'duplicate') {
+      quietly(() => note(name, `the same call arrived twice (${callId}); the second was ignored`))
+    }
     return
+  }
+  /*
+    WHY a field is empty, when it is empty for a reason she could fix.
+
+    `readArgs` collapses missing, wrong-typed and unparseable to `''` -- which
+    is right, and which makes a handler's refusal "you did not give me a
+    question" FALSE when she sent `{"question": 42}`. She did give one. Without
+    this she has no way to learn what was wrong with it and every reason to
+    make the same call again.
+
+    Noted rather than sent to her: the refusal itself belongs to the handler,
+    which knows which of its fields are required. This makes the cause
+    diagnosable rather than guessing at it from an empty string.
+  */
+  {
+    const wrong = argProblems(arrival.manifest, call.args)
+    if (wrong.length > 0) {
+      quietly(() => log(`[capability] ${name} was called with ${wrong.join('; ')}`))
+      quietly(() => note(name, `called with ${wrong.join('; ')}`))
+    }
   }
   // BOUNDED, like the result. The arguments are model output arriving through a
   // renderer, and an unbounded log line is a way to make the main process do

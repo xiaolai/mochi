@@ -57,3 +57,53 @@ export function readArgs(
   }
   return out
 }
+
+/**
+ * What was wrong with a call's arguments, in words a log can carry.
+ *
+ * ## Why this is separate from `readArgs`
+ *
+ * `readArgs` collapses missing, wrong-typed and unparseable to `''`, and its
+ * header explains why: the caller must still answer the call, and every
+ * declared field must be present so call sites stay free of optional handling.
+ * Both properties are load-bearing and neither is changed here.
+ *
+ * But that collapse costs something the header does not mention. A capability
+ * handed `question: ''` refuses with *"you did not give me a question"* — and
+ * when she actually sent `{"question": 42}`, that refusal is **false**. She
+ * did give one. She has no way to learn what was wrong with it, so she is
+ * likely to make the same call again.
+ *
+ * Empty when the arguments were fine, so a caller can say nothing in the
+ * ordinary case.
+ */
+export function argProblems(manifest: CapabilityManifest, raw: unknown): readonly string[] {
+  const fields = Object.keys(manifest.parameters.properties)
+
+  if (typeof raw !== 'string') return ['the arguments did not arrive as text']
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return ['the arguments were not valid JSON']
+  }
+  if (Array.isArray(parsed)) return ['the arguments were a list rather than an object']
+  if (typeof parsed !== 'object' || parsed === null) {
+    return ['the arguments were not an object']
+  }
+
+  const source = parsed as Record<string, unknown>
+  const found: string[] = []
+  for (const field of fields) {
+    if (!(field in source)) continue
+    // PRESENT but not a string. Absence is not reported: a capability may
+    // legitimately declare a field it does not require, and "you left out X"
+    // is a refusal the handler is better placed to make than this is.
+    const value = source[field]
+    if (typeof value !== 'string') {
+      found.push(`\`${field}\` was ${value === null ? 'null' : typeof value}, not text`)
+    }
+  }
+  return found
+}

@@ -36,7 +36,8 @@
  * be fast; it needs to arrive.
  */
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { logBoundedRead, readBounded } from '../../main/store/read-bounded'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { WebSearchMode } from '@shared/delegation'
@@ -270,14 +271,33 @@ export async function ask(question: string, deps: AskDeps): Promise<AskResult> {
       return { ok: false, why: said === '' ? `codex exited ${String(finished.code)}` : said }
     }
 
-    let written: string
-    try {
-      written = readFileSync(outPath, 'utf8')
-    } catch {
-      // Exit zero and no file is its own failure, and a different one from a
-      // crash: it means the run succeeded and produced nothing.
-      return { ok: false, why: 'codex wrote no answer' }
+    /*
+      BOUNDED, because a subprocess wrote it.
+
+      This was a bare `readFileSync`. The file is produced by Codex -- another
+      program, running against a workspace whose contents are not ours -- and
+      reading it whole put an unbounded amount of somebody else's output into
+      the main process's heap in one call. Every other file this app reads goes
+      through `readBounded`; this was the one that did not, and it is the only
+      one written by something outside the app.
+
+      `readBounded` also refuses a non-regular file, which matters more here
+      than elsewhere: `outPath` is in a temp directory, and a symlink dropped
+      there between the spawn and this read would otherwise be followed.
+    */
+    const read = readBounded(outPath)
+    if (!read.ok) {
+      // Exit zero and no answer is its own failure, and a different one from a
+      // crash: it means the run succeeded and produced nothing usable.
+      return {
+        ok: false,
+        why:
+          read.reason.kind === 'absent'
+            ? 'codex wrote no answer'
+            : `codex's answer could not be read: ${logBoundedRead(read.reason)}`,
+      }
     }
+    const written = read.text
     const answer = readAnswer(written)
     return answer === null
       ? { ok: false, why: 'the answer was not in the shape that was asked for' }

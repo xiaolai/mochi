@@ -192,6 +192,14 @@ const FIXED: readonly PromptSpec[] = [
     requires: ['{why}'],
   },
   {
+    key: 'askWorkspace.busy',
+    title: 'Lookup — too many at once',
+    purpose:
+      'Handed back when the bound on concurrent lookups is already taken. Each one spawns a process that may run three minutes, and the model can call a tool in a loop. {most} is how many may run at once.',
+    text: 'She did not look, because {most} lookups are already running. Say you will come back to it, finish what those were for, and ask again after.',
+    requires: ['{most}'],
+  },
+  {
     key: 'askWorkspace.report',
     title: 'Lookup — how to report what came back',
     purpose:

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readArgs } from './args'
+import { argProblems, readArgs } from './args'
 import type { CapabilityManifest } from './manifest'
 
 /**
@@ -108,5 +108,58 @@ describe('readArgs', () => {
     // today's implementation.
     expect(readArgs(ASK, '{"__proto__": {"question": "polluted"}}')['question']).toBe('')
     expect(({} as Record<string, unknown>)['question']).toBeUndefined()
+  })
+})
+
+describe('saying what was wrong with the arguments', () => {
+  /**
+   * `readArgs` collapses missing, wrong-typed and unparseable to `''` — which
+   * is right, and which makes a handler's refusal *"you did not give me a
+   * question"* a lie when she sent `{"question": 42}`. She cannot learn from a
+   * refusal that describes something she did not do.
+   */
+  const spec = ASK
+
+  it('says nothing when the arguments were fine', () => {
+    expect(argProblems(spec, JSON.stringify({ question: 'what changed?' }))).toEqual([])
+  })
+
+  it('says nothing about a field she simply left out', () => {
+    // Absence is the handler's to refuse — it knows which of its fields are
+    // required and this does not.
+    expect(argProblems(spec, JSON.stringify({}))).toEqual([])
+  })
+
+  it('names a field that was present but not text', () => {
+    expect(argProblems(spec, JSON.stringify({ question: 42 }))).toEqual([
+      '`question` was number, not text',
+    ])
+  })
+
+  it('distinguishes null from the type it would otherwise report', () => {
+    // `typeof null` is 'object', which would read as though she sent a nested
+    // structure rather than nothing at all.
+    expect(argProblems(spec, JSON.stringify({ question: null }))).toEqual([
+      '`question` was null, not text',
+    ])
+  })
+
+  it('reports the shapes that carry no fields at all', () => {
+    expect(argProblems(spec, 'not json')).toEqual(['the arguments were not valid JSON'])
+    expect(argProblems(spec, JSON.stringify(['a']))).toEqual([
+      'the arguments were a list rather than an object',
+    ])
+    expect(argProblems(spec, JSON.stringify('a string'))).toEqual([
+      'the arguments were not an object',
+    ])
+    expect(argProblems(spec, 42)).toEqual(['the arguments did not arrive as text'])
+  })
+
+  it('agrees with `readArgs` about what got through', () => {
+    // The join: anything this names as wrong must be one of the fields
+    // `readArgs` blanked, or the two are describing different calls.
+    const raw = JSON.stringify({ question: 42 })
+    expect(readArgs(spec, raw)['question']).toBe('')
+    expect(argProblems(spec, raw)).toHaveLength(1)
   })
 })

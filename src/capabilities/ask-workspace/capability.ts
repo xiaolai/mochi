@@ -26,6 +26,13 @@ import { fill } from '@shared/prompts'
 import type { Capability } from '../kind'
 import { ask } from './ask'
 import { spawnCodex } from './spawn'
+import { MOST_AT_ONCE, createRunning, type Running } from './running'
+
+/**
+ * Shared by every call, because the thing it bounds is shared: one machine,
+ * one disk, one workspace.
+ */
+export const running: Running = createRunning()
 import { guardWorkspace } from './workspace'
 
 /**
@@ -85,17 +92,47 @@ export const capability: Capability = {
       return cannot(fill(deps.prompt('askWorkspace.hazards'), { files }))
     }
 
-    const result = await ask(question, {
-      codexPath,
-      workspace,
-      settings: {
-        webSearch: deps.webSearch(),
-        model: null,
-        profile: deps.codexProfile(),
-        framing: deps.prompt('askWorkspace.framing'),
-      },
-      run: spawnCodex,
-    })
+    /*
+      BOUNDED, and held so it can be stopped.
+
+      Each of these spawns a Codex process that may run three minutes, and the
+      model can call a tool in a loop -- nothing said no, so a loop spawned one
+      process per call until the machine decided which to stop. And nothing
+      held them, so quitting left them reading somebody's workspace with the
+      app gone from the Dock. See `running.ts`; both came from the same
+      absence.
+
+      Refused rather than queued: a queue is a three-minute silence the model
+      cannot see, and `dispatch` guarantees every call an answer, so a refusal
+      is a shape the rest of the system already understands.
+    */
+    const slot = running.begin()
+    if (!slot.ok) {
+      return cannot(fill(deps.prompt('askWorkspace.busy'), { most: String(MOST_AT_ONCE) }))
+    }
+    let result
+    try {
+      result = await ask(question, {
+        codexPath,
+        workspace,
+        settings: {
+          webSearch: deps.webSearch(),
+          model: null,
+          profile: deps.codexProfile(),
+          framing: deps.prompt('askWorkspace.framing'),
+        },
+        run: (path, args) => {
+          const handle = spawnCodex(path, args)
+          const release = running.hold(handle)
+          void handle.finished.finally(release)
+          return handle
+        },
+      })
+    } finally {
+      // In a `finally`, not on the success path: a handler that throws with the
+      // slot still taken refuses every later lookup for the life of the process.
+      slot.done()
+    }
     if (!result.ok) {
       return cannot(fill(deps.prompt('askWorkspace.didNotFinish'), { why: result.why }))
     }
