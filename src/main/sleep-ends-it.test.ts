@@ -3,6 +3,27 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { reported } from './voice/reported'
+import type { ReportedDeps } from './voice/reported'
+import type { Conversation } from './store/conversation'
+
+/** Every dependency a no-op, so a test names only the one it cares about. */
+function stubReportedDeps(over: Partial<ReportedDeps> = {}): ReportedDeps {
+  return {
+    // Only `file` is reachable from this router; the rest of `Conversation` is
+    // not, so the cast is narrow and says which part is real.
+    conversation: () => ({ file: () => undefined }) as unknown as Conversation,
+    conversationFlushed: () => undefined,
+    stirred: () => undefined,
+    nextSession: { announced: () => undefined },
+    clickThrough: () => undefined,
+    setListening: () => undefined,
+    note: () => undefined,
+    log: () => undefined,
+    ...over,
+  }
+}
+
 /**
  * Sleep ends the conversation, and waits to be told it may.
  *
@@ -58,11 +79,31 @@ describe('going to sleep ends the conversation', () => {
   })
 
   it('ends it when the renderer says it has finished sending', () => {
-    const handler = MAIN.slice(MAIN.indexOf("ipcMain.on('voice:report'"))
-    expect(handler).toContain("kind === 'flushed'")
-    expect(handler.slice(0, handler.indexOf("kind === 'expiry'"))).toContain(
-      'conversationFlushed()',
-    )
+    /*
+      A REAL CALL, not a slice of source text.
+
+      This used to read `index.ts` and assert that the `voice:report` handler
+      contained `kind === 'flushed'`. The router moved to `voice/reported.ts`
+      -- which is importable, unlike `index.ts` -- so the assertion can now be
+      what it always wanted to be: send the frame, observe the effect.
+
+      Kept in this file because the property under test is still the ORDERING
+      across two processes, which is what the rest of the file asserts.
+    */
+    const flushed: number[] = []
+    reported({ kind: 'flushed' }, stubReportedDeps({ conversationFlushed: () => flushed.push(1) }))
+    expect(flushed).toHaveLength(1)
+  })
+
+  it('does not end it on any other kind of report', () => {
+    // The frame is an acknowledgement of a teardown. Anything else ending the
+    // conversation would close one she is still having.
+    const flushed: number[] = []
+    const deps = stubReportedDeps({ conversationFlushed: () => flushed.push(1) })
+    reported({ kind: 'heard', transcript: 'still talking' }, deps)
+    reported({ kind: 'state', state: 'listening' }, deps)
+    reported({ kind: 'pointer', onHer: true }, deps)
+    expect(flushed).toHaveLength(0)
   })
 
   it('ends it anyway if the renderer never answers', () => {

@@ -1,7 +1,7 @@
 ---
 max_pure_loc: 350
 overrides:
-  'src/main/index.ts': 1530
+  'src/main/index.ts': 1510
   'src/renderer/history/main.ts': 975
   'src/renderer/companion/face.ts': 500
 ---
@@ -116,12 +116,31 @@ lines. A ceiling raised to whatever the file happens to be is not a gate; this
 one was raised once, after the extraction, and the extraction is named above so
 the next person can check the claim rather than trust it.
 
-**The ceiling is left at 1530 rather than lowered, and that is a deliberate
-choice, not an oversight.** The correction above reopens the voice extraction;
-until it is actually done the file really is 1521 lines, and dropping the ceiling
-under it would turn the gate red without removing a single line. A red gate
-nobody can act on is how gates get ignored. Lower it to ~1160 **in the same
-change** that lifts `voice:*` out — not before, and not instead.
+**Ceiling lowered 1530 → 1510 on 2026-08-26, after the extraction and not
+instead of it.** Fixing the grill report's five Criticals pushed this file to
+1537 — over its own ceiling — so `voice:report` came out to
+`voice/reported.ts`. It was the right piece to take: 119 lines, twelve
+dependencies, and it **writes none of them**. A router over read-only
+dependencies is a function, not a piece of the wiring diagram.
+
+Lifting it also turned a source-text assertion into a real one.
+`sleep-ends-it.test.ts` sliced `index.ts` for `kind === 'flushed'`; it now
+calls `reported()` and observes the effect, because unlike `index.ts` that
+module can be imported. That is the second-order value of these extractions
+and it is easy to miss: **every line that leaves this file becomes testable by
+something better than a regex over its source.**
+
+The file is 1502 today, against 1521 at the start of that work — so the fixes
+above landed and it came out nineteen lines smaller. 1510 is set just above
+where it sits, which is the discipline this section describes; it is a
+tightening of 20 lines, not a ceiling raised to fit.
+
+`voice:config` was measured for extraction next and NOT taken: 134 lines, nine
+dependencies, and one setter (`sessionPersona`). The setter is what stopped
+it — a mechanical rewrite of the reads got the multi-line `problems.note(...)`
+calls wrong, and a regex-driven refactor that silently mangles a call is a
+worse outcome than a file nine lines under its ceiling. It is the named next
+move, by hand, when this file next needs room.
 
 Getting this under 350 needs the live state moved into an object the handler
 modules receive — a redesign of how every feature is written, not an extraction.

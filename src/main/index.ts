@@ -15,10 +15,9 @@ import { BUBBLE_SIDES, PERSONA_LIMITS, RECOMMENDED_VOICES, VOICE_NAMES } from '@
 import { BUILT_IN_ID } from '@shared/parse-persona'
 import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
-import { whatToFile } from './heard'
-import { readVoiceReport } from '@shared/voice-report'
 import { grantOutcome } from './grant-outcome'
 import { createMintSlot } from './voice/mint-slot'
+import { reported } from './voice/reported'
 import { createNextSession } from './voice/next-session'
 import { renderTools } from './tools-sent'
 import { promptsFor } from '@shared/prompts'
@@ -1721,107 +1720,27 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
 
 ipcMain.on('voice:report', (_event, report: unknown) => {
   /*
-    CHECKED, not cast.
+    The registration is here and the decision is in `voice/reported.ts`.
 
-    This was `report as VoiceReport`, which is a claim about what the author
-    believed rather than a check on what arrived -- and every field went
-    straight to the idle clock, the reconnect timer and SQLite. `at` is the one
-    that bit: `node:sqlite` throws when READING BACK an INTEGER outside +/-2^53,
-    for the whole result set rather than the row, so one turn filed at 1e17
-    makes the conversation list throw on every launch. That list is the pane
-    holding the delete buttons, so there is no way back from inside the app.
-
-    Dropped silently at the boundary would be its own defect, so it is noted.
+    That module is the only inbound path from the least trusted process that
+    reaches SQLite, the idle clock and the reconnect schedule at once, and it
+    reads twelve things from this file while writing none of them -- a router
+    over read-only dependencies, which is a function rather than a piece of the
+    wiring. Lifting it also made its guards directly testable: `index.ts` cannot
+    be imported outside Electron, so they were asserted on source text before.
   */
-  const event = readVoiceReport(report)
-  if (event === null) {
-    problems.note('voice', null, 'the renderer reported something unreadable; it was ignored')
-    return
-  }
-  if (event.kind === 'flushed') {
-    conversationFlushed()
-    return
-  }
-  if (event.kind === 'expiry') {
-    // The good path: the service said when this session ends, so the blind
-    // floor armed at `voice:open` is replaced by the real schedule.
-    nextSession.announced(event.expiresAt)
-    return
-  }
-  if (event.kind === 'heard') {
-    console.log(`[voice] heard: ${event.transcript}`)
-    conversation().file('you', event.transcript)
-    // Somebody is talking to her, so the silence being counted starts again.
-    // Filed turns rather than frames: a reconnect produces plenty of frames
-    // with nobody in the room, which is the case the timeout exists for.
-    stirred()
-    return
-  }
-  if (event.kind === 'said') {
-    // HER turns count too, and this is the line that stops a long answer being
-    // timed out from underneath: `heard` arrives when they finish speaking and
-    // this arrives when she does, which on a lookup can be half a minute later.
-    stirred()
-    /*
-      The whole decision is `whatToFile`, and it is BELOW `stirred()` on
-      purpose.
-
-      A preamble is still her speaking, so the idle clock has to see it even
-      though the archive must not. Getting that order backwards would let a
-      conversation full of lookups time out from underneath her.
-    */
-    const filing = whatToFile(event)
-    if (filing.kind === 'preamble') {
-      // Logged, never filed. A preamble vanishing with no trace at all is how
-      // somebody comes to believe the transcript is lossy.
-      console.log(`[voice] preamble, not filed: ${filing.text}`)
-      return
-    }
-    if (filing.kind === 'whole') {
-      console.log(`[voice] said: ${filing.text}`)
-      // The transcript's own instant, not this one. A finished turn is settled
-      // by `output_audio_buffer.stopped`, which §19 puts 2.1–7.9s after
-      // generation — and one whose verdict never came is settled at session
-      // close, which can be an hour later.
-      conversation().file('her', filing.text, { cut: false, at: filing.at })
-      return
-    }
-    console.log(
-      `[voice] said (cut): ${filing.text.length} of ${event.transcript.length} chars — "${filing.text.slice(-48)}"`,
-    )
-    conversation().file('her', filing.text, { cut: true, at: filing.at })
-    return
-  }
-  if (event?.kind === 'pointer') {
-    // The window is a square of empty pixels with a mochi somewhere in it.
-    // Without this the invisible corners swallow clicks, and the failure is
-    // silent — nothing looks wrong, the click just goes nowhere.
-    //
-    // `forward: true` on the ignore case so `mousemove` keeps arriving; without
-    // it she becomes blind the moment she becomes click-through, and can never
-    // report that the cursor came back.
-    companion?.setIgnoreMouseEvents(!event.onHer, { forward: true })
-    return
-  }
-  if (event?.kind === 'state') {
-    console.log(`[voice] ${event.state}`)
-    /*
-      The one fact the TRAY carries, from the one place that knows it.
-
-      Her window computes `!asleep && session !== null` for the halo and reports
-      the same boolean here, so the ring on her head and the mark in the menu bar
-      cannot disagree — which they would the moment main tried to infer this from
-      `resting.asleep`, because that says nothing about whether a session
-      actually negotiated.
-
-      This is what makes the halo a preference rather than a promise. It is also
-      what makes `setHidden` honest: hiding her window leaves the session open on
-      purpose, so until the menu bar said so, one click from the tray produced a
-      live microphone with nothing on screen at all.
-    */
-    setListening(event.state === 'listening')
-  }
-  if (event?.kind === 'note') console.log(`[voice] ${event.text}`)
+  reported(report, {
+    conversation,
+    conversationFlushed,
+    stirred,
+    nextSession,
+    clickThrough: (through) => companion?.setIgnoreMouseEvents(through, { forward: true }),
+    setListening,
+    note: (why) => problems.note('voice', null, why),
+    log: (line) => {
+      console.log(line)
+    },
+  })
 })
 
 /**
