@@ -19,15 +19,6 @@
  */
 
 /**
- * The range `node:sqlite` will read back.
- *
- * Not `Number.MAX_SAFE_INTEGER` spelled out at each site: the reason for the
- * bound is the reader, not the arithmetic, and naming it here is what lets the
- * next person find every place that depends on it.
- */
-export const READABLE_INSTANT = Number.MAX_SAFE_INTEGER
-
-/**
  * True when `at` is an epoch-milliseconds value this store can write AND read
  * back.
  *

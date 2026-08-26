@@ -102,7 +102,18 @@ describe('who shows her, and when', () => {
   it('is the first fit, once the window is the size it will be', () => {
     // After `setBounds`, never before it: the whole point is that the size and
     // the position are already right when the clamp gets its one chance.
-    const fit = /ipcMain\.on\('companion:fit'[\s\S]*?\n\}\)/.exec(index)?.[0] ?? ''
+    /*
+      EITHER REGISTRATION FORM.
+
+      This named `ipcMain.on` literally, and broke when every one-way listener
+      moved behind `ipc/listen.ts` to get the try/catch `on` cannot provide.
+      The property under test is the ORDER of `setBounds` and `showHerOnce`
+      inside the handler -- which registration helper installs it is not the
+      subject, and pinning that made a correct change look like a regression.
+    */
+    const fit =
+      /(?:ipcMain\.on|listenTo)\(\s*'companion:fit',[\s\S]*?\n\}[\s\S]{0,20}?\)/.exec(index)?.[0] ??
+      ''
     expect(fit, 'main still answers companion:fit').not.toBe('')
     const bounds = fit.indexOf('setBounds')
     const show = fit.indexOf('showHerOnce')

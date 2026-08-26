@@ -16,6 +16,7 @@ import { BUILT_IN_ID } from '@shared/parse-persona'
 import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
 import { grantOutcome } from './grant-outcome'
+import { listener } from './ipc/listen'
 import { migrateBubbleSide as runBubbleSideMigration } from './migrations/bubble-side'
 import { shutDown as shutDown_ } from './shutdown'
 import { running } from '../capabilities/ask-workspace/capability'
@@ -289,6 +290,27 @@ let claimed: readonly ShortcutOutcome[] = []
  * of them omitted the `isDestroyed` half — which throws rather than being
  * ignored, out of a listener where nothing catches it.
  */
+/**
+ * Where a one-way channel's failure goes.
+ *
+ * A hoisted `function`, not a `const`: these listeners register at module
+ * evaluation from top to bottom, and a const declared after the first of them
+ * is in its temporal dead zone. The first attempt at this was an arrow
+ * function and `tsc` said so twelve times.
+ */
+function ipcProblem(channel: string, detail: string): void {
+  problems.note('ipc', channel, detail)
+}
+
+/**
+ * Every one-way renderer channel, with the guard `ipcMain.on` cannot give it.
+ *
+ * `handle` returns a promise, so a throw inside one becomes a rejection the
+ * caller sees. `on` has nowhere to put one: the listener runs from Electron's
+ * event loop with no frame above it. Eleven of these twelve were unguarded.
+ */
+const listenTo = listener(ipcProblem)
+
 function tellCompanion(frame: Record<string, unknown>): void {
   if (companion === null || companion.isDestroyed()) return
   companion.webContents.send('voice:send', frame)
@@ -580,7 +602,7 @@ let bubbleSides: { available: readonly string[]; using: string } = {
   using: 'above',
 }
 
-ipcMain.on('companion:sides', (_event, value: unknown) => {
+listenTo('companion:sides', (_event, value: unknown) => {
   if (typeof value !== 'object' || value === null) return
   const said = value as { available?: unknown; using?: unknown }
   if (!Array.isArray(said.available) || typeof said.using !== 'string') return
@@ -784,7 +806,7 @@ function readPad(value: unknown): Pad | null {
   }
 }
 
-ipcMain.on('companion:body', (_event, value: unknown) => {
+listenTo('companion:body', (_event, value: unknown) => {
   const body = readBody(value)
   if (body === null) return
   herBody = body
@@ -852,7 +874,7 @@ function showHerOnce(why: string): void {
  */
 const SHOW_ANYWAY_MS = 4000
 
-ipcMain.on('companion:fit', (_event, value: unknown) => {
+listenTo('companion:fit', (_event, value: unknown) => {
   if (companion === null || companion.isDestroyed()) return
   const request = value as { pad?: unknown; body?: unknown; was?: unknown } | null
   if (typeof request !== 'object' || request === null) return
@@ -941,7 +963,7 @@ ipcMain.on('companion:fit', (_event, value: unknown) => {
   }
 })
 
-ipcMain.on('companion:grab', (_event, value: unknown) => {
+listenTo('companion:grab', (_event, value: unknown) => {
   if (companion === null) return
   const grip = parseGrip(value, companion.getBounds())
   if (grip === null) return
@@ -972,7 +994,7 @@ ipcMain.on('companion:grab', (_event, value: unknown) => {
   )
 })
 
-ipcMain.on('companion:drop', () => {
+listenTo('companion:drop', () => {
   stopDrag()
   /**
    * Where she was left, written down.
@@ -1004,11 +1026,11 @@ ipcMain.on('companion:drop', () => {
   }
 })
 
-ipcMain.on('companion:wake', () => {
+listenTo('companion:wake', () => {
   setAsleep(false)
 })
 
-ipcMain.on('companion:menu', () => {
+listenTo('companion:menu', () => {
   if (companion === null) return
   Menu.buildFromTemplate(trayMenuTemplate(menuModel(), menuHandlers, app.getName())).popup({
     window: companion,
@@ -1649,7 +1671,7 @@ ipcMain.handle('voice:config', () => {
  * see the note there, and `ledger.ts` on why a dropped call is the failure
  * that passes every at-most-once test ever written.
  */
-ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown) => {
+listenTo('voice:call', (_event, name: unknown, callId: unknown, args: unknown) => {
   if (typeof name !== 'string' || typeof callId !== 'string') return
   handleCall(
     {
@@ -1693,7 +1715,7 @@ ipcMain.on('voice:call', (_event, name: unknown, callId: unknown, args: unknown)
   )
 })
 
-ipcMain.on('voice:report', (_event, report: unknown) => {
+listenTo('voice:report', (_event, report: unknown) => {
   /*
     The registration is here and the decision is in `voice/reported.ts`.
 
@@ -1732,7 +1754,7 @@ ipcMain.on('voice:report', (_event, report: unknown) => {
  * follows a character switch on the same click — and answers before she has
  * ever spoken, which is when this window is most likely to be opened first.
  */
-ipcMain.on('clipboard:write', (_event, text: unknown) => {
+listenTo('clipboard:write', (_event, text: unknown) => {
   // Checked, not trusted: this comes from a renderer, and `writeText` will take
   // whatever it is given. Bounded because the clipboard is shared with every
   // other application on the machine.
@@ -1741,7 +1763,7 @@ ipcMain.on('clipboard:write', (_event, text: unknown) => {
   console.log(`[clipboard] ${text.length} chars`)
 })
 
-ipcMain.on('history:open', () => {
+listenTo('history:open', () => {
   showHistoryWindow()
 })
 
@@ -2674,7 +2696,7 @@ ipcMain.handle('settings:codex-recheck', async (): Promise<SettingsCodex> => {
   return await checkCodexNow()
 })
 
-ipcMain.on('settings:reveal', (_event, what: unknown) => {
+listenTo('settings:reveal', (_event, what: unknown) => {
   if (!(REVEALABLE as readonly unknown[]).includes(what)) {
     console.error(`[settings] refusing to reveal an unknown folder: ${String(what)}`)
     return

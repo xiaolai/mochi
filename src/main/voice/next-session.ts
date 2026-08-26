@@ -163,7 +163,27 @@ export function createNextSession(deps: NextSessionDeps): NextSession {
         return
       }
       log('[voice] reconnect due')
-      deps.reconnect()
+      /*
+        GUARDED, AND RE-ARMED ON FAILURE.
+
+        `timer` is already null by the time this runs, so a throw from
+        `reconnect()` escaped the callback and left NOTHING scheduled -- which
+        is this module's own defect returning by another route: no timer, no
+        log about a timer, and she never comes back.
+
+        It is reachable. `reconnect` reaches `webContents.send` on a window
+        that can die between its destroyed-check and the send.
+
+        Re-armed at the floor rather than immediately: a window that is gone
+        stays gone for a while, and retrying with no delay turns one failure
+        into a loop that fills the log and the problems pane.
+      */
+      try {
+        deps.reconnect()
+      } catch (error: unknown) {
+        deps.note(`the next session could not be opened: ${String(error)}`)
+        arm(FLOOR_MS)
+      }
     }, delay)
   }
 

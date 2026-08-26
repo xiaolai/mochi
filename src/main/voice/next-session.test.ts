@@ -22,9 +22,16 @@ function harness(startedAt = 1_700_000_000_000) {
   const notes: string[] = []
   const logs: string[] = []
   let awake = true
+  let failReconnect = false
 
   const next: NextSession = createNextSession({
-    reconnect: () => reconnects.push(clock),
+    reconnect: () => {
+      if (failReconnect) {
+        failReconnect = false
+        throw new Error('the window is gone')
+      }
+      reconnects.push(clock)
+    },
     awake: () => awake,
     note: (why) => notes.push(why),
     log: (line) => logs.push(line),
@@ -59,6 +66,10 @@ function harness(startedAt = 1_700_000_000_000) {
     },
     rest() {
       awake = false
+    },
+    /** The next `reconnect()` throws, as a dead window makes it. */
+    failNextReconnect() {
+      failReconnect = true
     },
   }
 }
@@ -230,5 +241,47 @@ describe('a deadline so distant the timer cannot hold it', () => {
     const h = harness()
     h.next.announced((1_700_000_000_000 - 60_000) / 1_000)
     expect(h.armedMs()).toBe(0)
+  })
+})
+
+describe('a reconnect that throws on its way out', () => {
+  /**
+   * AUDIT FINDING, in this module.
+   *
+   * `deps.reconnect()` runs inside the timer callback with `timer` already
+   * nulled, and nothing guarded it. `tellCompanion` reaches
+   * `webContents.send` on a window that can die between the destroyed-check
+   * and the send — so a throw there escaped the callback, and since `timer` was
+   * already null nothing re-armed.
+   *
+   * That is C3's original defect by a different route: no timer, no log about
+   * a timer, and she never comes back. The `uncaughtException` handler added in
+   * this same session catches the throw and reports it, which makes the failure
+   * visible — and still leaves nothing scheduled.
+   */
+  it('still has a reconnect pending afterwards', () => {
+    const h = harness()
+    h.next.announced(inAnHour(1_700_000_000_000))
+    h.failNextReconnect()
+    h.advance(3_600_000)
+    expect(h.next.pending(), 'nothing is scheduled after a failed reconnect').toBe(true)
+  })
+
+  it('says so rather than failing silently', () => {
+    const h = harness()
+    h.next.announced(inAnHour(1_700_000_000_000))
+    h.failNextReconnect()
+    h.advance(3_600_000)
+    expect(h.notes.join(' ')).toContain('could not be opened')
+  })
+
+  it('does not retry instantly, or it spins', () => {
+    // A window that is gone stays gone for a while. Retrying with no delay
+    // turns one failure into a loop that fills the log and the problems pane.
+    const h = harness()
+    h.next.announced(inAnHour(1_700_000_000_000))
+    h.failNextReconnect()
+    h.advance(3_600_000)
+    expect(h.armedMs()).toBeGreaterThan(0)
   })
 })
