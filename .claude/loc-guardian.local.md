@@ -1,7 +1,7 @@
 ---
 max_pure_loc: 350
 overrides:
-  'src/main/index.ts': 1510
+  'src/main/index.ts': 1460
   'src/renderer/history/main.ts': 975
   'src/renderer/companion/face.ts': 500
 ---
@@ -116,38 +116,37 @@ lines. A ceiling raised to whatever the file happens to be is not a gate; this
 one was raised once, after the extraction, and the extraction is named above so
 the next person can check the claim rather than trust it.
 
-**Ceiling lowered 1530 → 1510 on 2026-08-26, after three extractions and not
-instead of them.** Fixing every finding in the grill report pushed this file
-over its own ceiling twice. Both times the answer was to take something out.
+**Ceiling lowered 1530 → 1460 on 2026-08-26, after five extractions and not
+instead of them.** The grill report measured which decompositions pay here and
+which do not: handler-splitting does **not**, because 9 of 19 bindings span
+essentially the whole file, so it relocates state and makes the write set
+harder to audit. Five things left because they were the opposite.
 
-| out to                      | pure | why it was the right piece                |
-| --------------------------- | ---- | ----------------------------------------- |
-| `voice/reported.ts`         | ~35  | a router over **read-only** dependencies  |
-| `shutdown.ts`               | ~60  | a sequence with an argument for its order |
-| `migrations/bubble-side.ts` | ~30  | a one-time migration is not composition   |
+| out to                      | pure | why it was the right piece                 |
+| --------------------------- | ---- | ------------------------------------------ |
+| `voice/reported.ts`         | ~35  | a router over **read-only** dependencies   |
+| `shutdown.ts`               | ~60  | a sequence with an argument for its order  |
+| `migrations/bubble-side.ts` | ~30  | a one-time migration is not composition    |
+| `window/her-place.ts`       | ~50  | `herFeet` had a reference span of one line |
+| `idle-sleep.ts`             | ~20  | one binding, twelve lines of span          |
+| `voice/session-config.ts`   | ~103 | eight files read; two writes, both named   |
 
-None of them is wiring, which is the test this section applies: a composition
-root holds the things that must know about each other, and each of those three
-was a decision that merely happened to live here.
+None of them is wiring. That is the test this section applies: a composition
+root holds the things that must know about each other, and each of those was a
+decision that merely happened to live here.
 
 **The second-order value is the larger one and it is easy to miss.** Every line
 that leaves this file becomes testable by something better than a regex over
-its source. All three had source-text assertions against `index.ts`, because
-`index.ts` cannot be imported outside Electron; all three now have real tests.
-`closed-cleanly.test.ts` asserted the word `finally` appeared inside
-`shutDownCleanly` — it now makes the conversation throw and watches the archive
-close anyway, and gained three cases source text could not express.
+its own source. `closed-cleanly.test.ts` asserted the word `finally` appeared
+inside `shutDownCleanly`; it now makes the conversation throw and watches the
+archive close anyway. `sleep-ends-it.test.ts` asserted `kind === 'flushed'`
+appeared in a handler; it now sends the frame and observes the effect. The
+greeting rule — three independent conditions, each with its own argued reason —
+was asserted by nothing at all and now has three tests.
 
-The file is 1499 today against 1521 at the start of that work, so it came out
-twenty-two lines smaller with every finding fixed. 1510 is set just above where
-it sits.
-
-`voice:config` was measured for extraction and deliberately NOT taken: 134
-lines, nine dependencies, and one setter (`sessionPersona`). The setter is what
-stopped it — a mechanical rewrite of the reads got the multi-line
-`problems.note(...)` calls wrong, and a regex refactor that silently mangles a
-call is a worse outcome than a file eleven lines under its ceiling. It is the
-named next move, by hand.
+The file is **1450** today against 1521 at the start of that work: seventy
+lines smaller with every finding in the report fixed, and eighteen mutable
+bindings down to fourteen. 1460 is set just above where it sits.
 
 Getting this under 350 needs the live state moved into an object the handler
 modules receive — a redesign of how every feature is written, not an extraction.

@@ -13,12 +13,13 @@ import {
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { BUBBLE_SIDES, PERSONA_LIMITS, RECOMMENDED_VOICES, VOICE_NAMES } from '@shared/persona'
 import { BUILT_IN_ID } from '@shared/parse-persona'
-import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
+import { PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
 import { grantOutcome } from './grant-outcome'
 import { listener } from './ipc/listen'
 import { DRIFT_PX, createHerPlace } from './window/her-place'
 import { createIdleSleep } from './idle-sleep'
+import { sessionConfig } from './voice/session-config'
 import { migrateBubbleSide as runBubbleSideMigration } from './migrations/bubble-side'
 import { shutDown as shutDown_ } from './shutdown'
 import { running } from '../capabilities/ask-workspace/capability'
@@ -85,10 +86,10 @@ import {
 } from './store/worn'
 import { readGrants, writeGrant } from './store/grants'
 import { claimShortcuts, releaseShortcuts, type ShortcutOutcome } from './shortcuts'
-import { MOST_LANGUAGES, OFFERED_LANGUAGES, TRANSCRIPTION_MODEL } from '@shared/transcription'
+import { MOST_LANGUAGES, OFFERED_LANGUAGES } from '@shared/transcription'
 import { SHORTCUTS } from '@shared/shortcuts'
-import { allowsCapability, isGrant, withheldGuidance, GRANT_SPECS } from '@shared/grants'
-import { avatarsRoot, seedAvatars, resolveFaceFor } from './store/avatars'
+import { allowsCapability, isGrant, withheldGuidance } from '@shared/grants'
+import { avatarsRoot, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { problems } from './problems'
 import { leftoverCapabilities, legacyCapabilitiesRoot } from './capability/legacy'
@@ -164,7 +165,6 @@ import { checkCodexNow, codexForWindow } from './codex/ready'
 import { codexPathNow } from './codex/ready'
 import { carryGrantsForward } from './store/grants'
 import { legacyGrants } from './store/worn'
-import { WITHHELD_GRANTS } from '@shared/grants'
 import { registerForgetKept } from './ipc/forget-kept'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
@@ -1503,158 +1503,42 @@ ipcMain.handle('voice:sdp', async (_event, offer: unknown, session: unknown) => 
  * notice, so it is not defaulted and not skipped.
  */
 ipcMain.handle('voice:config', () => {
-  // CONSUMED here, whatever else this read goes on to decide. See
-  // `reconnecting`: the flag describes exactly one open.
-  const replacing = reconnecting
-  reconnecting = false
-  const userData = app.getPath('userData')
-  // Whether this installation has run before decides whether a one-time
-  // retention migration may run at all — a permissive default there would let a
-  // hand-placed package choose somebody's retention on a first launch.
-  const catalog = catalogue(userData)
-  for (const problem of catalog.problems) {
-    console.error(`[persona] ${problem.kind}`)
-    problems.note('persona', null, problem.kind)
-  }
-  // Which persona was last worn, remembered across restarts. Getting this wrong
-  // is not cosmetic: the archive is scoped per persona, so defaulting to the
-  // built-in on an installation whose history is under another name shows her
-  // an empty memory and presents as "recall does not work".
-  const resolved = activePersona(catalog, readWornPersonaId(userData))
-  if (resolved.problem !== null) {
-    console.error(`[persona] ${resolved.problem.kind}`)
-    problems.note('persona', resolved.persona.id, resolved.problem.kind)
-  }
-
-  // A new session is a new conversation. Ending the previous one here rather
-  // than on teardown covers the reconnect path too, which is the common case:
-  // §53 measured a session lasting exactly an hour, so this happens hourly.
-  // A new session is a new conversation. Doing it here rather than on teardown
-  // covers the reconnect path too, which is the common case: §53 measured a
-  // session lasting exactly an hour, so this happens hourly.
-  conversation().wear(resolved.persona.id)
-  sessionPersona = resolved.persona.id
-
-  /**
-   * Her face, from the folder the user can actually edit.
-   *
-   * `store/avatars.ts` and `parseFaceSpec` have existed and been tested since
-   * before this session; nothing had ever called them, so every mochi rendered
-   * from the built-in constant and "user-authored appearance" was a directory
-   * with no reader. `seedAvatars` writes the folder, an example and a README on
-   * first run, because a plugin format nobody can see the shape of is not one.
-   */
-  const avatars = avatarsRoot(userData)
-  seedAvatars(avatars)
-  const avatar = resolveFaceFor(
-    avatars,
-    packageFolder(resolved.persona.id, catalog.sources),
-    resolved.persona.avatarId,
-    resolved.persona.theme,
-    resolved.persona.size,
-  )
-  // LOUD, and per file. An avatar that silently did not load presents as "the
-  // app ignored my file", which the store's own comment calls the least
-  // debuggable outcome this feature can have.
-  for (const problem of avatar.problems) {
-    console.error(`[avatar] ${problem.file}: ${problem.reason}`)
-    problems.note('avatar', problem.file, problem.reason)
-  }
-  console.log(`[avatar] ${avatar.source ?? 'built-in'}`)
-
-  const note = recall(userData, resolved.persona.id)
-  /**
-   * What she may do — and whether that answer could be read at all.
-   *
-   * An unreadable `preferences.json` withholds everything, which is the right
-   * direction for a permission and the wrong thing to do in silence: she would
-   * simply stop hearing, and nothing on screen would say why. This is the one
-   * place with a `problems` sink to hand, and it runs on every wake.
-   */
   /*
-    HER file, not the one global setting.
+    The registration is here and the reading is in `voice/session-config.ts`.
 
-    This read was left on `readGrantsState` when permissions became per
-    character, so the session she actually runs with carried whatever the old
-    global blob said — a character whose `speak_first` had been withheld would
-    still greet, and the tools offered reflected the wrong policy entirely. The
-    per-character reader withholds on its own when a file cannot be read, so
-    the fail-closed direction is the same; what changes is whose answer it is.
+    103 lines that are not wiring: eight files read, a persona, an avatar, a
+    note and a permission set resolved, and two decisions that are genuinely
+    main's — whether she may speak first, and which character this session
+    belongs to. Both writes are passed IN below rather than reached for, so
+    the write set is this object rather than something to go looking for.
   */
-  const grants = readGrants(userData, resolved.persona.id, legacyGrants(userData))
-  if (grants === WITHHELD_GRANTS) {
-    console.error(`[grants] ${resolved.persona.id}'s permissions could not be read; withholding`)
-    problems.note(
-      'settings',
-      null,
-      'her permissions file could not be read, so every permission is withheld until it can be ' +
-        '— she cannot greet you, look anything up, or keep a note',
-    )
-  }
-  const mayDo = whatSheMayDo(
-    resolved.persona,
-    note,
-    grants,
-    registry.tools,
-    readPrompt(userData),
-    transcripts()?.kept.collections(resolved.persona.id) ?? [],
-  )
-  console.log(
-    `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars, bubble ${resolved.persona.bubble ? 'on' : 'off'}`,
-  )
-  const off = GRANT_SPECS.filter((spec) => !grants[spec.id]).map((spec) => spec.id)
-  console.log(`[grants] withheld: ${off.length === 0 ? 'none' : off.join(', ')}`)
-  return {
-    instructions: mayDo.instructions,
-    voice: resolved.persona.voice,
-    bubble: resolved.persona.bubble,
-    /*
-      Null rather than an empty instruction: the renderer must not ask for the
-      turn at all, and "say nothing on waking" is a decision made here.
-
-      TWO reasons for that null now, and they are not the same reason. The grant
-      is a permission somebody withheld; rest is a state she is in. Only the
-      first was consulted, so a session opened while she was resting greeted the
-      room out loud — with her eyes shut, because `blink: 1` is held for the
-      whole of `asleep`. That is reachable on every hourly reconnect (§53), and
-      the fix belongs here rather than in the renderer: whether she may speak
-      first is a decision, and decisions are main's.
-
-      `setAsleep` now closes the session outright, so this is nearly unreachable
-      — and it stays, because "nearly" is not a guarantee and because the two
-      conditions are genuinely independent.
-    */
-    /*
-      A GREETING IS FOR A WAKE, and a reconnect is not one.
-
-      The renderer's `greeted` flag is per SESSION, and the hourly reconnect
-      (§53) opens a new one -- so she greeted again, every hour, somebody she
-      had been mid-conversation with all along. The renderer cannot tell the
-      two apart: from inside a session an open is an open. Main can, because
-      main is what sends `__mochi_reconnect__`.
-
-      Decided here for the reason `heard.ts` gives for everything else on this
-      boundary: whether she speaks first is a decision, and decisions are
-      main's.
-    */
-    greeting:
-      grants.speak_first && !resting.asleep && !replacing ? greetingFor(resolved.persona) : null,
-    face: avatar.face,
-    problems: problems.count(),
-    bubbleSide: resolved.persona.bubbleSide,
-    asleep: resting.asleep,
-    tools: mayDo.tools,
-    /*
-      Read here, on the same pass as everything else, because it is read from
-      the same file at the same moment — the argument `bubbleSide` and `asleep`
-      already make. An empty list means send no hint and let the model detect;
-      see `readTranscriptionLanguages`.
-    */
-    transcription: {
-      model: TRANSCRIPTION_MODEL,
-      languages: readTranscriptionLanguages(userData),
+  return sessionConfig({
+    userData: () => app.getPath('userData'),
+    catalogue,
+    conversation,
+    nowWearing: (personaId) => {
+      sessionPersona = personaId
     },
-  }
+    replacingASession: () => {
+      // CONSUMED, whatever else this read goes on to decide: the flag
+      // describes exactly one open. Left set, it would also silence the
+      // greeting of a character somebody wore after a reconnect.
+      const was = reconnecting
+      reconnecting = false
+      return was
+    },
+    resting: () => resting,
+    registry,
+    transcripts,
+    problemCount: () => problems.count(),
+    note: (what, id, detail) => problems.note(what, id, detail),
+    log: (line) => {
+      console.log(line)
+    },
+    warn: (line) => {
+      console.error(line)
+    },
+  })
 })
 
 /**
