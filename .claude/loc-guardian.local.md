@@ -116,31 +116,38 @@ lines. A ceiling raised to whatever the file happens to be is not a gate; this
 one was raised once, after the extraction, and the extraction is named above so
 the next person can check the claim rather than trust it.
 
-**Ceiling lowered 1530 → 1510 on 2026-08-26, after the extraction and not
-instead of it.** Fixing the grill report's five Criticals pushed this file to
-1537 — over its own ceiling — so `voice:report` came out to
-`voice/reported.ts`. It was the right piece to take: 119 lines, twelve
-dependencies, and it **writes none of them**. A router over read-only
-dependencies is a function, not a piece of the wiring diagram.
+**Ceiling lowered 1530 → 1510 on 2026-08-26, after three extractions and not
+instead of them.** Fixing every finding in the grill report pushed this file
+over its own ceiling twice. Both times the answer was to take something out.
 
-Lifting it also turned a source-text assertion into a real one.
-`sleep-ends-it.test.ts` sliced `index.ts` for `kind === 'flushed'`; it now
-calls `reported()` and observes the effect, because unlike `index.ts` that
-module can be imported. That is the second-order value of these extractions
-and it is easy to miss: **every line that leaves this file becomes testable by
-something better than a regex over its source.**
+| out to                      | pure | why it was the right piece                |
+| --------------------------- | ---- | ----------------------------------------- |
+| `voice/reported.ts`         | ~35  | a router over **read-only** dependencies  |
+| `shutdown.ts`               | ~60  | a sequence with an argument for its order |
+| `migrations/bubble-side.ts` | ~30  | a one-time migration is not composition   |
 
-The file is 1502 today, against 1521 at the start of that work — so the fixes
-above landed and it came out nineteen lines smaller. 1510 is set just above
-where it sits, which is the discipline this section describes; it is a
-tightening of 20 lines, not a ceiling raised to fit.
+None of them is wiring, which is the test this section applies: a composition
+root holds the things that must know about each other, and each of those three
+was a decision that merely happened to live here.
 
-`voice:config` was measured for extraction next and NOT taken: 134 lines, nine
-dependencies, and one setter (`sessionPersona`). The setter is what stopped
-it — a mechanical rewrite of the reads got the multi-line `problems.note(...)`
-calls wrong, and a regex-driven refactor that silently mangles a call is a
-worse outcome than a file nine lines under its ceiling. It is the named next
-move, by hand, when this file next needs room.
+**The second-order value is the larger one and it is easy to miss.** Every line
+that leaves this file becomes testable by something better than a regex over
+its source. All three had source-text assertions against `index.ts`, because
+`index.ts` cannot be imported outside Electron; all three now have real tests.
+`closed-cleanly.test.ts` asserted the word `finally` appeared inside
+`shutDownCleanly` — it now makes the conversation throw and watches the archive
+close anyway, and gained three cases source text could not express.
+
+The file is 1499 today against 1521 at the start of that work, so it came out
+twenty-two lines smaller with every finding fixed. 1510 is set just above where
+it sits.
+
+`voice:config` was measured for extraction and deliberately NOT taken: 134
+lines, nine dependencies, and one setter (`sessionPersona`). The setter is what
+stopped it — a mechanical rewrite of the reads got the multi-line
+`problems.note(...)` calls wrong, and a regex refactor that silently mangles a
+call is a worse outcome than a file eleven lines under its ceiling. It is the
+named next move, by hand.
 
 Getting this under 350 needs the live state moved into an object the handler
 modules receive — a redesign of how every feature is written, not an extraction.

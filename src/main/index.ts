@@ -16,6 +16,8 @@ import { BUILT_IN_ID } from '@shared/parse-persona'
 import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
 import { grantOutcome } from './grant-outcome'
+import { migrateBubbleSide as runBubbleSideMigration } from './migrations/bubble-side'
+import { shutDown as shutDown_ } from './shutdown'
 import { running } from '../capabilities/ask-workspace/capability'
 import { createMintSlot } from './voice/mint-slot'
 import { reported } from './voice/reported'
@@ -69,10 +71,7 @@ import {
   writeWornPersonaId,
   readSleepAfterMinutes,
   writeSleepAfterMinutes,
-  bubbleSideMigrated,
-  markBubbleSideMigrated,
   readHaloWhen,
-  readLegacyBubbleSide,
   writeHaloWhen,
   readShoulderChip,
   writeShoulderChip,
@@ -657,66 +656,6 @@ const menuHandlers = {
  * edited on her sheet. A second grammar for one field is how the two come to
  * disagree about what a side is.
  */
-/**
- * Carry the old app-level bubble side onto every character, once.
- *
- * ## Why every character, and not the worn one
- *
- * The value it replaces was GLOBAL: one side, inherited by whoever was worn. A
- * migration that wrote it to the worn persona alone would leave every other
- * character on `auto` and call the difference a migration. Behaviour-preserving
- * means all of them see what they saw before.
- *
- * At the moment this runs, no persona has ever carried the field — it did not
- * exist — so every one of them is on the parser's default. Writing the legacy
- * value to all of them is exactly what they had.
- *
- * ## The marker goes down FIRST
- *
- * `bubbleSideMigrated` explains the ordering: `auto` is both the default and a
- * real choice, so a second pass cannot tell a character nobody has touched from
- * one whose owner has since picked `auto`. Marked first, a crash mid-pass skips
- * the carry-over — one visible trip to a dropdown. Marked last, it would
- * silently revert a later choice.
- *
- * ## And nothing at all when the legacy value was `auto`
- *
- * Which is the ordinary case: `auto` is what the setting shipped as and what
- * the new field defaults to. The marker still goes down, so this never runs
- * again either way.
- */
-function migrateBubbleSide(): void {
-  const userData = app.getPath('userData')
-  if (bubbleSideMigrated(userData)) return
-  const legacy = readLegacyBubbleSide(userData)
-  try {
-    markBubbleSideMigrated(userData)
-  } catch (error: unknown) {
-    // Ungated, so it must not run. Skipping costs a dropdown; running twice
-    // could overwrite a choice made in between.
-    console.error('[persona] the bubble-side migration could not be gated:', error)
-    return
-  }
-  if (legacy === 'auto') {
-    console.log('[persona] bubble side: nothing to carry over')
-    return
-  }
-  const catalog = catalogue(userData)
-  let carried = 0
-  for (const persona of catalog.personas.values()) {
-    const changed = applyChange(persona, { id: persona.id, bubbleSide: legacy }, [])
-    if (!changed.ok) continue
-    try {
-      savePersonaTo(userData, catalog, changed.persona)
-      carried += 1
-    } catch (error: unknown) {
-      // Said, not thrown. One character that could not be written must not stop
-      // the others, and the marker is already down.
-      console.error(`[persona] ${persona.id} did not take the old bubble side:`, error)
-    }
-  }
-  console.log(`[persona] bubble side ${legacy} carried onto ${String(carried)} character(s)`)
-}
 
 function setBubbleSide(side: string): SettingsWrite {
   const userData = app.getPath('userData')
@@ -3170,7 +3109,18 @@ const startup = app.whenReady().then(
     catalogue(app.getPath('userData'))
 
     try {
-      migrateBubbleSide()
+      runBubbleSideMigration({
+        userData: () => app.getPath('userData'),
+        catalogue,
+        savePersona: savePersonaTo,
+        log: (line) => {
+          console.log(line)
+        },
+        warn: (line, error) => {
+          if (error === undefined) console.error(line)
+          else console.error(line, error)
+        },
+      })
       /*
         Carry the one global permissions setting forward to everybody.
 
@@ -3320,78 +3270,37 @@ function shutDownCleanly(why: string): void {
   shutDown = true
   console.log(`[main] closing the archive (${why})`)
   /*
-    THE CHILDREN FIRST, before anything that can throw.
+    The ORDER, and the argument for it, are in `shutdown.ts`.
 
-    This closed the archive and left every running Codex process alive. The app
-    leaves the Dock, the tray icon goes, and a subprocess goes on reading
-    somebody's workspace with nothing on screen to say it is there — and, on
-    the paths that reach here through `app.exit()`, no parent left to reap it.
-
-    Above the archive work because that work has two `try` blocks that can
-    both fail, and a child outliving the app is worse than an archive closed a
-    few milliseconds later.
+    Four things end here and each can throw; run in the wrong order a failure
+    in one strands the others, and every one of them leaves something running
+    on a machine whose app has visibly quit. That is a sequence with a reason,
+    not composition -- and it was untestable here, because `index.ts` cannot be
+    imported outside Electron.
   */
-  try {
-    const stopped = running.stopAll()
-    if (stopped > 0) console.log(`[main] stopped ${String(stopped)} running lookup(s)`)
-  } catch (error: unknown) {
-    console.error('[main] a running lookup could not be stopped:', error)
-  }
-
-  /*
-    THE ONE PLACE THAT ASKS, and until now nothing did.
-
-    `ledger.ts` and `dispatch.ts` carry four comments describing
-    `unanswered()` and `undelivered()` as the things that "would notice" a
-    hang, a dropped frame, a promise she never came back from. Neither had a
-    single production caller: they were a reporting surface nobody read, which
-    made every one of those comments a claim about a mechanism that was not
-    running.
-
-    Shutdown is the honest moment to ask. Anything still outstanding here will
-    never be answered — the process is going away — so this is the last
-    instant at which the difference between "she was interrupted" and "a frame
-    was silently dropped" can still be recorded.
-  */
-  try {
-    const hanging = ledger.unanswered()
-    const promised = ledger.undelivered()
-    if (hanging.length > 0) {
-      console.error(`[capability] ${String(hanging.length)} call(s) were never answered`)
-      problems.note(
-        'capability',
-        null,
-        `${String(hanging.length)} tool call(s) were never answered before quitting`,
-      )
-    }
-    if (promised.length > 0) {
-      console.error(`[capability] ${String(promised.length)} deferred call(s) never came back`)
-      problems.note(
-        'capability',
-        null,
-        `she said she would come back to ${String(promised.length)} thing(s) and did not`,
-      )
-    }
-  } catch (error: unknown) {
-    console.error('[capability] the outstanding calls could not be read:', error)
-  }
-  try {
-    /*
-      Only one that EXISTS. `conversation()` builds the archive on demand, and
-      `shutDown` is already true by now -- so asking for one that was never
-      needed would throw on the way out of an app that had nothing to end.
-    */
-    if (talk !== null) talk.end()
-  } catch (error: unknown) {
-    console.error('[main] the conversation could not be ended:', error)
-  } finally {
-    try {
+  shutDown_({
+    stopLookups: () => running.stopAll(),
+    unanswered: () => ledger.unanswered(),
+    undelivered: () => ledger.undelivered(),
+    endConversation: () => {
+      // Only one that EXISTS. `conversation()` builds the archive on demand,
+      // and `shutDown` is already true by now -- so asking for one that was
+      // never needed would throw on the way out of an app with nothing to end.
+      if (talk !== null) talk.end()
+    },
+    closeArchive: () => {
       archive?.close()
       archive = null
-    } catch (error: unknown) {
-      console.error('[main] the archive could not be closed:', error)
-    }
-  }
+    },
+    note: (what, detail) => problems.note(what, null, detail),
+    log: (line) => {
+      console.log(line)
+    },
+    warn: (line, error) => {
+      if (error === undefined) console.error(line)
+      else console.error(line, error)
+    },
+  })
 }
 
 /**

@@ -3,6 +3,21 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { shutDown } from './shutdown'
+import type { ShutdownDeps } from './shutdown'
+
+/** Every step a no-op, so a test names only the one it is about. */
+const noopShutdown: ShutdownDeps = {
+  stopLookups: () => 0,
+  unanswered: () => [],
+  undelivered: () => [],
+  endConversation: () => undefined,
+  closeArchive: () => undefined,
+  note: () => undefined,
+  log: () => undefined,
+  warn: () => undefined,
+}
+
 /**
  * The archive is put down cleanly, however the app ends.
  *
@@ -53,13 +68,76 @@ describe('shutting down', () => {
   })
 
   it('closes it even when ending the conversation throws', () => {
-    // The close is what flushes deleted text out of the log. Skipping it
-    // because the end failed leaves that text on disk, which is the failure
-    // ordering that matters most and the one nobody would see.
-    const fn = MAIN.slice(MAIN.indexOf('function shutDownCleanly'))
-    const body = fn.slice(0, fn.indexOf('\n}\n'))
-    expect(body).toContain('finally')
-    expect(body.indexOf('archive?.close()')).toBeGreaterThan(body.indexOf('finally'))
+    /*
+      A REAL CALL, not a slice of source text.
+
+      This read `index.ts` for a `finally`. The sequence moved to
+      `shutdown.ts`, which — unlike `index.ts` — can be imported, so the
+      assertion is now what it always wanted to be: make the conversation throw
+      and watch the archive close anyway.
+
+      The close is what flushes deleted text out of the write-ahead log.
+      Skipping it because the end failed leaves that text on disk, which is the
+      ordering that matters most here and the one nobody would ever see.
+    */
+    let closed = false
+    shutDown({
+      ...noopShutdown,
+      endConversation: () => {
+        throw new Error('the conversation could not be ended')
+      },
+      closeArchive: () => {
+        closed = true
+      },
+    })
+    expect(closed).toBe(true)
+  })
+
+  it('closes it even when stopping the lookups throws', () => {
+    // Every step is independently guarded, because this runs from `will-quit`
+    // and from both `app.exit()` paths — where a throw strands whatever has
+    // not run yet.
+    let closed = false
+    shutDown({
+      ...noopShutdown,
+      stopLookups: () => {
+        throw new Error('no')
+      },
+      closeArchive: () => {
+        closed = true
+      },
+    })
+    expect(closed).toBe(true)
+  })
+
+  it('reports what was still owed before it goes', () => {
+    // `unanswered()` and `undelivered()` had no production caller at all until
+    // this sequence asked. Shutdown is the last moment the difference between
+    // "she was interrupted" and "a frame was silently dropped" can be recorded.
+    const noted: string[] = []
+    shutDown({
+      ...noopShutdown,
+      unanswered: () => ['call_1'],
+      undelivered: () => ['call_2', 'call_3'],
+      note: (_what, detail) => noted.push(detail),
+    })
+    expect(noted.join(' ')).toContain('never answered')
+    expect(noted.join(' ')).toContain('come back to 2')
+  })
+
+  it('stops the children before anything that can throw', () => {
+    // A subprocess outliving the app is worse than an archive closed a few
+    // milliseconds later, and everything below it can fail.
+    const order: string[] = []
+    shutDown({
+      ...noopShutdown,
+      stopLookups: () => {
+        order.push('lookups')
+        return 1
+      },
+      closeArchive: () => order.push('archive'),
+    })
+    expect(order).toEqual(['lookups', 'archive'])
   })
 
   it('runs once, however many ways the app is ending', () => {
