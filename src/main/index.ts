@@ -3337,6 +3337,44 @@ function shutDownCleanly(why: string): void {
   } catch (error: unknown) {
     console.error('[main] a running lookup could not be stopped:', error)
   }
+
+  /*
+    THE ONE PLACE THAT ASKS, and until now nothing did.
+
+    `ledger.ts` and `dispatch.ts` carry four comments describing
+    `unanswered()` and `undelivered()` as the things that "would notice" a
+    hang, a dropped frame, a promise she never came back from. Neither had a
+    single production caller: they were a reporting surface nobody read, which
+    made every one of those comments a claim about a mechanism that was not
+    running.
+
+    Shutdown is the honest moment to ask. Anything still outstanding here will
+    never be answered — the process is going away — so this is the last
+    instant at which the difference between "she was interrupted" and "a frame
+    was silently dropped" can still be recorded.
+  */
+  try {
+    const hanging = ledger.unanswered()
+    const promised = ledger.undelivered()
+    if (hanging.length > 0) {
+      console.error(`[capability] ${String(hanging.length)} call(s) were never answered`)
+      problems.note(
+        'capability',
+        null,
+        `${String(hanging.length)} tool call(s) were never answered before quitting`,
+      )
+    }
+    if (promised.length > 0) {
+      console.error(`[capability] ${String(promised.length)} deferred call(s) never came back`)
+      problems.note(
+        'capability',
+        null,
+        `she said she would come back to ${String(promised.length)} thing(s) and did not`,
+      )
+    }
+  } catch (error: unknown) {
+    console.error('[capability] the outstanding calls could not be read:', error)
+  }
   try {
     /*
       Only one that EXISTS. `conversation()` builds the archive on demand, and

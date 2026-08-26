@@ -93,9 +93,22 @@ export function readBearer(
   try {
     text = readFileSync(path, 'utf8')
   } catch (error: unknown) {
-    const code = (error as { code?: string }).code
+    /*
+      BY ERRNO, which is what `codex/auth.ts` already says this does.
+
+      That comment cites this function as describing the failure by errno; it
+      interpolated `String(error)` instead, which produces a sentence carrying
+      the absolute path of somebody's home directory and no machine-readable
+      cause. So the caller could not distinguish "your Codex login is not
+      readable by this app" (EACCES — actionable, and the common one on a
+      restored-from-backup machine) from any other fault.
+    */
+    const code = (error as NodeJS.ErrnoException).code
     if (code === 'ENOENT') return { ok: false, problem: { kind: 'no-auth-file', path } }
-    return { ok: false, problem: { kind: 'unreadable', why: String(error) } }
+    return {
+      ok: false,
+      problem: { kind: 'unreadable', why: code ?? 'the file could not be read' },
+    }
   }
 
   let parsed: unknown
