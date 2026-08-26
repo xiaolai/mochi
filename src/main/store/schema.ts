@@ -10,7 +10,20 @@ import { randomUUID } from 'node:crypto'
  * additive migrations are why `CREATE TABLE IF NOT EXISTS` alone is not enough:
  * it does not add a column to a table that already exists.
  */
-export function applySchema(db: DatabaseSync): void {
+/**
+ * What the store actually got, as opposed to what it asked for.
+ *
+ * Returned rather than thrown: a degraded store is still usable, and refusing
+ * to launch would lose her the archive entirely. But `wal` false means a long
+ * read can block a write, and `secureDelete` false means "Delete for good?" is
+ * not the truth — so a caller has to be able to say so.
+ */
+export interface SchemaApplied {
+  readonly wal: boolean
+  readonly secureDelete: boolean
+}
+
+export function applySchema(db: DatabaseSync): SchemaApplied {
   // WAL so a long read cannot block a write mid-conversation. Foreign keys are
   // OFF by default in SQLite, which makes `ON DELETE CASCADE` silently do
   // nothing -- and "deleting her left every turn behind" is exactly the
@@ -28,6 +41,38 @@ export function applySchema(db: DatabaseSync): void {
   // leaving them. For a store whose whole content is a few hundred kilobytes
   // of text that is not a trade worth thinking about twice.
   db.exec('PRAGMA secure_delete = ON')
+
+  /*
+    READ BACK, because setting a pragma is not the same as it taking effect.
+
+    `db.exec` succeeds when SQLite ACCEPTED the statement, which is a different
+    question from whether the mode changed. `journal_mode = WAL` is the one
+    that actually fails in the field: it needs shared memory, so on a network
+    share, some container mounts, and a few FUSE filesystems it silently falls
+    back to `delete` and returns success. `secure_delete` can be compiled out.
+
+    Both failures are invisible and both break a promise this app makes in
+    words. Without WAL a long read blocks a write mid-conversation; without
+    `secure_delete` the "Delete for good?" dialog is not telling the truth, and
+    this app makes a point of saying the file is not encrypted.
+
+    Returned rather than thrown. A degraded store is still a usable one, and
+    refusing to launch over it would lose her the archive entirely — but
+    nothing may report the promise as kept.
+  */
+  const mode = (db.prepare('PRAGMA journal_mode').get() as { journal_mode?: unknown } | undefined)
+    ?.journal_mode
+  const zeroes = (
+    db.prepare('PRAGMA secure_delete').get() as { secure_delete?: unknown } | undefined
+  )?.secure_delete
+  const settled = {
+    // Typed narrowly rather than stringified: a pragma answering with
+    // something that is not a string is itself a finding, and `String(...)` on
+    // it would quietly produce "[object Object]" and compare unequal for the
+    // wrong reason.
+    journalMode: typeof mode === 'string' ? mode.toLowerCase() : 'unknown',
+    secureDelete: typeof zeroes === 'number' ? zeroes : 0,
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS session (
       id         INTEGER PRIMARY KEY,
@@ -163,4 +208,6 @@ export function applySchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS kept_by_collection
       ON kept (persona_id, collection, updated_at DESC);
   `)
+
+  return { wal: settled.journalMode === 'wal', secureDelete: settled.secureDelete !== 0 }
 }

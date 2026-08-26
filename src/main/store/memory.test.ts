@@ -6,7 +6,7 @@
  * the failure that keeping memory inside `Persona` would have made possible.
  */
 
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -73,7 +73,8 @@ describe('the path is built from an id, so the id has to be one', () => {
   it('writes inside the memory folder and nowhere else', () => {
     const dir = workspace()
     remember(dir, 'tutor', 'note')
-    expect(memoryRoot(dir)).toBe(join(dir, MEMORY_DIR))
+    // Canonical: `storeRoot` resolves the root before joining. See its own test.
+    expect(memoryRoot(dir)).toBe(join(realpathSync(dir), MEMORY_DIR))
     expect(recall(dir, 'tutor')).toBe('note')
   })
 })

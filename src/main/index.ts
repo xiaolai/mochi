@@ -1814,7 +1814,6 @@ ipcMain.handle('history:problems', () => problems.all())
  */
 ipcMain.handle('history:export', async (): Promise<HistoryExport> => {
   const persona = wornId()
-  const archive = transcripts().exportFor(persona)
   const suggested = `mochi-${persona}-${new Date().toISOString().slice(0, 10)}.json`
   const chosen = await dialog.showSaveDialog({
     title: 'Export conversations',
@@ -1823,6 +1822,24 @@ ipcMain.handle('history:export', async (): Promise<HistoryExport> => {
   })
   // Dismissing the panel is not a failure and must not be reported as one.
   if (chosen.canceled || chosen.filePath === undefined) return { ok: false, cancelled: true }
+
+  /*
+    READ AFTER THE DIALOG, not before it.
+
+    The snapshot used to be taken on the way in, and a save panel is open for
+    as long as somebody takes to pick a folder. The shelf is still live behind
+    it: delete a conversation during that time and the export written
+    afterwards still contained it.
+
+    That is not a stale read, it is a privacy failure. Somebody who deletes a
+    conversation and then exports has said twice what they want, and the file
+    they end up with is the one artefact they are most likely to send
+    somewhere.
+
+    Read here the conversations are whatever they are at the moment of writing,
+    which is the only moment the file can honestly claim to describe.
+  */
+  const archive = transcripts().exportFor(persona)
 
   try {
     // Not `writeJsonAtomically`: that is for files this app will read back, and
@@ -2761,8 +2778,24 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
       if (live !== null && wanted.includes(live)) conversation().forget(live)
     } else if (kind === 'hers') {
       archive.forget(worn)
-      if (live !== null) conversation().forget(live)
+      /*
+        ONLY IF THE LIVE CONVERSATION IS HERS.
+
+        `worn` is who the shelf says is worn; the live conversation belongs to
+        whoever the SESSION was configured as, and the shelf can change one
+        without the other -- the same divergence `grant-outcome.ts` describes.
+
+        Releasing unconditionally meant deleting the newly worn character's
+        conversations also stopped recording the conversation somebody was
+        having with the OLD one, mid-sentence, for no reason they could see.
+        `forget` on a token whose rows were never deleted is not a correction,
+        it is a second loss.
+      */
+      if (live !== null && sessionPersona === worn) conversation().forget(live)
     } else {
+      // Unconditional here, and correctly so: `forgetEverything` deletes every
+      // persona's rows, so whoever the live conversation belongs to, its rows
+      // are among them.
       archive.forgetEverything()
       if (live !== null) conversation().forget(live)
     }

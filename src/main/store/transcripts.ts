@@ -306,7 +306,28 @@ export function createTranscripts(userData: string): Transcripts {
 
 /** Schema, migrations, statements and the store itself. See `createTranscripts`. */
 function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
-  applySchema(db)
+  const applied = applySchema(db)
+  if (!applied.wal) {
+    // A long read can now block a write mid-conversation.
+    console.warn('[transcripts] the write-ahead log is not in use; this filesystem refused it')
+    problems.note('transcripts', null, "this location does not support the archive's fast mode")
+  }
+  if (!applied.secureDelete) {
+    /*
+      "Delete for good?" is not the truth on this build.
+
+      Without `secure_delete` the bytes stay in the file after a row is
+      removed, and this app makes a point of saying that file is not
+      encrypted. Somebody deleting a conversation for a reason deserves to
+      know the guarantee did not hold.
+    */
+    console.warn('[transcripts] secure delete is unavailable; deleted text is not overwritten')
+    problems.note(
+      'transcripts',
+      null,
+      'deleted conversations are removed but not overwritten on this system',
+    )
+  }
 
   const stmt = prepareAll(db)
 
@@ -432,7 +453,34 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       db.exec('COMMIT')
       return result
     } catch (error: unknown) {
-      db.exec('ROLLBACK')
+      /*
+        THE ROLLBACK IS GUARDED, and the original error is what propagates.
+
+        `ROLLBACK` was outside a try. It throws whenever no transaction is
+        active -- which is precisely the case a failing `run()` can produce, if
+        it failed *after* something already ended the transaction -- and that
+        throw then REPLACED the real error on its way out. So the caller was
+        handed "cannot rollback - no transaction is active", which names the
+        recovery rather than the fault, and the actual reason the write failed
+        was gone.
+
+        Worse than the lost message: a rollback that did not happen leaves the
+        transaction open, and every later write on this connection joins it.
+        The store then looks fine and commits nothing.
+
+        Reported, because a failed rollback is a state this process cannot
+        reason about any further.
+      */
+      try {
+        db.exec('ROLLBACK')
+      } catch (rollback: unknown) {
+        console.error('[transcripts] a write failed and could not be rolled back:', rollback)
+        problems.note(
+          'transcripts',
+          null,
+          'a write failed and could not be undone; the archive may be holding an unfinished change',
+        )
+      }
       throw error
     }
   }

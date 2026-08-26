@@ -14,7 +14,15 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname } from 'node:path'
 import { readBounded } from './read-bounded'
 
@@ -57,7 +65,31 @@ export function writeTextAtomically(path: string, text: string): void {
   // failure rather than a follow if the guess lands anyway.
   const temporary = `${path}.${randomUUID()}.tmp`
   try {
-    writeFileSync(temporary, text, { mode: 0o600, flag: 'wx' })
+    /*
+      FLUSHED BEFORE THE RENAME, which is the half that makes this atomic.
+
+      `rename` is atomic with respect to the DIRECTORY ENTRY -- the name points
+      at the old file or the new one, never at neither. It says nothing about
+      the new file's CONTENTS having reached the disk. `writeFileSync` returns
+      once the data is in the page cache, so a crash between the write and the
+      flush leaves the rename already durable and the bytes not: the file is
+      there, at the right name, holding zeroes.
+
+      That is worse than the torn write this dance exists to prevent, because
+      it looks like a successful save. A persona, a prompt or a grants file
+      that reads back as empty is indistinguishable from one somebody cleared.
+
+      `fsync` on the file, not the directory: the rename's durability is the
+      filesystem's business, and every platform this ships on orders the two
+      correctly once the data is flushed first.
+    */
+    const handle = openSync(temporary, 'wx', 0o600)
+    try {
+      writeFileSync(handle, text)
+      fsyncSync(handle)
+    } finally {
+      closeSync(handle)
+    }
     renameSync(temporary, path)
   } catch (error: unknown) {
     // Never leave the scratch file behind. Unlike the fixed name it replaced,

@@ -1,4 +1,4 @@
-import { lstatSync } from 'node:fs'
+import { lstatSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
@@ -31,7 +31,27 @@ import { join } from 'node:path'
 const verified = new Set<string>()
 
 export function storeRoot(userData: string, name: string): string {
-  const path = join(userData, name)
+  /*
+    THE CHAIN ABOVE IT, not only the leaf.
+
+    Every check below is on `userData/name`. None of them said anything about
+    `userData` itself, or any component of it — so a symlink one level up
+    passed silently, and the guard reported a directory it had never looked at.
+    `lstat` on the leaf is exactly the wrong tool for that: it refuses to
+    follow the last link and says nothing about the ones before it.
+
+    Resolved rather than refused, which is the same choice `transcripts.ts`
+    makes and for the same reason: somebody who deliberately relocates their
+    Application Support directory — onto another volume, into a synced folder —
+    has done something legitimate, and refusing would lose them the app. What
+    must not happen is the guard believing it checked a path it did not.
+
+    Resolving also makes the registry's key honest. Two aliases of one
+    directory produce one canonical string now, so "one connection per file"
+    cannot be defeated by pointing at the same store twice.
+  */
+  const root = canonicalRoot(userData)
+  const path = join(root, name)
   if (verified.has(path)) return path
 
   let held
@@ -54,7 +74,31 @@ export function storeRoot(userData: string, name: string): string {
   return path
 }
 
+/**
+ * `userData` with every symlink in it already followed.
+ *
+ * Cached because it is a syscall per store per call for an answer that does
+ * not change while the app runs — and because `realpath` throws for a path
+ * that does not exist yet, which is the ordinary state on a first launch.
+ */
+const roots = new Map<string, string>()
+
+function canonicalRoot(userData: string): string {
+  const known = roots.get(userData)
+  if (known !== undefined) return known
+  let resolved: string
+  try {
+    resolved = realpathSync(userData)
+  } catch {
+    // Not there yet. Not cached either, so the next call sees it once it is.
+    return userData
+  }
+  roots.set(userData, resolved)
+  return resolved
+}
+
 /** For tests: forget what has been verified, so a fresh tree is looked at again. */
 export function forgetVerifiedRoots(): void {
+  roots.clear()
   verified.clear()
 }
