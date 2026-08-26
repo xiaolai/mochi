@@ -75,7 +75,12 @@ export interface KeptWrite {
 }
 
 export interface Kept {
-  put(personaId: string, collection: string, key: string, value: string): KeptWrite
+  /**
+   * `this: void` for the reason `exportFor` already carries it: these are
+   * handed out as bare function references, and a method that resolves `this`
+   * dynamically breaks the moment one is destructured or passed along.
+   */
+  put(this: void, personaId: string, collection: string, key: string, value: string): KeptWrite
   one(personaId: string, collection: string, key: string): KeptEntry | null
   inCollection(personaId: string, collection: string, most?: number): readonly KeptEntry[]
   collections(personaId: string): readonly KeptCollection[]
@@ -102,6 +107,26 @@ export function createKept(
   const rows = (personaId: string): number =>
     Number((stmt.keptCount.get(personaId) as { rows?: unknown } | undefined)?.rows ?? 0)
 
+  /**
+   * One kept entry, or null.
+   *
+   * A closure rather than a method, so `put` can reach it without `this`.
+   * `put` used `this.one(...)`, which meant the object could not be
+   * destructured or its methods passed anywhere -- and `exportFor` already
+   * carries `this: void` for exactly that reason, so the file disagreed with
+   * itself about whether these were bare functions.
+   */
+  function oneOf(personaId: string, collection: string, key: string): KeptEntry | null {
+    // The same grammar `put` enforces. A read is not a write, but binding an
+    // unbounded model-supplied string into SQLite on every lookup is work
+    // somebody else chose the size of.
+    if (!NAME.test(collection) || !NAME.test(key)) return null
+    const row = stmt.keptOne.get(personaId, collection, key) as
+      { value: unknown; updated_at: unknown } | undefined
+    if (row === undefined) return null
+    return { key, value: String(row.value), updatedAt: Number(row.updated_at) }
+  }
+
   return {
     put(personaId, collection, key, value) {
       if (!NAME.test(collection)) return { refused: 'bad-collection', previous: null }
@@ -117,7 +142,7 @@ export function createKept(
       // check would refuse an edit to something she already holds the moment
       // the store was full, which reads as her forgetting how to correct
       // herself.
-      const held = this.one(personaId, collection, key)
+      const held = oneOf(personaId, collection, key)
       if (held === null && rows(personaId) >= KEPT_LIMITS.rows) {
         return { refused: 'full', previous: null }
       }
@@ -126,16 +151,7 @@ export function createKept(
       return { refused: null, previous: held?.value ?? null }
     },
 
-    one(personaId, collection, key) {
-      // The same grammar `put` enforces. A read is not a write, but binding an
-      // unbounded model-supplied string into SQLite on every lookup is work
-      // somebody else chose the size of.
-      if (!NAME.test(collection) || !NAME.test(key)) return null
-      const row = stmt.keptOne.get(personaId, collection, key) as
-        { value: unknown; updated_at: unknown } | undefined
-      if (row === undefined) return null
-      return { key, value: String(row.value), updatedAt: Number(row.updated_at) }
-    },
+    one: oneOf,
 
     inCollection(personaId, collection, most = KEPT_LIMITS.rows) {
       if (!NAME.test(collection)) return []

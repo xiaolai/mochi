@@ -168,11 +168,32 @@ export function createPacer(): Pacer {
 
   return {
     wrote(next: string) {
-      // Recomputed rather than accumulated: the caller holds the authoritative
-      // string, and two places appending to two copies is how they diverge.
+      /*
+        EXTENDED when it extends, recomputed when it does not.
+
+        This walked the whole string every call. Deltas arrive per token, so a
+        response of N characters cost O(N^2) glyph iterations -- on the frame
+        loop, while she is speaking, which is where the cost shows up as her
+        mouth stuttering rather than as a number anybody profiles.
+
+        The original comment gave the right reason for recomputing (the caller
+        holds the authoritative string, and two copies appending independently
+        is how they diverge) and drew the wrong conclusion. `next` is still the
+        authority here; the fast path only claims that when `next` STARTS WITH
+        what we already measured, the part already measured has not changed --
+        which is a property of the string in hand, not an assumption about the
+        caller.
+
+        Anything else -- a rewrite, a shorter string, a new response -- falls
+        through to the full walk exactly as before.
+      */
+      if (next.startsWith(text)) {
+        for (const glyph of next.slice(text.length)) total += costOf(glyph)
+      } else {
+        total = 0
+        for (const glyph of next) total += costOf(glyph)
+      }
       text = next
-      total = 0
-      for (const glyph of text) total += costOf(glyph)
     },
     began() {
       speaking = true

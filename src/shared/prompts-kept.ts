@@ -1,4 +1,4 @@
-import type { PromptSpec } from './prompts'
+import type { PromptSpec } from './prompt-spec'
 
 /**
  * Everything she is handed about her own store.

@@ -183,3 +183,59 @@ describe('which word to underline', () => {
     expect(wordAt('abc', 99)).toEqual({ from: 0, to: 3 })
   })
 })
+
+describe('measuring a response as it streams in', () => {
+  /**
+   * `wrote` walked the whole string on every call. Deltas arrive per token, so
+   * an N-character response cost O(N²) glyph iterations — on the frame loop,
+   * while she is speaking, where it shows up as her mouth stuttering rather
+   * than as a number anybody profiles.
+   */
+  it('measures a streamed string the same as one written whole', () => {
+    // The property that makes the fast path safe. If these ever disagree, the
+    // incremental branch is wrong and the mouth is paced by a different number
+    // depending on how the text arrived.
+    const streamed = createPacer()
+    const whole = createPacer()
+    const parts = ['Hello', ' there', ', how', ' are you', ' today?']
+    let sofar = ''
+    for (const part of parts) {
+      sofar += part
+      streamed.wrote(sofar)
+    }
+    whole.wrote(sofar)
+    streamed.began()
+    whole.began()
+    play(streamed, 1)
+    play(whole, 1)
+    expect(streamed.at()).toBe(whole.at())
+  })
+
+  it('recomputes when the string is not an extension', () => {
+    // A rewrite, a shorter string, a new response: the fast path must not
+    // assume the prefix survived.
+    const pacer = createPacer()
+    pacer.wrote('the first answer entirely')
+    pacer.wrote('short')
+    const fresh = createPacer()
+    fresh.wrote('short')
+    pacer.began()
+    fresh.began()
+    play(pacer, 1)
+    play(fresh, 1)
+    expect(pacer.at()).toBe(fresh.at())
+  })
+
+  it('handles an empty extension without losing the measurement', () => {
+    const pacer = createPacer()
+    pacer.wrote('some words')
+    pacer.wrote('some words')
+    const fresh = createPacer()
+    fresh.wrote('some words')
+    pacer.began()
+    fresh.began()
+    play(pacer, 1)
+    play(fresh, 1)
+    expect(pacer.at()).toBe(fresh.at())
+  })
+})

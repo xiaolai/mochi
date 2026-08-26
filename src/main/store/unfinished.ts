@@ -70,9 +70,25 @@ export function writeTombstone(userData: string, id: string, source: string): vo
 export function clearTombstone(userData: string, id: string): void {
   try {
     unlinkSync(tombstonePath(userData, id))
-  } catch {
-    // Already gone. Every step behind a tombstone is idempotent, so a record
-    // that outlives its work costs one extra sweep and nothing else.
+  } catch (error: unknown) {
+    /*
+      ENOENT ONLY. The comment was right about one errno and applied to all of
+      them.
+
+      "Already gone" costs one extra sweep and nothing else -- true, and that
+      is ENOENT. EACCES, EPERM or EROFS mean the record CANNOT be removed, so
+      the sweep repeats on every launch for ever, re-running a deletion that
+      has already happened and finding nothing to do. That is not idempotence
+      working, it is a loop nobody is told about.
+    */
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return
+    console.warn(`[personas] the record of ${id}'s deletion could not be removed:`, error)
+    problems.note(
+      'personas',
+      id,
+      'a finished deletion could not be recorded as finished; it will be retried each launch',
+    )
   }
 }
 

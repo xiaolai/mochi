@@ -132,3 +132,36 @@ describe('making untrusted text safe for a line', () => {
     expect(looksEmpty('  a  ')).toBe(false)
   })
 })
+
+describe('characters that render as nothing but are not spaces', () => {
+  /**
+   * `looksEmpty` stripped `\p{Cf}` and `\p{Zs}`. Two blanks are neither:
+   * U+3164 HANGUL FILLER is a letter (`Lo`) and U+2800 BRAILLE PATTERN BLANK
+   * is a symbol (`So`). Both draw as nothing, so a name made of them passed
+   * validation and then appeared empty everywhere — which is the failure this
+   * function's own header describes, arrived at through a class it did not
+   * cover.
+   */
+  it('reads a hangul filler as empty', () => {
+    expect(looksEmpty('ㅤ')).toBe(true)
+    expect(looksEmpty('ㅤㅤㅤ')).toBe(true)
+  })
+
+  it('reads a blank braille pattern as empty', () => {
+    expect(looksEmpty('⠀')).toBe(true)
+  })
+
+  it('reads them as empty mixed with ordinary whitespace', () => {
+    expect(looksEmpty(' ㅤ ⠀ ')).toBe(true)
+  })
+
+  it('still reads real text as filled', () => {
+    // The other direction, which matters more: over-stripping would reject
+    // names somebody meant. Braille that says something is not blank.
+    expect(looksEmpty('a')).toBe(false)
+    expect(looksEmpty('ㅤa')).toBe(false)
+    expect(looksEmpty('⠁')).toBe(false)
+    expect(looksEmpty('ada')).toBe(false)
+    expect(looksEmpty('日本語')).toBe(false)
+  })
+})

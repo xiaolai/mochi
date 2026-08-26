@@ -391,8 +391,20 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
    * Deletion is the one place in this app where "eventually" is not a
    * synonym for "yes".
    */
+  /**
+   * True once `close()` has begun, so nothing arms a timer past the handle.
+   *
+   * `close()` clears the retry and then makes one last `scrub()` attempt --
+   * and a failing attempt calls `retryScrubSoon()`, which armed a fresh timer
+   * pointing at a connection that was closed microseconds later. It was
+   * `unref`'d, so it usually died with the process rather than firing; on the
+   * path where the app keeps running after a store is closed, it fired and
+   * used a closed database.
+   */
+  let closing = false
+
   function retryScrubSoon(): void {
-    if (scrubRetry !== null || scrubsLeft <= 0) return
+    if (closing || scrubRetry !== null || scrubsLeft <= 0) return
     scrubRetry = setTimeout(
       () => {
         scrubRetry = null
@@ -568,29 +580,40 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
   }
 
   /** One MATCH expression, run and shaped into hits. See `search`. */
+  /**
+   * Prepared ONCE, not on every search.
+   *
+   * This called `db.prepare(...)` inside the function, so every keystroke in
+   * the search box re-parsed and re-planned the same statement. Every other
+   * query in this store is prepared up front in `statements.ts` for exactly
+   * that reason; this one was written later and did not follow.
+   *
+   * Lazily rather than beside the others because it belongs to `search`, which
+   * a session may never use at all.
+   */
+  let matchStatement: ReturnType<DatabaseSync['prepare']> | null = null
+
   function matching(match: string, personaId: string, limit: number): Hit[] {
-    return db
-      .prepare(
-        // Joined through to `session` so a hit names its conversation the way
-        // everything else does. The index stores a turn id, which is a rowid
-        // and therefore not something to hand outwards.
-        `SELECT s.token, s.started_at, t.at, t.who, t.text, t.cut
+    matchStatement ??= db.prepare(
+      // Joined through to `session` so a hit names its conversation the way
+      // everything else does. The index stores a turn id, which is a rowid
+      // and therefore not something to hand outwards.
+      `SELECT s.token, s.started_at, t.at, t.who, t.text, t.cut
          FROM turn_fts f
            JOIN turn t ON t.id = f.turn_id
            JOIN session s ON s.id = t.session_id
          WHERE turn_fts MATCH ? AND f.persona_id = ?
          ORDER BY rank LIMIT ?`,
-      )
-      .all(match, personaId, limit)
-      .map((row) => ({
-        token: String(row['token']),
-        startedAt: Number(row['started_at']),
-        // Through the SAME decoders the turn reader uses. The two copies of
-        // this had already coerced unexpected database values differently, and
-        // a hit that disagrees with the turn it points at is the store quietly
-        // contradicting itself.
-        ...toTurn(row),
-      }))
+    )
+    return matchStatement.all(match, personaId, limit).map((row) => ({
+      token: String(row['token']),
+      startedAt: Number(row['started_at']),
+      // Through the SAME decoders the turn reader uses. The two copies of
+      // this had already coerced unexpected database values differently, and
+      // a hit that disagrees with the turn it points at is the store quietly
+      // contradicting itself.
+      ...toTurn(row),
+    }))
   }
 
   /*
@@ -912,6 +935,8 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
     },
     scrubPending: () => pendingScrub,
     close() {
+      // BEFORE the last attempt, so the attempt cannot arm a replacement.
+      closing = true
       if (scrubRetry !== null) {
         clearTimeout(scrubRetry)
         scrubRetry = null

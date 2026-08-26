@@ -526,3 +526,55 @@ describe('a deferred answer that outlived its session', () => {
     expect(ledger.deliver(CALL.callId, { answer: 'stale' }).ok).toBe(false)
   })
 })
+
+describe('a ledger left running for a long time', () => {
+  /**
+   * Nothing removed an entry. The panel reads this map, `unanswered()` and
+   * `undelivered()` scan it, and a session left running for days grew it
+   * without bound — a name and two timestamps per call, for calls settled
+   * hours earlier.
+   */
+  it('forgets calls that settled long ago', () => {
+    const { ledger, clock } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    ledger.answer(CALL.callId, { ok: true })
+    expect(ledger.calls()).toHaveLength(1)
+
+    clock.at += 7 * 60 * 60 * 1_000
+    ledger.arrived({ ...CALL, callId: 'call_2' })
+    expect(ledger.calls().map((one) => one.callId)).toEqual(['call_2'])
+  })
+
+  it('keeps one that settled recently', () => {
+    const { ledger, clock } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    ledger.answer(CALL.callId, { ok: true })
+    clock.at += 60_000
+    ledger.arrived({ ...CALL, callId: 'call_2' })
+    expect(ledger.calls()).toHaveLength(2)
+  })
+
+  it('never forgets one that is still outstanding', () => {
+    /*
+      The case that must not be swept, however old.
+
+      `undelivered()` naming a promise she made and never kept is the whole
+      reason these are recorded. Dropping one because a lot has happened since
+      would have the ledger quietly forget exactly what it exists to report.
+    */
+    const { ledger, clock } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    ledger.defer(CALL.callId, { ok: true })
+    clock.at += 30 * 24 * 60 * 60 * 1_000
+    ledger.arrived({ ...CALL, callId: 'call_2' })
+    expect(ledger.undelivered()).toContain(CALL.callId)
+  })
+
+  it('never forgets one that was never acknowledged', () => {
+    const { ledger, clock } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    clock.at += 30 * 24 * 60 * 60 * 1_000
+    ledger.arrived({ ...CALL, callId: 'call_2' })
+    expect(ledger.unanswered()).toContain(CALL.callId)
+  })
+})

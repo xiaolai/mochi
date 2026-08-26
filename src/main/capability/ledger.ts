@@ -250,7 +250,32 @@ export function createLedger(input: {
   const { registry, send, now, used } = input
   const working = input.working
   /** A `call_id` is never removed. The map IS the record. */
+  /**
+   * Every call this process has seen, and it is never pruned by anything else.
+   *
+   * The panel reads it, `unanswered()` and `undelivered()` scan it, and nothing
+   * removed an entry — so a session left running for days grew this without
+   * bound, holding a name and two timestamps per call for calls settled hours
+   * earlier.
+   *
+   * Bounded by AGE of settlement rather than by count, and only settled ones
+   * are eligible: an outstanding call must stay however old it is, because
+   * `undelivered()` naming a promise she never kept is the whole reason these
+   * are recorded. Dropping one because a lot has happened since would make the
+   * ledger quietly forget exactly the case it exists to report.
+   */
   const calls = new Map<string, LedgerCall>()
+
+  /** Settled longer ago than this, and the record has done its work. */
+  const KEEP_SETTLED_MS = 6 * 60 * 60 * 1_000
+
+  function forgetOldSettled(): void {
+    const cutoff = now() - KEEP_SETTLED_MS
+    for (const [id, call] of calls) {
+      // `settledAt` is null while anything is still owed. Those stay.
+      if (call.settledAt !== null && call.settledAt < cutoff) calls.delete(id)
+    }
+  }
   /**
    * Which session is live, counted rather than named.
    *
@@ -338,6 +363,10 @@ export function createLedger(input: {
       // amends the entry rather than creating it, so a send that throws leaves
       // the call visible as `unanswered()` — which is what it is, since the
       // model is waiting for a frame that did not go out.
+      // Swept on arrival rather than on a timer: this is the only moment the
+      // map grows, so it is the only moment it needs to shrink, and a timer
+      // would be a second thing to stop at shutdown.
+      forgetOldSettled()
       calls.set(call.callId, {
         callId: call.callId,
         name: call.name,

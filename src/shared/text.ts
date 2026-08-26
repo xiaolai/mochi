@@ -57,7 +57,20 @@ export function oneLine(value: string): string {
 export function looksEmpty(value: string): boolean {
   return (
     stripControl(value)
-      .replace(/\p{Cf}|\p{Zs}/gu, '')
+      /*
+        Three classes, not two.
+
+        `\p{Cf}` and `\p{Zs}` miss characters that render as nothing and are
+        neither: U+3164 HANGUL FILLER is a LETTER (`Lo`) and U+2800 BRAILLE
+        PATTERN BLANK is a SYMBOL (`So`). Both draw as blank in every consumer
+        this app has, so a name made of them passed validation and then
+        appeared empty everywhere — which is the exact failure this function's
+        own header describes, reached by a character class it did not cover.
+
+        `Default_Ignorable_Code_Point` covers U+3164 and the rest of that set
+        properly. U+2800 is not default-ignorable and is listed on its own.
+      */
+      .replace(/\p{Cf}|\p{Zs}|\p{Default_Ignorable_Code_Point}|\u2800/gu, '')
       .trim() === ''
   )
 }

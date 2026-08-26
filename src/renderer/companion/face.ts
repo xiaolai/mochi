@@ -1327,7 +1327,12 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     dispose() {
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', fit)
-      void audio?.close()
+      // `close()` returns a promise and CAN reject -- a context already closed,
+      // or one the browser tore down first. `void` discarded that, so a
+      // rejection surfaced as an unhandled one with no route back to here.
+      // Nothing to recover: this is teardown, and the context is going away
+      // either way.
+      audio?.close().catch(() => undefined)
       audio = null
       analyser = null
       samples = null

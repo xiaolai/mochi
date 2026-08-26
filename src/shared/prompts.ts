@@ -1,5 +1,6 @@
 import type { CapabilityManifest } from './capability/manifest'
 import { KEPT_PROMPTS } from '@shared/prompts-kept'
+import type { PromptSpec } from './prompt-spec'
 
 /**
  * Every string this app puts in front of a model, in one catalogue.
@@ -38,18 +39,16 @@ import { KEPT_PROMPTS } from '@shared/prompts-kept'
  * steps, and the person editing it may know exactly what they are doing —
  * `store/prompts.ts` explains why a warning is the honest instrument here.
  */
-export interface PromptSpec {
-  /** Stable across renames and releases: it is the key on disk. */
-  readonly key: string
-  /** For the pane. */
-  readonly title: string
-  /** What it does, and what changing it changes. Shown above the editor. */
-  readonly purpose: string
-  /** What ships. Never what is necessarily sent — see `store/prompts.ts`. */
-  readonly text: string
-  /** Phrases whose absence is worth reporting. Never enforced. */
-  readonly requires: readonly string[]
-}
+
+/**
+ * Re-exported rather than declared here.
+ *
+ * `PromptSpec` moved to `prompt-spec.ts` to break the one real import cycle in
+ * the codebase — this file imports `KEPT_PROMPTS` from `prompts-kept.ts`, and
+ * that file needed the type back. Every existing caller names it through this
+ * module, so the address it moved to is invisible to them.
+ */
+export type { PromptSpec } from './prompt-spec'
 
 /**
  * The prose that is not attached to a capability.
