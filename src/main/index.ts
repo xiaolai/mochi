@@ -17,6 +17,8 @@ import { greetingFor, PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry } from '@shared/capability/registry'
 import { grantOutcome } from './grant-outcome'
 import { listener } from './ipc/listen'
+import { DRIFT_PX, createHerPlace } from './window/her-place'
+import { createIdleSleep } from './idle-sleep'
 import { migrateBubbleSide as runBubbleSideMigration } from './migrations/bubble-side'
 import { shutDown as shutDown_ } from './shutdown'
 import { running } from '../capabilities/ask-workspace/capability'
@@ -460,7 +462,7 @@ function setAsleep(asleep: boolean): void {
     // She is going to sleep, so the next open IS a wake and she may greet.
     // Nothing is being replaced any more; if she is woken, that is a wake.
     reconnecting = false
-    stopIdleSleep()
+    idleSleep.stop()
     tellCompanion({ type: '__mochi_close__' })
     endWhenFlushed()
   } else {
@@ -479,7 +481,7 @@ function setAsleep(asleep: boolean): void {
     }
     // The same frame the hourly reconnect sends. One open path, not two.
     tellCompanion({ type: '__mochi_reconnect__' })
-    armIdleSleep()
+    idleSleep.arm()
   }
   console.log(`[rest] ${asleep ? 'asleep' : 'awake'}`)
   tray?.refresh()
@@ -508,30 +510,29 @@ function setAsleep(asleep: boolean): void {
  * hourly timer that exists for no reason is a thing somebody has to reason
  * about later.
  */
-let idleTimer: NodeJS.Timeout | null = null
 
-function stopIdleSleep(): void {
-  if (idleTimer !== null) clearTimeout(idleTimer)
-  idleTimer = null
-}
-
-function armIdleSleep(): void {
-  stopIdleSleep()
-  if (resting.asleep) return
-  const minutes = readSleepAfterMinutes(app.getPath('userData'))
-  // Zero is the opt-out, and it is checked here rather than turned into a very
-  // long timer: "never" and "in a thousand hours" are different promises.
-  if (minutes === 0) return
-  idleTimer = setTimeout(() => {
-    idleTimer = null
-    console.log(`[rest] ${String(minutes)} minutes with nothing said`)
+/**
+ * How long a room stays quiet before she stops listening.
+ *
+ * The decision, the arithmetic and the opt-out are in `idle-sleep.ts`; this is
+ * the wiring. The minutes are read PER ARMING rather than held, because the
+ * setting is in a window somebody can open mid-conversation and a preference
+ * that waits for a restart is indistinguishable from one that does not work.
+ */
+const idleSleep = createIdleSleep({
+  minutes: () => readSleepAfterMinutes(app.getPath('userData')),
+  asleep: () => resting.asleep,
+  sleep: () => {
     setAsleep(true)
-  }, minutes * 60_000)
-}
+  },
+  log: (line) => {
+    console.log(line)
+  },
+})
 
 /** Somebody said something. Whatever silence was being counted starts again. */
 function stirred(): void {
-  armIdleSleep()
+  idleSleep.arm()
 }
 
 /**
@@ -739,9 +740,7 @@ function setBubbleSide(side: string): SettingsWrite {
  * nominal body the window was first placed against — wrong for a resized
  * avatar, and wrong in the direction that keeps her reachable.
  */
-let herBody = NOMINAL_BODY
-/** The last size logged, so the line above is one per change rather than per frame. */
-let fitted = { width: 0, height: 0 }
+const herPlace = createHerPlace({ nominalBody: NOMINAL_BODY, feetFromTop: FEET_FROM_TOP })
 
 /**
  * How far into her window she is standing.
@@ -750,7 +749,6 @@ let fitted = { width: 0, height: 0 }
  * the display, because macOS will not lift the window any further and she rises
  * inside it instead — see `dragTo`. Held here because main is what moves her.
  */
-let herFeet: number = FEET_FROM_TOP
 
 /**
  * Both of these arrive from the renderer, so both are untrusted numbers.
@@ -809,7 +807,7 @@ function readPad(value: unknown): Pad | null {
 listenTo('companion:body', (_event, value: unknown) => {
   const body = readBody(value)
   if (body === null) return
-  herBody = body
+  herPlace.reportedBody(body)
 })
 
 /**
@@ -930,7 +928,7 @@ listenTo('companion:fit', (_event, value: unknown) => {
   })
   const size = windowFitting(body, pad)
   const origin = originHolding(herOnScreen, pad)
-  herBody = body
+  const fit = herPlace.fitTo({ body, origin, size, herOnScreen })
   companion.setBounds({ x: origin.x, y: origin.y, width: size.width, height: size.height })
   showHerOnce('the first fit')
   /*
@@ -941,19 +939,16 @@ listenTo('companion:fit', (_event, value: unknown) => {
     corner any more — reads as a layout opinion rather than as a defect. One
     subtraction, once per fit, and it names the thing that went wrong.
   */
-  const landed = { x: origin.x + body.left, y: origin.y + body.top }
-  const moved = Math.max(Math.abs(landed.x - herOnScreen.x), Math.abs(landed.y - herOnScreen.y))
-  if (moved > 1) {
+  if (fit.movedBy > DRIFT_PX) {
     console.log(
-      `[window] FIT MOVED HER by ${moved.toFixed(1)}px — was ${herOnScreen.x},${herOnScreen.y}, ` +
-        `landed ${landed.x},${landed.y}; pad ${pad.left},${pad.top} body ${body.left},${body.top}`,
+      `[window] FIT MOVED HER by ${fit.movedBy.toFixed(1)}px — was ${herOnScreen.x},${herOnScreen.y}; ` +
+        `pad ${pad.left},${pad.top} body ${body.left},${body.top}`,
     )
   }
   // Logged once per SIZE, not per request: the renderer asks on any frame the
   // answer changes, and a line per frame would bury everything else. Same
   // measurements as the creation line above, so the two can be read together.
-  if (size.width !== fitted.width || size.height !== fitted.height) {
-    fitted = size
+  if (fit.isNewSize) {
     const work = screen.getPrimaryDisplay().workArea
     console.log(
       `[window] fitted to ${size.width}x${size.height} at ${origin.x},${origin.y}; ` +
@@ -970,10 +965,9 @@ listenTo('companion:grab', (_event, value: unknown) => {
   startDrag(
     grip,
     () => companion,
-    () => herBody,
+    () => herPlace.body(),
     (feet) => {
-      if (feet === herFeet) return
-      herFeet = feet
+      if (!herPlace.standAt(feet)) return
       // Straight through on the frame it changes. She is being dragged, so a
       // stance that arrived a frame late would show as her jumping.
       companion?.webContents.send('voice:send', { type: '__mochi_stance__', feetFromTop: feet })
@@ -990,7 +984,7 @@ listenTo('companion:grab', (_event, value: unknown) => {
       267 + 73.32 is 340 while a bubble is up and the window is the big one, and
       26 + 73.32 is 99 while it is not.
     */
-    herBody.top + herBody.height,
+    herPlace.body().top + herPlace.body().height,
   )
 })
 
@@ -1013,11 +1007,12 @@ listenTo('companion:drop', () => {
   if (companion === null || companion.isDestroyed()) return
   const bounds = companion.getBounds()
   try {
+    const at = herPlace.placeFrom({ x: bounds.x, y: bounds.y })
     writeHerPlace(app.getPath('userData'), {
-      x: Math.round(bounds.x + herBody.left),
-      y: Math.round(bounds.y + herBody.top),
-      width: Math.round(herBody.width),
-      height: Math.round(herBody.height),
+      x: at.left,
+      y: at.top,
+      width: at.width,
+      height: at.height,
     })
   } catch (error: unknown) {
     // Not fatal — she is where somebody put her for this run — but silence
@@ -2631,7 +2626,7 @@ ipcMain.handle('settings:screen', (_event, change: unknown): SettingsWrite => {
     // Re-armed against the NEW value rather than left to expire on the old one.
     // Without this, shortening the timeout takes effect one timeout later,
     // which is the one moment somebody is watching for it to work.
-    armIdleSleep()
+    idleSleep.arm()
     console.log(`[rest] resting after ${minutes === 0 ? 'never' : `${String(minutes)} min`}`)
   }
 
@@ -2996,7 +2991,7 @@ const startup = app.whenReady().then(
       }
       console.log('[voice] opening the first session')
       tellCompanion({ type: '__mochi_reconnect__' })
-      armIdleSleep()
+      idleSleep.arm()
     })
 
     /**
