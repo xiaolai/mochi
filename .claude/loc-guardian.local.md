@@ -183,6 +183,17 @@ Everything that was a DECISION has been taken out and given a test:
 `screen-room.ts` (how much screen there is, which sides a bubble fits on) and
 `pad-change.ts` (grow at once, shrink only after it has stayed wanted).
 
+> **This sentence was false until 2026-08-26, and it was false about two of
+> the three.** Only `pad-change.ts` had a test; the other two were extracted
+> _for_ testability, out of a closure that resolves a palette off `document`
+> at load, and then never given one — so the split paid its whole cost and
+> collected none of its benefit. They have 14 tests each now.
+>
+> It is the same defect §1 of the grill report is about, and it survived that
+> report: I corrected the four claims in this file the report had already
+> named and did not audit the rest of it. Fixing the instances a review hands
+> you is not the same as looking.
+
 What is left is one render loop. `tick` is 339 code lines capturing **34**
 closure variables, and the pointer block captures 11. Splitting either means
 passing a context object of fifteen fields, and **no test executes `showFace`**
