@@ -53,6 +53,8 @@ export interface Nudge {
    * the request is remembered until she stops.
    */
   wanted(): boolean
+  /** The ask did not go out; want it again. See the implementation. */
+  again(): void
   /**
    * Her audio started or ended.
    *
@@ -84,6 +86,20 @@ export function createNudge(): Nudge {
       // the first is the refusal this module exists to avoid.
       pending = false
       return true
+    },
+    /**
+     * The ask did not go out after all; want it again.
+     *
+     * `wanted()` and `sounding()` both clear the flag on the way to returning
+     * true — they say "ask now", and the caller was assumed to have done it.
+     * `put` can drop the frame on a channel that is not open, and then the
+     * nudge is spent for an ask that never happened: her answer sits in the
+     * conversation, unspoken, and nothing will ever request the turn that
+     * would say it. That is the exact silence this module exists to prevent,
+     * arrived at from the other side.
+     */
+    again() {
+      pending = true
     },
     waiting: () => pending,
   }

@@ -436,6 +436,9 @@ function setAsleep(asleep: boolean): void {
     // opens a session behind her closed eyes — the exact thing this change is
     // removing.
     nextSession.cancel()
+    // She is going to sleep, so the next open IS a wake and she may greet.
+    // Nothing is being replaced any more; if she is woken, that is a wake.
+    reconnecting = false
     stopIdleSleep()
     tellCompanion({ type: '__mochi_close__' })
     endWhenFlushed()
@@ -1443,8 +1446,22 @@ const mint = createMintSlot()
  * frame therefore scheduled nothing at all, silently. See
  * `voice/next-session.ts`.
  */
+/**
+ * Whether the NEXT session to be configured is replacing one rather than
+ * starting one.
+ *
+ * One-shot: set when the reconnect fires, and cleared by the `voice:config`
+ * that reads it. A flag left set until she slept would also silence the
+ * greeting of a character somebody wore AFTER a reconnect — a new character
+ * saying nothing because an unrelated session was replaced an hour earlier.
+ * Scoped to the single open it describes, every other open greets normally
+ * without having to be enumerated here.
+ */
+let reconnecting = false
+
 const nextSession = createNextSession({
   reconnect: () => {
+    reconnecting = true
     tellCompanion({ type: '__mochi_reconnect__' })
   },
   awake: () => !resting.asleep,
@@ -1530,6 +1547,10 @@ ipcMain.handle('voice:sdp', async (_event, offer: unknown, session: unknown) => 
  * notice, so it is not defaulted and not skipped.
  */
 ipcMain.handle('voice:config', () => {
+  // CONSUMED here, whatever else this read goes on to decide. See
+  // `reconnecting`: the flag describes exactly one open.
+  const replacing = reconnecting
+  reconnecting = false
   const userData = app.getPath('userData')
   // Whether this installation has run before decides whether a one-time
   // retention migration may run at all — a permissive default there would let a
@@ -1647,7 +1668,21 @@ ipcMain.handle('voice:config', () => {
       — and it stays, because "nearly" is not a guarantee and because the two
       conditions are genuinely independent.
     */
-    greeting: grants.speak_first && !resting.asleep ? greetingFor(resolved.persona) : null,
+    /*
+      A GREETING IS FOR A WAKE, and a reconnect is not one.
+
+      The renderer's `greeted` flag is per SESSION, and the hourly reconnect
+      (§53) opens a new one -- so she greeted again, every hour, somebody she
+      had been mid-conversation with all along. The renderer cannot tell the
+      two apart: from inside a session an open is an open. Main can, because
+      main is what sends `__mochi_reconnect__`.
+
+      Decided here for the reason `heard.ts` gives for everything else on this
+      boundary: whether she speaks first is a decision, and decisions are
+      main's.
+    */
+    greeting:
+      grants.speak_first && !resting.asleep && !replacing ? greetingFor(resolved.persona) : null,
     face: avatar.face,
     problems: problems.count(),
     bubbleSide: resolved.persona.bubbleSide,

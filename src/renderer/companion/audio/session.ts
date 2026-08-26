@@ -224,7 +224,27 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
    * `conversation: 'none'`.
    */
   function askForTurn(): void {
-    put({ type: 'response.create' })
+    /*
+      IF IT DID NOT GO, WANT IT AGAIN.
+
+      `nudge.wanted()` and `nudge.sounding()` both clear the pending flag on
+      the way to returning true: they say "ask now" and assume the caller did.
+      `put` drops the frame on a channel that is not open, so the nudge was
+      spent for an ask that never happened -- her answer sitting in the
+      conversation, unspoken, with nothing left that would ever request the
+      turn to say it.
+
+      Restored rather than retried here: the next `output_audio_buffer.stopped`
+      is the right moment to ask, and this function has no way to know when the
+      channel comes back.
+    */
+    if (!put({ type: 'response.create' })) {
+      nudge.again()
+      window.mochi.report({
+        kind: 'note',
+        text: 'a turn could not be requested; it will be asked for again',
+      })
+    }
   }
 
   /**

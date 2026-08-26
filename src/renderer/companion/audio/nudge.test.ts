@@ -89,3 +89,47 @@ describe('asking her to volunteer a late answer', () => {
     expect(nudge.sounding(false)).toBe(true)
   })
 })
+
+describe('an ask that never went out', () => {
+  /**
+   * `wanted()` and `sounding()` clear the pending flag on the way to returning
+   * true — they say "ask now" and assume the caller did. `put` drops the frame
+   * on a channel that is not open, and then the nudge is spent for an ask that
+   * never happened: her answer sits in the conversation, unspoken, with
+   * nothing left that would request the turn to say it.
+   */
+  it('can be wanted again', () => {
+    const nudge = createNudge()
+    nudge.sounding(true)
+    expect(nudge.wanted()).toBe(false)
+    // The ask goes out when she stops...
+    expect(nudge.sounding(false)).toBe(true)
+    expect(nudge.waiting()).toBe(false)
+    // ...and the frame was dropped, so it is wanted again.
+    nudge.again()
+    expect(nudge.waiting()).toBe(true)
+  })
+
+  it('asks once more at the next moment she stops', () => {
+    const nudge = createNudge()
+    nudge.sounding(true)
+    nudge.wanted()
+    nudge.sounding(false)
+    nudge.again()
+    // She starts talking again and stops again: the restored nudge fires.
+    nudge.sounding(true)
+    expect(nudge.sounding(false)).toBe(true)
+  })
+
+  it('does not stack up asks when it is restored twice', () => {
+    // Still one ask, however many times the frame was dropped. Two
+    // `response.create` in a row is the refusal this module exists to avoid.
+    const nudge = createNudge()
+    nudge.sounding(true)
+    nudge.wanted()
+    nudge.again()
+    nudge.again()
+    expect(nudge.sounding(false)).toBe(true)
+    expect(nudge.sounding(false)).toBe(false)
+  })
+})

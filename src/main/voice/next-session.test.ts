@@ -198,3 +198,37 @@ describe('cancelling', () => {
     expect(h.armedMs()).toBe(FLOOR_MS)
   })
 })
+
+describe('a deadline so distant the timer cannot hold it', () => {
+  /**
+   * Past 2^31-1 milliseconds `setTimeout` overflows a signed 32-bit int and
+   * Node coerces the delay to **1** — so an absurdly distant deadline fires at
+   * once rather than never. Here that opens a session immediately, and the
+   * reconnect arms another timer, so the failure is a loop.
+   *
+   * `readVoiceReport` bounds `expiresAt` to a safe integer, which still leaves
+   * values thousands of years out. A bound on representability is not a bound
+   * on plausibility.
+   */
+  it('does not turn a distant deadline into an immediate reconnect', () => {
+    const h = harness()
+    // A safe integer, and about 300 years away in seconds.
+    h.next.announced(10_000_000_000)
+    expect(h.armedMs()).toBeLessThanOrEqual(2_147_483_647)
+    expect(h.armedMs()).toBeGreaterThan(0)
+  })
+
+  it('says when it clamped, rather than silently rescheduling', () => {
+    const h = harness()
+    h.next.announced(10_000_000_000)
+    expect(h.logs.join(' ')).toContain('clamped')
+  })
+
+  it('still opens at once for a deadline that has genuinely passed', () => {
+    // The clamp must not swallow the overdue case, which is the one place a
+    // zero delay is correct.
+    const h = harness()
+    h.next.announced((1_700_000_000_000 - 60_000) / 1_000)
+    expect(h.armedMs()).toBe(0)
+  })
+})

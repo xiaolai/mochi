@@ -183,6 +183,33 @@ interface Held {
 
 export function createPending(): Pending {
   const held = new Map<string, Held>()
+  /**
+   * Items already filed, so a late verdict cannot raise one from the dead.
+   *
+   * `held.get(itemId) ?? {}` cannot tell "never seen" from "already settled" —
+   * both are absent. So a `conversation.item.truncated` arriving after its
+   * turn had been filed created a NEW held record with no transcript, which
+   * then waited for one that was never coming and was filed at session close
+   * as an empty cut marker: a phantom turn in the archive, attached to a
+   * conversation that had already recorded the real one.
+   *
+   * A late truncation is not exotic. §58 puts the transcript before the
+   * truncation in 13 of 13 runs at a six-second cut, which is exactly the
+   * order that settles the item first.
+   *
+   * Bounded like `held`, and by the same argument: a long session must not
+   * grow this forever.
+   */
+  const filed = new Set<string>()
+
+  function remember(itemId: string): void {
+    filed.add(itemId)
+    while (filed.size > MAX_HELD) {
+      const oldest = filed.values().next().value
+      if (oldest === undefined) break
+      filed.delete(oldest)
+    }
+  }
 
   function record(itemId: string, next: Held): void {
     held.set(itemId, next)
@@ -197,6 +224,7 @@ export function createPending(): Pending {
   /** Turn a held record into the turn to file, and stop holding it. */
   function settle(itemId: string, it: Held, transcript: string): Spoken {
     held.delete(itemId)
+    remember(itemId)
     const cut = it.interruptedAt !== undefined
     return {
       transcript,
@@ -241,6 +269,10 @@ export function createPending(): Pending {
       return null
     },
     truncated(itemId: string, at: number, heardAt: number | null) {
+      // Already filed. Recording a verdict now would create a fresh held
+      // record with no transcript -- see `filed` -- and file it as an empty cut
+      // marker beside the turn it is a verdict FOR.
+      if (filed.has(itemId)) return null
       const it = held.get(itemId) ?? {}
       if (it.transcript === undefined) {
         record(itemId, { ...it, interruptedAt: at, heardAt })

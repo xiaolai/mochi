@@ -53,6 +53,22 @@ import { FLOOR_MS, whenToReconnect } from '@shared/realtime/reconnect'
  */
 type Timer = NodeJS.Timeout | number
 
+/**
+ * The largest delay `setTimeout` actually honours.
+ *
+ * Past 2^31-1 milliseconds the delay overflows a signed 32-bit int and Node
+ * coerces it to **1** — so an absurdly distant deadline fires at once rather
+ * than never, which is the exact inversion of what the caller asked for. Here
+ * that means an immediate reconnect, and the reconnect arms another timer, so
+ * the failure is a loop rather than a single mistake.
+ *
+ * `expiresAt` is renderer-supplied Unix seconds. `readVoiceReport` bounds it to
+ * a safe integer, which still leaves values thousands of years out — a bound on
+ * *representability* is not a bound on *plausibility*, and this is the second
+ * of the two.
+ */
+const LONGEST_DELAY_MS = 2_147_483_647
+
 export interface NextSession {
   /**
    * A session was minted. Arm the blind floor.
@@ -120,6 +136,18 @@ export function createNextSession(deps: NextSessionDeps): NextSession {
 
   function arm(ms: number): void {
     clear()
+    /*
+      CLAMPED BOTH WAYS before it reaches `setTimeout`.
+
+      Above `LONGEST_DELAY_MS` the delay overflows and fires immediately, which
+      would open a session at once and arm another timer -- a loop, not a
+      mistake. Below zero is `setTimeout`'s own "run now", which is wanted for
+      an overdue reconnect and never for anything else.
+    */
+    const delay = Math.min(Math.max(ms, 0), LONGEST_DELAY_MS)
+    if (delay !== ms) {
+      log(`[voice] a reconnect delay of ${String(ms)}ms was clamped to ${String(delay)}ms`)
+    }
     timer = setTimer(() => {
       timer = null
       /*
@@ -136,7 +164,7 @@ export function createNextSession(deps: NextSessionDeps): NextSession {
       }
       log('[voice] reconnect due')
       deps.reconnect()
-    }, ms)
+    }, delay)
   }
 
   return {

@@ -355,3 +355,41 @@ describe('a cut whose cursor belongs to another response', () => {
     expect(spoken?.heardAt).toBeNull()
   })
 })
+
+describe('a verdict that arrives after its turn was filed', () => {
+  /**
+   * `held.get(itemId) ?? {}` cannot tell "never seen" from "already settled" —
+   * both are absent. So a late `conversation.item.truncated` created a NEW
+   * held record with no transcript, which waited for one that was never coming
+   * and was filed at session close as an empty cut marker: a phantom turn
+   * beside the real one it was a verdict for.
+   */
+  it('does not raise the item from the dead', () => {
+    const p = createPending()
+    p.began('i1', 'r1', null)
+    p.said('i1', 'the whole story', 5_000)
+    // The verdict settles it and the turn is filed.
+    expect(p.truncated('i1', 6_000, 9)).not.toBeNull()
+    // A second, later verdict for the same item must produce nothing at all.
+    expect(p.truncated('i1', 7_000, 9)).toBeNull()
+    expect(p.flush()).toEqual([])
+  })
+
+  it('does not do it for a turn that ended naturally either', () => {
+    const p = createPending()
+    p.began('i2', 'r2', null)
+    p.said('i2', 'a finished answer', 5_000)
+    expect(p.finished('r2')).toHaveLength(1)
+    expect(p.truncated('i2', 6_000, 3)).toBeNull()
+    expect(p.flush()).toEqual([])
+  })
+
+  it('still holds a verdict for an item that has not been filed', () => {
+    // The ordinary order, which must keep working: verdict first, transcript
+    // after. Blocking too eagerly here would lose every interrupted turn.
+    const p = createPending()
+    p.began('i3', 'r3', null)
+    expect(p.truncated('i3', 6_000, 4)).toBeNull()
+    expect(p.said('i3', 'cut off here', 7_000)).not.toBeNull()
+  })
+})

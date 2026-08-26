@@ -413,7 +413,22 @@ window.mochi.onSend((frame) => {
     applyMicrophone()
   }
   if (type === '__mochi_working__') {
-    face.working(Number((frame as { outstanding?: unknown }).outstanding))
+    /*
+      CHECKED, unlike the bare `Number(...)` this replaces.
+
+      Every other frame on this listener validates -- `when === 'listening' ||
+      ...`, `shown !== false` -- and each says why. This one did not, and
+      `Number(undefined)` is `NaN`, as is `Number({})`. A `NaN` count is not a
+      count: it compares false against every threshold, so the indicator that
+      says she is still working on something silently never comes on again for
+      the life of the window.
+
+      Failing toward zero rather than toward "something is outstanding": a
+      spinner that never stops is worse than one that never starts, and this
+      frame is re-sent on every change, so the next good one corrects it.
+    */
+    const outstanding = (frame as { outstanding?: unknown }).outstanding
+    face.working(typeof outstanding === 'number' && Number.isFinite(outstanding) ? outstanding : 0)
   }
   if (type === '__mochi_halo__') {
     /*
