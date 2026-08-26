@@ -34,6 +34,7 @@ import type { Hit } from '../store/turn-row'
 import { fenced } from '@shared/instructions'
 import { elapsedWords } from './elapsed'
 import { oneLine } from '@shared/text'
+import { problems } from '../problems'
 
 /** How many hits come back. Enough to be useful, few enough to be sayable. */
 export const MAX_HITS = 5
@@ -138,6 +139,14 @@ export function recallPayloadFor(
     // throw escaping would take down the listener that receives speech -- and
     // she would be left waiting on a call nothing is ever going to answer.
     console.warn('[recall] the search failed:', error)
+    /*
+    She answers "I do not remember" -- which is a LIE she has no way to know she
+    is telling. The archive holds it; the search is what failed.
+
+    Most likely to be read as "recall does not work" rather than as a fault, so
+    it is the one most worth naming.
+  */
+    problems.note('recall', null, `a search of the archive failed: ${String(error)}`)
     return unavailable(guidance)
   }
 }

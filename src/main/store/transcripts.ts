@@ -401,6 +401,13 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
     } catch (error: unknown) {
       pendingScrub = true
       console.warn('[transcripts] could not truncate the write-ahead log after a delete:', error)
+      // The one store whose whole justification is that deleting is real. If
+      // this keeps failing, the deleted words are still in the file.
+      problems.note(
+        'transcripts',
+        null,
+        'deleted text could not be cleared from the file; it will be retried',
+      )
       retryScrubSoon()
     }
   }

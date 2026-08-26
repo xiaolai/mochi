@@ -19,6 +19,7 @@ import { isPersonaId } from '@shared/parse-persona'
 import { type Policy, UNREADABLE_POLICY, parsePolicy } from '@shared/policy'
 import { mkdirSync, readdirSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
+import { problems } from '../problems'
 /**
  * Her retention, parked in her own package until the policy store accepts it.
  *
@@ -88,7 +89,22 @@ export function readTombstones(userData: string): ReadonlyMap<string, string> {
   }
   for (const file of files) {
     const read = readBounded(join(personasRoot(userData), TOMBSTONES, file))
-    if (!read.ok) continue
+    if (!read.ok) {
+      /*
+        SKIPPED, and said so.
+
+        A tombstone is the record that a deletion did not finish. Skipping one
+        silently means that deletion is never resumed -- so data somebody asked
+        to have removed stays on disk, and the only thing that knew has just
+        decided not to mention it.
+
+        Skipping is still right: the alternative is acting on a record we
+        cannot read, and the block below says why that is worse. What was wrong
+        was doing it quietly.
+      */
+      problems.note('personas', null, `an unfinished deletion could not be read (${file})`)
+      continue
+    }
     try {
       const parsed = JSON.parse(read.text) as Record<string, unknown>
       const id = parsed['id']
@@ -102,7 +118,9 @@ export function readTombstones(userData: string): ReadonlyMap<string, string> {
       found.set(id, source)
     } catch {
       // A record nobody can read names nobody in particular, and acting on a
-      // guess here would delete the wrong persona's data.
+      // guess here would delete the wrong persona's data. Reported for the
+      // reason above: the deletion it recorded is now never resumed.
+      problems.note('personas', null, `an unfinished deletion is unreadable and was left (${file})`)
       continue
     }
   }
@@ -202,6 +220,10 @@ export function migratePolicy(
       // Her package is unwritable too, so there is nowhere durable left. The
       // in-memory copy is all there is, and it lasts until quit.
       console.warn(`[personas] and could not park it in ${source} either`)
+      // Both routes failed, so this retention is lost: she keeps her
+      // conversations for the default period rather than the chosen one, and
+      // nothing else will ever mention it.
+      problems.note('retention', id, 'a retention setting could not be carried across and was lost')
     }
     return legacy
   }

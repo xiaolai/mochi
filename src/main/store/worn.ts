@@ -8,6 +8,7 @@ import { readLanguages } from '@shared/transcription'
 import { DEFAULT_GRANTS, WITHHELD_GRANTS, parseGrants, type Grants } from '@shared/grants'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { writeJsonAtomically } from './json-file'
+import { problems } from '../problems'
 
 /**
  * Which persona is being worn, remembered across restarts.
@@ -144,6 +145,20 @@ function writeMerged(userData: string, changes: Record<string, unknown>): void {
       // preserve in a file nothing can parse, and refusing to write would
       // leave the switch silently ineffective.
       console.warn('[worn] preferences.json is not valid JSON; replacing it')
+      /*
+        REPLACED, and said so.
+
+        Replacing is right -- there is nothing to preserve in a file nothing can
+        parse, and refusing to write would leave the switch silently
+        ineffective. But every OTHER preference in that file goes with it, and
+        somebody whose window position, bubble side and sleep timer all reset at
+        once deserves a sentence about why.
+      */
+      problems.note(
+        'settings',
+        null,
+        'the preferences file could not be read and was replaced; other settings reset to their defaults',
+      )
     }
   } else if (read.reason.kind !== 'absent') {
     console.warn(`[worn] ${logBoundedRead(read.reason)}; replacing it`)
@@ -225,6 +240,8 @@ export function readGrantsState(userData: string): {
     // that lets her do something somebody may have said she may not.
     if (read.reason.kind === 'absent') return { readable: true, grants: DEFAULT_GRANTS }
     console.warn(`[grants] ${logBoundedRead(read.reason)}; withholding everything`)
+    // Seen, not just logged. Everything off is a posture nobody chose.
+    problems.note('grants', null, `permissions could not be read; everything is withheld`)
     return { readable: false, grants: WITHHELD_GRANTS }
   }
   try {
@@ -236,6 +253,7 @@ export function readGrantsState(userData: string): {
     // path that had been made to fail closed twice already.
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       console.warn('[grants] preferences.json does not hold an object; withholding everything')
+      problems.note('grants', null, 'the permissions file is malformed; everything is withheld')
       return { readable: false, grants: WITHHELD_GRANTS }
     }
     return { readable: true, grants: parseGrants((value as { grants?: unknown }).grants) }
@@ -243,6 +261,7 @@ export function readGrantsState(userData: string): {
     // A file that exists and cannot be PARSED is the same case: somebody's
     // answers are in there and nothing here can read them.
     console.warn('[grants] preferences.json is not valid JSON; withholding everything')
+    problems.note('grants', null, 'the permissions file is not valid JSON; everything is withheld')
     return { readable: false, grants: WITHHELD_GRANTS }
   }
 }

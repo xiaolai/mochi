@@ -18,6 +18,7 @@ import { join } from 'node:path'
 import { claimedId } from './persona-files'
 import { clearTombstone, readTombstones, writeTombstone } from './unfinished'
 import { forgetGrants } from './grants'
+import { problems } from '../problems'
 /**
  * Remove a persona file that was just written and must not survive.
  *
@@ -167,6 +168,14 @@ export function sweepDeletions(
       // deletion that keeps failing is somebody's data outliving their
       // request to remove it.
       console.error(`[personas] could not finish deleting ${id}; will retry next launch:`, error)
+      /*
+        Somebody asked for this to be gone and it is not.
+
+        "Will retry next launch" is true and is not a reason for silence: until
+        that launch happens their data is still on disk, and they have every
+        reason to believe otherwise.
+      */
+      problems.note('personas', id, `this character could not be fully deleted: ${String(error)}`)
     }
   }
 }

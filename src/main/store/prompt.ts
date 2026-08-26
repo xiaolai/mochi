@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { writeTextAtomically } from './json-file'
+import { problems } from '../problems'
 
 /**
  * The system prompt, as a document on disk.
@@ -107,6 +108,19 @@ export function readPrompt(userData: string): string {
   if (!read.ok) {
     if (read.reason.kind !== 'absent') {
       console.error(`[prompt] ${logBoundedRead(read.reason)}; she is told nothing extra`)
+      /*
+        This one changes WHO SHE IS, which is the failure this project is least
+        able to notice from the outside.
+
+        She goes on talking, fluently, without the instructions somebody wrote
+        for her -- and the only symptom is that she behaves like a different
+        character. Nobody debugs that by opening a console.
+      */
+      problems.note(
+        'prompt',
+        null,
+        'her instructions could not be read; she is running without them',
+      )
     }
     return ''
   }

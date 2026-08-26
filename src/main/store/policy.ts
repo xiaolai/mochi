@@ -21,6 +21,7 @@ import { DEFAULT_POLICY, UNREADABLE_POLICY, parsePolicy, type Policy } from '@sh
 import { writeJsonAtomically } from './json-file'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { rawObject } from './json-file'
+import { problems } from '../problems'
 
 export const POLICY_DIR = 'policies'
 
@@ -57,6 +58,13 @@ export function markRetentionMigrated(userData: string): void {
     // the next launch, which is idempotent -- it only seeds where there is no
     // setting already.
     console.warn('[policy] could not record that the retention migration ran:', error)
+    // The marker is what stops the migration running again. Without it the pass
+    // repeats on every launch, quietly re-deciding somebody's retention.
+    problems.note(
+      'retention',
+      null,
+      `the retention migration could not be recorded: ${String(error)}`,
+    )
   }
 }
 
@@ -109,6 +117,13 @@ export function readPolicy(userData: string, id: string): Policy {
     value = JSON.parse(read.text)
   } catch (error: unknown) {
     console.warn(`[policy] ${id} is not valid JSON:`, error)
+    // Falls back to a default retention. How long her conversations are kept is
+    // not a thing to change silently.
+    problems.note(
+      'retention',
+      id,
+      'the retention setting is not valid JSON; the default is in force',
+    )
     return UNREADABLE_POLICY
   }
   const parsed = parsePolicy(value)

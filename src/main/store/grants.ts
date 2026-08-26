@@ -11,6 +11,7 @@ import { logBoundedRead, readBounded } from './read-bounded'
 import { writeJsonAtomically } from './json-file'
 import { type LegacyGrants } from './worn'
 import { rawObject } from './json-file'
+import { problems } from '../problems'
 
 /**
  * What each character may do, filed under her id.
@@ -117,6 +118,20 @@ export function readGrants(userData: string, id: string, legacy: LegacyGrants = 
   const held = grantsState(userData, id)
   if (held.kind === 'unusable') {
     console.warn(`[grants] ${id} ${held.why}; withholding everything`)
+    /*
+      A POSTURE CHANGE, and it belongs somewhere a person can see it.
+
+      Withholding on an unreadable file is the right default and it is not the
+      state somebody configured. Every capability is off, she says she may not
+      do things she has been allowed to do, and the only account of why was a
+      line on a console no user is reading -- so the app looked broken rather
+      than cautious.
+    */
+    problems.note(
+      'grants',
+      id,
+      `permissions could not be read (${held.why}); everything is withheld`,
+    )
     return WITHHELD_GRANTS
   }
   if (held.kind === 'held') return held.grants
