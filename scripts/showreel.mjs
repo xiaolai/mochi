@@ -290,8 +290,8 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);font-si
 
 <section>
 <h2><span class="num">01</span>Moods</h2>
-<p>Eight expressions, each a set of multipliers on the neutral face — eye arcs, tilt, mouth, cheek colour, catchlight, gaze bias, squash and lean. She sets these herself by calling <code>set_expression</code>.</p>
-<div class="note"><b>She has never once used them.</b> Measured on the real installation: 275 sessions, 914 of her turns, and <code>set_expression</code> called zero times. Everything painted here has been reachable the whole time and unreached.</div>
+<p>Eight expressions, each a set of multipliers on the neutral face — eye arcs, tilt, mouth, cheek colour, catchlight, gaze bias, squash and lean.</p>
+<div class="note"><b>She never once chose one.</b> Measured on the real installation: 275 sessions, 914 of her turns, and the <code>set_expression</code> tool called zero times. It was removed on 2026-08-26. Two of these are reached automatically — neutral when she sleeps, a perk when she wakes — and the rest are reachable only from the character sheet's preview, or from this page.</div>
 <div class="grid">${moodCells}</div>
 </section>
 
