@@ -12,11 +12,15 @@ import { grantOutcome } from './grant-outcome'
 describe('what the panel may claim after saving', () => {
   it('is in force when nobody is speaking', () => {
     // Asleep, or never woken. The next wake reads it from disk.
-    expect(grantOutcome({ writtenFor: 'ada', live: null, told: false })).toEqual({ ok: true })
+    expect(grantOutcome({ writtenFor: 'ada', live: null, told: false, pronoun: 'she' })).toEqual({
+      ok: true,
+    })
   })
 
   it('is in force when the live session is the character it was written for', () => {
-    expect(grantOutcome({ writtenFor: 'ada', live: 'ada', told: true })).toEqual({ ok: true })
+    expect(grantOutcome({ writtenFor: 'ada', live: 'ada', told: true, pronoun: 'she' })).toEqual({
+      ok: true,
+    })
   })
 
   it('does not claim success when she is speaking as somebody else', () => {
@@ -28,7 +32,12 @@ describe('what the panel may claim after saving', () => {
       configured as. Revoking a capability in that window changed nothing about
       the session actually running, and the handler returned ok.
     */
-    const outcome = grantOutcome({ writtenFor: 'newly-worn', live: 'still-speaking', told: true })
+    const outcome = grantOutcome({
+      writtenFor: 'newly-worn',
+      live: 'still-speaking',
+      told: true,
+      pronoun: 'she',
+    })
     expect(outcome.ok).toBe(false)
     expect(outcome.ok === false && outcome.why).toContain('another character')
     expect(outcome.ok === false && outcome.why).toContain('next wake')
@@ -38,12 +47,12 @@ describe('what the panel may claim after saving', () => {
     // `told` is not the question. The frame reached a session governed by a
     // different character's permissions, so a success here would be the most
     // misleading answer available.
-    expect(grantOutcome({ writtenFor: 'a', live: 'b', told: true }).ok).toBe(false)
-    expect(grantOutcome({ writtenFor: 'a', live: 'b', told: false }).ok).toBe(false)
+    expect(grantOutcome({ writtenFor: 'a', live: 'b', told: true, pronoun: 'she' }).ok).toBe(false)
+    expect(grantOutcome({ writtenFor: 'a', live: 'b', told: false, pronoun: 'she' }).ok).toBe(false)
   })
 
   it('reports the ordinary undelivered case distinctly', () => {
-    const outcome = grantOutcome({ writtenFor: 'ada', live: 'ada', told: false })
+    const outcome = grantOutcome({ writtenFor: 'ada', live: 'ada', told: false, pronoun: 'she' })
     expect(outcome.ok).toBe(false)
     expect(outcome.ok === false && outcome.why).toContain('could not be told')
   })
@@ -52,10 +61,44 @@ describe('what the panel may claim after saving', () => {
     // They have different remedies -- one waits for a wake, the other is a
     // delivery fault worth reporting -- so a person must be able to tell them
     // apart from the sentence alone.
-    const mismatch = grantOutcome({ writtenFor: 'a', live: 'b', told: true })
-    const undelivered = grantOutcome({ writtenFor: 'a', live: 'a', told: false })
+    const mismatch = grantOutcome({ writtenFor: 'a', live: 'b', told: true, pronoun: 'she' })
+    const undelivered = grantOutcome({ writtenFor: 'a', live: 'a', told: false, pronoun: 'she' })
     expect(mismatch.ok === false && mismatch.why).not.toBe(
       undelivered.ok === false && undelivered.why,
     )
+  })
+})
+
+describe('the words it uses for her', () => {
+  it('takes the pronoun rather than assuming one', () => {
+    /*
+      Both sentences named a `she` while this function had no character in hand,
+      so a `he/him` character was told "she is still speaking as another
+      character". The pronoun is the smallest thing that makes the copy correct
+      without moving it away from the argument it states.
+    */
+    const mismatch = (pronoun: 'she' | 'he' | 'it') =>
+      grantOutcome({ writtenFor: 'a', live: 'b', told: true, pronoun })
+    expect(mismatch('he')).toEqual({
+      ok: false,
+      why: 'Saved. He is still speaking as another character, so it applies from his next wake.',
+    })
+    expect(mismatch('it')).toEqual({
+      ok: false,
+      why: 'Saved. It is still speaking as another character, so it applies from its next wake.',
+    })
+  })
+
+  it('uses it for the undelivered case too, which was the other missed one', () => {
+    const undelivered = (pronoun: 'she' | 'he' | 'it') =>
+      grantOutcome({ writtenFor: 'a', live: 'a', told: false, pronoun })
+    expect(undelivered('he')).toEqual({
+      ok: false,
+      why: 'Saved, but he could not be told just now — it applies from his next wake.',
+    })
+    expect(undelivered('it')).toEqual({
+      ok: false,
+      why: 'Saved, but it could not be told just now — it applies from its next wake.',
+    })
   })
 })

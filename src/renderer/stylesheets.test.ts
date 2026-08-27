@@ -199,9 +199,27 @@ describe('a class the renderer creates is a class something styles', () => {
   function classesCreatedBy(window: string): readonly string[] {
     const dir = fileURLToPath(new URL(`./${window}/`, import.meta.url))
     const made = new Set<string>()
-    for (const entry of readdirSync(dir)) {
-      if (!entry.endsWith('.ts') || entry.endsWith('.test.ts')) continue
-      const source = readFileSync(`${dir}${entry}`, 'utf8')
+    /*
+      The settings panes too, and at any depth.
+
+      The MIRROR check below already walks them, with a comment explaining that
+      they are authored beside the settings window and rendered INTO this one.
+      This half did not, and it is the half that catches the harmful direction —
+      a class on a real element with no rule anywhere, which is how `.sheet`
+      shipped six plates touching. Every class the panes create was invisible to
+      it: the two directions disagreed about what this window draws, and only
+      the forgiving one covered the newer files.
+
+      Non-recursive `readdirSync` was the other half of that: `panes.ts` became
+      a directory of one-pane-per-file, so even naming the folder would not have
+      been enough.
+    */
+    const paths = sourcesUnder(dir)
+    if (window === 'history') {
+      paths.push(...sourcesUnder(fileURLToPath(new URL('./settings/', import.meta.url))))
+    }
+    for (const path of paths) {
+      const source = readFileSync(path, 'utf8')
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^\s*\/\/.*$/gm, '')
       const found = [

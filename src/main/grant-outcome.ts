@@ -33,6 +33,9 @@
  * effect when it did not.
  */
 
+import { forPronoun, type Pronoun } from '@shared/pronoun'
+import { SAYS } from './says'
+
 /** What `settings:grant` gives back. Mirrors `SettingsWrite`. */
 export type GrantOutcome = { readonly ok: true } | { readonly ok: false; readonly why: string }
 
@@ -43,8 +46,20 @@ export function grantOutcome(input: {
   readonly live: string | null
   /** Whether the live session was successfully told. */
   readonly told: boolean
+  /**
+   * Which words to use for her.
+   *
+   * TAKEN, rather than reached for. This module decides what may honestly be
+   * claimed and the two sentences below are that decision — they belong here,
+   * beside the reasoning, and not in the caller. But they named a `she` while
+   * this function had no character in hand at all, so a `he/him` character got
+   * "she is still speaking as another character". The pronoun is the smallest
+   * thing that makes the copy correct without moving it away from the argument
+   * it states.
+   */
+  readonly pronoun: Pronoun
 }): GrantOutcome {
-  const { writtenFor, live, told } = input
+  const { writtenFor, live, told, pronoun } = input
 
   // No session at all. She is asleep or has never woken, and the next wake
   // reads this from disk — so the change is simply in force.
@@ -63,17 +78,11 @@ export function grantOutcome(input: {
     is the wrong character.
   */
   if (live !== writtenFor) {
-    return {
-      ok: false,
-      why: 'Saved. She is still speaking as another character, so it applies from her next wake.',
-    }
+    return { ok: false, why: forPronoun(SAYS.grantOtherCharacter, pronoun) }
   }
 
   if (!told) {
-    return {
-      ok: false,
-      why: 'Saved, but she could not be told just now — it applies from her next wake.',
-    }
+    return { ok: false, why: forPronoun(SAYS.grantNotTold, pronoun) }
   }
 
   return { ok: true }

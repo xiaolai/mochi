@@ -544,7 +544,18 @@ export function applyHearing(
     if (asked.length > MOST_LANGUAGES) {
       return {
         ok: false,
-        why: `Choose at most ${String(MOST_LANGUAGES)} languages, or none to let her work it out.`,
+        /*
+          PRONOUN-FREE, unlike the pane's version of this sentence.
+
+          This module is a pure checker with no character in hand, and the one
+          it used to name was always "her" — so a build worn as `he` refused in
+          the wrong words. Threading a pronoun through every checker here to
+          serve a message the pane already says first is the expensive way to
+          fix that; saying it without one is the honest way. The pane refuses
+          the same selection before a write is attempted and DOES have the
+          pronoun, so this is what a page bypassing the control gets.
+        */
+        why: `Choose at most ${String(MOST_LANGUAGES)} languages, or none at all to have the language worked out automatically.`,
       }
     }
     for (const one of asked) {

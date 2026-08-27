@@ -30,6 +30,15 @@ import { faceTile } from './sheet/face-tile'
 import { type ShelfHandlers } from './sheet/row'
 import { installLogStamp } from '@shared/log'
 import { SAYS } from './main-says'
+/*
+  The settings panes' own copy, aliased because this file already has a `SAYS`.
+
+  Imported rather than restated: the sentence about when a saved setting takes
+  effect is drawn in the hearing pane AND said in the message when one is saved,
+  and two copies of it is how one of them keeps saying "her" after the other is
+  fixed — which is the failure this whole sweep is about.
+*/
+import { SAYS as MACHINE_SAYS } from '../settings/panes-says'
 import {
   calEl,
   castEl,
@@ -594,7 +603,7 @@ const handlers: ShelfHandlers = {
         const result = await window.mochiHistory.wearFace(face)
         // Named, so the status line says which face went on. "Done" over eight
         // tiles that look alike at 56px says nothing anybody can check.
-        say(result.ok ? `${face} — look at her.` : result.why, !result.ok)
+        say(result.ok ? `${face}${forPronoun(SAYS.lookAtHer, saying())}` : result.why, !result.ok)
       } catch (error: unknown) {
         say(String(error), true)
       }
@@ -624,7 +633,7 @@ const handlers: ShelfHandlers = {
       // replacing who she is mid-sentence is a character switch without the
       // reconnect a character switch gets.
       text.trim() === ''
-        ? 'The system prompt is empty. She is still told her character.'
+        ? forPronoun(SAYS.promptNowEmpty, saying())
         : forPronoun(SAYS.saved, saying()),
     )
   },
@@ -1389,7 +1398,7 @@ const machineHandlers: PaneHandlers = {
     // screen changes and the setting does not reach the session she is in.
     void writeMachine(
       () => window.mochiSettings.hearing(change),
-      'Saved. It takes effect on her next wake.',
+      `Saved. ${forPronoun(MACHINE_SAYS.nextWake, saying())}`,
     )
   },
   grant: (change) => {
@@ -1421,9 +1430,7 @@ const machineHandlers: PaneHandlers = {
     */
     void writeMachine(
       () => window.mochiSettings.prompt(key, text),
-      text === null
-        ? 'Reset. It takes effect on her next wake.'
-        : 'Saved. It takes effect on her next wake.',
+      `${text === null ? 'Reset' : 'Saved'}. ${forPronoun(MACHINE_SAYS.nextWake, saying())}`,
     )
   },
   recheckCodex: async () => {

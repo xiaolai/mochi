@@ -107,7 +107,7 @@ export function readPrompt(userData: string): string {
   const read = readBounded(promptFile(userData))
   if (!read.ok) {
     if (read.reason.kind !== 'absent') {
-      console.error(`[prompt] ${logBoundedRead(read.reason)}; she is told nothing extra`)
+      console.error(`[prompt] ${logBoundedRead(read.reason)}; nothing extra is sent`)
       /*
         This one changes WHO SHE IS, which is the failure this project is least
         able to notice from the outside.
@@ -119,7 +119,10 @@ export function readPrompt(userData: string): string {
       problems.note(
         'prompt',
         null,
-        'her instructions could not be read; she is running without them',
+        // Pronoun-free: a store module reading a file has no character in hand,
+        // and loading the persona catalogue to word an error would couple this
+        // to the thing it is a dependency of. `says.ts` states the rule.
+        'the system prompt could not be read, so it is not being used',
       )
     }
     return ''

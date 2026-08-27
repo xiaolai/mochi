@@ -20,6 +20,33 @@ import type { ByPronoun } from '@shared/pronoun'
  * same words whoever is worn.
  */
 export const SAYS = {
+  /* The system prompt box's hint, drawn while it is empty. */
+  promptEmpty: {
+    she: 'Empty. She is still told her character, what she remembers and what she can do — this is prose of your own, above all of it.',
+    he: 'Empty. He is still told his character, what he remembers and what he can do — this is prose of your own, above all of it.',
+    it: 'Empty. It is still told its character, what it remembers and what it can do — this is prose of your own, above all of it.',
+  },
+  /* The name field's hint. It shows for one keystroke when the name is cleared
+     before `change` puts it back, which is the only time anybody sees it. */
+  namePlaceholder: { she: 'her name', he: 'his name', it: 'its name' },
+  /* The size section: its heading, its reading, and the way back. */
+  sizeHeading: { she: 'Her size', he: 'His size', it: 'Its size' },
+  sizeOwn: { she: 'Use her own size', he: 'Use his own size', it: 'Use its own size' },
+  sizeAsFaceAsks: {
+    she: 'as her face asks for',
+    he: 'as his face asks for',
+    it: 'as its face asks for',
+  },
+  sizeYours: {
+    she: 'yours, not her face’s',
+    he: 'yours, not his face’s',
+    it: 'yours, not its face’s',
+  },
+  /* The tail of a mood tile's tooltip: "See happy" + this. A SUFFIX, which is
+     the shape `everythingOf` already uses in the settings copy — the variable
+     sits in the middle of the sentence and a slot mechanism for one string
+     would be a second way of doing this. */
+  seeMoodOn: { she: ' on her', he: ' on him', it: ' on it' },
   noFile: {
     she: 'the built-in, with no file of her own',
     he: 'the built-in, with no file of his own',

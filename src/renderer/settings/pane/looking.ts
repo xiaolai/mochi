@@ -36,7 +36,7 @@ export const LOOKING: Pane = {
     // `tokens.css` reads `:placeholder-shown`, and an empty box with nothing in
     // it does not say what it is for either. Never reachable in practice: the
     // workspace always resolves to at least the default.
-    workspace.placeholder = 'a folder she may read'
+    workspace.placeholder = forPronoun(SAYS.workspacePlaceholder, view.pronoun)
     workspace.value = view.lookup.workspace
     workspace.spellcheck = false
     workspace.addEventListener('change', () => {

@@ -80,6 +80,18 @@ export const SAYS = {
     he: 'Nothing has been kept yet. Conversations appear here once he has been awake and his conversations are being saved.',
     it: 'Nothing has been kept yet. Conversations appear here once it has been awake and its conversations are being saved.',
   },
+  /* Said after a face is worn from the mood tiles. The face's own name comes
+     first — "Done" over eight tiles that look alike at 56px says nothing
+     anybody can check — and this is the tail. */
+  lookAtHer: { she: ' — look at her.', he: ' — look at him.', it: ' — look at it.' },
+  /* Said when the system prompt is saved with nothing in it. What actually
+     happens, rather than "Saved": the document is empty and the character is
+     still assembled from everything else. */
+  promptNowEmpty: {
+    she: 'The system prompt is empty. She is still told her character.',
+    he: 'The system prompt is empty. He is still told his character.',
+    it: 'The system prompt is empty. It is still told its character.',
+  },
   machineIsFor: {
     she: 'Who she is is on the Cast tab. This holds only what is true whoever is worn.',
     he: 'Who he is is on the Cast tab. This holds only what is true whoever is worn.',

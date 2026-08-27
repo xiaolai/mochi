@@ -76,7 +76,15 @@ export function applyChange(
     ) {
       return {
         ok: false,
-        why: `Her size has to be between ${String(SIZE_BAND.min)} and ${String(SIZE_BAND.max)}.`,
+        /*
+          PRONOUN-FREE. This is a pure checker with no character in hand -- it
+          takes a `PersonaChange` and a band -- and the sentence named a `she`,
+          so a `he/him` character was refused in the wrong words. `applyHearing`
+          settled the rule this follows: say it without a pronoun rather than
+          assume one, and let the pane, which has `view.pronoun`, do the wording
+          where a pronoun actually belongs.
+        */
+        why: `The size has to be between ${String(SIZE_BAND.min)} and ${String(SIZE_BAND.max)}.`,
       }
     } else {
       next = { ...next, size: change.size }

@@ -186,7 +186,7 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
   // What it is FOR, in the window rather than in the file. Markdown has no
   // comment a model cannot read, so anything put in the document to explain it
   // would be text she is handed — see `store/prompt.ts`.
-  editor.placeholder = `Empty. She is still told her character, what she remembers and what she can do — this is prose of your own, above all of it.\n\nSlots move a piece instead of leaving it where it goes: ${view.prompt.slots.map((one) => `{${one}}`).join(' ')} and {name}.`
+  editor.placeholder = `${forPronoun(SAYS.promptEmpty, view.pronoun)}\n\nSlots move a piece instead of leaving it where it goes: ${view.prompt.slots.map((one) => `{${one}}`).join(' ')} and {name}.`
 
   const sent = element('div', 'wake-box')
   const body = element('pre')

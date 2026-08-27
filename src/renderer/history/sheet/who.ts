@@ -38,7 +38,7 @@ export function whoBand(
   // Her name can be cleared to nothing in the field before it is put back on
   // `change`, and the h1 has no box of its own — so without this there is one
   // keystroke of a pane with nothing on it. See the field rule in `tokens.css`.
-  name.placeholder = 'her name'
+  name.placeholder = forPronoun(SAYS.namePlaceholder, view.pronoun)
   name.value = worn.name
   name.addEventListener('change', () => {
     if (name.value.trim() === worn.name) {

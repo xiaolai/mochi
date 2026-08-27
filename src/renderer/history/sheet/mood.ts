@@ -121,7 +121,7 @@ export function moodSection(
     tryIt.type = 'button'
     // What it DOES. The name under it is what the expression is called; a
     // tooltip repeating that would tell nobody anything they cannot see.
-    tryIt.title = `See ${emotion} on her`
+    tryIt.title = `See ${emotion}${forPronoun(SAYS.seeMoodOn, view.pronoun)}`
     tryIt.append(faceTile(worn.face, 56, emotion))
     tryIt.addEventListener('click', () => {
       handlers.tryFace(emotion)

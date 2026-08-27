@@ -28,9 +28,14 @@
  */
 import { element } from '../../element'
 import { type Pane } from '../pane'
+import { SAYS } from '../panes-says'
 export const PROMPTS: Pane = {
   id: 'prompts',
-  label: 'What she is told',
+  // A TABLE, because the name has a pronoun in it. It was the one pane label
+  // that did and it was a bare string, so this group was called "What she is
+  // told" whoever was worn — see `panes-says.ts`, whose header says in so many
+  // words that group names are kept there for exactly this.
+  label: SAYS.promptsLabel,
   attention: (view) => {
     // The count of prompts whose required phrasing has gone, because that is
     // the one state here somebody would want chasing. Edited-but-fine is not a
@@ -62,7 +67,7 @@ export const PROMPTS: Pane = {
         a selection back — that would delete what was typed — so it holds the
         Save button instead and says why.
       */
-      const overLong = element('p', 'note alarm')
+      const overLong = element('p', 'note bad')
       overLong.hidden = true
       const tooLong = (value: string): boolean =>
         one.limit !== undefined && value.length > one.limit
@@ -80,7 +85,14 @@ export const PROMPTS: Pane = {
         nodes.push(
           element(
             'p',
-            'note alarm',
+            // `bad`, not `alarm`. Nothing has ever styled `.alarm` — the
+            // stylesheet's warning variant is `.note.bad` — so this warning,
+            // which is the entire visible half of the `requires` mechanism, has
+            // rendered as ordinary grey body text since it was written. Two
+            // names for one thing, and this pane picked the one that does not
+            // exist. `stylesheets.test.ts` now walks these files, which is what
+            // turned it up.
+            'note bad',
             `This no longer mentions ${one.missing.join(', ')}, which the code that reads it depends on.`,
           ),
         )

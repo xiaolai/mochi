@@ -52,6 +52,7 @@ import {
 } from '@shared/ipc'
 import { type HistoryExport, type ShelfView } from '@shared/history-window'
 import { forPronoun, type Pronoun } from '@shared/pronoun'
+import { SAYS } from './says'
 import { CAPABILITIES } from '../capabilities'
 import { createLedger, type AnswerFrame } from './capability/ledger'
 import { handleCall } from './capability/dispatch'
@@ -910,7 +911,7 @@ async function rewriteNote(personaId: string): Promise<void> {
     // path, and an unhandled rejection there is an unhandled rejection in going
     // to sleep.
     console.error('[summary] the note could not be rewritten:', error)
-    problems.note('memory', personaId, `her note could not be rewritten: ${String(error)}`)
+    problems.note('memory', personaId, `the note could not be rewritten: ${String(error)}`)
   } finally {
     rewritingNote = false
     if (scratch !== null) {
@@ -961,8 +962,8 @@ let carriedPolicies: ReadonlyMap<string, Policy> = new Map()
 function catalogue(userData: string): PersonaCatalog {
   const { edits, problem } = readEdits(userData)
   if (problem !== null) {
-    console.error(`[persona] her own edits could not be read: ${problem}`)
-    problems.note('persona', null, `her own edits could not be read: ${problem}`)
+    console.error(`[persona] the character edits could not be read: ${problem}`)
+    problems.note('persona', null, `the character edits could not be read: ${problem}`)
   }
   const loaded = loadPersonas(userData, edits)
   carriedPolicies = loaded.carriedPolicies
@@ -2858,14 +2859,14 @@ ipcMain.handle('shelf:memory', (_event, action: unknown): SettingsWrite => {
   const shown = (action as { id?: unknown }).id
   if (typeof shown !== 'string') return refuse('That does not name a character.')
   if (shown !== worn) {
-    return refuse('That was for a different character — she has changed since. Have another look.')
+    return refuse(forPronoun(SAYS.characterChanged, wornPronoun(userData)))
   }
 
   if (kind === 'restore') {
     const previous = previousNote(userData, worn)
     // Null means nothing has ever been rewritten — there is no version to go
     // back to, which is different from going back to an empty one.
-    if (previous === null) return refuse('There is no earlier version of her notes to go back to.')
+    if (previous === null) return refuse(forPronoun(SAYS.noPreviousNote, wornPronoun(userData)))
     try {
       remember(userData, worn, previous)
     } catch (error: unknown) {
@@ -2881,8 +2882,10 @@ ipcMain.handle('shelf:memory', (_event, action: unknown): SettingsWrite => {
   // `remember` treats an unchanged write as nothing to do — but a note that is
   // already empty and readable has nothing to clear either, so say so.
   const held = recallState(userData, worn)
-  if (!held.ok) return refuse(`Her notes could not be read, so they were left alone: ${held.why}`)
-  if (held.notes === '') return refuse('There is nothing in her notes to forget.')
+  if (!held.ok) {
+    return refuse(`${forPronoun(SAYS.notesUnreadable, wornPronoun(userData))}${held.why}`)
+  }
+  if (held.notes === '') return refuse(forPronoun(SAYS.nothingToForget, wornPronoun(userData)))
   try {
     remember(userData, worn, '')
   } catch (error: unknown) {
@@ -2962,7 +2965,7 @@ ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
     // The built-in has no file to remove. Refused with a sentence rather than
     // left to throw one, and pointed at the thing somebody actually wants.
     if (catalog.sources.get(asked.id) === undefined) {
-      return refuse('The built-in cannot be deleted. Put her back as she ships instead.')
+      return refuse(forPronoun(SAYS.builtInStays, wornPronoun(userData)))
     }
     try {
       deletePersona(userData, catalog, asked.id, transcripts())
@@ -3113,7 +3116,11 @@ ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
     told = tellTheSession()
   } catch (error: unknown) {
     console.error('[grants] saved, but the live session could not be told:', error)
-    problems.note('settings', asked.id, `saved, but she was not told: ${String(error)}`)
+    problems.note(
+      'settings',
+      asked.id,
+      `${forPronoun(SAYS.notTold, wornPronoun(app.getPath('userData')))}${String(error)}`,
+    )
     told = false
   }
   /*
@@ -3126,7 +3133,12 @@ ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
     `told` is true, and the capability keeps running -- and the window said the
     change was in force. See `grant-outcome.ts`.
   */
-  const outcome = grantOutcome({ writtenFor, live: sessionPersona, told })
+  const outcome = grantOutcome({
+    writtenFor,
+    live: sessionPersona,
+    told,
+    pronoun: wornPronoun(app.getPath('userData')),
+  })
   if (!outcome.ok) return refuse(outcome.why)
   return { ok: true }
 })
@@ -3315,7 +3327,7 @@ ipcMain.handle('shelf:wear-face', (_event, face: unknown): SettingsWrite => {
   if (companion === null || companion.isDestroyed()) {
     // The same answer the capability gives, for the same reason: a success
     // reported over a window that is not there is a face nobody can see.
-    return refuse('She is not on screen just now, so there is nothing to put a face on.')
+    return refuse(forPronoun(SAYS.notOnScreen, wornPronoun(app.getPath('userData'))))
   }
   companion.webContents.send('voice:send', { type: '__mochi_face__', face })
   console.log(`[face] trying ${face} on from the shelf`)
@@ -3518,7 +3530,7 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
     const shown = (action as { id?: unknown }).id
     if (typeof shown !== 'string') return no('That does not name a character.')
     if (shown !== worn) {
-      return no('That was for a different character — she has changed since. Have another look.')
+      return no(forPronoun(SAYS.characterChanged, wornPronoun(app.getPath('userData'))))
     }
   }
 

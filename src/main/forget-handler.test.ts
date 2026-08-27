@@ -39,7 +39,17 @@ describe('before it deletes anything', () => {
     */
     expect(HANDLER).toContain('shown !== worn')
     const refusal = HANDLER.slice(HANDLER.indexOf('shown !== worn'))
-    expect(refusal.slice(0, 300)).toContain('a different character')
+    /*
+      The SAYS key, not the prose it resolves to.
+
+      This read the sentence verbatim and broke when the wording moved into
+      `says.ts` to be given a phrasing per pronoun. That was the assertion
+      pinning the wrong thing: what has to hold is that the refusal names the
+      character mismatch, and the key names it more durably than the sentence
+      did — a reword now changes one table entry instead of failing a test in
+      another file.
+    */
+    expect(refusal.slice(0, 300)).toContain('SAYS.characterChanged')
     // And the refusal comes before anything is touched.
     expect(HANDLER.indexOf('shown !== worn')).toBeLessThan(HANDLER.indexOf('transcripts()'))
   })

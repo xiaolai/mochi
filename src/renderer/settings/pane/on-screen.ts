@@ -72,7 +72,10 @@ export const ON_SCREEN: Pane = {
       rest,
       view.screen.sleepAfterChoices.map((minutes) => ({
         value: String(minutes),
-        label: minutes === 0 ? 'never on her own' : `after ${String(minutes)} minutes`,
+        label:
+          minutes === 0
+            ? forPronoun(SAYS.restsNever, view.pronoun)
+            : `after ${String(minutes)} minutes`,
       })),
       String(view.screen.sleepAfterMinutes),
     )

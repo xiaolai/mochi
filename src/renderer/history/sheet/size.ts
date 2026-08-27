@@ -1,5 +1,7 @@
 import { element } from '../../element'
 import { type ShelfHandlers, section } from './row'
+import { forPronoun } from '@shared/pronoun'
+import { SAYS } from '../shelf-says'
 import type { ShelfCharacter, ShelfView } from '@shared/history-window'
 
 /**
@@ -47,7 +49,7 @@ export function sizeSection(
     handlers.save({ id: worn.id, size: Number(slider.value) })
   })
 
-  const back = element('button', 'btn', 'Use her own size')
+  const back = element('button', 'btn', forPronoun(SAYS.sizeOwn, view.pronoun))
   back.type = 'button'
   // Absent when she has not disagreed with it: a button that undoes nothing is
   // a button somebody has to work out the meaning of.
@@ -60,8 +62,8 @@ export function sizeSection(
   row.append(slider, reading)
 
   return section(
-    'Her size',
-    chosen === null ? 'as her face asks for' : 'yours, not her face’s',
+    forPronoun(SAYS.sizeHeading, view.pronoun),
+    forPronoun(chosen === null ? SAYS.sizeAsFaceAsks : SAYS.sizeYours, view.pronoun),
     row,
     back,
   )

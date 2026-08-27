@@ -24,6 +24,8 @@
  */
 import { element } from '../../element'
 import { type Pane } from '../pane'
+import { forPronoun } from '@shared/pronoun'
+import { SAYS } from '../panes-says'
 import { field } from '../pane'
 export const HEARING: Pane = {
   id: 'hearing',
@@ -51,7 +53,7 @@ export const HEARING: Pane = {
       if (picked.length > view.hearing.most) {
         for (const option of languages.options) option.selected = chosen.has(option.value)
         handlers.say(
-          `Choose at most ${String(view.hearing.most)} languages, or none to let her work it out.`,
+          `Choose at most ${String(view.hearing.most)}${forPronoun(SAYS.tooManyLanguages, view.pronoun)}`,
           true,
         )
         return
@@ -64,15 +66,13 @@ export const HEARING: Pane = {
       element(
         'p',
         'note',
-        chosen.size === 0
-          ? 'Nothing chosen, so she works out the language herself. Choose only languages that are actually spoken here — a hint for one nobody uses makes the transcript worse, not better.'
-          : 'A hint, not a restriction. Anything else spoken is still transcribed; these are what she expects.',
+        forPronoun(chosen.size === 0 ? SAYS.noLanguages : SAYS.someLanguages, view.pronoun),
       ),
     )
     // Said plainly, because nothing on screen changes when this is saved. The
     // voice locks after her first audio, so the configuration is re-sent on the
     // next session rather than to this one.
-    parts.push(element('p', 'note', 'Takes effect on her next wake.'))
+    parts.push(element('p', 'note', forPronoun(SAYS.nextWake, view.pronoun)))
     return parts
   },
 }

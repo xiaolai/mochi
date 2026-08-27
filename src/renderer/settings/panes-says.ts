@@ -74,6 +74,55 @@ export const SAYS = {
   /* Under the keys, and it says what a reset actually does — deleting the
      stored answer rather than writing today's default in, so the key keeps
      tracking whatever later releases ship. */
+  /* The prompts group's own name. It was the one pane label with a pronoun in
+     it and it was a bare string, so a character worn as `he` or `it` was
+     offered "What she is told" in the nav -- the failure `SettingsView.pronoun`
+     describes, in the one place this file exists to prevent it. */
+  promptsLabel: {
+    she: 'What she is told',
+    he: 'What he is told',
+    it: 'What it is told',
+  },
+  /* Said when the pane refuses a selection before main is asked. Main refuses
+     it again in words of its own, and deliberately pronoun-free: `applyHearing`
+     is a pure checker with no character in hand, and this is the sentence
+     somebody actually sees. */
+  tooManyLanguages: {
+    she: ' languages, or none to let her work it out.',
+    he: ' languages, or none to let him work it out.',
+    it: ' languages, or none to let it work it out.',
+  },
+  noLanguages: {
+    she:
+      'Nothing chosen, so she works out the language herself. Choose only languages that are ' +
+      'actually spoken here — a hint for one nobody uses makes the transcript worse, not better.',
+    he:
+      'Nothing chosen, so he works out the language himself. Choose only languages that are ' +
+      'actually spoken here — a hint for one nobody uses makes the transcript worse, not better.',
+    it:
+      'Nothing chosen, so it works out the language itself. Choose only languages that are ' +
+      'actually spoken here — a hint for one nobody uses makes the transcript worse, not better.',
+  },
+  someLanguages: {
+    she: 'A hint, not a restriction. Anything else spoken is still transcribed; these are what she expects.',
+    he: 'A hint, not a restriction. Anything else spoken is still transcribed; these are what he expects.',
+    it: 'A hint, not a restriction. Anything else spoken is still transcribed; these are what it expects.',
+  },
+  /* Used by the hearing pane and by the two prompt messages. Nothing on screen
+     changes when one of those is saved, so saying when it lands is the whole
+     message rather than a footnote to it. */
+  nextWake: {
+    she: 'It takes effect on her next wake.',
+    he: 'It takes effect on his next wake.',
+    it: 'It takes effect on its next wake.',
+  },
+  /* The `0` answer in the rest timer, which is a decision rather than a
+     duration -- and the only option in that list with a pronoun in it. */
+  restsNever: {
+    she: 'never on her own',
+    he: 'never on his own',
+    it: 'never on its own',
+  },
   keysReset: {
     she:
       'Reset gives a key back to what the app ships, and keeps it there: it stops being a ' +
