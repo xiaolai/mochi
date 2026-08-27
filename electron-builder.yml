@@ -120,10 +120,35 @@ mac:
   # electron-builder finds it; naming it here would pin a build to one developer's
   # keychain and break on everybody else's.
   #
-  # Notarization: OFF until somebody decides to submit. Turning it on means
-  # setting `notarize: {teamId: ...}` here and storing a keychain profile with
-  # `xcrun notarytool store-credentials`. Nothing in a build script should upload
-  # a binary to Apple as a side effect of `pnpm dist`.
+  # Notarization: OFF until somebody decides to submit, and that decision is
+  # deliberately not a side effect of running a build script — submitting
+  # uploads the binary to Apple.
+  #
+  # Everything that CAN be prepared without making that decision has been.
+  # The team id is NOT written here, and that is deliberate rather than an
+  # omission: it identifies whoever signs this build, it is different for
+  # everybody who forks it, and a value committed once is a value that stays in
+  # the history of a public repository. Read it off the machine that will do the
+  # signing instead — it is the parenthesised string in the identity name:
+  #
+  #     security find-identity -v -p codesigning
+  #     #   1) ABC123... "Developer ID Application: Your Name (TEAMID1234)"
+  #
+  # Then, with that value:
+  #
+  #     xcrun notarytool store-credentials mochi \
+  #       --apple-id <your Apple ID> --team-id <TEAMID> --password <app-specific password>
+  #
+  # and replace the line below with:
+  #
+  #     notarize: { teamId: <TEAMID> }
+  #
+  # The app-specific password is made at appleid.apple.com and is the one part
+  # nobody else can do for you, which is why this line is still `false`.
+  #
+  # Nothing ships quietly in the meantime: `scripts/verify-signing.sh` fails on a
+  # missing stapled ticket and tells `Notarized Developer ID` apart from
+  # `Unnotarized Developer ID`, and exits non-zero — measured.
   notarize: false
 
 dmg:
