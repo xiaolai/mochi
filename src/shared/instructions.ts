@@ -22,7 +22,15 @@ import { EMOTIONS } from './avatar'
  * for one.
  */
 const CATALOGUE: readonly PromptSpec[] = promptsFor([])
-const defaultPrompts: Prompts = (key) => CATALOGUE.find((spec) => spec.key === key)?.text ?? ''
+/**
+ * The wording this build ships, for a caller that wants exactly that.
+ *
+ * EXPORTED and named, rather than being a default nobody types. As a default it
+ * was reached by omission, which is how four prompts stayed editable and unread
+ * for the length of this build — see `instructionsFor`'s `prompts` parameter.
+ */
+export const SHIPPED_PROMPTS: Prompts = (key) =>
+  CATALOGUE.find((spec) => spec.key === key)?.text ?? ''
 /** What a fence tag may be. See `fenced`. */
 const TAG_SHAPE = /^[a-z]+$/
 
@@ -103,6 +111,31 @@ export function instructionsFor(
   persona: Persona,
   memory: string,
   /**
+   * What each catalogued prompt currently says. See `@shared/prompts`.
+   *
+   * REQUIRED, and third, which is why it sits ahead of two parameters that read
+   * as more important. It was defaulted to the catalogue's own text on the same
+   * argument `brief` and `template` carry — that a test with no opinion about
+   * wording should say nothing — and the comment claimed *"the two callers that
+   * matter build it from what is on disk."* Neither did. `whatSheMayDo` passed
+   * `undefined` here and called `grantsNotice` bare, so every override of
+   * `notes.heading`, `notes.fence`, `grants.heading` and `grants.notice` was
+   * saved to `prompts.json` and discarded on the way to the model.
+   *
+   * The asymmetry with `brief` is the whole reason this one cannot be
+   * defaulted. An omitted brief produces a visibly shorter prompt; an omitted
+   * resolver produces a prompt that looks exactly right and is silently not the
+   * one somebody configured. `notes.fence` is the sentence telling her the
+   * notes block is DATA rather than instructions — the boundary against content
+   * a MODEL wrote — so the invisible failure was on the one string here whose
+   * whole job is to be load-bearing.
+   *
+   * `SHIPPED_PROMPTS` is what a caller passes when it genuinely wants the
+   * wording this build ships. Saying so is the point: it is a sentence in the
+   * call rather than an absence nobody reads.
+   */
+  prompts: Prompts,
+  /**
    * What happened the last time they spoke. Built by `main/memory/brief.ts`.
    *
    * DEFAULTED, unlike `memory`, and the asymmetry is deliberate. The argument
@@ -126,15 +159,6 @@ export function instructionsFor(
    * says nothing.
    */
   template: string = '',
-  /**
-   * What each catalogued prompt currently says. See `@shared/prompts`.
-   *
-   * DEFAULTED to the catalogue's own text, so every test that has no opinion
-   * about wording says nothing — the same asymmetry `brief` and `template`
-   * already carry, and for the same reason. The two callers that matter build
-   * it from what is on disk.
-   */
-  prompts: Prompts = defaultPrompts,
 ): string {
   /*
     Each piece once: at its slot if the document names one, at its default

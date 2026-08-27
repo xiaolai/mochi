@@ -787,9 +787,12 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
       confirming = null
       window.mochi.report({
         kind: 'note',
+        // Pronoun-free, for the reason `companion/main.ts` gives at its own
+        // `report` call: this is drawn in the Troubles drawer and nothing here
+        // knows which words the worn character takes.
         text:
-          'NOT CONFIGURED: no session.updated came back, so she is running on the ' +
-          "service's defaults — no instructions, no voice of hers, server_vad. " +
+          'NOT CONFIGURED: no session.updated came back, so this session is running on ' +
+          "the service's defaults — no instructions, no chosen voice, server_vad. " +
           'An `error` frame above says which field was refused.',
       })
     }, CONFIRM_MS)

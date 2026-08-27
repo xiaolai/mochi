@@ -2076,6 +2076,7 @@ ipcMain.handle('voice:config', () => {
     },
     resting: () => resting,
     tools: toolsNow,
+    prompts: promptsNow,
     transcripts,
     problemCount: () => problems.count(),
     now: () => Date.now(),
@@ -2576,6 +2577,12 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     readGrants(userData, worn.id, legacyGrants(userData)),
     toolsNow(),
     prompt,
+    '',
+    // The SAME resolver the wire uses. This card's whole claim is that it shows
+    // what she will be told, and reading the shipped wording here while the
+    // session read the edited wording is precisely the disagreement it exists
+    // to rule out.
+    promptsNow(),
   )
   return {
     face: resolveFaceFor(
@@ -3263,6 +3270,10 @@ function tellTheSession(): boolean {
     toolsNow(),
     readPrompt(userData),
     sessionBriefing,
+    // Read at CALL time, like every other reader in this file: a rewritten
+    // grants notice reaches the live session on the next grant change rather
+    // than on the next relaunch.
+    promptsNow(),
   )
   companion.webContents.send('voice:send', {
     type: '__mochi_grants__',

@@ -78,7 +78,7 @@ export function listAvatars(avatarsFolder: string): readonly SettingsAvatar[] {
   }
   // The built-in first, and as `null`: that is literally what a persona stores
   // for "the shipped face", so there is nothing to translate on the way back.
-  return [{ id: null, builtIn: true }, ...names.map((id) => ({ id, builtIn: false }))]
+  return [{ id: null }, ...names.map((id) => ({ id }))]
 }
 
 /** The personas on the shelf, in a shape a page can draw and nothing more. */
@@ -262,7 +262,7 @@ export function listKeys(
   }[],
   /** What each key does, in this interface's words for whoever is worn. */
   what: Readonly<Record<string, string>>,
-  /** What the app ships for each, so the pane can offer a reset. */
+  /** What the app ships for each, so `edited` can be decided here. */
   shipped: Readonly<Record<string, string>>,
 ): readonly SettingsKey[] {
   return outcomes.map((one) => ({
@@ -270,10 +270,9 @@ export function listKeys(
     what: what[one.id] ?? one.id,
     accelerator: one.accelerator,
     refused: one.refused,
-    // The id's own default, and `accelerator` when there is none — an id this
-    // build does not ship is already showing itself as its own label above, and
-    // a reset button pointing at `undefined` would be a button that unbinds it.
-    shipped: shipped[one.id] ?? one.accelerator,
+    // Against the id's own default, falling back to what it is bound to — an
+    // id this build does not ship cannot be edited away from a default it does
+    // not have, and `true` there would offer a reset that unbinds it.
     edited: one.accelerator !== (shipped[one.id] ?? one.accelerator),
   }))
 }

@@ -94,7 +94,6 @@ export interface PromptRow {
   readonly title: string
   readonly purpose: string
   readonly text: string
-  readonly fallback: string
   readonly edited: boolean
   /**
    * Required phrases this override has dropped.
@@ -128,7 +127,6 @@ export function promptRows(
       title: spec.title,
       purpose: spec.purpose,
       text,
-      fallback: spec.text,
       edited: override !== undefined,
       missing: missingFrom(spec, text),
       ...(spec.limit === undefined ? {} : { limit: spec.limit }),

@@ -508,16 +508,15 @@ export interface SettingsKey {
   /** Null when this application has it. The reason, when it does not. */
   readonly refused: string | null
   /**
-   * What the app ships for this key.
+   * Whether somebody has chosen this one, rather than it being what ships.
    *
-   * Sent so the pane can offer a reset and know whether to enable it, without
-   * holding a second copy of the defaults — `SettingsScreen.haloChoices` is
-   * sent for the same reason, and it is the same failure: a page with its own
-   * list is a second answer, and only one of the two is checked on the way
-   * back.
+   * The pane reads this and nothing else about the default: a reset sends
+   * `null`, which DELETES the stored answer, so the window never needs to know
+   * the combination it goes back to. This carried a `shipped` field beside it
+   * for exactly one commit, read by nothing — which is the defect
+   * `nothing-written-goes-unread.test.ts` exists to catch, arriving in the
+   * change that added the test.
    */
-  readonly shipped: string
-  /** Whether somebody has chosen this one, rather than it being what ships. */
   readonly edited: boolean
 }
 
@@ -642,7 +641,6 @@ export interface SettingsPersona {
  */
 export interface SettingsAvatar {
   readonly id: string | null
-  readonly builtIn: boolean
 }
 
 /**
@@ -852,8 +850,6 @@ export interface SettingsPrompt {
   readonly purpose: string
   /** What is sent today — the override when there is one, the default otherwise. */
   readonly text: string
-  /** What the app ships, so the pane can show the difference and offer a reset. */
-  readonly fallback: string
   readonly edited: boolean
   /**
    * Required phrases this override has dropped.

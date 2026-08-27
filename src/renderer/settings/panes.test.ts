@@ -55,7 +55,6 @@ function settled(): SettingsView {
         what: 'Let her rest',
         accelerator: 'Control+Shift+L',
         refused: null,
-        shipped: 'Control+Shift+L',
         edited: false,
       },
       {
@@ -63,7 +62,6 @@ function settled(): SettingsView {
         what: 'Hide her',
         accelerator: 'Control+Shift+M',
         refused: null,
-        shipped: 'Control+Shift+M',
         edited: false,
       },
     ],
@@ -187,7 +185,6 @@ describe('the dot, and what it is for', () => {
           what: 'Hide her',
           accelerator: 'Control+Shift+M',
           refused: 'another application already has it',
-          shipped: 'Control+Shift+M',
           edited: false,
         },
       ],

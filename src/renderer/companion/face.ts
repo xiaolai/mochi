@@ -953,7 +953,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
           kind: 'note',
           text:
             `[bubble] sides ${sides.available.join(',') || 'none'} · using ${sides.using} · ` +
-            `her ${sides.from.her} · box ${sides.from.box} · room ${sides.from.room}`,
+            `body ${sides.from.body} · box ${sides.from.box} · room ${sides.from.room}`,
         })
       }
     }

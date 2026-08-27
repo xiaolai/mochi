@@ -12,6 +12,7 @@ import { legacyGrants, readTranscriptionLanguages, readWornPersonaId } from '../
 import type { Transcripts } from '../store/transcripts'
 import type { Conversation } from '../store/conversation'
 import type { WireTool } from '@shared/capability/registry'
+import type { Prompts } from '@shared/grants'
 import { whatSheMayDo } from '../what-she-may-do'
 import { briefFor, resumeFor } from '../memory/brief'
 
@@ -83,6 +84,14 @@ export interface SessionConfigDeps {
    * text.
    */
   readonly tools: () => readonly WireTool[]
+  /**
+   * What each catalogued prompt currently says. See `@shared/prompts`.
+   *
+   * A THUNK, for `tools`' reason: these are editable and read from disk, so
+   * capturing them at wiring time would make an edit land on the next relaunch
+   * rather than on the next wake.
+   */
+  readonly prompts: () => Prompts
   /** The archive, or null when it is not open. */
   readonly transcripts: () => Transcripts | null
   readonly problemCount: () => number
@@ -287,6 +296,7 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
     deps.tools(),
     readPrompt(userData),
     brief,
+    deps.prompts(),
   )
   deps.log(
     `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars, bubble ${resolved.persona.bubble ? 'on' : 'off'}`,

@@ -186,6 +186,44 @@ describe('the renderer resolves every gendered wording', () => {
   })
 })
 
+describe('the companion says nothing to a person that is worded for one pronoun', () => {
+  /*
+    The companion draws to a canvas and its literals are log lines, SVG ids and
+    CSS variable names — which is why it is not read whole, the way the shell
+    windows are. It was left out entirely on that reasoning, and the reasoning
+    was wrong: `window.mochi.report({ kind: 'note', text })` reaches `problems`,
+    and the conversations window draws every one of those in the Troubles
+    drawer. Two of them were sentences about her.
+
+    So the sink is checked rather than the file. And the rule here is the stores'
+    rather than the windows': `SessionConfig` carries no pronoun, so this process
+    cannot resolve one, and putting a field on every session to word two
+    diagnostics is the wrong trade. Pronoun-free is the fix.
+  */
+  const REPORT =
+    /report\(\s*\{[^}]*?\btext:\s*((?:'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\s*\+\s*)+)/gs
+  const files = filesUnder(`${SRC}renderer/companion/`)
+
+  it('finds the reports it is checking', () => {
+    const found = files.flatMap((path) => [...code(path).matchAll(REPORT)])
+    // A pattern that matched nothing would pass every assertion below while
+    // reading not one call.
+    expect(found.length).toBeGreaterThan(2)
+  })
+
+  it.each(files.map((path) => [path.slice(SRC.length), path]))('%s', (_name, path) => {
+    const found: string[] = []
+    for (const match of code(path).matchAll(REPORT)) {
+      const text = match[1] ?? ''
+      if (GENDERED.test(text) && !exempt(undefined, text)) found.push(text.slice(0, 90))
+    }
+    expect(
+      [...new Set(found)],
+      'a note drawn in the Troubles drawer, worded for one pronoun — the companion has no pronoun to resolve, so word it without one',
+    ).toEqual([])
+  })
+})
+
 describe('main says nothing to a person that is worded for one pronoun', () => {
   /*
     Main is scanned by SINK rather than whole, and here that is right rather

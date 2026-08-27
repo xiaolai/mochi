@@ -313,7 +313,11 @@ async function open(): Promise<void> {
   if (unreadable.length > 0) {
     window.mochi.report({
       kind: 'note',
-      text: `her colour was refused and the built-in used instead — ${unreadable.join('; ')}`,
+      // PRONOUN-FREE. This reaches the Troubles drawer through `report`, so it
+      // is read by a person — and the companion has no pronoun to resolve:
+      // `SessionConfig` does not carry one, and adding a field to every session
+      // to word two diagnostics is the wrong trade. `says.ts` states the rule.
+      text: `the character's colour was refused and the built-in used instead — ${unreadable.join('; ')}`,
     })
   }
   face.wear(next.face)

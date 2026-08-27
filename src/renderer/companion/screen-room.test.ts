@@ -153,7 +153,7 @@ describe('which sides a bubble would fit on', () => {
     // than reproduced.
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 1200, screenY: 600 })
     const from = sidesFor(BOX, 'auto')?.from
-    expect(from?.her).toMatch(/^\d+(\.\d+)?,\d+(\.\d+)?\s\d+x\d+$/)
+    expect(from?.body).toMatch(/^\d+(\.\d+)?,\d+(\.\d+)?\s\d+x\d+$/)
     expect(from?.room).toContain('to')
   })
 })

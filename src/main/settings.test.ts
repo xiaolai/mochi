@@ -46,7 +46,7 @@ describe('what somebody can wear', () => {
     // name invented here would be a second way to say one thing and the
     // resolver would have to learn the fake one.
     const avatars = listAvatars(avatarFolder([]))
-    expect(avatars).toEqual([{ id: null, builtIn: true }])
+    expect(avatars).toEqual([{ id: null }])
   })
 
   it('lists the json files beside it, sorted, without their extension', () => {
@@ -65,9 +65,7 @@ describe('what somebody can wear', () => {
 
   it('answers with the built-in when the folder is not there at all', () => {
     // Ordinary on a fresh install, not an error to report.
-    expect(listAvatars(join(tmpdir(), 'mochi-nonexistent-avatars'))).toEqual([
-      { id: null, builtIn: true },
-    ])
+    expect(listAvatars(join(tmpdir(), 'mochi-nonexistent-avatars'))).toEqual([{ id: null }])
   })
 })
 
@@ -436,20 +434,18 @@ describe('the two global keys, as the window shows them', () => {
       SHIPPED,
     )
     expect(shown[0]?.edited).toBe(false)
-    expect(shown[0]?.shipped).toBe('Control+Shift+L')
   })
 
   it('calls a key edited when somebody has moved it', () => {
     const shown = listKeys([{ id: 'rest', accelerator: 'Alt+F9', refused: null }], SAYS, SHIPPED)
     expect(shown[0]?.edited).toBe(true)
-    // What it goes BACK to, not what it is on. A reset that offered the current
-    // combination would be a button that does nothing.
-    expect(shown[0]?.shipped).toBe('Control+Shift+L')
   })
 
-  it('offers an id it does not ship its own combination, so a reset cannot unbind it', () => {
+  it('calls an id it does not ship unedited, so a reset cannot unbind it', () => {
+    // It has no default to be edited away from, and `true` here would offer a
+    // reset that sends `null` — which deletes a stored answer that is the only
+    // thing binding it.
     const shown = listKeys([{ id: 'wobble', accelerator: 'F13', refused: null }], SAYS, SHIPPED)
-    expect(shown[0]?.shipped).toBe('F13')
     expect(shown[0]?.edited).toBe(false)
   })
 })

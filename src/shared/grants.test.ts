@@ -3,6 +3,7 @@ import { PRONOUNS } from './pronoun'
 import {
   allowsCapability,
   grantsNotice,
+  SHIPPED_GRANT_PROMPTS,
   isGrant,
   parseGrants,
   withheldGuidance,
@@ -159,11 +160,14 @@ describe('which capabilities may run', () => {
 describe('what she is told', () => {
   it('says nothing at all while she may do everything', () => {
     // The ordinary session carries no extra prompt.
-    expect(grantsNotice(DEFAULT_GRANTS)).toBe('')
+    expect(grantsNotice(DEFAULT_GRANTS, SHIPPED_GRANT_PROMPTS)).toBe('')
   })
 
   it('names every grant that is off', () => {
-    const notice = grantsNotice({ ...DEFAULT_GRANTS, ask_workspace: false, remember_this: false })
+    const notice = grantsNotice(
+      { ...DEFAULT_GRANTS, ask_workspace: false, remember_this: false },
+      SHIPPED_GRANT_PROMPTS,
+    )
     expect(notice).toContain('look anything up')
     expect(notice).toContain('long-term notes')
     // And not the ones that are on.
@@ -173,7 +177,7 @@ describe('what she is told', () => {
   it('tells her to SAY SO rather than to decline', () => {
     // The failure `notBuilt` was deleted for: a capability she cannot perform
     // that presents as her choosing not to help.
-    const notice = grantsNotice({ ...DEFAULT_GRANTS, ask_workspace: false })
+    const notice = grantsNotice({ ...DEFAULT_GRANTS, ask_workspace: false }, SHIPPED_GRANT_PROMPTS)
     expect(notice).toContain('say plainly')
     expect(notice).toContain('switched it off')
   })

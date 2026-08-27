@@ -66,7 +66,12 @@ import { promptsFor, type PromptSpec } from './prompts'
 export type Prompts = (key: string) => string
 
 const CATALOGUE: readonly PromptSpec[] = promptsFor([])
-const defaultPrompts: Prompts = (key) => CATALOGUE.find((spec) => spec.key === key)?.text ?? ''
+/**
+ * The wording this build ships. See `instructions.ts` for why it is named
+ * rather than being a default a caller reaches by omission.
+ */
+export const SHIPPED_GRANT_PROMPTS: Prompts = (key) =>
+  CATALOGUE.find((spec) => spec.key === key)?.text ?? ''
 
 export const GRANTS = ['speak_first', 'ask_workspace', 'remember_this'] as const
 
@@ -258,8 +263,13 @@ export function withheldGuidance(name: string): string {
  * extra. Appended AFTER everything `instructionsFor` assembles, which is the
  * strongest instructional position — safe here in a way it would not be for
  * anything derived from what somebody said, because every word of it is ours.
+ *
+ * `prompts` is REQUIRED, and was defaulted. `whatSheMayDo` called this with one
+ * argument, so the two prompts below read the shipped text however they had been
+ * rewritten — the same silent discard `instructionsFor`'s own parameter
+ * describes at length.
  */
-export function grantsNotice(grants: Grants, prompts: Prompts = defaultPrompts): string {
+export function grantsNotice(grants: Grants, prompts: Prompts): string {
   const off = GRANT_SPECS.filter((spec) => !grants[spec.id])
   if (off.length === 0) return ''
   return [

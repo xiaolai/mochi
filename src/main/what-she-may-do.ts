@@ -1,6 +1,6 @@
 import { type Persona } from '@shared/persona'
 import { instructionsFor } from '@shared/instructions'
-import { allowsCapability, grantsNotice, type Grants } from '@shared/grants'
+import { allowsCapability, grantsNotice, type Grants, type Prompts } from '@shared/grants'
 import type { WireTool } from '@shared/capability/registry'
 
 /**
@@ -56,9 +56,28 @@ export function whatSheMayDo(
    * conversation back up.
    */
   brief: string = '',
+  /**
+   * What each catalogued prompt currently says. See `@shared/prompts`.
+   *
+   * REQUIRED, and the reason it is required is this function. It called
+   * `grantsNotice(grants)` with no resolver and `instructionsFor(..., undefined)`
+   * for a parameter that defaulted to the shipped catalogue — so `notes.heading`,
+   * `notes.fence`, `grants.heading` and `grants.notice` were displayed in the
+   * pane, warned about, written to `prompts.json`, reported saved, and thrown
+   * away here.
+   *
+   * That is `describedTools`' defect in the other half of the same return
+   * value, arriving through default parameters instead of through a missing
+   * read. This is the one place both halves are assembled — its own header
+   * says a second derivation would be a second answer to what she may do — so
+   * making it impossible to omit HERE is what closes it for every caller.
+   *
+   * Defaulted to nothing, deliberately. A default would be the trap again.
+   */
+  prompts: Prompts,
 ): WhatSheMayDo {
-  const notice = grantsNotice(grants)
-  const instructions = instructionsFor(persona, note, brief, template, undefined)
+  const notice = grantsNotice(grants, prompts)
+  const instructions = instructionsFor(persona, note, prompts, brief, template)
   return {
     instructions: notice === '' ? instructions : `${instructions}\n\n${notice}`,
     // NOT OFFERED, rather than offered and refused. A description she cannot

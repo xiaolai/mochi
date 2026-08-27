@@ -105,9 +105,15 @@ describe('the file', () => {
 })
 
 describe('what the pane draws', () => {
-  it('marks an edited prompt and keeps the default beside it', () => {
+  it('draws the override and says the prompt is edited', () => {
+    /*
+      It asserted a `fallback` field beside these, carrying the shipped wording
+      "so the pane can show the difference". The pane never showed a difference
+      — it draws `text` and offers a reset, which sends `null` — so the field
+      crossed the bridge on every read and was drawn by nothing.
+    */
     const [a] = promptRows(SPECS, { a: 'mine' })
-    expect(a).toMatchObject({ text: 'mine', fallback: 'the shipped A', edited: true })
+    expect(a).toMatchObject({ text: 'mine', edited: true })
   })
 
   it('reports a required phrase an override dropped', () => {

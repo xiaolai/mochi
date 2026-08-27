@@ -73,7 +73,7 @@ export function sidesFor(
   available: readonly Side[]
   using: Side
   /** What it decided from, so a surprising answer can be checked at a glance. */
-  from: { her: string; box: string; room: string }
+  from: { body: string; box: string; room: string }
 } | null {
   const full = fullPad({ width: box.width, height: box.height })
   // Where the big window would sit to leave her exactly where she is.
@@ -102,7 +102,7 @@ export function sidesFor(
     available,
     using: placeBubble(her, WIDEST_BUBBLE, room, BUBBLE_REACH, bubbleSide).side,
     from: {
-      her: `${String(her.left)},${String(her.top)} ${String(her.width)}x${String(her.height)}`,
+      body: `${String(her.left)},${String(her.top)} ${String(her.width)}x${String(her.height)}`,
       box: `${String(WIDEST_BUBBLE.w)}x${String(WIDEST_BUBBLE.h)}`,
       room: `${String(room.left)},${String(room.top)} to ${String(room.right)},${String(room.bottom)}`,
     },

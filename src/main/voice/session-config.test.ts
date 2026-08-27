@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SHIPPED_PROMPTS } from '@shared/instructions'
 
 import { sessionConfig } from './session-config'
 import type { SessionConfigDeps } from './session-config'
@@ -30,6 +31,7 @@ function deps(over: Partial<SessionConfigDeps> = {}): SessionConfigDeps {
     replacingASession: () => false,
     resting: () => ({ asleep: false }),
     tools: () => [],
+    prompts: () => SHIPPED_PROMPTS,
     transcripts: () => null,
     problemCount: () => 0,
     // Fixed, so a brief's "most recently…" is a value rather than a moving target.
