@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { closeSync, constants, fstatSync, openSync, readSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import wire from '@shared/realtime-wire.json'
@@ -44,6 +44,15 @@ import { DEFAULT_REALTIME_MODEL, type RealtimeModel } from '@shared/realtime-mod
  */
 
 const AUTH_FILE = 'auth.json'
+
+/**
+ * The most a credential file can plausibly be.
+ *
+ * A JWT and a little JSON around it. Generous by three orders of magnitude, and
+ * the point is only that SOME bound exists on a synchronous read that now runs
+ * during startup.
+ */
+const MAX_AUTH_BYTES = 1_000_000
 
 export type CredentialProblem =
   | { readonly kind: 'no-auth-file'; readonly path: string }
@@ -91,7 +100,65 @@ export function readBearer(
   const path = join(home, AUTH_FILE)
   let text: string
   try {
-    text = readFileSync(path, 'utf8')
+    /*
+      BOUNDED AND CHECKED ON THE DESCRIPTOR, not on the path.
+
+      This became load-bearing when the check moved to startup (`plan-0.1.md`
+      W10): a bare `readFileSync` on a user-controlled path now runs before the
+      first window, so an oversized or non-regular `auth.json` stalls the app
+      before anything is on screen to say why.
+
+      The first version of the guard was `lstatSync` and then `readFileSync`,
+      which is a check-then-act pair: two lookups of the same NAME, and the
+      thing at that name can be replaced or grown in between. `fstat` on the
+      open descriptor answers about the object actually being read, which is
+      the only version of this question worth asking.
+
+      `readBounded` is the usual instrument and is deliberately not used here:
+      its `unreadable` reason carries `String(error)`, which is a sentence
+      holding somebody's home directory — the exact leak the errno mapping
+      below exists to avoid.
+    */
+    /*
+      NON-BLOCKING, because `open` itself can hang.
+
+      A FIFO at this path — or a symlink to one — blocks `openSync` until a
+      writer appears, which on the startup path is the main process stopped
+      before a window exists. `O_NONBLOCK` returns immediately; the `fstat`
+      below then rejects it for not being a regular file, which is the answer
+      that check was always meant to give.
+    */
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK)
+    try {
+      const stats = fstatSync(fd)
+      if (!stats.isFile()) {
+        return { ok: false, problem: { kind: 'unreadable', why: 'not a file' } }
+      }
+      if (stats.size > MAX_AUTH_BYTES) {
+        return {
+          ok: false,
+          problem: { kind: 'unreadable', why: 'larger than a credential can be' },
+        }
+      }
+      /*
+        READ IN A LOOP. A single `readSync` may legally return short.
+
+        Rare on a local regular file and not impossible, and the failure is
+        silent in the worst way: a truncated JWT parses as malformed and
+        reports "your Codex login is not readable", sending somebody to
+        re-authenticate a credential that was fine.
+      */
+      const held = Buffer.allocUnsafe(stats.size)
+      let filled = 0
+      while (filled < stats.size) {
+        const got = readSync(fd, held, filled, stats.size - filled, filled)
+        if (got === 0) break
+        filled += got
+      }
+      text = held.subarray(0, filled).toString('utf8')
+    } finally {
+      closeSync(fd)
+    }
   } catch (error: unknown) {
     /*
       BY ERRNO, which is what `codex/auth.ts` already says this does.

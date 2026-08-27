@@ -61,10 +61,13 @@ export interface CapabilityProperty {
    * — describing the options in prose and validating on the way back — makes a
    * refusal the normal path for a mistake the schema could have prevented.
    *
-   * Narrowed per session where the set is per character: `set_expression`
-   * declares all eight faces here and is offered only the ones the worn
-   * character uses. A value outside the enum is still refused by the handler,
-   * because a manifest is a request and not a guarantee.
+   * A manifest declares a fixed set, the same for every session. One capability
+   * used to have its enum narrowed per character before it went on the wire —
+   * `set_expression`, which was removed on 2026-08-26 — and no manifest is
+   * per-character today.
+   *
+   * A value outside the enum is still refused by the handler, because a
+   * manifest is a request and not a guarantee.
    */
   readonly enum?: readonly string[]
 }

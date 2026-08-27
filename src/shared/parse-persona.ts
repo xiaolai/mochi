@@ -56,7 +56,8 @@ const RETIRED_AT = {
    * format, built-in motions, and `parseMotionClip` for a package that ships
    * one -- but nothing ever asks a persona which of them she claims, because
    * the tool that would play one does not exist. The `set_expression` tool
-   * that would consult the other was never built at all.
+   * that would consult the other was built later, and removed again on
+   * 2026-08-26 having never been called.
    *
    * They were held open so a manifest written later would
    * not have to be retrofitted -- but nothing could be retrofitted INTO a
@@ -75,8 +76,14 @@ const RETIRED_AT = {
  *
  * `expressions` was retired at format 3, and the note there says exactly why:
  * "What is missing is the CALLER, not the machinery ... the `set_expression`
- * tool that would consult the other was never built at all." It is built now, so
- * the field has a reader and earns its validator back.
+ * tool that would consult the other was never built at all." It was built, so
+ * the field earned its validator back.
+ *
+ * **The caller has since gone again** — `set_expression` was removed on
+ * 2026-08-26, unused. The validator stays because the field is still read: the
+ * shelf previews the set and her prompt names it. That is a thinner reader than
+ * the one it was restored for, and it is written down rather than left to be
+ * rediscovered.
  *
  * ## And it is a NEW name, deliberately
  *
@@ -260,6 +267,15 @@ export type PersonaParse =
        * storage OFF would mean quietly turning it back on.
        */
       readonly legacy: Policy | null
+      /**
+       * The manifest said something about retention that this build cannot do.
+       *
+       * Asked of the RAW fields rather than of `legacy`, which is normalised —
+       * see where it is computed. `keepDays: 7` normalises to `{keeps: true}`
+       * and a malformed `keeps` normalises to null, and both of those read as
+       * "asked for nothing" through the parsed value.
+       */
+      readonly declaresRetention: boolean
     }
   | { readonly ok: false; readonly problems: readonly SaveProblem[] }
 
@@ -310,6 +326,24 @@ export type PersonaLoadProblem =
   | { readonly kind: 'two-faces'; readonly source: string }
   /** A file tried to claim the built-in's id. See `BUILT_IN_ID`. */
   | { readonly kind: 'reserved-id'; readonly id: string; readonly source: string }
+  /**
+   * A v1 manifest declares a retention choice this build can no longer carry.
+   *
+   * FAIL CLOSED, and this is the one problem kind whose whole reason is that
+   * admitting her would be worse than refusing her.
+   *
+   * v1 wrote `keeps` and `keepDays` into the manifest itself, and the loader
+   * used to move them into the policy store on first read. That migration was
+   * deleted with the rest of the v1 layer (`plan-0.1.md` W1) because there are
+   * no v1 installs to migrate — but `parsePersona` still HANDS the fields back,
+   * so a manifest saying `keeps: false` was being parsed, its opt-out read, and
+   * then discarded. She would load, and record, having asked not to be.
+   *
+   * The fallback for a missing policy is to KEEP. That is the one direction a
+   * dropped privacy choice must never fail in, so a declaration that cannot be
+   * honoured refuses the persona and says so instead.
+   */
+  | { readonly kind: 'retention-unsupported'; readonly id: string; readonly source: string }
   /** The remembered active persona is not in the catalog. */
   | { readonly kind: 'active-missing'; readonly id: string }
   /** More persona files than this app will read. Named so it is not a mystery. */
@@ -477,6 +511,28 @@ export function parsePersona(value: unknown): PersonaParse {
     rawKeeps === undefined && rawKeepDays === undefined
       ? null
       : parsePolicy({ keeps: rawKeeps === undefined ? DEFAULT_POLICY.keeps : rawKeeps })
+  /*
+    WHETHER THE AUTHOR ASKED FOR ANYTHING, kept separately from what it parsed to.
+
+    `legacy` is normalised, and the catalogue used to decide whether to admit a
+    package by comparing it against the default. Two declarations survive that
+    comparison while meaning something else entirely:
+
+    - `keepDays: 7` with no `keeps` normalises to `{keeps: true}`, because
+      `keepDays` has no representation in the current `Policy`. A request for
+      SEVEN DAYS therefore read as "asks for the default" and was admitted to
+      keep for ever.
+    - `keeps: "no"` — anything malformed — makes `parsePolicy` answer null, and
+      a null `legacy` reads as "declared nothing at all", so it bypassed the
+      check completely.
+
+    Both fail in the one direction a retention choice must never fail in. So the
+    catalogue is given the RAW question — did this file say anything about
+    retention that is not exactly what this build does anyway — and the
+    normalised value is left for readers who want the value.
+  */
+  const declaresRetention =
+    (rawKeeps !== undefined && rawKeeps !== DEFAULT_POLICY.keeps) || rawKeepDays !== undefined
 
   // Unknown keys are REPORTED, not dropped. Same rule as `parseFaceSpec`, and
   // the same reason: a persona file is hand-editable, and `styel` silently
@@ -498,6 +554,7 @@ export function parsePersona(value: unknown): PersonaParse {
     // "nobody has said" into "somebody said keep", which is the distinction
     // `readPolicy` exists to preserve.
     legacy: source['keeps'] === undefined && source['keepDays'] === undefined ? null : legacy,
+    declaresRetention,
     persona: {
       id,
       name,

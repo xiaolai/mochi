@@ -616,12 +616,6 @@ const handlers: ShelfHandlers = {
       action.kind === 'restore' ? 'Put back as it was.' : 'Forgotten.',
     )
   },
-  forgetKept: (action) => {
-    void write(
-      () => window.mochiHistory.forgetKept(action),
-      action.kind === 'all' ? 'All of it is forgotten.' : 'Forgotten.',
-    )
-  },
   prompt: (text) => {
     void write(
       () => window.mochiHistory.prompt(text),

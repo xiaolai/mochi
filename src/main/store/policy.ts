@@ -29,45 +29,6 @@ export function policyRoot(userData: string): string {
   return storeRoot(userData, POLICY_DIR)
 }
 
-/** Marks that retention has been carried out of old manifests, once, ever. */
-const MIGRATED = '.migrated'
-
-/**
- * Whether this installation has already moved retention out of the manifests.
- *
- * The gate that makes "a package cannot declare retention" true against a
- * hostile package rather than only a careless one. Accepting the legacy fields
- * from any manifest claiming to predate the move is not a check -- a package
- * can claim anything, and omitting `version` claims it by default.
- *
- * Carrying those fields across is a ONE-TIME event for an installation that
- * predates the move, not a feature packages get to use. After the first load
- * has done it, nothing seeds a policy from a manifest again.
- */
-export function retentionMigrated(userData: string): boolean {
-  const read = readBounded(join(policyRoot(userData), MIGRATED))
-  return read.ok || read.reason.kind !== 'absent'
-}
-
-/** Record that it has happened, so it never happens again. */
-export function markRetentionMigrated(userData: string): void {
-  try {
-    writeJsonAtomically(join(policyRoot(userData), MIGRATED), { at: Date.now() })
-  } catch (error: unknown) {
-    // Not fatal: the cost of failing is that the one-time pass runs again on
-    // the next launch, which is idempotent -- it only seeds where there is no
-    // setting already.
-    console.warn('[policy] could not record that the retention migration ran:', error)
-    // The marker is what stops the migration running again. Without it the pass
-    // repeats on every launch, quietly re-deciding somebody's retention.
-    problems.note(
-      'retention',
-      null,
-      `the retention migration could not be recorded: ${String(error)}`,
-    )
-  }
-}
-
 /**
  * The file holding one persona's setting.
  *
@@ -188,11 +149,16 @@ export function forgetPolicy(userData: string, id: string): void {
  * that somebody actually chose into recording. The one direction that must not
  * be guessed, guessed the wrong way.
  *
- * `loadPersonas` already parks that policy in `carriedPolicies` and retries it
- * on every read, so the information was never lost. It simply had no consumer:
- * the map was built, filled, returned, and read by nothing. `UNREADABLE_POLICY`
- * makes exactly this argument one step later, for a policy that exists and
- * cannot be parsed.
+ * `loadPersonas` used to park that policy in `carriedPolicies` and retry it on
+ * every read, so the information was never lost — it simply had no consumer:
+ * the map was built, filled, returned, and read by nothing.
+ *
+ * **Both halves went with the v1 migration layer on 2026-08-26.** The map is
+ * still on `PersonaCatalog` and is now always empty; what replaced the carry is
+ * a refusal, because a declaration that cannot be honoured must not be admitted
+ * quietly — see `retention-unsupported` in `parse-persona.ts`.
+ * `UNREADABLE_POLICY` makes exactly this argument one step later, for a policy
+ * that exists and cannot be parsed.
  *
  * ## Why the store still wins
  *

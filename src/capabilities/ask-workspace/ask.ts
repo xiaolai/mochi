@@ -87,6 +87,30 @@ export interface AskSettings {
   /** Null leaves the model to the user's `config.toml`, which is a real choice. */
   readonly model: string | null
   /**
+   * Run with `$CODEX_HOME/config.toml` not loaded at all.
+   *
+   * ## Why this is a setting and not a constant either way
+   *
+   * §65 measured that a Codex profile carries `mcp_servers` and that
+   * `-s read-only` does not confine them: an MCP server is a separate process
+   * running as the user, launched BEFORE authentication, outside the sandbox.
+   * That is a feature for a lookup — §65's own conclusion is that
+   * `mochi → codex → mcp` needs no code here because the profile is what it is
+   * for — and it is not one for the sleep summariser.
+   *
+   * The difference is who asked. A lookup happens because somebody pressed a
+   * key or the model chose a tool; the summariser fires on its own, every time
+   * she goes to sleep, unattended. Starting somebody's configured tool
+   * processes on that schedule is not something they asked for, and the job
+   * needs no tools at all — it is handed a transcript and returns JSON.
+   *
+   * Measured 2026-08-27, §71: `--ignore-user-config` stops the launch, with a
+   * control on either side, and a real run still authenticates and still
+   * honours `--output-schema`. `-c mcp_servers={}` does NOT stop it, which is
+   * why this is a flag rather than an override.
+   */
+  readonly ignoreUserConfig: boolean
+  /**
    * A Codex profile to layer, or null for none.
    *
    * `-p <name>` layers `$CODEX_HOME/<name>.config.toml` over the user's base
@@ -120,7 +144,6 @@ export function argsFor(options: {
   readonly workspace: string
   readonly schemaPath: string
   readonly outPath: string
-  readonly question: string
   readonly settings: AskSettings
 }): readonly string[] {
   const { settings } = options
@@ -154,6 +177,9 @@ export function argsFor(options: {
      */
     '-c',
     'project_doc_fallback_filenames=[]',
+    // See `AskSettings.ignoreUserConfig`. Auth still reads `CODEX_HOME`, which
+    // is what makes this usable at all — measured, §71.
+    ...(settings.ignoreUserConfig ? ['--ignore-user-config'] : []),
     '--output-schema',
     options.schemaPath,
     '-o',
@@ -161,7 +187,16 @@ export function argsFor(options: {
     ...(settings.profile === null ? [] : ['-p', settings.profile]),
     ...(settings.model === null ? [] : ['-m', settings.model]),
     ...(settings.webSearch === 'follow' ? [] : ['-c', `web_search="${settings.webSearch}"`]),
-    framed(options.question, settings.framing),
+    /*
+      AND NO PROMPT. `codex exec` reads its instructions from stdin when the
+      PROMPT argument is absent, and `spawnCodex` writes them there.
+
+      This used to end with `framed(question, framing)` as the last argv entry.
+      `ps` shows a full command line to every user on the machine, so the words
+      somebody said to her were readable by anything running as anybody — and
+      the sleep summariser's prompt is a whole transcript, which is also the one
+      input here with no ceiling under `ARG_MAX`.
+    */
   ]
 }
 
@@ -198,8 +233,14 @@ export interface AskDeps {
   readonly codexPath: string
   readonly workspace: string
   readonly settings: AskSettings
-  /** Injected so a test can run the whole path without a Codex on the machine. */
-  readonly run: (path: string, args: readonly string[]) => RunHandle
+  /**
+   * Injected so a test can run the whole path without a Codex on the machine.
+   *
+   * `input` is the prompt, and it goes down stdin rather than into `args` —
+   * see `spawnCodex`. A test that wants to assert what was ASKED reads this
+   * argument; one that wants to assert how it was CONFIGURED reads `args`.
+   */
+  readonly run: (path: string, args: readonly string[], input: string) => RunHandle
   /** How long to wait before giving up. §8 measured a twenty-second floor. */
   readonly timeoutMs?: number
   /**
@@ -216,29 +257,42 @@ export interface AskDeps {
 export type AskResult =
   { readonly ok: true; readonly answer: Answer } | { readonly ok: false; readonly why: string }
 
+/** What one schema-constrained run produced, or why it produced nothing. */
+export type SchemaRun =
+  { readonly ok: true; readonly text: string } | { readonly ok: false; readonly why: string }
+
 /**
- * Run one question to completion.
+ * Run one schema-constrained prompt to completion, and hand back what it wrote.
+ *
+ * The transport, with no opinion about what is being asked. `ask` below is one
+ * caller and the sleep summariser is the other, and they share this for the
+ * reason the summariser's own header gives: it runs on the Codex subscription
+ * rather than a metered key, so the credential, the deadline, the kill
+ * escalation and the process group should exist once rather than twice.
+ *
+ * The two callers differ in one setting and it is deliberate — see
+ * `AskSettings.ignoreUserConfig`.
  *
  * The schema and the answer go through a temporary directory that is removed
  * afterwards whatever happens — including when the process is killed on the
  * deadline, which is the path that leaked in every version of this that did the
  * cleanup on the success branch.
  */
-export async function ask(question: string, deps: AskDeps): Promise<AskResult> {
+export async function runSchema(prompt: string, schema: object, deps: AskDeps): Promise<SchemaRun> {
   const scratch = mkdtempSync(join(tmpdir(), 'mochi-ask-'))
   const schemaPath = join(scratch, 'schema.json')
   const outPath = join(scratch, 'answer.json')
   try {
-    writeFileSync(schemaPath, JSON.stringify(ANSWER_SCHEMA))
+    writeFileSync(schemaPath, JSON.stringify(schema))
     const handle = deps.run(
       deps.codexPath,
       argsFor({
         workspace: deps.workspace,
         schemaPath,
         outPath,
-        question,
         settings: deps.settings,
       }),
+      framed(prompt, deps.settings.framing),
     )
 
     /*
@@ -297,12 +351,23 @@ export async function ask(question: string, deps: AskDeps): Promise<AskResult> {
             : `codex's answer could not be read: ${logBoundedRead(read.reason)}`,
       }
     }
-    const written = read.text
-    const answer = readAnswer(written)
-    return answer === null
-      ? { ok: false, why: 'the answer was not in the shape that was asked for' }
-      : { ok: true, answer }
+    return { ok: true, text: read.text }
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }
+}
+
+/**
+ * Run one question to completion and read the answer she will speak.
+ *
+ * A thin caller of `runSchema`: this one owns `ANSWER_SCHEMA` and the shape
+ * check, and nothing else.
+ */
+export async function ask(question: string, deps: AskDeps): Promise<AskResult> {
+  const run = await runSchema(question, ANSWER_SCHEMA, deps)
+  if (!run.ok) return { ok: false, why: run.why }
+  const answer = readAnswer(run.text)
+  return answer === null
+    ? { ok: false, why: 'the answer was not in the shape that was asked for' }
+    : { ok: true, answer }
 }

@@ -32,11 +32,16 @@ import { BUILT_IN_ID, deriveId, parsePersona, type PersonaLoadProblem } from '@s
 import { PACKAGE_FACE } from './avatars'
 import { readBounded } from './read-bounded'
 import type {} from './transcripts'
-import { markRetentionMigrated, retentionMigrated } from './policy'
 import { type Policy } from '@shared/policy'
 import { EDITS, type PersonaEdits, builtInPersona, writeEdits } from './her-edits'
-import { PENDING_POLICY, migratePolicy, readTombstones, settlePendingPolicy } from './unfinished'
-import { MANIFEST, claimedId, personasRoot, reservePackage, writeManifest } from './persona-files'
+import { unfinishedDeletions } from './deleting'
+import {
+  MANIFEST,
+  createPackage,
+  manifestId,
+  personasRoot,
+  savePersonaManifest,
+} from './persona-files'
 import { MAX_PERSONAS } from './persona-files'
 import { seedGrants } from './grants'
 
@@ -54,7 +59,7 @@ function verifiedSource(userData: string, catalog: PersonaCatalog, id: string): 
   const source = catalog.sources.get(id)
   if (source === undefined) throw new Error(`${id} has no file to read`)
   const standing = readBounded(join(personasRoot(userData), source, MANIFEST))
-  const claims = standing.ok ? claimedId(standing.text) : null
+  const claims = standing.ok ? manifestId(standing.text) : null
   if (claims !== id) {
     throw new Error(`${source} is no longer ${id}; reopen mochi before editing this persona`)
   }
@@ -110,6 +115,8 @@ interface Candidate {
   readonly persona: Persona
   /** A retention setting found in an older manifest, awaiting migration. */
   readonly legacy: Policy | null
+  /** The manifest asked for retention this build cannot honour. */
+  readonly declaresRetention: boolean
 }
 
 /**
@@ -119,29 +126,7 @@ interface Candidate {
  * persona permanently silent, and the person it fails is the one who wrote the
  * broken file.
  */
-export function loadPersonas(
-  userData: string,
-  edits: PersonaEdits,
-  /**
-   * Whether this installation has run before.
-   *
-   * Decides whether the one-time retention migration may run at all. On a
-   * machine where the app has never started there is nothing of the user's to
-   * carry across -- so a manifest claiming to predate the move can only have
-   * been placed there from outside, and migrating it would let a package
-   * choose somebody's retention on their first launch. `keeps: false` is a
-   * package deciding, in a field nobody reads before installing, that this
-   * character's conversations are never written down.
-   *
-   * REQUIRED, with no default. It defaulted to `true`, which is the permissive
-   * answer on a privacy gate: any future caller that forgot the argument would
-   * have silently re-enabled package-supplied retention, and the omission
-   * compiles. Main knows the answer -- the preferences file either existed or
-   * it did not -- and a caller that genuinely does not know should be saying
-   * `false`.
-   */
-  ranBefore: boolean,
-): PersonaCatalog {
+export function loadPersonas(userData: string, edits: PersonaEdits): PersonaCatalog {
   const root = personasRoot(userData)
   const problems: PersonaLoadProblem[] = []
   // The built-in, as this install has her. Her edits are applied HERE so the
@@ -153,37 +138,6 @@ export function loadPersonas(
   // Retention carried out of an old manifest that could not be written to its
   // own file. Empty in the ordinary case -- see `PersonaCatalog`.
   const carriedPolicies = new Map<string, Policy>()
-  // Asked ONCE, before anything is read, so every persona in this pass gets
-  // the same answer and the marker is written after all of them.
-  const settled = retentionMigrated(userData)
-  // May anything be carried across? Only on an installation that has run
-  // before -- a first launch has nothing of the user's to carry FROM.
-  const migrating = ranBefore && !settled
-  // Is the one-time pass finished after this load? On a first launch it is
-  // finished by there being nothing to do, and saying so is the point: the
-  // package installed a minute later must not be able to claim it predates a
-  // move this machine never lived through.
-  //
-  // Only after a scan that could actually SEE everything, though. See
-  // `deferred` below.
-  const closing = !settled
-  /**
-   * A manifest this pass could not read, so the gate stays open.
-   *
-   * The marker used to be written whatever happened: a personas folder that
-   * could not be listed, or a manifest that could not be opened, still closed
-   * the one-time migration permanently. So a transient permissions problem on
-   * one launch cost a user their stored `keeps: false` for good -- and the
-   * fallback for a missing policy is to KEEP, which is the one direction this
-   * must never fail in.
-   *
-   * Only I/O failures defer. A manifest that is malformed or invalid will read
-   * the same way on every future launch, so holding the gate open for it would
-   * mean never closing it -- and the persona it belongs to is not in the
-   * catalog either way.
-   */
-  let deferred = false
-
   let files: string[]
   try {
     files = readdirSync(root, { withFileTypes: true })
@@ -209,17 +163,6 @@ export function loadPersonas(
     if (!missing) {
       problems.push({ kind: 'folder-unreadable' })
     }
-    // Marked when the folder is genuinely ABSENT. A machine with no personas
-    // folder has nothing to migrate, and returning without saying so left the
-    // one-time pass owed for ever -- so the first package installed afterwards
-    // could claim to predate the move and seed a retention policy, which is
-    // exactly what the marker exists to prevent.
-    //
-    // NOT marked when the folder is merely unreadable. That is a permissions
-    // problem, not an empty machine: closing the gate on it threw away every
-    // stored opt-out in a folder this launch happened not to be able to open,
-    // permanently, and the recovery on the next launch would have been free.
-    if (closing && missing) markRetentionMigrated(userData)
     return { personas, sources, problems, carriedPolicies, reserved: new Set() }
   }
 
@@ -251,21 +194,15 @@ export function loadPersonas(
   }
 
   // Deletions that have not finished. She is gone as far as everything above
-  // this store is concerned, from the moment the tombstone lands -- otherwise a
+  // this store is concerned, from the moment the deletion mark lands -- otherwise a
   // deletion interrupted after her memory went would put her back on the shelf
   // with half her history missing and no sign that anything had happened.
-  const deleting = readTombstones(userData)
+  const deleting = unfinishedDeletions(userData)
 
   const byId = new Map<string, Candidate[]>()
   for (const source of files) {
     const read = readCandidate(root, source)
     if (read.problem !== null) problems.push(read.problem)
-    if (read.retry) {
-      // The gate stays open. This manifest may hold a legacy `keeps: false`
-      // that nobody has been able to read yet, and closing over it discards
-      // that choice for good.
-      deferred = true
-    }
     if (read.candidate === null) continue
     const group = byId.get(read.candidate.persona.id)
     if (group === undefined) byId.set(read.candidate.persona.id, [read.candidate])
@@ -284,38 +221,39 @@ export function loadPersonas(
       problems.push({ kind: 'duplicate-id', id, sources: group.map((c) => c.source) })
       continue
     }
+    /*
+      A RETENTION CHOICE THIS BUILD CANNOT HONOUR REFUSES HER.
+
+      v1 wrote `keeps`/`keepDays` into the manifest and the loader moved them
+      into the policy store on first read. That migration went with the rest of
+      the v1 layer (`plan-0.1.md` W1), on the argument that there are no v1
+      installs to migrate — but `parsePersona` still hands the fields back as
+      `legacy`, so for a moment this admitted a persona whose stored opt-out had
+      just been read and dropped. She would load, and record, having asked not
+      to be.
+
+      The fallback for a missing policy is to KEEP, which is the one direction
+      this must never fail in. So the choice is between honouring a declaration
+      whose machinery is gone and refusing the package that carries it, and
+      refusing is the only one of those that cannot quietly record somebody.
+
+      Only when it actually asks for something. A v1 manifest saying `keeps:
+      true` asks for the default and loses nothing by being read as the
+      default.
+
+      Asked of `declaresRetention`, which reads the RAW fields, and not of the
+      parsed `legacy` — which this first version did, and which let two shapes
+      through: `keepDays: 7` normalises to `{keeps: true}` and a malformed
+      `keeps` normalises to null, so a seven-day request and an unreadable one
+      both read as "asked for nothing" and were admitted to keep for ever.
+    */
+    if (first.declaresRetention) {
+      problems.push({ kind: 'retention-unsupported', id, source: first.source })
+      continue
+    }
     personas.set(id, first.persona)
     sources.set(id, first.source)
-    // Migrated only for a persona that was ADMITTED, and after every reason to
-    // refuse her has been checked. Seeding at parse time wrote a policy file
-    // for packages that never entered the catalog -- a reserved id, a
-    // two-faced package, one of a refused duplicate pair -- leaving a setting
-    // filed under an id its owner does not hold, waiting for whoever gets it.
-    // Only while the one-time pass is still owed. After it, a manifest
-    // claiming to predate the move seeds nothing -- see `retentionMigrated`.
-    if (migrating) {
-      const carried = migratePolicy(userData, id, first.source, first.legacy)
-      if (carried !== null) carriedPolicies.set(id, carried)
-    }
-    // UNCONDITIONALLY, and deliberately not in an `else`.
-    //
-    // `markRetentionMigrated` records that the pass RAN, which is a different
-    // question from whether its writes succeeded — a carry that failed used to
-    // live only in `carriedPolicies` while the marker was written anyway, so
-    // the next launch skipped the migration and the opt-out reverted to the
-    // default, which is to keep.
-    //
-    // Gating this on `!migrating` looked equivalent and was not: the marker
-    // lives in the policy directory, so the write that failed is the same write
-    // that records the pass as done. `migrating` therefore stays TRUE on the
-    // relaunch — exactly the case a parked record exists for — and an `else`
-    // skipped it. Running always is also cheap: it is one stat on a file that
-    // is normally absent, and a no-op once the policy exists.
-    const still = settlePendingPolicy(userData, id, first.source)
-    if (still !== null) carriedPolicies.set(id, still)
   }
-  // Closed only after a pass that could read everything it found. See `deferred`.
-  if (closing && !deferred) markRetentionMigrated(userData)
 
   return { personas, sources, problems, carriedPolicies, reserved: new Set(deleting.keys()) }
 }
@@ -324,9 +262,9 @@ export function loadPersonas(
  * One package folder, read and judged. PURE apart from the reads.
  *
  * Extracted because `loadPersonas` had grown to 185 lines holding enumeration,
- * parsing, duplicate resolution, retention migration, pending-policy
- * settlement and marker lifecycle in one scroll -- and the marker lifecycle is
- * exactly what went wrong in there twice.
+ * parsing and duplicate resolution in one scroll. The retention migration,
+ * the pending-policy settlement and the marker lifecycle that used to sit
+ * beside them went with the v1 migration layer.
  *
  * `retry` is what separates "this file is broken" from "this file could not be
  * opened". Only the second defers the one-time retention gate: a parse failure
@@ -377,7 +315,12 @@ function readCandidate(
     return { candidate: null, problem: { kind: 'two-faces', source }, retry: false }
   }
   return {
-    candidate: { source, persona: result.persona, legacy: result.legacy },
+    candidate: {
+      source,
+      persona: result.persona,
+      legacy: result.legacy,
+      declaresRetention: result.declaresRetention,
+    },
     problem: null,
     retry: false,
   }
@@ -471,7 +414,7 @@ export function savePersonaTo(
   if (persona.avatarId !== null && hasOwnFace(join(root, known))) {
     throw new Error(`${known} already carries its own face; it cannot also name one`)
   }
-  writeManifest(join(root, known), persona, id)
+  savePersonaManifest(join(root, known), persona, id)
   return { id, source: known }
 }
 
@@ -507,13 +450,13 @@ export function copyPersonaTo(
   persona: Persona,
   name: string,
 ): Written {
-  // Tombstoned ids count as taken. See `PersonaCatalog.reserved`.
+  // Ids with a pending deletion count as taken. See `PersonaCatalog.reserved`.
   const id = deriveId(name, new Set([...catalog.personas.keys(), ...catalog.reserved]))
   const root = personasRoot(userData)
   // The destination taken EXCLUSIVELY, before anything is built. `entryExists`
   // then `renameSync` was a check-then-act pair whose second half silently
-  // replaces an empty destination anyway -- see `reservePackage`.
-  reservePackage(root, id)
+  // replaces an empty destination anyway -- see `createPackage`.
+  createPackage(root, id)
   // Staged under a temporary name and moved into place at the end.
   //
   // The copy used to build the destination in place: `cpSync`, then the
@@ -544,16 +487,10 @@ export function copyPersonaTo(
       // Except the overlay, which is the built-in's user edits and belongs to
       // this install rather than to any package.
       rmSync(join(staging, EDITS), { force: true })
-      // And except a parked retention, which belongs to the persona it was
-      // carried for. It is filed by folder, so copying it would hand the new
-      // persona a stranger's opt-out the first time her package is scanned --
-      // and `settlePendingPolicy` would then write it under HER id, which is
-      // the identity mistake the whole `sources` mapping exists to prevent.
-      rmSync(join(staging, PENDING_POLICY), { force: true })
     } else {
       mkdirSync(staging, { recursive: true })
     }
-    writeManifest(staging, persona, id, name)
+    savePersonaManifest(staging, persona, id, name)
     // Onto the reservation this call made, which `rename` may replace because
     // it is an empty directory and it is ours.
     renameSync(staging, join(root, id))

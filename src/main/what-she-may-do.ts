@@ -33,51 +33,6 @@ export interface WhatSheMayDo {
   readonly tools: readonly WireTool[]
 }
 
-/**
- * `set_expression` is offered with THIS character's faces, not all eight.
- *
- * The same argument as the filter below, one level down. A face left out of the
- * enum is not on the wire at all, so she cannot reach for it — where describing
- * all eight and asking her to use three is a rule she can break, at the moment
- * she is least likely to be reading rules carefully.
- *
- * Every other tool passes through untouched. This is deliberately a narrowing of
- * one argument of one capability rather than a general "personas may edit
- * manifests" hook, which would let a downloaded character rewrite what any tool
- * claims to do.
- */
-function narrowFaces(persona: Persona): (tool: WireTool) => WireTool | null {
-  return (tool) => {
-    if (tool.name !== 'set_expression') return tool
-    /*
-      NO FACES MEANS NO TOOL, and this is the same rule as the line below.
-
-      Narrowing an empty `faces` produced `enum: []` — a schema that no argument
-      can satisfy, offered to her anyway. She would see a tool in her list,
-      have no legal value for its one required field, and either fail the call
-      or have the session configuration refused outright.
-
-      `whatSheMayDo` already says the principle in the comment under this one:
-      not offered, rather than offered and refused. The narrowing had a case it
-      did not apply the principle to.
-
-      The capability's own empty-first branch stays. It is unreachable through
-      the wire now and is the answer if a caller ever reaches the handler
-      another way — see `set-expression/capability.ts`.
-    */
-    if (persona.faces.length === 0) return null
-    const face = tool.parameters.properties['face']
-    if (face === undefined) return tool
-    return {
-      ...tool,
-      parameters: {
-        ...tool.parameters,
-        properties: { ...tool.parameters.properties, face: { ...face, enum: persona.faces } },
-      },
-    }
-  }
-}
-
 export function whatSheMayDo(
   persona: Persona,
   note: string,
@@ -91,19 +46,24 @@ export function whatSheMayDo(
    * is the shelf, which draws the same string back.
    */
   template: string = '',
-  /** An index of what she has kept — names and counts, never contents. */
-  kept: readonly { readonly collection: string; readonly entries: number }[] = [],
+  /**
+   * What happened last time, or what is still happening. See `memory/brief.ts`.
+   *
+   * DEFAULTED, so the tests here — which are about tools and grants — say
+   * nothing about it. `session-config` is the caller that builds one, and it
+   * chooses between the two kinds: a wake gets `briefFor` and a reconnect gets
+   * `resumeFor`, which carry opposite instructions about whether to pick the
+   * conversation back up.
+   */
+  brief: string = '',
 ): WhatSheMayDo {
   const notice = grantsNotice(grants)
-  const instructions = instructionsFor(persona, note, '', template, undefined, kept)
+  const instructions = instructionsFor(persona, note, brief, template, undefined)
   return {
     instructions: notice === '' ? instructions : `${instructions}\n\n${notice}`,
     // NOT OFFERED, rather than offered and refused. A description she cannot
     // act on is worse than one she never had — `registry.ts`'s deleted
     // `execution-unavailable` reasoning, arriving in a form that is still true.
-    tools: tools
-      .filter((tool) => allowsCapability(grants, tool.name))
-      .map(narrowFaces(persona))
-      .filter((tool): tool is WireTool => tool !== null),
+    tools: tools.filter((tool) => allowsCapability(grants, tool.name)),
   }
 }

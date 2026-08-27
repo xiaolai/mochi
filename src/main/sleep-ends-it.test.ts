@@ -109,9 +109,16 @@ describe('going to sleep ends the conversation', () => {
   it('ends it anyway if the renderer never answers', () => {
     // Otherwise the conversation stays open exactly as before, with a mechanism
     // in place that looks like it fixed the problem.
+    //
+    // Two hops now, and both are asserted. The grace branch calls
+    // `endPresence`, which is the one place that ends a presence and then
+    // rewrites her note from it — so checking only the first hop would pass
+    // over an `endPresence` that had stopped ending anything.
     const grace = MAIN.slice(MAIN.indexOf('function endWhenFlushed'))
     expect(grace).toContain('FLUSH_GRACE_MS')
-    expect(grace.slice(0, grace.indexOf('function conversationFlushed'))).toContain(
+    expect(grace.slice(0, grace.indexOf('function conversationFlushed'))).toContain('endPresence()')
+    const ends = MAIN.slice(MAIN.indexOf('function endPresence'))
+    expect(ends.slice(0, ends.indexOf('async function rewriteNote'))).toContain(
       'conversation().end()',
     )
   })

@@ -207,7 +207,7 @@ describe('a character created after the upgrade', () => {
     const { DEFAULT_PERSONA } = await import('@shared/persona')
     const legacy = { ...DEFAULT_GRANTS, ask_workspace: false }
 
-    const made = copyPersonaTo(userData, loadPersonas(userData, {}, true), DEFAULT_PERSONA, 'Ada')
+    const made = copyPersonaTo(userData, loadPersonas(userData, {}), DEFAULT_PERSONA, 'Ada')
     expect(hasGrants(userData, made.id)).toBe(true)
     expect(readGrants(userData, made.id, legacy).ask_workspace).toBe(true)
   })

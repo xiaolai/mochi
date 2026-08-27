@@ -29,6 +29,19 @@ import { describe, expect, it } from 'vitest'
  */
 
 const STORE = join(process.cwd(), 'src', 'main', 'store')
+/**
+ * Scanned as well as the store, and it is here because of what it missed.
+ *
+ * `memory/summarise.ts` — the whole-note rewriter, the thing that makes her a
+ * companion who remembers you rather than one who is told things — was
+ * written, tested, deadlined and called by NOTHING for weeks, while this file
+ * stayed green throughout. It was out of range: this gate scanned one
+ * directory, and the subsystem that went dark was in the one next door.
+ *
+ * A gate whose coverage is narrower than the class of defect it exists to
+ * catch reports the absence of a defect it never looked for.
+ */
+const MEMORY = join(process.cwd(), 'src', 'main', 'memory')
 const SRC = join(process.cwd(), 'src')
 
 /**
@@ -114,18 +127,20 @@ interface Surface {
  */
 function surfaces(): Surface[] {
   const found: Surface[] = []
-  for (const path of tsFilesUnder(STORE)) {
-    const text = stripped(path)
-    const module = path.slice(STORE.length + 1)
+  for (const root of [STORE, MEMORY]) {
+    for (const path of tsFilesUnder(root)) {
+      const text = stripped(path)
+      const module = path.slice(root.length + 1)
 
-    for (const match of text.matchAll(/^export function ([A-Za-z][A-Za-z0-9]*)/gm)) {
-      found.push({ name: match[1] ?? '', module, kind: 'function', owner: module })
-    }
+      for (const match of text.matchAll(/^export function ([A-Za-z][A-Za-z0-9]*)/gm)) {
+        found.push({ name: match[1] ?? '', module, kind: 'function', owner: module })
+      }
 
-    for (const block of text.matchAll(/^export interface ([A-Za-z]+) \{([\s\S]*?)^\}/gm)) {
-      const owner = block[1] ?? ''
-      for (const method of (block[2] ?? '').matchAll(/^ {2}([a-z][A-Za-z0-9]*)\(/gm)) {
-        found.push({ name: method[1] ?? '', module, kind: 'method', owner })
+      for (const block of text.matchAll(/^export interface ([A-Za-z]+) \{([\s\S]*?)^\}/gm)) {
+        const owner = block[1] ?? ''
+        for (const method of (block[2] ?? '').matchAll(/^ {2}([a-z][A-Za-z0-9]*)\(/gm)) {
+          found.push({ name: method[1] ?? '', module, kind: 'method', owner })
+        }
       }
     }
   }
@@ -154,13 +169,29 @@ const WIRED_ELSEWHERE: Readonly<Record<string, string>> = {
  * regression guard at once.
  */
 const KNOWN_DEBT: readonly string[] = [
+  /*
+    FOUND 2026-08-26, by widening this gate to `src/main/memory` — see `MEMORY`.
+
+    Four exports, two subsystems, no production caller between them: the same
+    defect as `summarise`, which sat uncalled in the same directory until it was
+    wired, and invisible for the same reason — nothing looked here.
+
+    **`brief.ts` was wired on 2026-08-27 and its two lines are gone from this
+    list**, which is what deleting a line here is for. The cost of its absence
+    was not cosmetic: without `resumeFor`, an hour into a conversation the
+    session is replaced (§53) and she starts with an empty context, so she kept
+    talking and had forgotten the morning.
+
+    `cue.ts` stays. It is a ledger of things to raise UNPROMPTED, and what may
+    interrupt somebody — and when — is a decision about how a companion should
+    behave rather than a missing call. Listed so it cannot go dark quietly.
+  */
   // No caller and no work item. `Conversation` tracks whether one is open and
   // nothing asks -- which is why deleting the live conversation was able to
   // become defect A-4 unnoticed.
   'conversation.ts: isLive',
-  // The store landed in phase 1 of `plan-kept.md` with no tools, deliberately:
-  // the data model is committed and verifiable before a model can reach it.
-
+  'cue.ts: createCueLedger',
+  'cue.ts: cueFor',
   // No caller and no work item. The archive can be exported and cannot be
   // imported back: the reader exists, is transactional, is tested, and no
   // surface offers it. Recorded here rather than fixed, because an import

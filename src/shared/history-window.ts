@@ -27,30 +27,6 @@ import type { Pronoun } from './pronoun'
  * the shelf reuses. `ipc.ts` names `ShelfView` and `ShelfCharacter` only in
  * prose, never in code, so nothing here needs importing back.
  */
-/** One collection in her store, as the sheet lists it. */
-export interface KeptSummary {
-  readonly collection: string
-  readonly entries: number
-  readonly newest: number
-}
-
-/**
- * Clearing part of her store, or all of it.
- *
- * One ENTRY is absent on purpose, the same way `history:forget` has no `one`:
- * removing a single thing is a conversation she can have — `forget_kept` — and
- * the sheet is where the sweeping gestures live, because those are the ones
- * that want to be seen before they happen.
- *
- * `personaId` names who the sheet was drawn FOR. Main refuses when it no longer
- * matches who is worn: a character switch between drawing the button and
- * pressing it would otherwise erase the new character's store, which is the
- * one mistake this section exists to prevent rather than cause.
- */
-export type KeptAction =
-  | { readonly personaId: string; readonly kind: 'collection'; readonly collection: string }
-  | { readonly personaId: string; readonly kind: 'all' }
-
 /** One conversation, as the window lists it. */
 export interface HistoryConversation {
   /** Opaque; holding it authorises nothing. Every read still checks the persona. */
@@ -229,8 +205,6 @@ export interface ShelfView {
     readonly slots: readonly string[]
   }
   readonly note: SettingsNote
-  /** What she has kept, by collection. Empty when she has kept nothing. */
-  readonly kept: readonly KeptSummary[]
 }
 
 /**
@@ -267,17 +241,15 @@ export interface MochiHistoryApi {
   /**
    * Put one of her expressions on her, now, to look at it.
    *
-   * Nothing is saved: this is the same one-value frame `set_expression` sends,
-   * from the grid that decides which expressions she may choose herself. See
-   * `shelf:wear-face`.
+   * Nothing is saved. The frame is `__mochi_face__`, which the shelf is now the
+   * only sender of — `set_expression` sent the same one until it was removed.
+   * See `shelf:wear-face`.
    */
   wearFace(face: string): Promise<SettingsWrite>
   /** Make one, copy one, remove one, or put the built-in back. */
   character(action: PersonaAction): Promise<SettingsWrite>
   /** Undo the last change to her note, or clear it. */
   memory(action: NoteAction): Promise<SettingsWrite>
-  /** Clear one collection of what she kept, or all of it. */
-  forgetKept(action: KeptAction): Promise<SettingsWrite>
   /** Store the system prompt document. Empty is a real answer and is allowed. */
   prompt(text: string): Promise<SettingsWrite>
   /** Put one turn's words on the clipboard. See `shelf:copy`. */

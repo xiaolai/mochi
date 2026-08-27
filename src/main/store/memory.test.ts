@@ -11,7 +11,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { PERSONA_LIMITS } from '@shared/persona'
-import { MEMORY_DIR, memoryRoot, previousNote, recall, remember } from './memory'
+import {
+  MEMORY_DIR,
+  forgetMemory,
+  markSummarised,
+  memoryRoot,
+  previousNote,
+  recall,
+  remember,
+  summarisedThrough,
+} from './memory'
 
 function workspace(): string {
   return mkdtempSync(join(tmpdir(), 'mochi-memory-'))
@@ -207,5 +216,91 @@ describe('one step back', () => {
     remember(userData, 'loki', '')
     expect(recall(userData, 'loki')).toBe('')
     expect(previousNote(userData, 'loki')).toBe('months of accumulated notes')
+  })
+})
+
+describe('how far her note has been brought up to date', () => {
+  /*
+    The cursor lives in her memory file, and that placement is the whole design.
+
+    It was a Map in the main process that started empty on every launch, so a
+    conversation somebody QUIT out of rather than slept was never summarised —
+    its turns sat in the archive, findable by `recall_conversations` and absent
+    from her note, for ever.
+
+    Here it survives the quit. It is per persona for free, because the file
+    already is. And it dies with her, because `forgetMemory` takes that file —
+    which matters: ids are derived name slugs handed out again once free, so a
+    cursor left behind would tell the next character of that name that a
+    conversation she never had was already summarised.
+  */
+  const AT = 1_700_000_000_000
+
+  it('is absent until something summarises her', () => {
+    expect(summarisedThrough(workspace(), 'ada')).toBe(0)
+  })
+
+  it('is read back after a restart, which is the point of storing it', () => {
+    const dir = workspace()
+    markSummarised(dir, 'ada', AT)
+    // A fresh read of the file, which is all a new process would have.
+    expect(summarisedThrough(dir, 'ada')).toBe(AT)
+  })
+
+  it('survives a later rewrite of the note', () => {
+    // `remember` writes the whole object. Rewriting it without carrying the
+    // cursor would re-summarise everything since launch, every launch.
+    const dir = workspace()
+    remember(dir, 'ada', 'They are learning Rust.')
+    markSummarised(dir, 'ada', AT)
+    remember(dir, 'ada', 'They are learning Rust and Go.')
+
+    expect(recall(dir, 'ada')).toContain('Go')
+    expect(summarisedThrough(dir, 'ada'), 'a note rewrite dropped it').toBe(AT)
+  })
+
+  it('advances even when the summary changed nothing', () => {
+    /*
+      The reason it is not written by `remember`.
+
+      `remember` returns without writing when the note is unchanged — right,
+      because an unchanged write rotates the one rollback version away. But a
+      summariser legitimately returns an identical note, and that run still
+      covered its conversations. Riding on `remember` would leave the cursor
+      behind on exactly those runs, and the same conversations would be
+      re-summarised for ever.
+    */
+    const dir = workspace()
+    remember(dir, 'ada', 'Unchanged.')
+    markSummarised(dir, 'ada', AT)
+    remember(dir, 'ada', 'Unchanged.')
+    markSummarised(dir, 'ada', AT + 5_000)
+
+    expect(summarisedThrough(dir, 'ada')).toBe(AT + 5_000)
+  })
+
+  it('goes when she goes', () => {
+    const dir = workspace()
+    markSummarised(dir, 'ada', AT)
+    forgetMemory(dir, 'ada')
+    expect(summarisedThrough(dir, 'ada'), 'it outlived her').toBe(0)
+  })
+
+  it('reads a hand-edited nonsense value as no cursor at all', () => {
+    // Re-summarising is the safe direction. A cursor read from nonsense would
+    // silently skip whatever it happened to land past.
+    const dir = workspace()
+    mkdirSync(memoryRoot(dir), { recursive: true })
+    writeFileSync(
+      join(memoryRoot(dir), 'ada.json'),
+      JSON.stringify({ notes: 'x', summarisedThrough: 'tuesday' }),
+    )
+    expect(summarisedThrough(dir, 'ada')).toBe(0)
+  })
+
+  it('does not fail a sleep when it cannot be stored', () => {
+    // A cursor that could not be written costs a repeated summary. Failing the
+    // sleep over bookkeeping would cost the sleep.
+    expect(() => markSummarised(workspace(), 'nobody-has-notes', AT)).not.toThrow()
   })
 })

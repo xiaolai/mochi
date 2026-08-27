@@ -99,40 +99,6 @@ export function fenced(tag: string, text: string): string {
  * now it could forge a heading, which is the same class of thing the fence
  * already only mitigates.
  */
-/**
- * The most collections her prompt will ever list.
- *
- * The index grows with COLLECTIONS, not with rows — a thousand entries under
- * one name is one line. So this is the number that bounds what she costs on
- * every wake and every hourly reconnect, and the row cap never was: nothing
- * stopped a character holding five hundred collections of one row each and
- * putting five hundred lines in front of the model, for ever.
- *
- * Twenty is enough that a real store is described rather than sampled, and
- * small enough that the section stays a glance.
- */
-const MOST_COLLECTIONS = 20
-
-/**
- * Names and counts, never contents, and never more than a screen of them.
- *
- * The remainder is COUNTED rather than dropped. A list that looks complete is
- * how she comes to say confidently that something is not there — the same
- * reason `look_up` reports what it did not read.
- */
-function keptIndex(
-  kept: readonly { readonly collection: string; readonly entries: number }[],
-  prompts: Prompts,
-): string {
-  if (kept.length === 0) return ''
-  const shown = kept.slice(0, MOST_COLLECTIONS)
-  const lines = shown.map((one) => `- ${one.collection} (${String(one.entries)})`)
-  if (kept.length > shown.length) {
-    lines.push(`- and ${String(kept.length - shown.length)} more, which look_up will list`)
-  }
-  return [prompts('kept.heading'), lines.join('\n')].filter((line) => line !== '').join('\n')
-}
-
 export function instructionsFor(
   persona: Persona,
   memory: string,
@@ -169,15 +135,6 @@ export function instructionsFor(
    * it from what is on disk.
    */
   prompts: Prompts = defaultPrompts,
-  /**
-   * An INDEX of what she has kept — names and counts, never the contents.
-   *
-   * The contents would grow this prompt with everything she has ever written,
-   * on every wake and on every hourly reconnect, which is the unbounded request
-   * `PERSONA_LIMITS` exists to prevent. What this buys is the thing the tool
-   * alone cannot: she cannot ask for a name she does not know she filed.
-   */
-  kept: readonly { readonly collection: string; readonly entries: number }[] = [],
 ): string {
   /*
     Each piece once: at its slot if the document names one, at its default
@@ -197,21 +154,29 @@ export function instructionsFor(
           .filter((line) => line !== '')
           .join('\n'),
     brief: brief.trim(),
-    // Empty means ABSENT, for the reason the memory section gives: a heading
-    // with nothing under it invites the model to invent something to put there.
-    kept: keptIndex(kept, prompts),
     /*
       Which faces she has, and only when it is not all of them.
 
       Silent in the ordinary case, for the same reason the memory section is: an
       "everything is available" heading is a line that costs tokens and says
-      nothing. When a character DOES narrow the set, she is told — because
-      `set_expression`'s enum is narrowed to match, and a tool that silently
-      offers three of eight leaves her wondering why a face she can see in the
-      tuple is not on her wire.
+      nothing.
 
-      It says "you may use" rather than "you have", because she can also be
-      refused at the moment of the call: the grant can be off.
+      **What this section is for has narrowed twice, and this is the current
+      truth.** It used to say the set was narrowed "because `set_expression`'s
+      enum is narrowed to match"; that tool went on 2026-08-26, unused in 275
+      sessions. A later correction said her expression was time-driven instead
+      — also wrong: `repose.ts` drives MOTION, and contains no expression code
+      at all.
+
+      What actually changes her face today is two built-in reactions in
+      `renderer/companion/face.ts` (neutral when she sleeps, a perk when she
+      wakes) and the shelf's preview. None of them consults `persona.faces`.
+
+      So this section no longer constrains anything she can do — it tells her
+      what she has. Kept because a character describing an expression nobody
+      will ever see her wear is worse than one that says nothing, and because
+      the honest alternative is removing `persona.faces` entirely, which is a
+      product decision recorded in `dev-docs/plan-0.1.md` W2.
     */
     faces:
       persona.faces.length === EMOTIONS.length
@@ -263,7 +228,7 @@ export function instructionsFor(
   // text derived from what somebody said must never occupy the strongest
   // instructional position in the prompt. `briefFor` already fences the quoted
   // half; the ordering is what keeps the rules downstream of it.
-  for (const slot of ['notes', 'brief', 'faces', 'kept'] as const) {
+  for (const slot of ['notes', 'brief', 'faces'] as const) {
     if (placed.has(slot)) continue
     if (pieces[slot] !== '') sections.push(pieces[slot])
   }
@@ -331,7 +296,7 @@ export const NAME_TOKEN = '{name}'
  * and the fence is what survives it. That is a real cost of handing the layout
  * over, and it is stated rather than prevented: it is their prompt.
  */
-export const PROMPT_SLOTS = ['style', 'address', 'notes', 'brief', 'faces', 'kept'] as const
+export const PROMPT_SLOTS = ['style', 'address', 'notes', 'brief', 'faces'] as const
 
 export type PromptSlot = (typeof PROMPT_SLOTS)[number]
 

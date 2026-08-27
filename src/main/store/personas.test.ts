@@ -22,17 +22,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createTranscripts, type Transcripts } from './transcripts'
-import { hasPolicy, policyRoot, readPolicy, retentionMigrated, writePolicy } from './policy'
+import { hasPolicy, readPolicy, writePolicy } from './policy'
 import { DEFAULT_POLICY } from '@shared/policy'
 import { PACKAGE_FACE } from './avatars'
 import { DEFAULT_PERSONA, type Persona } from '@shared/persona'
 import { BUILT_IN_ID } from '@shared/parse-persona'
 import { activePersona, copyPersonaTo, loadPersonas, hasOwnFace, savePersonaTo } from './personas'
-import { LEGACY_FILE, MANIFEST, personasRoot } from './persona-files'
+import { MANIFEST, personasRoot } from './persona-files'
 import { EDITS, builtInPersona, type PersonaEdits } from './her-edits'
 import { deletePersona, discardWrite, sweepDeletions } from './delete-persona'
 import { editsFrom, readEdits, restoreBuiltIn } from './her-edits'
-import { migrateLegacyPersona, migrateLooseFiles } from './migrate-personas'
 
 const roots: string[] = []
 
@@ -79,7 +78,7 @@ function write(userData: string, folder: string, value: unknown): void {
 
 describe('the built-in is in the catalog and never on disk', () => {
   it('is present with no folder at all', () => {
-    const catalog = loadPersonas(workspace(), {}, true)
+    const catalog = loadPersonas(workspace(), {})
     expect([...catalog.personas.keys()]).toEqual([BUILT_IN_ID])
     // No source, which is how "this one cannot be written to" is expressed --
     // a missing key rather than a flag somebody has to remember to check.
@@ -90,7 +89,7 @@ describe('the built-in is in the catalog and never on disk', () => {
   it('refuses a file that tries to claim her id, and keeps her', () => {
     const dir = workspace()
     write(dir, 'impostor', { ...tutor, id: BUILT_IN_ID })
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
 
     expect(catalog.problems).toEqual([{ kind: 'reserved-id', id: BUILT_IN_ID, source: 'impostor' }])
     // The built-in she is, not the file's version of her.
@@ -105,7 +104,7 @@ describe('a duplicate id takes down its own group and nothing else', () => {
     write(dir, 'b', { ...tutor, name: 'Grace' })
     write(dir, 'c', { ...tutor, id: 'coach', name: 'Coach' })
 
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
 
     // Neither duplicate wins. Picking one would make the choice depend on
     // filesystem order -- and the loser's memory is filed under the same id.
@@ -126,7 +125,7 @@ describe('a file that is not a persona is reported, not skipped in silence', () 
     write(dir, 'wrong', { ...tutor, id: 'Bad Id' })
     write(dir, 'good', { ...tutor, id: 'coach' })
 
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
 
     expect(catalog.problems).toContainEqual({ kind: 'malformed', source: 'broken' })
     const invalid = catalog.problems.find((p) => p.kind === 'invalid')
@@ -148,7 +147,7 @@ describe('a file that is not a persona is reported, not skipped in silence', () 
 
 describe('which persona is active', () => {
   it('falls back to the built-in and says so when the id is gone', () => {
-    const catalog = loadPersonas(workspace(), {}, true)
+    const catalog = loadPersonas(workspace(), {})
     const resolved = activePersona(catalog, 'deleted-one')
     expect(resolved.persona).toEqual(DEFAULT_PERSONA)
     expect(resolved.problem).toEqual({ kind: 'active-missing', id: 'deleted-one' })
@@ -157,7 +156,7 @@ describe('which persona is active', () => {
   it('says nothing when nobody has chosen one', () => {
     // Never having picked is not a problem, and reporting it identically to
     // "your persona is missing" is how a working setup grows a warning.
-    const resolved = activePersona(loadPersonas(workspace(), {}, true), null)
+    const resolved = activePersona(loadPersonas(workspace(), {}), null)
     expect(resolved.persona).toEqual(DEFAULT_PERSONA)
     expect(resolved.problem).toBeNull()
   })
@@ -172,7 +171,7 @@ describe('which persona is active', () => {
    * a lookup nobody made.
    */
   it('hands back the built-in wearing the edits this install made', () => {
-    const catalog = loadPersonas(workspace(), { name: 'Bao', theme: 'sky', voice: 'verse' }, true)
+    const catalog = loadPersonas(workspace(), { name: 'Bao', theme: 'sky', voice: 'verse' })
     for (const id of [null, BUILT_IN_ID]) {
       const resolved = activePersona(catalog, id)
       expect(resolved.persona.name, `active id ${String(id)}`).toBe('Bao')
@@ -189,7 +188,7 @@ describe('which persona is active', () => {
     // The whole reason the overlay stores a DIFF. Somebody who renamed her two
     // releases ago still gets this release's prompt; a stored full manifest
     // would have frozen her at the version that was open when they typed.
-    const resolved = activePersona(loadPersonas(workspace(), { name: 'Bao' }, true), null)
+    const resolved = activePersona(loadPersonas(workspace(), { name: 'Bao' }), null)
     expect(resolved.persona.style).toBe(DEFAULT_PERSONA.style)
     expect(resolved.persona.greeting).toEqual(DEFAULT_PERSONA.greeting)
   })
@@ -199,9 +198,9 @@ describe('which persona is active', () => {
     // identically-named copy, so the shelf grew a second "Mochi" and there was
     // no route back to the first. The catalog stays one entry long.
     const dir = workspace()
-    expect([...loadPersonas(dir, {}, true).personas.keys()]).toEqual([BUILT_IN_ID])
+    expect([...loadPersonas(dir, {}).personas.keys()]).toEqual([BUILT_IN_ID])
     expect([
-      ...loadPersonas(dir, { name: 'Bao', style: 'Teach me words.' }, true).personas.keys(),
+      ...loadPersonas(dir, { name: 'Bao', style: 'Teach me words.' }).personas.keys(),
     ]).toEqual([BUILT_IN_ID])
   })
 })
@@ -209,12 +208,12 @@ describe('which persona is active', () => {
 describe('the built-in is edited in place, and can be put back', () => {
   /** Read her back the way the app does: save, then reload through the overlay. */
   function reload(dir: string): Persona {
-    return activePersona(loadPersonas(dir, readEdits(dir).edits, true), null).persona
+    return activePersona(loadPersonas(dir, readEdits(dir).edits), null).persona
   }
 
   it('survives a save and a reload', () => {
     const dir = workspace()
-    savePersonaTo(dir, loadPersonas(dir, {}, true), {
+    savePersonaTo(dir, loadPersonas(dir, {}), {
       ...DEFAULT_PERSONA,
       name: 'Bao',
       style: 'You teach vocabulary.',
@@ -227,7 +226,7 @@ describe('the built-in is edited in place, and can be put back', () => {
 
   it('writes only what differs, so the rest can still move with the app', () => {
     const dir = workspace()
-    savePersonaTo(dir, loadPersonas(dir, {}, true), { ...DEFAULT_PERSONA, name: 'Bao' })
+    savePersonaTo(dir, loadPersonas(dir, {}), { ...DEFAULT_PERSONA, name: 'Bao' })
     const written = JSON.parse(
       readFileSync(join(personasRoot(dir), BUILT_IN_ID, EDITS), 'utf8'),
     ) as Record<string, unknown>
@@ -239,11 +238,11 @@ describe('the built-in is edited in place, and can be put back', () => {
 
   it('writes no manifest for her, so nothing can claim her id', () => {
     const dir = workspace()
-    savePersonaTo(dir, loadPersonas(dir, {}, true), { ...DEFAULT_PERSONA, name: 'Bao' })
+    savePersonaTo(dir, loadPersonas(dir, {}), { ...DEFAULT_PERSONA, name: 'Bao' })
     expect(existsSync(join(personasRoot(dir), BUILT_IN_ID, MANIFEST))).toBe(false)
     // And she is still not a writable source: `sources` having no entry for her
     // is how the rest of the module reads "constant, not record".
-    expect(loadPersonas(dir, readEdits(dir).edits, true).sources.has(BUILT_IN_ID)).toBe(false)
+    expect(loadPersonas(dir, readEdits(dir).edits).sources.has(BUILT_IN_ID)).toBe(false)
   })
 
   it('editing her back by hand leaves no overlay behind', () => {
@@ -251,15 +250,15 @@ describe('the built-in is edited in place, and can be put back', () => {
     // state. An empty `{}` left on disk would make the restore below look like
     // it had failed, and would light the undo button with nothing to undo.
     const dir = workspace()
-    savePersonaTo(dir, loadPersonas(dir, {}, true), { ...DEFAULT_PERSONA, name: 'Bao' })
-    savePersonaTo(dir, loadPersonas(dir, {}, true), DEFAULT_PERSONA)
+    savePersonaTo(dir, loadPersonas(dir, {}), { ...DEFAULT_PERSONA, name: 'Bao' })
+    savePersonaTo(dir, loadPersonas(dir, {}), DEFAULT_PERSONA)
     expect(existsSync(join(personasRoot(dir), BUILT_IN_ID, EDITS))).toBe(false)
     expect(editsFrom(reload(dir))).toEqual({})
   })
 
   it('restores her, and is harmless when there was nothing to restore', () => {
     const dir = workspace()
-    savePersonaTo(dir, loadPersonas(dir, {}, true), {
+    savePersonaTo(dir, loadPersonas(dir, {}), {
       ...DEFAULT_PERSONA,
       name: 'Bao',
       theme: 'clay',
@@ -280,7 +279,7 @@ describe('the built-in is edited in place, and can be put back', () => {
       join(personasRoot(dir), BUILT_IN_ID, EDITS),
       JSON.stringify({ id: 'someone-else', name: 'Bao' }),
     )
-    const her = activePersona(loadPersonas(dir, readEdits(dir).edits, true), null).persona
+    const her = activePersona(loadPersonas(dir, readEdits(dir).edits), null).persona
     // The name lands; the id cannot. Her id keys her memory and transcripts, so
     // an overlay able to set it would be a way to read another persona's notes.
     expect(her.name).toBe('Bao')
@@ -344,9 +343,9 @@ describe('the built-in is edited in place, and can be put back', () => {
 describe('copying is the only thing that makes a new persona', () => {
   it('mints an id from the new name and leaves the original alone', () => {
     const dir = workspace()
-    const { id } = copyPersonaTo(dir, loadPersonas(dir, {}, true), DEFAULT_PERSONA, 'Mochi 2')
+    const { id } = copyPersonaTo(dir, loadPersonas(dir, {}), DEFAULT_PERSONA, 'Mochi 2')
     expect(id).toBe('mochi-2')
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     expect(catalog.personas.get(id)?.name).toBe('Mochi 2')
     // The built-in is untouched: copying her is not editing her.
     expect(catalog.personas.get(BUILT_IN_ID)).toEqual(DEFAULT_PERSONA)
@@ -363,7 +362,7 @@ describe('copying is the only thing that makes a new persona', () => {
       join(personasRoot(dir), 'coach', 'extra.json'),
       JSON.stringify({ anything: 'she needs' }),
     )
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
 
     const { id } = copyPersonaTo(dir, catalog, catalog.personas.get('coach')!, 'Coach Two')
 
@@ -376,7 +375,7 @@ describe('copying is the only thing that makes a new persona', () => {
     writeFileSync(join(personasRoot(dir), 'coach', 'whatever-comes-next.json'), '{}')
     const { id: second } = copyPersonaTo(
       dir,
-      loadPersonas(dir, {}, true),
+      loadPersonas(dir, {}),
       catalog.personas.get('coach')!,
       'Coach Three',
     )
@@ -389,7 +388,7 @@ describe('copying is the only thing that makes a new persona', () => {
     const dir = workspace()
     write(dir, 'coach', { ...tutor, id: 'coach', name: 'Coach' })
     writeFileSync(join(personasRoot(dir), 'coach', EDITS), JSON.stringify({ name: 'Mine' }))
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
 
     const { id } = copyPersonaTo(dir, catalog, catalog.personas.get('coach')!, 'Coach Two')
     expect(existsSync(join(personasRoot(dir), id, EDITS))).toBe(false)
@@ -419,7 +418,7 @@ describe('saving', () => {
     // `sources` map exists for: deriving a path from the id would write a
     // second file and leave the first one shadowing it.
     write(dir, 'odd-filename', { ...tutor, id: 'teacher' })
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
 
     const written = savePersonaTo(dir, catalog, {
       ...tutor,
@@ -428,21 +427,21 @@ describe('saving', () => {
     })
 
     expect(written).toEqual({ id: 'teacher', source: 'odd-filename' })
-    const reloaded = loadPersonas(dir, {}, true)
+    const reloaded = loadPersonas(dir, {})
     expect(reloaded.personas.get('teacher')?.name).toBe('Ada Lovelace')
     expect([...reloaded.personas.keys()].filter((id) => id !== BUILT_IN_ID)).toEqual(['teacher'])
   })
 
   it('writes the built-in in place, and mints nothing', () => {
     const dir = workspace()
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
 
     const written = savePersonaTo(dir, catalog, { ...DEFAULT_PERSONA, name: 'Ada' })
 
     // This used to fork: her id was reserved, so renaming her produced a copy
     // called `ada` and moved the user onto it without saying so.
     expect(written.id).toBe(BUILT_IN_ID)
-    const reloaded = loadPersonas(dir, readEdits(dir).edits, true)
+    const reloaded = loadPersonas(dir, readEdits(dir).edits)
     expect([...reloaded.personas.keys()]).toEqual([BUILT_IN_ID])
     expect(reloaded.personas.get(BUILT_IN_ID)?.name).toBe('Ada')
   })
@@ -450,253 +449,12 @@ describe('saving', () => {
   it('copies her onto a free id when the derived one is taken', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
 
     const written = copyPersonaTo(dir, catalog, DEFAULT_PERSONA, 'Ada')
     expect(written.id).toBe('ada-2')
     // The persona that already held the name is untouched.
-    expect(loadPersonas(dir, {}, true).personas.get('ada')?.name).toBe('Ada')
-  })
-})
-
-describe('migrating the single persona.json', () => {
-  const legacy = (userData: string, persona: unknown): void => {
-    writeFileSync(join(userData, LEGACY_FILE), JSON.stringify(persona, null, 2))
-  }
-
-  it('does nothing when there is no legacy file', () => {
-    const dir = workspace()
-    expect(migrateLegacyPersona(dir, loadPersonas(dir, {}, true))).toEqual({
-      kind: 'none',
-    })
-  })
-
-  it('renames a legacy persona off the reserved id without renaming HER', () => {
-    const dir = workspace()
-    // What editing the built-in used to produce: her own id, a changed name.
-    legacy(dir, { ...DEFAULT_PERSONA, name: 'Mochi', style: 'You are mine.' })
-
-    const migrated = migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-    expect(migrated.kind).toBe('imported')
-    const id = migrated.kind === 'imported' ? migrated.id : ''
-
-    expect(id).not.toBe(BUILT_IN_ID)
-    const catalog = loadPersonas(dir, {}, true)
-    const moved = catalog.personas.get(id)
-    // The KEY changed. What she is called did not -- a migration that renamed
-    // the character would be a migration that lost something.
-    expect(moved?.name).toBe('Mochi')
-    expect(moved?.style).toBe('You are mine.')
-    expect(catalog.problems).toEqual([])
-  })
-
-  it('keeps a legacy id that was never reserved', () => {
-    const dir = workspace()
-    legacy(dir, tutor)
-    expect(migrateLegacyPersona(dir, loadPersonas(dir, {}, true))).toEqual({
-      kind: 'imported',
-      id: 'tutor',
-      // Nothing to carry: this manifest never held a retention setting, and
-      // the field is only non-null when one could not be written to its file.
-      carried: null,
-    })
-  })
-
-  it('retires the legacy file rather than deleting it', () => {
-    const dir = workspace()
-    legacy(dir, tutor)
-    migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-    expect(existsSync(join(dir, LEGACY_FILE))).toBe(false)
-    expect(existsSync(join(dir, `${LEGACY_FILE}.migrated`))).toBe(true)
-  })
-
-  it('imports once even when the legacy file is still there', () => {
-    const dir = workspace()
-    legacy(dir, tutor)
-    const first = migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-    expect(first).toEqual({ kind: 'imported', id: 'tutor', carried: null })
-
-    // Put it back, exactly as a failed retire would leave it. The guard is the
-    // CONTENT of the catalog, not the absence of this file -- otherwise a
-    // read-only directory means one extra persona per launch, forever.
-    legacy(dir, tutor)
-    const second = migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-
-    // `already`, NOT `imported`. Reported as an import, every launch would
-    // reselect this persona and quietly overrule whatever the user chose since.
-    // `carried: null` because her policy landed on the first pass, so this
-    // retry has nothing outstanding and the file is free to retire.
-    expect(second).toEqual({ kind: 'already', id: 'tutor', carried: null })
-    const stored = [...loadPersonas(dir, {}, true).personas.keys()].filter(
-      (id) => id !== BUILT_IN_ID,
-    )
-    expect(stored).toEqual(['tutor'])
-  })
-
-  /**
-   * A failed retention write must survive the process, and must not survive HER.
-   *
-   * `carriedPolicies` is retried on every read and heals the moment the disk
-   * allows — but only within one run. If it never allows before quit, the choice
-   * is gone and the fallback for a missing policy file is `keeps: true`: a user
-   * who turned transcripts off starts recording.
-   *
-   * The first attempt at this kept the legacy `persona.json` so the next launch
-   * could retry from it. That preserved the opt-out and bought a worse bug —
-   * deleting her removed the package and left the source, so she came back on
-   * the next launch and no UI action could make her stay gone. The record is
-   * parked in her own package instead: durable, writable, and removed with her.
-   */
-  it('parks her retention in her package and still retires the legacy file', () => {
-    const dir = workspace()
-    legacy(dir, { ...tutor, version: 1, keeps: false })
-    mkdirSync(policyRoot(dir), { recursive: true })
-    chmodSync(policyRoot(dir), 0o500)
-
-    const result = migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-    expect(result.kind).toBe('imported')
-    // Handed back, so the caller enforces it for this run...
-    expect(result.kind === 'imported' && result.carried).toEqual({ keeps: false })
-    // ...parked, so the NEXT run can still find it...
-    expect(existsSync(join(personasRoot(dir), 'tutor', 'pending-policy.json'))).toBe(true)
-    // ...and the legacy source is gone, so she cannot be re-imported.
-    expect(existsSync(join(dir, LEGACY_FILE))).toBe(false)
-  })
-
-  it('settles the parked retention on a later launch, once the disk allows', () => {
-    const dir = workspace()
-    legacy(dir, { ...tutor, version: 1, keeps: false })
-    mkdirSync(policyRoot(dir), { recursive: true })
-    chmodSync(policyRoot(dir), 0o500)
-    migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-
-    // The disk recovers. Note the one-time migration marker has already been
-    // written, so this retry cannot depend on `migrating` being true.
-    chmodSync(policyRoot(dir), 0o700)
-    const catalog = loadPersonas(dir, {}, true)
-
-    expect(readPolicy(dir, 'tutor')).toEqual({ keeps: false })
-    expect(catalog.carriedPolicies.size, 'still outstanding after it landed').toBe(0)
-    // Settled, so the record is cleared rather than retried forever.
-    expect(existsSync(join(personasRoot(dir), 'tutor', 'pending-policy.json'))).toBe(false)
-  })
-
-  /**
-   * The regression the parked-record design exists to avoid. Deleting her must
-   * stick, even while the policy store is still refusing writes.
-   */
-  it('takes the parked record with her when she is deleted', () => {
-    const dir = workspace()
-    legacy(dir, { ...tutor, version: 1, keeps: false })
-    mkdirSync(policyRoot(dir), { recursive: true })
-    chmodSync(policyRoot(dir), 0o500)
-    migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-    expect(loadPersonas(dir, {}, true).personas.has('tutor')).toBe(true)
-
-    deletePersona(dir, loadPersonas(dir, {}, true), 'tutor', history)
-
-    expect(loadPersonas(dir, {}, true).personas.has('tutor'), 'she came back').toBe(false)
-    expect(existsSync(join(personasRoot(dir), 'tutor'))).toBe(false)
-    // And nothing anywhere can re-import her.
-    expect(existsSync(join(dir, LEGACY_FILE))).toBe(false)
-  })
-
-  /**
-   * A copy is a NEW identity. Her package is copied wholesale so future
-   * capabilities travel without anybody remembering to list them — which would
-   * hand the copy a stranger's parked opt-out, and `settlePendingPolicy` would
-   * then write it under the copy's id.
-   */
-  it('does not copy a parked retention onto a new persona', () => {
-    const dir = workspace()
-    legacy(dir, { ...tutor, version: 1, keeps: false })
-    mkdirSync(policyRoot(dir), { recursive: true })
-    chmodSync(policyRoot(dir), 0o500)
-    migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-
-    const catalog = loadPersonas(dir, {}, true)
-    const made = copyPersonaTo(dir, catalog, catalog.personas.get('tutor')!, 'Ada 2')
-    expect(existsSync(join(personasRoot(dir), made.source, 'pending-policy.json'))).toBe(false)
-  })
-
-  /**
-   * A record is filed by FOLDER and applied by ID, and those are deliberately
-   * different things. Settlement refuses to bridge them on trust: a record
-   * copied into another package — by hand, by a sync tool, by a backup restored
-   * over the top — would otherwise hand one persona's opt-out to another.
-   */
-  it('refuses a parked record that names a different persona', () => {
-    const dir = workspace()
-    write(dir, 'coach', { ...tutor, id: 'coach', name: 'Coach' })
-    writeFileSync(
-      join(personasRoot(dir), 'coach', 'pending-policy.json'),
-      JSON.stringify({ id: 'someone-else', keeps: false }),
-    )
-
-    const catalog = loadPersonas(dir, {}, true)
-    expect(hasPolicy(dir, 'coach'), "settled a stranger's retention under her id").toBe(false)
-    expect(catalog.carriedPolicies.has('coach')).toBe(false)
-  })
-
-  /**
-   * A record that EXISTS and cannot be read is a choice we cannot honour. The
-   * safe direction is the one `policy.ts` already chose for the same shape:
-   * do not keep. Treating it as absence falls back to keeping, which records
-   * somebody who may have asked not to be.
-   */
-  it('does not fall back to keeping when a parked record is unreadable', () => {
-    const dir = workspace()
-    write(dir, 'coach', { ...tutor, id: 'coach', name: 'Coach' })
-    writeFileSync(join(personasRoot(dir), 'coach', 'pending-policy.json'), '{ not json')
-
-    const carried = loadPersonas(dir, {}, true).carriedPolicies.get('coach')
-    expect(carried?.keeps, 'an unreadable choice fell back to recording').toBe(false)
-  })
-
-  /**
-   * `sameCharacter` matches by CONTENT, so an independently created persona
-   * identical to the legacy one lands on the `already` branch on the very first
-   * pass. That branch used to retire the file carrying nothing, dropping a
-   * legacy `keeps: false` on a perfectly writable disk.
-   */
-  it('carries retention even when the legacy persona matches one already there', () => {
-    const dir = workspace()
-    write(dir, 'twin', { ...tutor, id: 'twin' })
-    // With the `keepDays` a real v1 file would have carried, to pin that the
-    // number is DROPPED on the way in rather than refused. Refusing would fail
-    // the parse, and a failed policy parse reads as "record nothing".
-    legacy(dir, { ...tutor, version: 1, keeps: false, keepDays: 7 })
-
-    const result = migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-    expect(result.kind).toBe('already')
-    expect(readPolicy(dir, 'twin'), 'her opt-out went with the retired file').toEqual({
-      keeps: false,
-    })
-  })
-
-  it('leaves a legacy file it cannot parse exactly where it is', () => {
-    const dir = workspace()
-    writeFileSync(join(dir, LEGACY_FILE), '{ half a file')
-
-    // REPORTED, not silent. This used to answer identically to "there was
-    // nothing to move", so an upgrading user lost their character with nothing
-    // anywhere to say why.
-    expect(migrateLegacyPersona(dir, loadPersonas(dir, {}, true))).toEqual({
-      kind: 'failed',
-      problem: { kind: 'legacy-malformed' },
-    })
-    // Still the only copy of whatever somebody wrote. Deleting it to tidy up
-    // is the one outcome that cannot be undone.
-    expect(readFileSync(join(dir, LEGACY_FILE), 'utf8')).toBe('{ half a file')
-  })
-
-  it('leaves a legacy file that is JSON but not a persona', () => {
-    const dir = workspace()
-    legacy(dir, { id: 'x' })
-    const result = migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-    expect(result.kind).toBe('failed')
-    if (result.kind === 'failed') expect(result.problem.kind).toBe('legacy-invalid')
-    expect(existsSync(join(dir, LEGACY_FILE))).toBe(true)
+    expect(loadPersonas(dir, {}).personas.get('ada')?.name).toBe('Ada')
   })
 })
 
@@ -731,7 +489,7 @@ describe('creating a persona never overwrites what is already in the folder', ()
     mkdirSync(join(personasRoot(dir), 'ada'), { recursive: true })
     writeFileSync(join(personasRoot(dir), 'ada', MANIFEST), '{ half a file')
 
-    expect(() => copyPersonaTo(dir, loadPersonas(dir, {}, true), DEFAULT_PERSONA, 'Ada')).toThrow(
+    expect(() => copyPersonaTo(dir, loadPersonas(dir, {}), DEFAULT_PERSONA, 'Ada')).toThrow(
       /refusing to overwrite/,
     )
     expect(readFileSync(join(personasRoot(dir), 'ada', MANIFEST), 'utf8')).toBe('{ half a file')
@@ -742,7 +500,7 @@ describe('creating a persona never overwrites what is already in the folder', ()
     mkdirSync(join(personasRoot(dir), 'ADA'), { recursive: true })
     writeFileSync(join(personasRoot(dir), 'ADA', MANIFEST), 'sentinel')
 
-    expect(() => copyPersonaTo(dir, loadPersonas(dir, {}, true), DEFAULT_PERSONA, 'Ada')).toThrow(
+    expect(() => copyPersonaTo(dir, loadPersonas(dir, {}), DEFAULT_PERSONA, 'Ada')).toThrow(
       /refusing to overwrite/,
     )
     expect(readFileSync(join(personasRoot(dir), 'ADA', MANIFEST), 'utf8')).toBe('sentinel')
@@ -750,7 +508,7 @@ describe('creating a persona never overwrites what is already in the folder', ()
 
   it('writes normally when the name really is free', () => {
     const dir = workspace()
-    const written = copyPersonaTo(dir, loadPersonas(dir, {}, true), DEFAULT_PERSONA, 'Ada')
+    const written = copyPersonaTo(dir, loadPersonas(dir, {}), DEFAULT_PERSONA, 'Ada')
     expect(written).toEqual({ id: 'ada', source: 'ada' })
   })
 })
@@ -763,20 +521,20 @@ describe('a hand-renamed file', () => {
     // the file, so only the source path changed.
     renameSync(join(personasRoot(dir), 'ada'), join(personasRoot(dir), 'my-tutor'))
 
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     expect(catalog.personas.get('ada')?.name).toBe('Ada')
     expect(catalog.sources.get('ada')).toBe('my-tutor')
 
     savePersonaTo(dir, catalog, { ...tutor, id: 'ada', name: 'Ada Lovelace' })
     // Written back to the file it came from -- not to a recreated `ada.json`.
     expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(false)
-    expect(loadPersonas(dir, {}, true).personas.get('ada')?.name).toBe('Ada Lovelace')
+    expect(loadPersonas(dir, {}).personas.get('ada')?.name).toBe('Ada Lovelace')
   })
 
   it('refuses to save when the file moved AFTER loading, rather than recreating it', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     // Renamed underneath a running app. The map is now stale by design.
     renameSync(join(personasRoot(dir), 'ada'), join(personasRoot(dir), 'moved'))
 
@@ -791,7 +549,7 @@ describe('a hand-renamed file', () => {
     // Recreating `ada.json` would leave two files claiming one id, which the
     // next launch refuses as a duplicate -- so neither would load.
     expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(false)
-    expect(loadPersonas(dir, {}, true).personas.get('ada')?.name).toBe('Ada')
+    expect(loadPersonas(dir, {}).personas.get('ada')?.name).toBe('Ada')
   })
 })
 
@@ -803,9 +561,9 @@ describe('deleting a persona takes her notes with her', () => {
     remember(dir, 'ada', 'They are learning Rust.')
     expect(recall(dir, 'ada')).toContain('Rust')
 
-    deletePersona(dir, loadPersonas(dir, {}, true), 'ada', history)
+    deletePersona(dir, loadPersonas(dir, {}), 'ada', history)
 
-    expect(loadPersonas(dir, {}, true).personas.has('ada')).toBe(false)
+    expect(loadPersonas(dir, {}).personas.has('ada')).toBe(false)
     // The notes go too. Ids are DERIVED from names, so `ada` is handed out
     // again the moment nothing holds it -- and a new persona inheriting a
     // stranger's notes is the privacy failure the per-id filing exists to
@@ -818,8 +576,8 @@ describe('deleting a persona takes her notes with her', () => {
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
     // No memory file exists. Absent is success -- treating it as a failure
     // would make deleting a quiet character report an error.
-    expect(() => deletePersona(dir, loadPersonas(dir, {}, true), 'ada', history)).not.toThrow()
-    expect(loadPersonas(dir, {}, true).personas.has('ada')).toBe(false)
+    expect(() => deletePersona(dir, loadPersonas(dir, {}), 'ada', history)).not.toThrow()
+    expect(loadPersonas(dir, {}).personas.has('ada')).toBe(false)
   })
 
   it('keeps her id reserved when clearing what is filed under it fails', async () => {
@@ -828,7 +586,7 @@ describe('deleting a persona takes her notes with her', () => {
     // still filed under that name -- and ids are DERIVED from names, so the
     // next Ada would have inherited them.
     //
-    // What changed with the tombstone: she is no longer LISTED while the
+    // What changed with the deletion mark: she is no longer LISTED while the
     // deletion is unfinished. She used to be, with her memory already deleted,
     // which is the half-deleted state this now makes unreachable -- the user
     // asked for her to go, and the parts of her that are gone do not come back.
@@ -841,15 +599,11 @@ describe('deleting a persona takes her notes with her', () => {
       forget: () => {
         throw new Error('SQLITE_BUSY')
       },
-      // Her store clears before the transcripts do, so this stub has to answer
-      // for the step that now runs first. It succeeds; the point of the test is
-      // that a LATER failure leaves her intact.
-      kept: { forgetAll: () => 0 } as unknown as Transcripts['kept'],
     }
 
-    expect(() => deletePersona(dir, loadPersonas(dir, {}, true), 'ada', refuses)).toThrow(/BUSY/)
+    expect(() => deletePersona(dir, loadPersonas(dir, {}), 'ada', refuses)).toThrow(/BUSY/)
 
-    const after = loadPersonas(dir, {}, true)
+    const after = loadPersonas(dir, {})
     expect(after.personas.has('ada'), 'she came back half-deleted').toBe(false)
     expect(after.reserved.has('ada'), 'her id was released with her data still here').toBe(true)
     expect(recall(dir, 'ada')).toBe('')
@@ -859,7 +613,7 @@ describe('deleting a persona takes her notes with her', () => {
     // And the sweep finishes it, on this launch or the next one.
     sweepDeletions(dir, history)
     expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(false)
-    expect(loadPersonas(dir, {}, true).reserved.has('ada')).toBe(false)
+    expect(loadPersonas(dir, {}).reserved.has('ada')).toBe(false)
   })
 
   it('puts her retention back when the package cannot be removed', () => {
@@ -870,7 +624,7 @@ describe('deleting a persona takes her notes with her', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
     writePolicy(dir, 'ada', { keeps: false })
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     // A personas folder that cannot be written to, so the removal fails.
     chmodSync(personasRoot(dir), 0o500)
 
@@ -894,7 +648,7 @@ describe('deleting a persona takes her notes with her', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
     remember(dir, 'ada', 'They are learning Rust.')
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     renameSync(join(personasRoot(dir), 'ada'), join(personasRoot(dir), 'ada-renamed'))
 
     expect(() => deletePersona(dir, catalog, 'ada', history)).toThrow(/no longer ada/)
@@ -911,21 +665,19 @@ describe('deleting a persona takes her notes with her', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
     remember(dir, 'ada', 'They are learning Rust.')
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     // Somebody swaps the contents of that folder for another character.
     write(dir, 'ada', { ...tutor, id: 'coach', name: 'Coach' })
 
     expect(() => deletePersona(dir, catalog, 'ada', history)).toThrow(/no longer ada/)
 
     expect(recall(dir, 'ada')).toContain('Rust')
-    expect(loadPersonas(dir, {}, true).personas.has('coach')).toBe(true)
+    expect(loadPersonas(dir, {}).personas.has('coach')).toBe(true)
   })
 
   it('refuses the built-in, which has no file', () => {
     const dir = workspace()
-    expect(() => deletePersona(dir, loadPersonas(dir, {}, true), BUILT_IN_ID, history)).toThrow(
-      /no file/,
-    )
+    expect(() => deletePersona(dir, loadPersonas(dir, {}), BUILT_IN_ID, history)).toThrow(/no file/)
   })
 
   it('leaves everybody else alone', () => {
@@ -933,9 +685,9 @@ describe('deleting a persona takes her notes with her', () => {
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
     write(dir, 'coach', { ...tutor, id: 'coach', name: 'Coach' })
 
-    deletePersona(dir, loadPersonas(dir, {}, true), 'ada', history)
+    deletePersona(dir, loadPersonas(dir, {}), 'ada', history)
 
-    const after = loadPersonas(dir, {}, true)
+    const after = loadPersonas(dir, {})
     expect(after.personas.get('coach')?.name).toBe('Coach')
     expect(after.problems).toEqual([])
   })
@@ -999,7 +751,7 @@ describe('a package is a folder, so she can carry her own face', () => {
 
     // Alternatives, never a precedence chain. A precedence rule is one
     // somebody has to remember and this format would have to defend forever.
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     expect(catalog.problems).toContainEqual({ kind: 'two-faces', source: 'ada' })
     expect(catalog.personas.has('ada')).toBe(false)
   })
@@ -1009,51 +761,11 @@ describe('a package is a folder, so she can carry her own face', () => {
     write(dir, 'ada', { ...tutor, id: 'ada' })
     writeFileSync(join(personasRoot(dir), 'ada', 'face.json'), '{}')
 
-    deletePersona(dir, loadPersonas(dir, {}, true), 'ada', history)
+    deletePersona(dir, loadPersonas(dir, {}), 'ada', history)
 
     // An orphaned folder reads as a persona that failed to load rather than
     // one that was deleted.
     expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(false)
-  })
-})
-
-describe('the shape before packages becomes a package', () => {
-  it('moves a loose file into a folder of the same name', () => {
-    const dir = workspace()
-    mkdirSync(personasRoot(dir), { recursive: true })
-    writeFileSync(join(personasRoot(dir), 'ada.json'), JSON.stringify({ ...tutor, id: 'ada' }))
-
-    expect(migrateLooseFiles(dir)).toEqual([])
-
-    expect(existsSync(join(personasRoot(dir), 'ada.json'))).toBe(false)
-    expect(loadPersonas(dir, {}, true).sources.get('ada')).toBe('ada')
-  })
-
-  it('is a no-op the second time', () => {
-    const dir = workspace()
-    mkdirSync(personasRoot(dir), { recursive: true })
-    writeFileSync(join(personasRoot(dir), 'ada.json'), JSON.stringify({ ...tutor, id: 'ada' }))
-    migrateLooseFiles(dir)
-    expect(migrateLooseFiles(dir)).toEqual([])
-    expect(
-      [...loadPersonas(dir, {}, true).personas.keys()].filter((id) => id !== BUILT_IN_ID),
-    ).toEqual(['ada'])
-  })
-
-  it('leaves a loose file alone when a folder of that name is already there', () => {
-    const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'In the folder' })
-    writeFileSync(join(personasRoot(dir), 'ada.json'), JSON.stringify({ ...tutor, id: 'ada' }))
-
-    // Merging them is guesswork -- which manifest wins? -- so the loose file
-    // stays where it is and is named.
-    expect(migrateLooseFiles(dir)).toEqual([{ kind: 'legacy-blocked', source: 'ada.json' }])
-    expect(existsSync(join(personasRoot(dir), 'ada.json'))).toBe(true)
-    expect(loadPersonas(dir, {}, true).personas.get('ada')?.name).toBe('In the folder')
-  })
-
-  it('does nothing when there is no personas folder at all', () => {
-    expect(migrateLooseFiles(workspace())).toEqual([])
   })
 })
 
@@ -1070,8 +782,8 @@ describe('the retention setting is hers, not her package’s', () => {
 
     const made = copyPersonaTo(
       dir,
-      loadPersonas(dir, {}, true),
-      loadPersonas(dir, {}, true).personas.get('ada')!,
+      loadPersonas(dir, {}),
+      loadPersonas(dir, {}).personas.get('ada')!,
       'Ada 2',
     )
 
@@ -1098,7 +810,7 @@ describe('the retention setting is hers, not her package’s', () => {
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
     writePolicy(dir, 'ada', { keeps: false })
 
-    deletePersona(dir, loadPersonas(dir, {}, true), 'ada', history)
+    deletePersona(dir, loadPersonas(dir, {}), 'ada', history)
 
     expect(hasPolicy(dir, 'ada')).toBe(false)
     expect(readPolicy(dir, 'ada')).toEqual(DEFAULT_POLICY)
@@ -1126,7 +838,7 @@ describe('a package carries a face or names one, never both', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
     writeFileSync(join(personasRoot(dir), 'ada', PACKAGE_FACE), '{}')
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     const hers = catalog.personas.get('ada')
     expect(hers).toBeDefined()
 
@@ -1147,220 +859,12 @@ describe('rolling back a fork whose follow-up failed', () => {
     // extra persona was in the list anyway.
     const dir = workspace()
     write(dir, 'ada-2', { ...tutor, id: 'ada-2', name: 'Ada 2' })
-    expect(loadPersonas(dir, {}, true).personas.has('ada-2')).toBe(true)
+    expect(loadPersonas(dir, {}).personas.has('ada-2')).toBe(true)
 
     discardWrite(dir, 'ada-2')
 
     expect(existsSync(join(personasRoot(dir), 'ada-2'))).toBe(false)
-    expect(loadPersonas(dir, {}, true).personas.has('ada-2')).toBe(false)
-  })
-})
-
-describe('moving loose files into packages', () => {
-  it('refuses a name that is not a folder inside personas/', () => {
-    // The stem becomes a path segment. `...json` leaves `..`, which names the
-    // parent of the personas folder -- and the next two lines are `mkdirSync`
-    // and `renameSync` against it.
-    const dir = workspace()
-    mkdirSync(personasRoot(dir), { recursive: true })
-    for (const name of ['...json', '.json']) {
-      writeFileSync(join(personasRoot(dir), name), JSON.stringify(tutor))
-    }
-
-    const problems = migrateLooseFiles(dir)
-
-    // Counted before it is described. `[].every(...)` is `true`, so the shape
-    // assertion below passes on an empty array — which is exactly the state a
-    // removed guard could produce.
-    expect(problems).toHaveLength(2)
-    expect(problems.every((one) => one.kind === 'legacy-blocked')).toBe(true)
-    // Nothing was created outside the folder, and nothing above it moved.
-    expect(existsSync(join(personasRoot(dir), '..', MANIFEST))).toBe(false)
-  })
-
-  it('refuses a dotted stem even when nothing is standing in its way', () => {
-    // THIS is the case the stem check uniquely decides, and the test above does
-    // not reach it.
-    //
-    // Mutation testing removed `stem.includes('.')` and the test above stayed
-    // green — not because it asserts nothing, but because a SECOND mechanism
-    // produces the same observable. `...json` and `.json` leave the stems `..`
-    // and `''`, which name directories that already exist, so `reservePackage`
-    // throws and pushes the very same `legacy-blocked`. The traversal cases are
-    // caught by "that folder is taken", with the guard removed or not.
-    //
-    // `my.persona.json` leaves `my.persona`: a dot, no traversal, and nothing
-    // at that path. `reservePackage` would happily create it and the file would
-    // move in. So this is the one input whose outcome the guard alone decides.
-    const dir = workspace()
-    mkdirSync(personasRoot(dir), { recursive: true })
-    writeFileSync(join(personasRoot(dir), 'my.persona.json'), JSON.stringify(tutor))
-
-    const problems = migrateLooseFiles(dir)
-
-    expect(problems).toEqual([{ kind: 'legacy-blocked', source: 'my.persona.json' }])
-    // The guard's actual job: no folder was reserved and the file did not move.
-    expect(existsSync(join(personasRoot(dir), 'my.persona'))).toBe(false)
-    expect(existsSync(join(personasRoot(dir), 'my.persona.json'))).toBe(true)
-  })
-})
-
-describe('carrying retention out of an old manifest', () => {
-  it('migrates it for a persona who is actually loaded', () => {
-    const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
-
-    const catalog = loadPersonas(dir, {}, true)
-
-    expect(catalog.personas.has('ada')).toBe(true)
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false })
-    // The manifest fields are gone from the persona itself.
-    expect('keeps' in (catalog.personas.get('ada') as object)).toBe(false)
-  })
-
-  it('does not seed one for a package the catalog refused', () => {
-    // It used to write the policy file the moment the manifest parsed, before
-    // the reserved-id, two-face and duplicate checks. So a package that never
-    // became a persona still left a setting filed under that id -- waiting for
-    // whoever legitimately gets the name later.
-    const dir = workspace()
-    write(dir, 'a', { ...tutor, id: 'twin', name: 'Twin', version: 1, keeps: false })
-    write(dir, 'b', { ...tutor, id: 'twin', name: 'Other', version: 1, keeps: false })
-    write(dir, 'imposter', { ...tutor, id: BUILT_IN_ID, version: 1, keeps: false })
-
-    const catalog = loadPersonas(dir, {}, true)
-
-    expect(catalog.personas.has('twin')).toBe(false)
-    expect(hasPolicy(dir, 'twin')).toBe(false)
-    expect(hasPolicy(dir, BUILT_IN_ID)).toBe(false)
-  })
-
-  it('refuses a CURRENT manifest that tries to set retention', () => {
-    // The gate that makes "a package cannot declare a retention policy" true
-    // rather than aspirational. Carrying these across is a migration for
-    // somebody's own older file; a package written today supplying them is an
-    // author deciding, in a field nobody reads before installing, whether a
-    // stranger's conversations are written down.
-    const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', keeps: false })
-
-    const catalog = loadPersonas(dir, {}, true)
-
-    expect(catalog.personas.has('ada')).toBe(false)
-    const refused = catalog.problems.find((one) => one.kind === 'invalid')
-    expect(refused?.kind === 'invalid' && refused.problems).toContainEqual({
-      kind: 'unknown-field',
-      field: 'keeps',
-    })
-    expect(hasPolicy(dir, 'ada')).toBe(false)
-  })
-
-  it('migrates nothing on a machine that has never run the app', () => {
-    // The hole the marker alone did not close. On a first launch the marker
-    // does not exist yet, so a package placed there beforehand would be
-    // migrated -- and a package choosing somebody's retention is exactly what
-    // the gate exists to prevent. The `keeps` here is what still bites: a
-    // package deciding whether this character is recorded at all. (`keepDays`
-    // rides along because a real planted v1 file would have carried one, and
-    // the gate has to tolerate it to reach the field beside it.)
-    const dir = workspace()
-    write(dir, 'planted', {
-      ...tutor,
-      id: 'planted',
-      name: 'Planted',
-      version: 1,
-      // `false`, so the leak would be VISIBLE. With `keeps: true` the policy a
-      // leak wrote would be identical to the default, and `readPolicy` below
-      // would answer the same either way.
-      keeps: false,
-      keepDays: 1,
-    })
-
-    const catalog = loadPersonas(dir, {}, false)
-
-    expect(catalog.personas.has('planted')).toBe(true)
-    expect(hasPolicy(dir, 'planted')).toBe(false)
-    expect(readPolicy(dir, 'planted')).toEqual(DEFAULT_POLICY)
-    // And the door is shut behind it, so the next launch cannot be used either.
-    expect(retentionMigrated(dir)).toBe(true)
-  })
-
-  it('never seeds again once the one-time pass has run', () => {
-    // A package can claim any version it likes, and omitting `version` claims
-    // v1 by default -- so "accept these fields from an older manifest" is not
-    // a check against a package that wants to set retention, only against a
-    // careless one. Carrying them across is a one-time event for an install
-    // that predates the move.
-    const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
-    loadPersonas(dir, {}, true)
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false })
-
-    // A package installed AFTER that pass, claiming to be old.
-    write(dir, 'later', {
-      ...tutor,
-      id: 'later',
-      name: 'Later',
-      version: 1,
-      keeps: false,
-      keepDays: 7,
-    })
-
-    const catalog = loadPersonas(dir, {}, true)
-
-    expect(catalog.personas.has('later')).toBe(true)
-    expect(hasPolicy(dir, 'later')).toBe(false)
-    expect(readPolicy(dir, 'later')).toEqual(DEFAULT_POLICY)
-  })
-
-  it('closes the one-time pass even when there are no personas yet', () => {
-    // A fresh machine has no personas folder, and the load returned before
-    // recording that the pass had happened -- so the migration stayed owed for
-    // ever, and the FIRST package installed afterwards could claim to predate
-    // the move and seed a retention policy.
-    const dir = workspace()
-    loadPersonas(dir, {}, true)
-
-    write(dir, 'later', {
-      ...tutor,
-      id: 'later',
-      name: 'Later',
-      version: 1,
-      keeps: false,
-      keepDays: 7,
-    })
-
-    expect(loadPersonas(dir, {}, true).personas.has('later')).toBe(true)
-    expect(hasPolicy(dir, 'later')).toBe(false)
-  })
-
-  it('does not re-seed over a setting she has since changed', () => {
-    const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
-    writePolicy(dir, 'ada', { keeps: true })
-
-    loadPersonas(dir, {}, true)
-
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: true })
-  })
-
-  it('holds the value in memory when it cannot be written', () => {
-    // A missing policy file falls back to `keeps: true`. So a disk error while
-    // migrating would have turned a stored opt-out into recording -- silently,
-    // and permanently once the old manifest is rewritten without the field.
-    const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
-    // A policies folder that cannot be written to. The file itself is still
-    // absent -- so this is a genuine write failure, not the different case
-    // where a setting exists and cannot be read.
-    mkdirSync(policyRoot(dir), { recursive: true })
-    chmodSync(policyRoot(dir), 0o500)
-
-    const catalog = loadPersonas(dir, {}, true)
-
-    expect(catalog.personas.has('ada')).toBe(true)
-    expect(catalog.carriedPolicies.get('ada')).toEqual({ keeps: false })
-    chmodSync(policyRoot(dir), 0o700)
+    expect(loadPersonas(dir, {}).personas.has('ada-2')).toBe(false)
   })
 })
 
@@ -1374,7 +878,7 @@ describe('deleting her takes the conversations too', () => {
     history.end(session, 1020)
     expect(history.search('ada', 'private')).toHaveLength(1)
 
-    deletePersona(dir, loadPersonas(dir, {}, true), 'ada', history)
+    deletePersona(dir, loadPersonas(dir, {}), 'ada', history)
 
     // The defect this is here for: memory was forgotten and transcripts were
     // not. Ids are DERIVED from names, so `ada` is handed out again the moment
@@ -1391,7 +895,7 @@ describe('deleting her takes the conversations too', () => {
     if (kept === null) throw new Error('that instant was already taken')
     history.say(kept, 'her', 'still here', 1010)
 
-    deletePersona(dir, loadPersonas(dir, {}, true), 'ada', history)
+    deletePersona(dir, loadPersonas(dir, {}), 'ada', history)
 
     expect(history.search('coach', 'still')).toHaveLength(1)
   })
@@ -1406,54 +910,6 @@ describe('deleting her takes the conversations too', () => {
  * stored `keeps: false` for good, and the fallback for a missing policy is to
  * KEEP: they would start recording without being told.
  */
-describe('the retention migration gate', () => {
-  it('stays open when the personas folder could not be listed', () => {
-    const dir = workspace()
-    mkdirSync(personasRoot(dir), { recursive: true })
-    chmodSync(personasRoot(dir), 0o000)
-    try {
-      const catalog = loadPersonas(dir, {}, true)
-      expect(catalog.problems).toContainEqual({ kind: 'folder-unreadable' })
-      expect(retentionMigrated(dir), 'the gate closed over a folder nobody could read').toBe(false)
-    } finally {
-      chmodSync(personasRoot(dir), 0o700)
-    }
-  })
-
-  it('stays open when a manifest could not be read', () => {
-    const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
-    chmodSync(join(personasRoot(dir), 'ada', MANIFEST), 0o000)
-    try {
-      const catalog = loadPersonas(dir, {}, true)
-      expect(catalog.problems).toContainEqual({ kind: 'unreadable', source: 'ada' })
-      expect(retentionMigrated(dir), 'a legacy keeps:false could still be in there').toBe(false)
-    } finally {
-      chmodSync(join(personasRoot(dir), 'ada', MANIFEST), 0o600)
-    }
-  })
-
-  it('still closes on a machine that has nothing to migrate', () => {
-    // The other half. An empty machine must close the gate, or the first
-    // package installed afterwards could claim to predate a move this machine
-    // never lived through.
-    const dir = workspace()
-    loadPersonas(dir, {}, true)
-    expect(retentionMigrated(dir)).toBe(true)
-  })
-
-  it('closes over a manifest that is merely malformed', () => {
-    // A parse failure reads the same way on every future launch, so deferring
-    // for it would mean never closing — and the persona is not in the catalog
-    // either way.
-    const dir = workspace()
-    mkdirSync(join(personasRoot(dir), 'broken'), { recursive: true })
-    writeFileSync(join(personasRoot(dir), 'broken', MANIFEST), '{ not json')
-    loadPersonas(dir, {}, true)
-    expect(retentionMigrated(dir)).toBe(true)
-  })
-})
-
 describe('a folder replaced underneath a running app', () => {
   const swap = (dir: string): void => {
     // `ada`'s folder renamed away and a DIFFERENT package moved into the name.
@@ -1464,7 +920,7 @@ describe('a folder replaced underneath a running app', () => {
   it('is not written over by a save', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     swap(dir)
 
     expect(() => savePersonaTo(dir, catalog, { ...tutor, id: 'ada', name: 'Ada L' })).toThrow(
@@ -1482,7 +938,7 @@ describe('a folder replaced underneath a running app', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
     writeFileSync(join(personasRoot(dir), 'ada', 'extra.txt'), 'ada’s own file')
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     swap(dir)
     writeFileSync(join(personasRoot(dir), 'ada', 'extra.txt'), 'coach’s file')
 
@@ -1500,7 +956,7 @@ describe('saving a persona the catalog does not hold', () => {
     // line and was unreachable through the settings window. Creation belongs to
     // `copyPersonaTo`, behind the button that says so.
     const dir = workspace()
-    const catalog = loadPersonas(dir, {}, true)
+    const catalog = loadPersonas(dir, {})
     expect(() => savePersonaTo(dir, catalog, { ...tutor, id: 'nobody' })).toThrow(
       /use copyPersonaTo/,
     )
@@ -1508,46 +964,82 @@ describe('saving a persona the catalog does not hold', () => {
   })
 })
 
-describe('migrating the legacy persona onto a disk that will not take it', () => {
-  it('reports a structured failure rather than throwing out of startup', () => {
-    // The whole return type of `migrateLegacyPersona` exists to report this,
-    // and the creation step was the one that escaped it instead: a read-only
-    // personas folder threw out of `loadStoredPersonas` and took the launch
-    // with it — over a legacy file that is left perfectly intact either way.
-    const dir = workspace()
-    writeFileSync(
-      join(dir, LEGACY_FILE),
-      JSON.stringify({ ...DEFAULT_PERSONA, id: 'ada', name: 'Ada' }),
-    )
-    mkdirSync(personasRoot(dir), { recursive: true })
-    chmodSync(personasRoot(dir), 0o500)
-    try {
-      const result = migrateLegacyPersona(dir, loadPersonas(dir, {}, true))
-      expect(result.kind).toBe('failed')
-      // And the source is untouched, so the next launch can try again.
-      expect(existsSync(join(dir, LEGACY_FILE))).toBe(true)
-    } finally {
-      chmodSync(personasRoot(dir), 0o700)
-    }
-  })
-})
+describe('a v1 retention choice this build cannot carry refuses the package', () => {
+  /*
+    The privacy regression this closes, and how it arrived.
 
-describe('moving loose files when the folder cannot be listed', () => {
-  it('says so rather than reporting nothing to do', () => {
-    // Swallowing this as "no folder" reported success over a folder full of
-    // loose files it could not see — the same distinction `loadPersonas` draws,
-    // missing here.
+    v1 wrote `keeps` into the manifest; the loader moved it into the policy
+    store on first read. That migration was deleted with the rest of the v1
+    layer on the argument that there are no v1 installs to migrate — but
+    `parsePersona` still hands the fields back, so for a moment a manifest
+    saying `keeps: false` was parsed, its opt-out read, and dropped. She loaded,
+    and recorded, having asked not to be.
+
+    The fallback for a missing policy is to KEEP, which is the one direction a
+    dropped privacy choice must never fail in.
+  */
+  it('does not admit a persona whose stored opt-out would be discarded', () => {
     const dir = workspace()
-    mkdirSync(personasRoot(dir), { recursive: true })
-    chmodSync(personasRoot(dir), 0o000)
-    try {
-      expect(migrateLooseFiles(dir)).toContainEqual({ kind: 'folder-unreadable' })
-    } finally {
-      chmodSync(personasRoot(dir), 0o700)
-    }
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
+
+    const catalog = loadPersonas(dir, {})
+    expect(catalog.personas.has('ada'), 'she loaded and would record').toBe(false)
   })
 
-  it('says nothing at all when there is simply no folder', () => {
-    expect(migrateLooseFiles(workspace())).toEqual([])
+  it('says which package it was, so it is not a character that simply vanished', () => {
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
+
+    expect(loadPersonas(dir, {}).problems).toContainEqual({
+      kind: 'retention-unsupported',
+      id: 'ada',
+      source: 'ada',
+    })
+  })
+
+  it('refuses a finite retention request, which used to read as the default', () => {
+    /*
+      `keepDays` has no representation in the current `Policy`, so
+      `parsePersona` normalised `{keepDays: 7}` to `{keeps: true}` — and a
+      guard comparing the PARSED value against the default read a seven-day
+      request as "asks for nothing" and kept for ever.
+    */
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keepDays: 7 })
+
+    const catalog = loadPersonas(dir, {})
+    expect(catalog.personas.has('ada'), 'a seven-day request loaded as indefinite').toBe(false)
+    expect(catalog.problems).toContainEqual({
+      kind: 'retention-unsupported',
+      id: 'ada',
+      source: 'ada',
+    })
+  })
+
+  it('refuses a retention field it cannot even read', () => {
+    // `parsePolicy` answers null for a malformed `keeps`, and a null parsed
+    // value read as "declared nothing at all" — so the guard was bypassed
+    // entirely by the one shape nobody can interpret.
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: 'no' })
+
+    expect(loadPersonas(dir, {}).personas.has('ada')).toBe(false)
+  })
+
+  it('admits one whose declaration asks for the default, because it asks for nothing', () => {
+    // `keeps: true` is what an installation with no policy file already does.
+    // Refusing a character over a field that changes nothing would be a cost
+    // with no privacy behind it.
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: true })
+
+    expect(loadPersonas(dir, {}).personas.has('ada')).toBe(true)
+  })
+
+  it('admits an ordinary v2 package, which declares no retention at all', () => {
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
+
+    expect(loadPersonas(dir, {}).personas.has('ada')).toBe(true)
   })
 })

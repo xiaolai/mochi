@@ -4,7 +4,7 @@
  * ## Why this is separate from the catalogue
  *
  * Splitting `personas.ts` produced a cycle: the catalogue needs the crash
- * recovery in `unfinished.ts` and the built-in's diff in `her-edits.ts`, and
+ * recovery in `deleting.ts` and the built-in's diff in `her-edits.ts`, and
  * both of those need to know where a package sits -- which lived in the
  * catalogue. Two modules that import each other are two modules that must be
  * read together, which is worse than the one file they came from.
@@ -43,11 +43,8 @@ export const MANIFEST = 'persona.json'
  */
 export const MAX_PERSONAS = 64
 
-/** The legacy single-persona file, read once by the migration and then retired. */
-export const LEGACY_FILE = 'persona.json'
-
 /** Which id a manifest on disk claims, without validating the rest of it. */
-export function claimedId(text: string): string | null {
+export function manifestId(text: string): string | null {
   try {
     const parsed: unknown = JSON.parse(text)
     if (typeof parsed !== 'object' || parsed === null) return null
@@ -80,7 +77,7 @@ export function personasRoot(userData: string): string {
  * `entryExists` was hand-rolling, since `ADA` and `ada` are one directory on
  * macOS.
  */
-export function reservePackage(root: string, name: string): string {
+export function createPackage(root: string, name: string): string {
   mkdirSync(root, { recursive: true })
   const folder = join(root, name)
   try {
@@ -97,14 +94,16 @@ export function reservePackage(root: string, name: string): string {
 /**
  * Write a manifest into a package, stamped with the current format.
  *
- * One helper because three paths did this -- a first save, a copy, and the
- * legacy import -- with different collision behaviour and different error
- * mapping between them. Stamped with the CURRENT format, not whatever version
- * the persona was loaded under: a v1 manifest rewritten by this build no longer
- * holds `keeps`, so leaving it labelled v1 tells an older build it is safe to
- * read, and that build fills `keeps: true` over an opt-out it cannot see.
+ * One helper because both writing paths did this -- a first save and a copy --
+ * with different collision behaviour and different error mapping between them.
+ * A third caller, the v1 legacy import, went with the migration layer.
+ *
+ * Stamped with the CURRENT format, not whatever version the persona was loaded
+ * under: a v1 manifest rewritten by this build no longer holds `keeps`, so
+ * leaving it labelled v1 tells an older build it is safe to read, and that
+ * build fills `keeps: true` over an opt-out it cannot see.
  */
-export function writeManifest(
+export function savePersonaManifest(
   folder: string,
   persona: Persona,
   id: string,

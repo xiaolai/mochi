@@ -13,7 +13,6 @@ import { type ShelfHandlers } from './sheet/row'
 import { bubbleSection, savingSection } from './sheet/saving'
 import { voiceSection } from './sheet/voice'
 import { whoBand } from './sheet/who'
-import { keptSection } from './sheet/kept'
 import { sizeSection } from './sheet/size'
 
 /**
@@ -48,7 +47,7 @@ import { sizeSection } from './sheet/size'
  *
  * `pronoun`, `addressUser`, `theme`, `style`, `greeting`, `farewell` and
  * `faces` were validated, migrated, persisted and reachable only by hand-editing
- * a manifest. `faces` was the sharpest: it narrows `set_expression`'s enum on
+ * a manifest. `faces` was the sharpest: it narrowed `set_expression`'s enum on
  * the wire and appears in her prompt, and it shipped with no UI at all.
  *
  * ## `document.createElement` and `textContent`, never `innerHTML`
@@ -148,11 +147,6 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
     promptSection(view, worn, handlers),
     memorySection(view, handlers),
   )
-  // Absent rather than empty when she has kept nothing — the section decides,
-  // and answers null. `append` will not take a null, and filtering here keeps
-  // that decision in one place rather than two.
-  const kept = keptSection(view, handlers)
-  if (kept !== null) page.append(kept)
   return page
 }
 

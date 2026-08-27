@@ -12,15 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_POLICY, parsePolicy } from '@shared/policy'
-import {
-  forgetPolicy,
-  hasPolicy,
-  markRetentionMigrated,
-  policyRoot,
-  readPolicy,
-  retentionMigrated,
-  writePolicy,
-} from './policy'
+import { forgetPolicy, hasPolicy, policyRoot, readPolicy, writePolicy } from './policy'
 
 function workspace(): string {
   return mkdtempSync(join(tmpdir(), 'mochi-policy-'))
@@ -153,26 +145,5 @@ describe('whether a setting exists at all', () => {
     expect(hasPolicy(dir, 'ada')).toBe(true)
     // And it still refuses to act on what it cannot read.
     expect(readPolicy(dir, 'ada').keeps).toBe(false)
-  })
-})
-
-describe('the one-time retention migration marker', () => {
-  it('counts a marker it cannot read as still marked', () => {
-    // Same rule as `hasPolicy`, and the same reason: absent is the only answer
-    // that means "this has not happened". A marker that exists and cannot be
-    // read, treated as absent, would run the one-time pass again -- and that
-    // pass is what stops a package claiming to predate the move from seeding
-    // a retention policy.
-    const dir = workspace()
-    expect(retentionMigrated(dir)).toBe(false)
-    mkdirSync(policyRoot(dir), { recursive: true })
-    symlinkSync('/etc/hosts', join(policyRoot(dir), '.migrated'))
-    expect(retentionMigrated(dir)).toBe(true)
-  })
-
-  it('is marked by writing it, and stays marked', () => {
-    const dir = workspace()
-    markRetentionMigrated(dir)
-    expect(retentionMigrated(dir)).toBe(true)
   })
 })

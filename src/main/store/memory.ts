@@ -23,9 +23,10 @@
  * ## Who writes it
  *
  * The `remember_this` capability, when somebody asks her out loud to remember
- * something — one line, appended under its own heading. The sleep-time
- * summariser in `memory/summarise.ts` is the other intended writer and has no
- * caller yet.
+ * something — one line, appended under its own heading. And the sleep-time
+ * summariser in `memory/summarise.ts`, which rewrites the whole note from the
+ * presence that just ended; it was wired on 2026-08-26, having been written,
+ * tested and called by nothing until then.
  *
  * A writer must read through `recallState` rather than `recall`. See its note:
  * `recall` answers "" for a note that could not be read, which is right for the
@@ -200,7 +201,80 @@ export function remember(userData: string, id: string, notes: string): void {
   // nothing. The summariser can legitimately return an identical note, and the
   // save button can be pressed twice.
   if (kept === previous) return
-  writeJsonAtomically(memoryPath(userData, id), { notes: kept, previous })
+  // The cursor is CARRIED, not dropped. It lives in this file so it dies with
+  // her — see `summarisedThrough` — and every other writer of this file must
+  // leave it alone rather than rewrite the object without it.
+  writeJsonAtomically(memoryPath(userData, id), {
+    notes: kept,
+    previous,
+    summarisedThrough: summarisedThrough(userData, id),
+  })
+}
+
+/**
+ * The instant her note was last brought up to date, or 0 when it never was.
+ *
+ * ## Why it lives in her memory file
+ *
+ * It is a fact about her note, it is worthless without her note, and it must
+ * not outlive her: an id is a derived name slug handed out again once free, so
+ * a cursor left behind would tell the next character of that name that a
+ * conversation she never had was already summarised. Keeping it here means
+ * `forgetMemory` takes it, and every argument that file already makes about
+ * per-id filing covers it too.
+ *
+ * ## Why it is not written by `remember`
+ *
+ * `remember` returns without writing when the note is unchanged, which is
+ * right — an unchanged write would rotate the one rollback version away. But
+ * the summariser legitimately returns an identical note, and that run still
+ * covered its conversations. Riding on `remember` would have left the cursor
+ * unmoved on exactly those runs, and the same conversations would be
+ * re-summarised for ever.
+ *
+ * ## Why 0 rather than "now" when it is absent
+ *
+ * Absent means this installation has never summarised her, which is true of
+ * every install before this existed. The CALLER decides what to do with that —
+ * `main/index.ts` starts from launch instead, because summarising a whole
+ * history on first sleep is not what "the presence that just ended" means.
+ */
+export function summarisedThrough(userData: string, id: string): number {
+  const read = readBounded(memoryPath(userData, id))
+  if (!read.ok) return 0
+  try {
+    const held = (JSON.parse(read.text) as { summarisedThrough?: unknown } | null)
+      ?.summarisedThrough
+    // A stored instant has to be one. Anything else is a file somebody edited
+    // by hand, and a cursor read from nonsense would silently skip whatever it
+    // happened to land past.
+    return typeof held === 'number' && Number.isSafeInteger(held) && held >= 0 ? held : 0
+  } catch {
+    // Unreadable JSON is `recallState`'s problem to report; here it simply
+    // means no cursor, which re-summarises rather than skipping.
+    return 0
+  }
+}
+
+/**
+ * Record that her note now covers everything up to `at`.
+ *
+ * Written even when the note did not change, and separately from it — see
+ * `summarisedThrough`. Never throws: a cursor that could not be stored costs a
+ * repeated summary, and the alternative is failing a sleep over bookkeeping.
+ */
+export function markSummarised(userData: string, id: string, at: number): void {
+  const held = recallState(userData, id)
+  if (!held.ok) return
+  try {
+    writeJsonAtomically(memoryPath(userData, id), {
+      notes: held.notes,
+      previous: previousNote(userData, id),
+      summarisedThrough: at,
+    })
+  } catch (error: unknown) {
+    console.warn(`[memory] ${id}'s summary cursor could not be stored:`, error)
+  }
 }
 
 /**

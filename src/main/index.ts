@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import {
   app,
   BrowserWindow,
@@ -10,7 +11,7 @@ import {
   screen,
   shell,
 } from 'electron'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { BUBBLE_SIDES, PERSONA_LIMITS, RECOMMENDED_VOICES, VOICE_NAMES } from '@shared/persona'
 import { BUILT_IN_ID } from '@shared/parse-persona'
 import { PROMPT_SLOTS } from '@shared/instructions'
@@ -23,6 +24,10 @@ import { sessionConfig } from './voice/session-config'
 import { migrateBubbleSide as runBubbleSideMigration } from './migrations/bubble-side'
 import { shutDown as shutDown_ } from './shutdown'
 import { running } from '../capabilities/ask-workspace/capability'
+import { runSchema } from '../capabilities/ask-workspace/ask'
+import { spawnCodex } from '../capabilities/ask-workspace/spawn'
+import { summarise } from './memory/summarise'
+import { fittingNewestFirst } from './memory/presence'
 import { createMintSlot } from './voice/mint-slot'
 import { reported } from './voice/reported'
 import { createNextSession } from './voice/next-session'
@@ -51,10 +56,8 @@ import { createLedger, type AnswerFrame } from './capability/ledger'
 import { handleCall } from './capability/dispatch'
 import { describeProblem, exchangeSdp, mintEphemeralKey, readBearer } from './voice/credential'
 import { activePersona, copyPersonaTo, loadPersonas, savePersonaTo } from './store/personas'
-import { personasRoot } from './store/persona-files'
 import { deletePersona, discardWrite, sweepDeletions } from './store/delete-persona'
 import { readEdits, restoreBuiltIn } from './store/her-edits'
-import { migrateLegacyPersona, migrateLooseFiles } from './store/migrate-personas'
 import type { PersonaCatalog } from './store/personas'
 import { keepsFor, writePolicy } from './store/policy'
 import type { Policy } from '@shared/policy'
@@ -159,13 +162,20 @@ import { type SessionToken } from './store/turn-row'
 import { noteUsed, readUsage } from './store/usage'
 import { whatSheMayDo } from './what-she-may-do'
 import { createConversation, type Conversation } from './store/conversation'
-import { previousNote, recall, recallState, remember } from './store/memory'
+import {
+  markSummarised,
+  previousNote,
+  recall,
+  recallState,
+  remember,
+  summarisedThrough,
+} from './store/memory'
+import type { Turn } from './store/turn-row'
 import { createCompanionWindow, showHistoryWindow } from './window'
 import { checkCodexNow, codexForWindow } from './codex/ready'
 import { codexPathNow } from './codex/ready'
 import { carryGrantsForward } from './store/grants'
 import { legacyGrants } from './store/worn'
-import { registerForgetKept } from './ipc/forget-kept'
 
 // The same string as `appId` in `electron-builder.yml`. Two spellings of an
 // application's identity is how a notification arrives attributed to nothing and
@@ -384,7 +394,7 @@ function endWhenFlushed(): void {
     awaitingFlush = null
     if (shutDown) return
     console.warn('[rest] her window never said it had finished; ending the conversation anyway')
-    conversation().end()
+    endPresence()
   }, FLUSH_GRACE_MS)
   // Never a reason to hold the app open. If everything else is done, the
   // shutdown coordinator ends the conversation anyway, and sooner.
@@ -402,7 +412,472 @@ function conversationFlushed(): void {
   if (awaitingFlush === null) return
   clearTimeout(awaitingFlush)
   awaitingFlush = null
+  endPresence()
+}
+
+/**
+ * How long the summariser gets before it is killed.
+ *
+ * Longer than a lookup's default, because nothing is waiting on it: §8 measured
+ * a twenty-second floor on `codex exec` and this prompt is a whole transcript.
+ * Short enough that a wedged child does not sit in the process table until quit.
+ */
+const SUMMARY_TIMEOUT_MS = 240_000
+
+/**
+ * End the presence, and think about what was said in it.
+ *
+ * ## `summarise` existed for weeks and nothing called it
+ *
+ * The module was written, tested, deadlined, schema-guarded and deliberately
+ * routed onto the Codex subscription so that maintaining her memory would not
+ * sit behind a second paywall — and no production caller ever existed. Her note
+ * therefore only ever moved when the model chose to call `remember_this`, and
+ * `usage.json` is the measurement of how often a model chooses anything: four
+ * of this build's then-seven tools were never called once — three remain.
+ *
+ * `summariser.instruction` was in the prompt catalogue the whole time, so the
+ * prompts pane offered a box for tuning the wording of a call that never
+ * happened.
+ *
+ * ## Never awaited, and it cannot hold sleep
+ *
+ * `void`, with its own deadline and its own catch. The failure of a summary is
+ * that her note does not improve, which is a non-event; the failure this must
+ * never have is keeping her awake, or throwing on the way out of `setAsleep`.
+ *
+ * ## A scratch directory, not the workspace
+ *
+ * `codex exec` needs a `-C`, and this job needs no files at all: the transcript
+ * is handed to it in the prompt. Pointing it at the lookup workspace would give
+ * the note rewriter read access to somebody's project for no reason, so it gets
+ * an empty temporary directory and `-s read-only` on top.
+ */
+function endPresence(): void {
+  const personaId = sessionPersona ?? wornId()
   conversation().end()
+  /*
+    NEXT TURN, not this one. `void` does not defer anything.
+
+    An async function runs synchronously up to its first `await`, and this one's
+    prefix is not small: a SQLite read of the conversation, `catalogue()` — which
+    opens every persona file on disk — her note, the prompt overrides, and a
+    `mkdtemp`. All of that sat on the sleep path, which is a keystroke somebody
+    just pressed expecting her to close her eyes.
+
+    `setImmediate` puts it after this handler has returned. Nothing waits on it
+    either way, so the only thing that changes is which side of "she is asleep"
+    the disk work happens on.
+  */
+  setImmediate(() => void rewriteNote(personaId))
+}
+
+/**
+ * Whether a note is being rewritten right now.
+ *
+ * ## The lost update this prevents
+ *
+ * `summarise` READS the current note, hands it to the model as the document to
+ * maintain, and the caller WRITES what comes back. Two runs overlapping is
+ * therefore not two summaries — it is one: both read note N, and whichever
+ * finishes second writes over the other's work with a note built from a base
+ * that no longer existed.
+ *
+ * It takes a person, not a race condition. Sleep, wake, say something, sleep
+ * again — and the first run has up to four minutes to still be going, because
+ * `codex exec` has a floor near twenty seconds and this prompt is a whole
+ * transcript. The rest key makes that a two-second sequence.
+ *
+ * ## And it bounds the subprocesses
+ *
+ * `ask-workspace/running.ts` exists because nothing bounded the lookups and a
+ * loop spawned one Codex per call until the machine decided which to stop. This
+ * path spawns the same binary and had no bound at all: one per sleep, for as
+ * many sleeps as somebody cares to press the key.
+ *
+ * ## Skipped rather than queued
+ *
+ * A queue here would hold a transcript, a persona id and a promise for as long
+ * as somebody keeps toggling, and deliver a summary of a conversation two
+ * conversations ago. `summarise`'s own asymmetry is the argument: a note that
+ * fails to improve is a non-event, while a note replaced by something built on
+ * a stale base is a memory quietly corrupted. The NEXT sleep summarises, and it
+ * summarises something more recent.
+ */
+let rewritingNote = false
+
+/**
+ * How many personas have been deleted this run.
+ *
+ * ## Why an identity check is not enough
+ *
+ * The summariser's commit re-checks that the persona is still in the catalogue,
+ * which covers "she was deleted while this ran". It does NOT cover the case a
+ * verification pass found underneath it: **deleted, and a new character created
+ * with the same name.** Ids are derived name slugs handed out again once free,
+ * so the new persona holds the same id, and a fresh character's note is empty —
+ * so the byte-comparison against the note we started from passes too.
+ *
+ * Both checks answer "is this the same id, holding the same note". Neither
+ * answers "is this the same character", and that is the question. A counter
+ * does: it changes when anybody is deleted, so a job that spanned a deletion
+ * cannot commit whatever else is true.
+ *
+ * Deliberately coarse. It rejects a summary because some OTHER persona was
+ * deleted mid-run, which is a wasted summary rather than a wrong one — and the
+ * cost of the two mistakes is not remotely equal: the other direction attaches
+ * one person's transcript-derived notes to a different character.
+ */
+let personasDeleted = 0
+
+/**
+ * The instant her note was last brought up to date.
+ *
+ * ## Why a watermark and not the token that just ended
+ *
+ * This used to summarise the one conversation that happened to be live when
+ * somebody pressed rest. §53 measured a session lasting exactly an hour and
+ * `session-config` ends the previous conversation on every session config, so
+ * an awake day is one transcript per hour — and she would remember the evening
+ * and not the morning.
+ *
+ * ## Why it advances only on a committed write
+ *
+ * A run that was skipped — another summary in flight, no Codex on the machine —
+ * leaves this where it was, so the NEXT sleep covers the presence the skipped
+ * one would have. Advancing on the attempt would make a dropped run a lost day.
+ *
+ * The window is therefore unbounded in TIME after a long failure, and bounded
+ * in SIZE regardless: `fitting` keeps the most recent `MOST_TRANSCRIPT_CHARS`
+ * and the segment scan is an indexed read.
+ *
+ * ## Why it starts at LAUNCH and not at zero
+ *
+ * Zero was the first version and it is wrong on a real installation. "Every
+ * conversation since the watermark" with the watermark at the epoch means every
+ * conversation ever — 283 of them on the machine this was written on. The
+ * prompt would still have been bounded, because `fitting` keeps a fixed number
+ * of characters, but bounded is not the same as correct: the first sleep after
+ * an update would have rewritten her note from an arbitrary window of the
+ * user's entire history rather than from the presence that just ended, and it
+ * would have opened every one of those conversations to do it.
+ *
+ * A presence is a run. Starting here means the first sleep covers exactly the
+ * conversations this launch has had.
+ *
+ * **What that gives up, stated rather than left to be found:** a conversation
+ * held and then QUIT out of — rather than slept — is never summarised. Its
+ * turns are in the archive and `recall_conversations` still finds them; they
+ * simply do not reach her note. Fixing that means persisting the watermark
+ * beside her memory, which is a file this does not yet have.
+ */
+/**
+ * When this run began. The floor for a persona nobody has ever summarised.
+ *
+ * Only for the ABSENT case. A stored cursor is a fact about her note and is
+ * used whatever its value; this is what applies when there is none, because
+ * summarising a whole history on the first sleep after an update is not what
+ * "the presence that just ended" means.
+ */
+const launchedAt = Date.now()
+
+/**
+ * How many times history has been deleted this run.
+ *
+ * The same shape as `personasDeleted` and for the same reason. A summary is
+ * built from conversations that were on disk when it started; deleting them
+ * while it runs and then writing its result puts the substance of a deleted
+ * conversation into her long-term note, which is a file that survives the
+ * deletion and gets read aloud later. Somebody who deleted a conversation did
+ * not delete it so that a summary of it could be kept.
+ */
+let historyForgotten = 0
+
+/**
+ * Scratch directories a summary is using right now.
+ *
+ * Held so `shutDownCleanly` can remove them synchronously. The job's own
+ * `finally` is a continuation on a promise nobody awaits, and quit does not
+ * wait for one — so on the path where somebody quits mid-summary the directory
+ * that held a transcript was left behind for the OS to reclaim whenever it got
+ * round to it.
+ */
+const summaryScratch = new Set<string>()
+
+async function rewriteNote(personaId: string): Promise<void> {
+  const userData = app.getPath('userData')
+  /*
+    READ FROM HER MEMORY FILE, not from this process.
+
+    It was a Map that started empty on every launch, so a conversation somebody
+    QUIT out of rather than slept was never summarised — its turns sat in the
+    archive, findable by `recall_conversations` and absent from her note, for
+    ever. A cursor beside the note it describes survives the quit, and dies with
+    her when the note does.
+
+    `launchedAt` is the floor for a persona who has none, which is every
+    persona on the launch this shipped in.
+  */
+  const stored = summarisedThrough(userData, personaId)
+  const since = stored === 0 ? launchedAt : stored
+  /*
+    THE BOUNDARY OF THIS SNAPSHOT, taken before anything is read.
+
+    The commit used to advance the watermark to `Date.now()` — the moment the
+    summary FINISHED, minutes later — and this comment used to claim that a run
+    skipped by `rewritingNote` was picked up by the next one. Both were wrong,
+    and together they lost conversations:
+
+      sleep A starts a summary · she wakes · a conversation happens · sleep B
+      is skipped because A is still running · A finishes and advances the
+      watermark past B's conversation, which nothing ever summarises.
+
+    Committing the boundary the snapshot was TAKEN at leaves anything that
+    started afterwards uncovered, which is what makes the next sleep pick it up.
+  */
+  const upTo = Date.now()
+  const forgottenBefore = historyForgotten
+  let turns: readonly Turn[]
+  try {
+    /*
+      EVERY segment since her note was last brought up to date, not one.
+
+      `turns > 0` is a column on the session row, so a scan of an idle day
+      rejects its segments without opening any of them. `presenceTurns` then
+      drops the ones where only SHE spoke — see `memory/presence.ts`, which
+      carries the argument for what counts as empty.
+    */
+    const store = transcripts()
+    /*
+      LAZY, so a conversation past the budget is never opened.
+
+      `sessions()` answers newest-first and `turns > 0` is a column on the row,
+      so an idle day is rejected without reading any of it. The generator hands
+      `fittingNewestFirst` one conversation at a time and it stops pulling once
+      the character budget is full — which is the difference between bounding
+      the PROMPT and bounding the work, and only the first of those was true
+      before.
+    */
+    const newestFirst = function* (): Generator<readonly Turn[]> {
+      for (const one of store.sessions(personaId)) {
+        if (one.startedAt < since || one.turns === 0) continue
+        yield store.turns(personaId, one.token)
+      }
+    }
+    turns = fittingNewestFirst(newestFirst())
+  } catch (error: unknown) {
+    console.error('[summary] the presence could not be read back:', error)
+    return
+  }
+  // Nobody said anything worth thinking about — an empty room for an hour, or
+  // an install that keeps no transcripts. Either way, before any subprocess.
+  if (turns.length === 0) return
+
+  const codexPath = codexPathNow()
+  if (codexPath === null) {
+    // Not a problem worth a strip entry: `LOOKING`'s dot already says the CLI is
+    // not there, and this is the second thing that stops working when it is not.
+    console.warn('[summary] no codex on this machine; her note is unchanged')
+    return
+  }
+
+  if (rewritingNote) {
+    // Not a problem worth a strip entry: nothing is lost that the next sleep
+    // does not cover, and it says so in the log for anybody reading one.
+    console.warn('[summary] a note is already being rewritten; leaving this presence to the next')
+    return
+  }
+  rewritingNote = true
+  /*
+    NULLABLE, and created INSIDE the try.
+
+    `mkdtempSync` can fail — a full disk, a `TMPDIR` that has gone away — and it
+    used to run between taking the flag and entering the block that clears it.
+    One failure there disabled every later summary for the life of the process,
+    silently, which is a worse fault than the one it was reaching for.
+  */
+  let scratch: string | null = null
+  try {
+    const workspace = mkdtempSync(join(tmpdir(), 'mochi-summary-'))
+    scratch = workspace
+    summaryScratch.add(workspace)
+    const incarnation = personasDeleted
+    const others = new Set(catalogue(userData).personas.keys())
+    others.delete(personaId)
+    /*
+      Held, so the write below can tell whether it is still answering the same
+      question. See the commit check.
+    */
+    const before = recall(userData, personaId)
+    const result = await summarise(turns, before, {
+      ask: async (prompt, schema) => {
+        const run = await runSchema(prompt, schema, {
+          codexPath,
+          workspace,
+          settings: {
+            // Nothing here needs the web, and the note may not contain a URL —
+            // `FORBIDDEN` refuses one — so offering the search is offering a
+            // route to content every entry would then be rejected for.
+            webSearch: 'disabled',
+            // The instruction IS the prompt here. A lookup's framing is about
+            // reading somebody's files, which this does not do.
+            framing: '',
+            model: null,
+            // The user's lookup profile configures lookups. Layering it over
+            // note maintenance would apply a choice made about one job to
+            // another one they were never asked about.
+            profile: null,
+            /*
+              WHAT THIS DOES NOT BUY, said first.
+
+              §72 measured that `-s read-only` names what the sandbox may WRITE:
+              a run with an empty `-C` read a canary file elsewhere on the disk
+              and returned its contents. And `--strict-config` shows there is no
+              key that withholds the shell — `tools.web_search` is real,
+              `tools.shell` is not.
+
+              So an injection carried in a transcript is not sandboxed away, and
+              this comment is not going to pretend otherwise. What stands
+              between one and her note is `fenced()`, an instruction saying the
+              fenced blocks are data, a closed output schema, `FORBIDDEN`
+              rejecting paths and URLs and shell syntax, 200-character entries,
+              and a note the user can read and revert. A short plain secret
+              would pass all of it.
+
+              The one thing that IS closed here:
+
+              AND THE USER'S CONFIG NOT LOADED AT ALL.
+
+              `profile: null` only omits `-p`; the base `config.toml` still
+              loads, and §65 measured that its `mcp_servers` are launched as
+              the user, before authentication, outside `-s read-only`. That is
+              a feature for a lookup somebody asked for. This runs by itself
+              every time she sleeps, and needs no tools at all.
+            */
+            ignoreUserConfig: true,
+          },
+          /*
+            HELD, so quitting kills it.
+
+            `running.ts` exists because `will-quit` closed the archive and left
+            every Codex child alive — "the app disappears from the Dock and a
+            Codex process goes on reading somebody's workspace with no window,
+            no tray icon and nothing to say it is there". This path spawns the
+            same binary and reached it through a different door.
+
+            `hold` and not `begin`: the slot count bounds LOOKUPS against each
+            other, and a summary must not be able to refuse somebody's question
+            — nor be refused by one. What this needs from that module is only
+            the part that makes a child killable, and `rewritingNote` above is
+            what bounds this path to one.
+          */
+          run: (path, args, input) => {
+            const handle = spawnCodex(path, args, input)
+            const release = running.hold(handle)
+            void handle.finished.finally(release)
+            return handle
+          },
+          timeoutMs: SUMMARY_TIMEOUT_MS,
+        })
+        if (!run.ok) {
+          console.warn(`[summary] ${run.why}`)
+          return null
+        }
+        try {
+          return JSON.parse(run.text)
+        } catch {
+          // `summarise` reads null as "nothing usable came back" and leaves the
+          // previous note alone, which is the right answer for unparseable JSON.
+          return null
+        }
+      },
+      personaIds: others,
+      instruction: promptsNow()('summariser.instruction'),
+    })
+    if (!result.ok) {
+      console.warn(`[summary] her note is unchanged: ${result.reason}`)
+      return
+    }
+    /*
+      TWO CHECKS BEFORE THE WRITE, because minutes passed.
+
+      `summarise` is handed the note as the document to MAINTAIN and returns a
+      whole replacement for it. Writing that back unconditionally treats the
+      note as if nothing else could have touched it in the four minutes this
+      call is allowed — and two things can.
+
+      1. SOMEBODY EDITED IT. Her note is editable by hand in the shelf, and it
+         has a Clear. An edit made while this ran would be reverted by a
+         rewrite built from the version before it, and the person who made it
+         would watch their change disappear with nothing to explain it.
+
+      2. SHE WAS DELETED. `deletePersona` calls `forgetMemory`, and ids are
+         derived name slugs handed out again once free — so a write landing
+         after a deletion RECREATES `memory/<id>.json`, and if the name has
+         come round again it attaches one person's transcript-derived notes to
+         a different character. That is the exact privacy failure the per-id
+         filing exists to prevent, arriving from the one direction it does not
+         cover: a job that outlived its subject.
+
+      Discarded rather than merged or retried. A summary is a nice-to-have
+      whose own module says a note that fails to improve is a non-event; a note
+      built on a base that no longer exists is not.
+    */
+    if (personasDeleted !== incarnation) {
+      // Somebody was deleted while this ran. Even if this id is still in the
+      // catalogue holding an identical note, it may be a different character
+      // wearing a recycled name — see `personasDeleted`.
+      console.warn(`[summary] a character was deleted while this ran; the rewrite is dropped`)
+      return
+    }
+    if (!catalogue(userData).personas.has(personaId)) {
+      console.warn(`[summary] ${personaId} is gone; her note is not being recreated`)
+      return
+    }
+    if (recall(userData, personaId) !== before) {
+      console.warn(`[summary] ${personaId}'s note changed while this ran; the rewrite is dropped`)
+      return
+    }
+    if (historyForgotten !== forgottenBefore) {
+      // Conversations were deleted while this ran, and this summary was built
+      // from what was on disk before that. Writing it would keep the substance
+      // of a deleted conversation in a file that outlives the deletion.
+      console.warn('[summary] history was deleted while this ran; the rewrite is dropped')
+      return
+    }
+    remember(userData, personaId, result.note)
+    /*
+      AFTER the write, and its OWN write.
+
+      After, so a run that got this far and could not commit is covered again by
+      the next one. To the snapshot's boundary rather than to now, so a sleep
+      skipped while this ran is not stepped over. And separately from
+      `remember`, because `remember` returns without writing when the note is
+      unchanged — which a summariser can legitimately produce, and which would
+      otherwise leave the cursor behind for ever on exactly those runs.
+    */
+    markSummarised(userData, personaId, upTo)
+    console.log(`[summary] ${personaId}'s note rewritten from ${String(turns.length)} turns`)
+  } catch (error: unknown) {
+    // Caught rather than propagated: this is started with `void` from the sleep
+    // path, and an unhandled rejection there is an unhandled rejection in going
+    // to sleep.
+    console.error('[summary] the note could not be rewritten:', error)
+    problems.note('memory', personaId, `her note could not be rewritten: ${String(error)}`)
+  } finally {
+    rewritingNote = false
+    if (scratch !== null) {
+      summaryScratch.delete(scratch)
+      try {
+        rmSync(scratch, { recursive: true, force: true })
+      } catch (error: unknown) {
+        // Caught, because this is a `finally` on a promise nobody awaits: a
+        // throw here becomes an unhandled rejection out of the sleep path. A
+        // temporary directory that outlives us is a smaller problem than that.
+        console.warn('[summary] the scratch directory could not be removed:', error)
+      }
+    }
+  }
 }
 
 /**
@@ -442,7 +917,7 @@ function catalogue(userData: string): PersonaCatalog {
     console.error(`[persona] her own edits could not be read: ${problem}`)
     problems.note('persona', null, `her own edits could not be read: ${problem}`)
   }
-  const loaded = loadPersonas(userData, edits, existsSync(personasRoot(userData)))
+  const loaded = loadPersonas(userData, edits)
   carriedPolicies = loaded.carriedPolicies
   return loaded
 }
@@ -1317,32 +1792,6 @@ const capabilityDeps: CapabilityDeps = {
   userData: () => app.getPath('userData'),
   wearing: () => sessionPersona,
   /**
-   * Which faces the character SHE IS SPEAKING AS uses — not the worn one.
-   *
-   * `moods.test.ts` calls this a join: the wire enum is built by `narrowFaces`
-   * from a persona's `faces`, and the handler checks this. Two answers to
-   * "which faces", and they have to be the same answer.
-   *
-   * They were not. The enum goes out at `voice:config`, built for the character
-   * the session is configured as; this read `wornId()` from disk. The shelf can
-   * change who is worn while a session is up, and after that she was OFFERED a
-   * face from her own enum and REFUSED it by the handler — which reads to her
-   * as the tool being broken, and to a log as her calling it wrong. The same
-   * divergence `grant-outcome.ts` describes, one process further in.
-   *
-   * `sessionPersona` is what the enum was built from, so `sessionPersona` is
-   * what validates it. Falls back to worn when no session is up, which is the
-   * case the tests exercise and the only one where the two cannot disagree.
-   *
-   * Still read from disk per call: a persona's faces can be edited inside one
-   * session, and `set_expression` is called a handful of times at most.
-   */
-  facesSheMayWear: () => {
-    const userData = app.getPath('userData')
-    const catalog = catalogue(userData)
-    return activePersona(catalog, sessionPersona ?? readWornPersonaId(userData)).persona.faces
-  },
-  /**
    * The one dep that reaches the renderer, and it carries a single value.
    *
    * False when there is no window to draw in — she is between sessions, or the
@@ -1351,11 +1800,6 @@ const capabilityDeps: CapabilityDeps = {
    * would let any capability push anything into her window; this is the whole
    * hole, and it is one enum wide.
    */
-  wearExpression: (face) => {
-    if (companion === null || companion.isDestroyed()) return false
-    companion.webContents.send('voice:send', { type: '__mochi_face__', face })
-    return true
-  },
   transcripts: () => archive,
   /**
    * Read per call rather than held, because the shelf is files on disk and
@@ -1449,6 +1893,19 @@ ipcMain.handle('voice:open', async () => {
     because nothing had happened. A floor set here is replaced by the precise
     schedule the moment a deadline actually arrives.
   */
+  /*
+    CLEARED, because it described a moment rather than a state.
+
+    `checkCredentialNow` runs once at startup and `tellHerWhyNot` is also called
+    from `did-finish-load`, which fires again on every reload. Somebody who ran
+    `codex` to fix a stale token would have had the old sentence put back under
+    her by the next reload, describing a problem that no longer existed.
+
+    Here rather than in the check: a mint that succeeded is the only evidence
+    that the credential works, and it is the same evidence the user is waiting
+    for.
+  */
+  cannotSpeak = null
   nextSession.opened()
   /*
     The ledger is told too, and it is NOT reset.
@@ -1516,6 +1973,9 @@ ipcMain.handle('voice:config', () => {
     userData: () => app.getPath('userData'),
     catalogue,
     conversation,
+    briefedWith: (text) => {
+      sessionBriefing = text
+    },
     nowWearing: (personaId) => {
       sessionPersona = personaId
     },
@@ -1531,6 +1991,7 @@ ipcMain.handle('voice:config', () => {
     registry,
     transcripts,
     problemCount: () => problems.count(),
+    now: () => Date.now(),
     note: (what, id, detail) => problems.note(what, id, detail),
     log: (line) => {
       console.log(line)
@@ -1884,19 +2345,14 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     `assembled`'s own comment warns about, one level along: the two renderings
     would drift the first time anything between them changed.
   */
-  // Empty when she has kept nothing: the sheet renders no section, and the
-  // prompt carries no index.
-  const kept = transcripts()?.kept.collections(worn.id) ?? []
   const mayDo = whatSheMayDo(
     worn,
     note,
     readGrants(userData, worn.id, legacyGrants(userData)),
     registry.tools,
     prompt,
-    kept,
   )
   return {
-    kept,
     face: resolveFaceFor(
       avatarsRoot(userData),
       packageFolder(worn.id, catalog.sources),
@@ -2059,8 +2515,6 @@ ipcMain.handle('settings:lookup', (_event, change: unknown): SettingsWrite => {
  * `remember` THROWS rather than overwrite a note it could not read, so a corrupt
  * file is reported here instead of being silently replaced by an empty one.
  */
-registerForgetKept({ worn: wornId, store: transcripts })
-
 ipcMain.handle('shelf:memory', (_event, action: unknown): SettingsWrite => {
   if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
   const kind = (action as { kind?: unknown }).kind
@@ -2158,7 +2612,7 @@ ipcMain.handle('shelf:copy', (_event, text: unknown): SettingsWrite => {
  * `copyPersonaTo` derives it against the ids already taken and the ones a
  * pending deletion still reserves. An id chosen by a renderer would be a
  * renderer choosing whose memory and whose conversations a new character
- * inherits, which is the whole reason `deriveId` is told about tombstones.
+ * inherits, which is the whole reason `deriveId` is told about pending deletions.
  */
 ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
   if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
@@ -2195,6 +2649,21 @@ ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
       problems.note('persona', asked.id, `could not be deleted: ${String(error)}`)
       return refuse(String(error))
     }
+    /*
+      IMMEDIATELY, and that is the whole of it.
+
+      This counter records that a deletion HAPPENED, so it belongs on the line
+      after the deletion happens and nowhere later. It used to sit at the foot
+      of this handler, below an unguarded `readWornPersonaId` and a
+      `conversation().end()` — either of which can throw, and a throw there
+      leaves the counter reading as though nothing had been deleted while the
+      persona is already gone from disk.
+
+      An in-flight summary would then commit against a recycled id, which is
+      exactly the case `personasDeleted` exists for. A guard that is skipped by
+      the error path is a guard for the easy case only.
+    */
+    personasDeleted += 1
     // Wearing somebody who has just been deleted resolves to the built-in with
     // a problem attached. Saying so explicitly is better than falling back and
     // reporting it as a fault.
@@ -2213,7 +2682,7 @@ ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
      * the archive recreate her conversations — under an id `deriveId` has
      * already released, so the next character named the same thing inherits a
      * stranger's notes. That is the exact fault `deletePersona`'s ordering and
-     * `forgetPolicy`'s tombstones exist to prevent, arriving from the one
+     * the deletion marks in `deleting.ts` exist to prevent, arriving from the one
      * direction they do not cover.
      */
     if (sessionPersona === asked.id) {
@@ -2341,6 +2810,90 @@ ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
 })
 
 /**
+ * Is the borrowed credential usable — asked at startup, not at her first word.
+ *
+ * ## Why this is separate from `checkCodexNow`
+ *
+ * They answer different questions and only one of them was being asked. The
+ * readiness check asks whether the CLI is installed and runs; this asks whether
+ * the token in `~/.codex/auth.json` is one this app can still use. Read from
+ * the file, not asked of the service: the token carries its own `exp`, and a
+ * revoked-but-unexpired token still passes here and fails at the mint. That is
+ * the case the 401 branch in `voice:open` stays for. A
+ * machine can pass the first and fail the second, and that is the ORDINARY
+ * failure rather than an exotic one: `codex/auth.ts` measured the access token
+ * at a **ten-day** lifetime, and nothing refreshes it except running the CLI. A
+ * fortnight without opening Codex is enough.
+ *
+ * ## Why at startup rather than where it already was
+ *
+ * It was already checked — inside `voice:open`, which is the moment she tries
+ * to speak. `credential.ts` names that as "the least informative place to
+ * discover it", and from outside the app it is not a diagnosis at all: she
+ * simply does not answer.
+ *
+ * ## No new diagnosis, and none is wanted
+ *
+ * `readBearer` and `describeProblem` already compute the exact fault and the
+ * exact remedy, down to the sentence to type. Every word a person reads here
+ * was already written; the only thing that changes is that they read it before
+ * the failure rather than instead of an explanation for it.
+ *
+ * The window is opened because a strip nobody has on screen is the same silence
+ * one level along. It is not modal: a person who knows their token is stale and
+ * wants her on the desktop anyway is not somebody this should argue with.
+ */
+/**
+ * The reason she will not be able to speak, or null when there is none.
+ *
+ * Held rather than sent once, because the two things that need it happen in an
+ * order nothing guarantees: the check runs during startup, and her window
+ * announces itself when its module script has executed. Whichever is second
+ * does the sending, and `tellHerWhyNot` is safe to call twice.
+ */
+let cannotSpeak: string | null = null
+
+/**
+ * Put it under her, if there is anything to put and anybody to show it to.
+ *
+ * `webContents.send` before the renderer's listener exists drops the frame with
+ * no error, so this is called from `did-finish-load` as well — which fires
+ * after the module script has run, and again on a reload.
+ */
+function tellHerWhyNot(): void {
+  if (cannotSpeak === null) return
+  tellCompanion({ type: '__mochi_cannot__', why: cannotSpeak })
+}
+
+function checkCredentialNow(): void {
+  const bearer = readBearer()
+  if (bearer.ok) return
+  const why = describeProblem(bearer.problem)
+  console.error(`[voice] ${why}`)
+  problems.note('codex', null, why)
+  cannotSpeak = why
+  tellHerWhyNot()
+  try {
+    showHistoryWindow()
+  } catch (error: unknown) {
+    // Never a reason not to start. The note above is already filed, and the
+    // companion's indicator reads the same list.
+    console.error('[voice] the window could not be opened to say so:', error)
+  }
+}
+
+/**
+ * The briefing this session opened with, so a later rebuild does not lose it.
+ *
+ * `tellTheSession` rebuilds the whole instruction block on a grant change and
+ * the renderer REPLACES what it is holding — so an instruction assembled
+ * without the brief silently deleted the wake summary, or told her to stop
+ * carrying on a conversation she was in the middle of. The grant panel is
+ * reachable mid-conversation, which is exactly when losing the resume hurts.
+ */
+let sessionBriefing = ''
+
+/**
  * Tell the live session what changed, if there is one.
  *
  * Best effort by construction: there may be no window, no session, or she may
@@ -2375,7 +2928,7 @@ function tellTheSession(): boolean {
     grants,
     registry.tools,
     readPrompt(userData),
-    transcripts()?.kept.collections(persona.id) ?? [],
+    sessionBriefing,
   )
   companion.webContents.send('voice:send', {
     type: '__mochi_grants__',
@@ -2624,6 +3177,19 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
   if (kind !== 'some' && kind !== 'hers' && kind !== 'everything') {
     return no('That is not something to delete.')
   }
+  /*
+    COUNTED BEFORE ANYTHING GOES, not after it succeeds.
+
+    An in-flight summary was built from what was on disk when it started. If a
+    deletion lands while it runs, writing its result keeps the substance of a
+    deleted conversation in her note — a file that outlives the deletion and is
+    read aloud on later wakes. See `historyForgotten`.
+
+    Counted here rather than on the success path because a PARTIAL deletion is
+    still a deletion: `forgetSessions` can remove some rows and fail on the
+    rest, and the summary must be dropped either way.
+  */
+  historyForgotten += 1
 
   const worn = wornId()
   if (kind !== 'everything') {
@@ -2834,6 +3400,10 @@ const startup = app.whenReady().then(
      * anything to fix.
      */
     companion.webContents.on('did-finish-load', () => {
+      // Before anything else here: it is the one frame that says she will not
+      // work at all, and the startup check may have run before this listener
+      // existed. See `cannotSpeak`.
+      tellHerWhyNot()
       /*
         WHETHER SHE IS ASLEEP, first, and this was missing.
 
@@ -2926,58 +3496,19 @@ const startup = app.whenReady().then(
      * Finish any deletion a previous run left half-done.
      *
      * `sweepDeletions`'s own comment has always said "called at startup, once
-     * the transcript store is open", and nothing called it. A tombstone
-     * outlives the process that wrote it, so a crash partway through a deletion
-     * left a persona whose memory was gone and whose conversations were not —
+     * the transcript store is open", and nothing called it. The mark outlives
+     * the process that wrote it, so a crash partway through a deletion left a
+     * persona whose memory was gone and whose conversations were not —
      * permanently, because the only thing that finishes the job is this.
      *
      * `transcripts()` rather than `archive`, because opening it is the point:
      * the half-done part is usually the transcripts.
      */
-    /**
-     * v1's persona, and the shape before packages. Once, at startup.
-     *
-     * Both of these were written, tested, and called by nothing — and
-     * `inherited.ts` quarantines `persona.json.migrated` as "the tombstone of a
-     * migration that has already happened", which could never be true while
-     * nothing performed one. So an upgrading user's `persona.json` sat in
-     * userData untouched and unread: they got the built-in, their own character
-     * was not lost but was not found either, and nothing anywhere said so.
-     *
-     * Loose files FIRST. It turns `<name>.json` into `<name>/persona.json`, and
-     * the legacy import wants a catalog that already reflects that — otherwise
-     * a name taken by a loose file looks free and the import derives an id that
-     * collides on the next launch.
-     */
-    for (const problem of migrateLooseFiles(app.getPath('userData'))) {
-      console.error(`[persona] loose file: ${problem.kind}`)
-      problems.note('persona', null, `a persona file could not be moved: ${problem.kind}`)
-    }
-    {
-      const userData = app.getPath('userData')
-      const catalog = catalogue(userData)
-      const migration = migrateLegacyPersona(userData, catalog)
-      if (migration.kind === 'imported') {
-        console.log(`[persona] v1's persona imported as ${migration.id}`)
-      }
-      if (migration.kind === 'failed') {
-        // The file is never deleted, so this is actionable: it is the persona
-        // they wrote, and saying nothing would lose a character while leaving
-        // its only copy on disk.
-        console.error(`[persona] v1's persona could not be imported: ${migration.problem.kind}`)
-        problems.note(
-          'persona',
-          null,
-          `the persona from the previous version could not be imported: ${migration.problem.kind}`,
-        )
-      }
-    }
-
     try {
       sweepDeletions(app.getPath('userData'), transcripts())
     } catch (error: unknown) {
       // Never a reason not to start. A deletion that cannot be finished this
-      // launch is finished the next one, and the tombstone is what remembers.
+      // launch is finished the next one, and the mark is what remembers.
       console.error('[persona] could not finish an interrupted deletion:', error)
       problems.note(
         'persona',
@@ -2987,25 +3518,11 @@ const startup = app.whenReady().then(
     }
 
     /*
-      AFTER the v1 import and the deletion sweep, and that order is the point.
+      AFTER the deletion sweep, and that order is the point.
 
-      The import can create the characters this has to write to, and the sweep
-      can remove ones it would otherwise write to and resurrect. Running before
-      either would migrate a catalog that is not yet the catalog.
-    */
-    /*
-      The v1 import can hand back a retention choice it could not file, and
-      until this line nothing read it.
-
-      `migrateLegacyPersona` returns `carried` for exactly the case the policy
-      store refused the write, and main used only `kind`. The choice was parked
-      in her package as `pending-policy.json` and would have been picked up by
-      the NEXT load -- so re-reading the catalogue here is enough, and is better
-      than threading the value by hand, because it uses the durable record
-      rather than a second copy of it that can disagree.
-
-      Without it the window is one whole run: she is imported having asked not
-      to be recorded, and is recorded until the app is restarted.
+      The sweep can remove characters this would otherwise load and resurrect,
+      so reading the catalogue before it would cache a catalog that is already
+      out of date by the time the first window opens.
     */
     catalogue(app.getPath('userData'))
 
@@ -3078,6 +3595,8 @@ const startup = app.whenReady().then(
       console.error('[codex] the readiness check could not be run:', error)
       problems.note('codex', null, `Codex could not be checked: ${String(error)}`)
     })
+
+    checkCredentialNow()
 
     tray = createTray(menuModel, menuHandlers)
 
@@ -3181,6 +3700,20 @@ function shutDownCleanly(why: string): void {
   */
   shutDown_({
     stopLookups: () => running.stopAll(),
+    removeScratch: () => {
+      let swept = 0
+      for (const one of summaryScratch) {
+        try {
+          rmSync(one, { recursive: true, force: true })
+          swept += 1
+        } catch {
+          // Best effort, and it is the last chance: the process is going away.
+          // A directory that could not be removed is one the OS reclaims.
+        }
+        summaryScratch.delete(one)
+      }
+      return swept
+    },
     unanswered: () => ledger.unanswered(),
     undelivered: () => ledger.undelivered(),
     endConversation: () => {

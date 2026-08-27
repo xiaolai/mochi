@@ -7,7 +7,7 @@
  * in one strands the others — and every one of them leaves something running
  * on a machine whose app has visibly quit.
  *
- *   1. **The children.** A Codex lookup may have three minutes left. On the
+ *   1. **The children.** A Codex run may have three minutes left. On the
  *      paths that reach here through `app.exit()` there is no parent left to
  *      reap it, so a subprocess goes on reading somebody's workspace with the
  *      app gone from the Dock and nothing on screen to say it is there. First,
@@ -46,6 +46,17 @@ export interface ShutdownDeps {
   readonly endConversation: () => void
   /** Close the archive. */
   readonly closeArchive: () => void
+  /**
+   * Remove any scratch directory a summary is still using. Returns how many.
+   *
+   * Here rather than left to the job's own `finally`, which is a continuation
+   * on a promise nobody awaits: `stopLookups` above kills the child
+   * synchronously and the process can exit before that continuation ever runs,
+   * leaving a `mochi-summary-*` directory holding a transcript in the system
+   * temp folder. The OS reclaims it eventually; "eventually" is not a property
+   * worth shipping for a directory that held somebody's conversation.
+   */
+  readonly removeScratch: () => number
   readonly note: (what: string, detail: string) => void
   readonly log: (line: string) => void
   readonly warn: (line: string, error?: unknown) => void
@@ -63,9 +74,21 @@ export interface ShutdownDeps {
 export function shutDown(deps: ShutdownDeps): void {
   try {
     const stopped = deps.stopLookups()
-    if (stopped > 0) deps.log(`[main] stopped ${String(stopped)} running lookup(s)`)
+    // "Codex run", not "lookup". The sleep summariser shares this registry
+    // now, so a shutdown log naming every child a lookup misidentifies half of
+    // what it stopped — and this log is the only record that they were.
+    if (stopped > 0) deps.log(`[main] stopped ${String(stopped)} running Codex run(s)`)
   } catch (error: unknown) {
-    deps.warn('[main] a running lookup could not be stopped:', error)
+    deps.warn('[main] a running Codex run could not be stopped:', error)
+  }
+
+  try {
+    // Straight after the kill, and before anything slower: the child that was
+    // reading this directory is gone as of the line above.
+    const swept = deps.removeScratch()
+    if (swept > 0) deps.log(`[main] removed ${String(swept)} summary scratch director(ies)`)
+  } catch (error: unknown) {
+    deps.warn('[main] a summary scratch directory could not be removed:', error)
   }
 
   try {

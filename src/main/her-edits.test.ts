@@ -48,7 +48,7 @@ describe('the built-in character keeps what was changed about her', () => {
     const { edits, problem } = readEdits(userData)
     expect(problem).toBeNull()
 
-    const her = loadPersonas(userData, edits, true).personas.get('mochi')
+    const her = loadPersonas(userData, edits).personas.get('mochi')
     expect(her?.name).toBe('Momo')
     expect(her?.theme).toBe('moss')
   })
@@ -56,7 +56,7 @@ describe('the built-in character keeps what was changed about her', () => {
   it('is discarded when the edits are dropped on the floor', () => {
     // The bug, reproduced: this is what all sixteen call sites did.
     seedEdits({ name: 'Momo' })
-    expect(loadPersonas(userData, {}, true).personas.get('mochi')?.name).not.toBe('Momo')
+    expect(loadPersonas(userData, {}).personas.get('mochi')?.name).not.toBe('Momo')
   })
 
   it('starts anyway when her edits cannot be read', () => {
@@ -66,7 +66,7 @@ describe('the built-in character keeps what was changed about her', () => {
     writeFileSync(join(personasRoot(userData), 'mochi', 'edits.json'), '{ not json')
     const { edits, problem } = readEdits(userData)
     expect(problem).not.toBeNull()
-    expect(loadPersonas(userData, edits, true).personas.get('mochi')).toBeDefined()
+    expect(loadPersonas(userData, edits).personas.get('mochi')).toBeDefined()
   })
 })
 

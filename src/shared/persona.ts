@@ -252,9 +252,16 @@ export interface Persona {
   /**
    * Which of her eight faces this character uses, in `EMOTIONS` order.
    *
-   * All of them unless the manifest narrows it. She is offered `set_expression`
-   * with exactly this list as its enum, so a face left out is not merely
-   * discouraged — it is never on the wire and she cannot reach for it.
+   * All of them unless the manifest narrows it.
+   *
+   * This used to be the exact enum of the `set_expression` tool, so a face left
+   * out was never on the wire and she could not reach for it. **That tool was
+   * removed on 2026-08-26** — it was chosen zero times in 275 sessions — so the
+   * field no longer gates anything she can call. What it still does: it is the
+   * set the shelf previews, and `shared/instructions.ts` tells her which faces
+   * she has when the set is narrowed. The enforcement that used to back it is
+   * gone, and whether the field should follow it is an open question recorded
+   * in `dev-docs/plan-0.1.md` W2.
    */
   readonly faces: readonly Emotion[]
   /** How she says hello when she wakes. */

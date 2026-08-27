@@ -80,8 +80,7 @@ export function applySchema(db: DatabaseSync): SchemaApplied {
       started_at INTEGER NOT NULL,
       ended_at   INTEGER,
       -- One session per persona per instant. This is what makes importing the
-      -- same archive twice a no-op instead of doubling everything, the same
-      -- way the persona migration recognises its own previous work.
+      -- same archive twice a no-op instead of doubling everything.
       UNIQUE (persona_id, started_at)
     );
     CREATE INDEX IF NOT EXISTS session_by_persona ON session (persona_id, started_at DESC);
@@ -166,6 +165,57 @@ export function applySchema(db: DatabaseSync): SchemaApplied {
     db.exec('ALTER TABLE turn ADD COLUMN cut INTEGER NOT NULL DEFAULT 0')
   }
 
+  /*
+    HER OLD STORE, removed rather than left unreadable.
+
+    `kept` held whatever the `keep` tool wrote. That tool and its two siblings
+    went on 2026-08-26 (`plan-0.1.md` W2) because `usage.json` recorded no call
+    to any of them, ever — and dropping the CREATE from this file does nothing
+    to a database that already has the table. Rows would have stayed on disk
+    indefinitely with no reader, no export and no way for anybody to remove
+    them, which is the exact opposite of what every other deletion path in this
+    store promises.
+
+    ## What actually makes the words go away, MEASURED
+
+    The first version of this ran `DELETE FROM kept` before the `DROP`, on the
+    reasoning that `DROP TABLE` only unlinks pages into the freelist while
+    `secure_delete` zeroes pages as ROWS are deleted. **That reasoning was
+    wrong, and the test written to prove it passed with the `DELETE` removed** —
+    which is how it was caught.
+
+    Measured 2026-08-27, `node:sqlite` in Electron 43, 200 rows carrying a
+    known needle, journal mode `delete`, grepping the file after close:
+
+    | `PRAGMA secure_delete` | statement | needle still on disk |
+    | --- | --- | --- |
+    | OFF | `DROP TABLE` | **yes** |
+    | OFF | `DELETE` then `DROP` | **yes** |
+    | ON | `DROP TABLE` | no |
+    | ON | `DELETE` then `DROP` | no |
+
+    So the `DELETE` bought nothing in either direction, and the whole guarantee
+    rests on `PRAGMA secure_delete = ON` at the top of this function — which is
+    also why this file reads that pragma back rather than trusting it to have
+    been accepted.
+
+    Guarded on existence rather than run blind, so an ordinary open of an
+    ordinary database costs one query of `sqlite_master` and no writes.
+
+    The checkpoint belongs to the caller: `buildTranscripts` scrubs at open,
+    which is what moves this out of the write-ahead log.
+  */
+  const heldOldStore = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'kept'")
+    .get()
+  if (heldOldStore !== undefined) {
+    db.exec(`
+      DROP INDEX IF EXISTS kept_by_collection;
+      DROP TABLE kept;
+    `)
+    console.log('[transcripts] her old kept store was removed')
+  }
+
   // A session an unclean quit left open has no end, and therefore no length to
   // show: the archive reports `null` while she is still awake in one, so an
   // abandoned conversation would sit in the list for ever claiming to be live.
@@ -181,32 +231,6 @@ export function applySchema(db: DatabaseSync): SchemaApplied {
     UPDATE session
     SET ended_at = coalesce((SELECT max(at) FROM turn WHERE session_id = session.id), started_at)
     WHERE ended_at IS NULL
-  `)
-
-  /*
-    Where a persona keeps what she was asked to keep.
-
-    A FIXED schema with model-supplied keys, not a table she may create. Letting
-    a model emit DDL means letting it emit a table name, and a name is the one
-    thing a prepared statement cannot parameterise -- and a schema this repo did
-    not define is a schema `applySchema` cannot migrate.
-
-    `previous` holds one step back per key, for the reason `memory.ts` gives
-    about notes: one step back is what makes an automatic rewrite reviewable,
-    and it is the whole safety story for letting a model maintain a document.
-  */
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS kept (
-      persona_id TEXT    NOT NULL,
-      collection TEXT    NOT NULL,
-      key        TEXT    NOT NULL,
-      value      TEXT    NOT NULL,
-      previous   TEXT,
-      updated_at INTEGER NOT NULL,
-      PRIMARY KEY (persona_id, collection, key)
-    );
-    CREATE INDEX IF NOT EXISTS kept_by_collection
-      ON kept (persona_id, collection, updated_at DESC);
   `)
 
   return { wal: settled.journalMode === 'wal', secureDelete: settled.secureDelete !== 0 }

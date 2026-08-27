@@ -12,7 +12,6 @@
  * needs fails on the assertion rather than quietly reaching a real path.
  */
 
-import { EMOTIONS } from '@shared/avatar'
 import type { CapabilityDeps } from '../capabilities/kind'
 import { promptsFor } from '@shared/prompts'
 
@@ -37,10 +36,6 @@ export function stubDeps(overrides: Partial<CapabilityDeps> = {}): CapabilityDep
     codexPath: () => null,
     workspace: () => '/nowhere',
     guardStopAt: () => '/nowhere',
-    // All eight, and a window that refuses — the "cannot" default this file
-    // describes, so a test that forgot to say otherwise fails on its assertion.
-    facesSheMayWear: () => EMOTIONS,
-    wearExpression: () => false,
     webSearch: () => 'disabled',
     codexProfile: () => null,
     now: () => TEST_NOW,

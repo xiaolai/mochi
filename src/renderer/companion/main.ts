@@ -476,6 +476,28 @@ window.mochi.onSend((frame) => {
     process trusts nothing that crosses the bridge — the same rule the grants
     frame states: a value this side cannot read is not one it may act on.
   */
+  if (type === '__mochi_cannot__') {
+    /*
+      A credential that will not work, said before it is tried.
+
+      The status line already carries the reason a session FAILED — `describe`
+      puts `state.failed` under her. What it could not do was say so before
+      anybody spoke to her, and the borrowed token expires after about ten days
+      without warning (`codex/auth.ts`), so the ordinary shape of this fault is
+      somebody talking to a companion who was never going to answer.
+
+      Main knows at startup. This is the channel that lets her say it then,
+      rather than after the first silence.
+
+      NOT a modal and not a refusal to appear: it is fixed by running `codex`
+      once, and a companion that hides in order to tell you about it is a worse
+      trade than a sentence under her feet.
+    */
+    const why = (frame as { why?: unknown }).why
+    if (typeof why === 'string' && why !== '') show(why)
+    return
+  }
+
   if (type === '__mochi_face__') {
     const chosen = (frame as { face?: unknown }).face
     if (typeof chosen === 'string' && (EMOTIONS as readonly string[]).includes(chosen)) {

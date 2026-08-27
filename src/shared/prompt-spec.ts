@@ -5,9 +5,11 @@
  *
  * ## Why it is not in `prompts.ts`, where it was
  *
- * `prompts.ts` imports `KEPT_PROMPTS` from `prompts-kept.ts`, and
- * `prompts-kept.ts` imported this type back out of `prompts.ts` — a cycle, and
- * the only real one in the codebase.
+ * `prompts.ts` used to import a second catalogue from `prompts-kept.ts`, and
+ * that file imported this type back out of `prompts.ts` — a cycle, and the only
+ * real one in the codebase. Both went with the `kept` tools on 2026-08-26; the
+ * split stays, because every caller names the type through `prompts.ts` and
+ * moving it back would be a change of address for no reason.
  *
  * `.claude/loc-guardian.local.md` states the rule this follows, and it was
  * written from two earlier instances of the same shape: *"A cycle means the

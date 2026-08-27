@@ -23,19 +23,21 @@ import type { WireTool } from '@shared/capability/registry'
  *
  * ## Read from the wire value, never re-derived
  *
- * The input is `whatSheMayDo`'s own `tools` — already filtered by grant and
- * already narrowed per persona — so a withheld capability is absent here
- * exactly as it is absent on the wire, and `set_expression` shows the faces
- * this character actually has rather than all eight. Anything that rebuilt the
- * list to display it would be a second answer to a question with one.
+ * The input is `whatSheMayDo`'s own `tools` — already filtered by grant — so a
+ * withheld capability is absent here exactly as it is absent on the wire.
+ * Anything that rebuilt the list to display it would be a second answer to a
+ * question with one.
+ *
+ * It also used to be narrowed per persona: `set_expression`'s `face` enum was
+ * cut to the character's own faces. That tool and that narrowing went on
+ * 2026-08-26, so today no manifest is per-character.
  *
  * ## Prose, not JSON
  *
  * The wire carries JSON and a person reading "what is she told" is not
  * debugging a payload; they are reading sentences somebody wrote. The argument
  * names and the enum are kept because they are the part that constrains what
- * she can ask for — `set_expression`'s narrowed `face` enum is the single most
- * surprising thing on this screen, and it is invisible in prose alone.
+ * she can ask for, and an enum is invisible in prose alone.
  */
 export function renderTools(tools: readonly WireTool[]): string {
   if (tools.length === 0) {
@@ -68,9 +70,9 @@ function argumentLines(tool: WireTool): readonly string[] {
     /*
       The enum, when there is one, because it is what she may actually say.
 
-      `set_expression` is narrowed per character by `whatSheMayDo`, so this line
-      is the only place the difference between "eight faces exist" and "this
-      character has three" is visible to anybody.
+      No manifest narrows one per character any more — `set_expression` did, and
+      went — but a manifest may still declare a fixed set, and a reader asking
+      "what can she actually pass here" has nowhere else to look.
     */
     const choices = property?.enum
     if (choices !== undefined && choices.length > 0) {

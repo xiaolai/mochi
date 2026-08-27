@@ -10,10 +10,16 @@ import { describe, expect, it } from 'vitest'
  * that the DEFAULT still asks for sources and still permits the web.
  */
 const FRAMING = promptsFor([]).find((s) => s.key === 'askWorkspace.framing')?.text ?? ''
-import { argsFor, ask, framed, readAnswer, type AskSettings } from './ask'
+import { argsFor, ask, framed, readAnswer, runSchema, type AskSettings } from './ask'
 import type { RunHandle } from './spawn'
 
-const SETTINGS: AskSettings = { webSearch: 'live', framing: FRAMING, model: null, profile: null }
+const SETTINGS: AskSettings = {
+  webSearch: 'live',
+  framing: FRAMING,
+  model: null,
+  profile: null,
+  ignoreUserConfig: false,
+}
 
 function argAfter(args: readonly string[], flag: string): string | undefined {
   const at = args.indexOf(flag)
@@ -25,7 +31,6 @@ describe('the invocation', () => {
     workspace: '/work',
     schemaPath: '/tmp/s.json',
     outPath: '/tmp/o.json',
-    question: 'What changed today?',
     settings: SETTINGS,
   })
 
@@ -57,8 +62,13 @@ describe('the invocation', () => {
       workspace: '/work',
       schemaPath: '/s',
       outPath: '/o',
-      question: 'q',
-      settings: { webSearch: 'disabled', framing: FRAMING, model: null, profile: null },
+      settings: {
+        webSearch: 'disabled',
+        framing: FRAMING,
+        model: null,
+        profile: null,
+        ignoreUserConfig: false,
+      },
     })
     expect(off).toContain('web_search="disabled"')
   })
@@ -70,8 +80,13 @@ describe('the invocation', () => {
       workspace: '/work',
       schemaPath: '/s',
       outPath: '/o',
-      question: 'q',
-      settings: { webSearch: 'follow', framing: FRAMING, model: null, profile: null },
+      settings: {
+        webSearch: 'follow',
+        framing: FRAMING,
+        model: null,
+        profile: null,
+        ignoreUserConfig: false,
+      },
     })
     expect(follow.join(' ')).not.toContain('web_search')
   })
@@ -82,8 +97,13 @@ describe('the invocation', () => {
       workspace: '/work',
       schemaPath: '/s',
       outPath: '/o',
-      question: 'q',
-      settings: { webSearch: 'live', framing: FRAMING, model: 'gpt-5.6-sol', profile: null },
+      settings: {
+        webSearch: 'live',
+        framing: FRAMING,
+        model: 'gpt-5.6-sol',
+        profile: null,
+        ignoreUserConfig: false,
+      },
     })
     expect(argAfter(pinned, '-m')).toBe('gpt-5.6-sol')
   })
@@ -94,8 +114,13 @@ describe('the invocation', () => {
       workspace: '/work',
       schemaPath: '/s',
       outPath: '/o',
-      question: 'q',
-      settings: { webSearch: 'live', framing: FRAMING, model: null, profile: 'mochi' },
+      settings: {
+        webSearch: 'live',
+        framing: FRAMING,
+        model: null,
+        profile: 'mochi',
+        ignoreUserConfig: false,
+      },
     })
     expect(argAfter(layered, '-p')).toBe('mochi')
   })
@@ -112,16 +137,34 @@ describe('the invocation', () => {
       workspace: '/work',
       schemaPath: '/s',
       outPath: '/o',
-      question: 'q',
-      settings: { webSearch: 'live', framing: FRAMING, model: null, profile: 'mochi' },
+      settings: {
+        webSearch: 'live',
+        framing: FRAMING,
+        model: null,
+        profile: 'mochi',
+        ignoreUserConfig: false,
+      },
     })
     expect(layered).toContain('project_doc_fallback_filenames=[]')
     expect(layered).toContain('read-only')
     expect(layered).toContain('--ephemeral')
   })
 
-  it('puts the question last, framed', () => {
-    expect(args[args.length - 1]).toBe(framed('What changed today?', FRAMING))
+  it('does not put the question in an argument at all', () => {
+    /*
+      `ps` shows a full command line to every user on the machine.
+
+      The question used to be the last argv entry, so the words somebody said
+      to her were readable by anything running as anybody — and the sleep
+      summariser's prompt is a whole transcript. It also had to fit `ARG_MAX`,
+      which a long conversation is the one input here with no ceiling under.
+
+      `codex exec` reads its instructions from stdin when the PROMPT argument is
+      absent, so this asserts the ABSENCE. The transport test asserts it arrives.
+    */
+    for (const one of args) {
+      expect(one).not.toContain('What changed today?')
+    }
   })
 })
 
@@ -327,5 +370,113 @@ describe('a child that will not die', () => {
     child.die()
     await running
     expect(child.signals).toEqual([])
+  })
+})
+
+/**
+ * The transport, asked for a schema that is not the answer schema.
+ *
+ * `runSchema` came out of `ask` so the sleep summariser could share one
+ * credential, one deadline and one kill escalation rather than growing a second
+ * copy of each. That is only true if the schema it writes is the one it was
+ * HANDED — and nothing checked it, because for the whole of this function's
+ * previous life there was exactly one schema and it was a constant.
+ *
+ * A `runSchema` that quietly kept using `ANSWER_SCHEMA` would pass every test
+ * in this file: `ask` would still work, and the summariser would get JSON in a
+ * shape `parseFields` refuses, reported as "the notes were refused" — a message
+ * about the model's output, pointing away from the bug.
+ */
+describe('the transport takes the schema it is given', () => {
+  const deps = { codexPath: '/bin/codex', workspace: '/work', settings: SETTINGS }
+
+  it('writes THAT schema to disk, not the answer schema', async () => {
+    const SUMMARY = { type: 'object', properties: { about: { type: 'array' } } }
+    let written: unknown = null
+    await runSchema('rewrite this note', SUMMARY, {
+      ...deps,
+      run: (_path, args) => {
+        const schemaPath = args[args.indexOf('--output-schema') + 1]
+        if (schemaPath !== undefined) written = JSON.parse(readFileSync(schemaPath, 'utf8'))
+        const out = args[args.indexOf('-o') + 1]
+        if (out !== undefined) writeFileSync(out, '{"about":[]}')
+        return { finished: Promise.resolve({ code: 0, stderr: '' }), kill: () => true }
+      },
+    })
+    expect(written).toEqual(SUMMARY)
+  })
+
+  it('hands back the raw text, and does not judge its shape', async () => {
+    // `ask` owns the answer shape; this owns the transport. A `runSchema` that
+    // validated would have to know every caller's schema, which is the coupling
+    // the extraction removed.
+    const result = await runSchema(
+      'q',
+      { type: 'object' },
+      {
+        ...deps,
+        run: fakeCodex({ code: 0, write: '{"anything":true}' }),
+      },
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(JSON.parse(result.text)).toEqual({ anything: true })
+  })
+
+  it('carries the prompt through on stdin, and nowhere else', async () => {
+    let sent = ''
+    let inArgs = false
+    await runSchema(
+      'rewrite this note',
+      { type: 'object' },
+      {
+        ...deps,
+        run: (_path, args, input) => {
+          sent = input
+          inArgs = args.some((one) => one.includes('rewrite this note'))
+          const out = args[args.indexOf('-o') + 1]
+          if (out !== undefined) writeFileSync(out, '{}')
+          return { finished: Promise.resolve({ code: 0, stderr: '' }), kill: () => true }
+        },
+      },
+    )
+    expect(sent).toContain('rewrite this note')
+    // Asserting only that it arrived would pass a version that sent it both ways.
+    expect(inArgs).toBe(false)
+  })
+})
+
+describe('whose configuration a run inherits', () => {
+  /*
+    §65 measured that a Codex profile carries `mcp_servers`, that they are
+    launched BEFORE authentication, and that `-s read-only` does not confine
+    them — an MCP server is a separate process running as the user.
+
+    That is a FEATURE for a lookup. §65's own conclusion is that
+    `mochi → codex → mcp` needs no code in this project because the profile is
+    what it is for. It is not a feature for the sleep summariser, which fires by
+    itself every time she goes to sleep and is handed a transcript to turn into
+    JSON — it needs no tools at all, and starting somebody's configured tool
+    processes on that schedule is not something they asked for.
+
+    §71 measured the mechanism: `--ignore-user-config` stops the launch, with a
+    control either side, while auth still reads `CODEX_HOME`. `-c
+    mcp_servers={}` does NOT stop it, which is why this is a flag and not an
+    override.
+  */
+  function argsWith(ignoreUserConfig: boolean): readonly string[] {
+    return argsFor({
+      workspace: '/work',
+      schemaPath: '/s',
+      outPath: '/o',
+      settings: { ...SETTINGS, ignoreUserConfig },
+    })
+  }
+
+  it('keeps it by default, because a lookup is asked for', () => {
+    expect(argsWith(false)).not.toContain('--ignore-user-config')
+  })
+
+  it('drops it when the caller says so, which is the unattended path', () => {
+    expect(argsWith(true)).toContain('--ignore-user-config')
   })
 })

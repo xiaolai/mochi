@@ -12,8 +12,8 @@ import {
   GRANT_SPECS,
 } from './grants'
 
-describe('the five', () => {
-  it('is 5b’s three, the face she wears, and her own store, and no more', () => {
+describe('the three', () => {
+  it('is 5b’s three, and no more', () => {
     // The plugin sandbox and the grant broker are struck, so a grant is not a
     // fence around somebody else's code — it is what this machine lets her do.
     //
@@ -22,19 +22,11 @@ describe('the five', () => {
     // awake, connected, deaf — that nobody wants. It was deleted rather than
     // hidden; `grants.ts` carries the argument, and this list is the assertion
     // that it does not quietly come back.
-    expect([...GRANTS]).toEqual([
-      'speak_first',
-      'ask_workspace',
-      'remember_this',
-      // The fifth. Her own store — writing into it, reading it back, and
-      // dropping one entry — is one switch rather than three, because it is one
-      // thing to a person and three only to the wire.
-      'keep_things',
-      // The fourth. `set_expression` reaches the RENDERER rather than the disk
-      // or the network, which is why it is a grant at all: the others are about
-      // what she may read and say, and this is about what she may show.
-      'set_expression',
-    ])
+    // `keep_things` and `set_expression` were here and are not: `usage.json`
+    // records a last-called time per tool and names none of the four they
+    // governed. The same rule as `microphone`, decided by measurement rather
+    // than by argument.
+    expect([...GRANTS]).toEqual(['speak_first', 'ask_workspace', 'remember_this'])
   })
 
   it('describes every one of them exactly once', () => {
@@ -47,14 +39,7 @@ describe('the five', () => {
     // Flattened: one switch may govern several tools, and every name it lists
     // has to be one that exists.
     const named = GRANT_SPECS.flatMap((one) => one.capabilities)
-    expect(named).toEqual([
-      'ask_workspace',
-      'remember_this',
-      'keep',
-      'look_up',
-      'forget_kept',
-      'set_expression',
-    ])
+    expect(named).toEqual(['ask_workspace', 'remember_this'])
   })
 
   it('gives every one a sentence she can say out loud', () => {
@@ -82,8 +67,6 @@ describe('what an installation that has never been asked gets', () => {
       speak_first: true,
       ask_workspace: true,
       remember_this: true,
-      keep_things: true,
-      set_expression: true,
     })
   })
 })
@@ -168,8 +151,6 @@ describe('which capabilities may run', () => {
       speak_first: false,
       ask_workspace: false,
       remember_this: false,
-      keep_things: false,
-      set_expression: false,
     }
     expect(allowsCapability(nothing, 'recall_conversations')).toBe(true)
   })
@@ -220,8 +201,6 @@ describe('what applies when a stored answer cannot be read', () => {
       speak_first: false,
       ask_workspace: false,
       remember_this: false,
-      keep_things: false,
-      set_expression: false,
     })
   })
 

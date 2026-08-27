@@ -466,9 +466,10 @@ export class MochiAvatar implements AvatarBackend {
      *
      * Rendered HERE rather than by setting the emotion on the way down, and
      * that distinction is the whole of it. `face.ts` clears her chosen
-     * expression when she rests, because `set_expression` promises the face
-     * she picked ends there — and a character told to look `angry` used to
-     * wake up angry into a session that had never heard of it. If sleep also
+     * expression when she rests, because an expression must not outlive the
+     * presence it belonged to — a character told to look `angry` used to wake
+     * up angry into a session that had never heard of it. The rule arrived
+     * with `set_expression` and outlived it. If sleep also
      * ASSIGNED `sleepy`, the two would be writing to the same slot, and waking
      * would have to guess which of them put it there. The rig knows it is
      * asleep; it does not need to be told twice.

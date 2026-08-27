@@ -51,19 +51,19 @@ export const SAYS = {
     it: 'A side that will not fit is not honoured — dragged into a corner it puts its words wherever there is room.',
   },
   moods: {
-    she: 'eight drawn · she picks one per reply',
-    he: 'eight drawn · he picks one per reply',
-    it: 'eight drawn · it picks one per reply',
+    she: 'eight drawn · what she is told she has',
+    he: 'eight drawn · what he is told he has',
+    it: 'eight drawn · what it is told it has',
   },
   moodsHow: {
-    she: 'A set_expression tool, offered on the wire like any other. She chooses from the ones left on; the rest are never in her tool list, so she cannot reach for a face this character does not use.',
-    he: 'A set_expression tool, offered on the wire like any other. He chooses from the ones left on; the rest are never in his tool list, so he cannot reach for a face this character does not use.',
-    it: 'A set_expression tool, offered on the wire like any other. It chooses from the ones left on; the rest are never in its tool list, so it cannot reach for a face this character does not use.',
+    she: 'Which expressions this character claims. Nothing changes her face on its own except falling asleep and waking up, so today this only decides what she is told about herself — and which tiles you can try below. The tool that let her choose was removed after 275 sessions in which she never used it.',
+    he: 'Which expressions this character claims. Nothing changes his face on its own except falling asleep and waking up, so today this only decides what he is told about himself — and which tiles you can try below. The tool that let him choose was removed after 275 sessions in which he never used it.',
+    it: 'Which expressions this character claims. Nothing changes its face on its own except falling asleep and waking up, so today this only decides what it is told about itself — and which tiles you can try below. The tool that let it choose was removed after 275 sessions in which it never used it.',
   },
   noMoods: {
-    she: 'None left on. She will be told she has no expressions to choose from, and will keep whatever face she has.',
-    he: 'None left on. He will be told he has no expressions to choose from, and will keep whatever face he has.',
-    it: 'None left on. It will be told it has no expressions to choose from, and will keep whatever face it has.',
+    she: 'None left on. She will be told she has one face and cannot change it.',
+    he: 'None left on. He will be told he has one face and cannot change it.',
+    it: 'None left on. It will be told it has one face and cannot change it.',
   },
   colour: {
     she: 'eight themes · retints this window and her',

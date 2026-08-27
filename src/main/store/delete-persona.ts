@@ -1,22 +1,21 @@
 /**
  * Removing a character, and the half-removed states that outlive a crash.
  *
- * The callers of `unfinished.ts`: a delete writes a tombstone, removes the
- * package, then clears the tombstone, so a process killed in the middle leaves
- * a mark that the next launch sweeps. Kept beside that module rather than
- * inside the catalogue, because loading personas and destroying one are
- * different jobs with different failure modes.
+ * The callers of `deleting.ts`: a delete marks her, removes the package, then
+ * clears the mark, so a process killed in the middle leaves a record that the
+ * next launch sweeps. Kept beside that module rather than inside the
+ * catalogue, because loading personas and destroying one are different jobs
+ * with different failure modes.
  */
 import { forgetMemory } from './memory'
 import { type PersonaCatalog } from './personas'
-import { MANIFEST, personasRoot } from './persona-files'
+import { MANIFEST, manifestId, personasRoot } from './persona-files'
 import { forgetPolicy } from './policy'
 import { readBounded } from './read-bounded'
 import { type Transcripts } from './transcripts'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { claimedId } from './persona-files'
-import { clearTombstone, readTombstones, writeTombstone } from './unfinished'
+import { markDeleting, unfinishedDeletions, unmarkDeleting } from './deleting'
 import { forgetGrants } from './grants'
 import { problems } from '../problems'
 /**
@@ -66,7 +65,7 @@ export function deletePersona(
   userData: string,
   catalog: PersonaCatalog,
   id: string,
-  history: Pick<Transcripts, 'forget' | 'kept'>,
+  history: Pick<Transcripts, 'forget'>,
 ): void {
   const source = catalog.sources.get(id)
   if (source === undefined) throw new Error(`${id} has no file to remove`)
@@ -75,11 +74,11 @@ export function deletePersona(
   // package moved into its place, at which point this erases one persona's
   // notes and conversations and then removes another persona's package.
   const standing = readBounded(join(personasRoot(userData), source, MANIFEST))
-  const claims = standing.ok ? claimedId(standing.text) : null
+  const claims = standing.ok ? manifestId(standing.text) : null
   if (claims !== id) {
     throw new Error(`${source} is no longer ${id}; reopen mochi before deleting this persona`)
   }
-  // THE TOMBSTONE FIRST, and everything else after it.
+  // THE MARK FIRST, and everything else after it.
   //
   // This used to delete her memory and her conversations -- both irreversible
   // -- and only then reach the parts that can fail. A transcript failure, or a
@@ -90,11 +89,11 @@ export function deletePersona(
   // before anything is touched.
   //
   // From that moment she is deleted as far as the rest of the app is
-  // concerned -- `loadPersonas` skips a tombstoned id -- and `sweepDeletions`
+  // concerned -- `loadPersonas` skips a marked id -- and `sweepDeletions`
   // finishes the job on this launch or the next one. So the states are "not
   // deleted" and "deleted, possibly still being tidied up", with nothing in
   // between where she is half gone and fully present.
-  writeTombstone(userData, id, source)
+  markDeleting(userData, id, source)
   finishDeletion(userData, id, source, history)
 }
 
@@ -102,29 +101,16 @@ export function deletePersona(
  * Every store that holds something filed under her, emptied. Idempotent.
  *
  * Safe to run again after any failure, which is the whole point of running it
- * behind a tombstone: each step either removes something or finds it already
+ * behind a mark: each step either removes something or finds it already
  * gone.
  */
 function finishDeletion(
   userData: string,
   id: string,
   source: string,
-  history: Pick<Transcripts, 'forget' | 'kept'>,
+  history: Pick<Transcripts, 'forget'>,
 ): void {
   forgetMemory(userData, id)
-  /*
-    Her store dies here, ABOVE `clearTombstone`.
-
-    Persona ids are derived name slugs and are handed out again once free, so a
-    store that outlives its owner is handed to the next character of the same
-    name. `PersonaCatalog.reserved` holds the id while the tombstone exists, so
-    everything removed before that last line is covered -- and a crash here
-    leaves the tombstone, which `sweepDeletions` retries next launch.
-
-    Ordering is the whole guarantee. `kept.test.ts` asserts a recreated `ada`
-    reads empty, which is what stops a later edit reversing this silently.
-  */
-  history.kept.forgetAll(id)
   // Her CONVERSATIONS too, and the store is a required argument rather than
   // something the caller might remember. This was missed once already: memory
   // was forgotten and transcripts were not, so deleting `ada` and letting the
@@ -135,7 +121,7 @@ function finishDeletion(
   // Her retention setting goes with the rest of her state. The ordering
   // argument that used to live here -- delete it before or after the package,
   // and put it back if the package could not go -- is gone with the compensating
-  // write: the tombstone makes her deleted from the moment it lands, so there
+  // write: the mark makes her deleted from the moment it lands, so there
   // is no state in which she is loaded again and needs her opt-out back.
   forgetPolicy(userData, id)
   forgetGrants(userData, id)
@@ -145,22 +131,19 @@ function finishDeletion(
   rmSync(join(personasRoot(userData), source), { recursive: true, force: true })
   // LAST. While this is here she is deleted and the work may be unfinished;
   // once it is gone, every store agrees she never existed.
-  clearTombstone(userData, id)
+  unmarkDeleting(userData, id)
 }
 
 /**
  * Finish any deletion a previous run left half-done.
  *
- * Called at startup, once the transcript store is open. A tombstone outlives
- * the process that wrote it, so a crash or a disk error partway through a
- * deletion is recovered rather than left as a persona whose memory is gone and
- * whose conversations are not.
+ * Called at startup, once the transcript store is open. The mark outlives the
+ * process that wrote it, so a crash or a disk error partway through a deletion
+ * is recovered rather than left as a persona whose memory is gone and whose
+ * conversations are not.
  */
-export function sweepDeletions(
-  userData: string,
-  history: Pick<Transcripts, 'forget' | 'kept'>,
-): void {
-  for (const [id, source] of readTombstones(userData)) {
+export function sweepDeletions(userData: string, history: Pick<Transcripts, 'forget'>): void {
+  for (const [id, source] of unfinishedDeletions(userData)) {
     try {
       finishDeletion(userData, id, source, history)
     } catch (error: unknown) {

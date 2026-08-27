@@ -13,6 +13,7 @@ import type { Transcripts } from '../store/transcripts'
 import type { Conversation } from '../store/conversation'
 import type { Registry } from '@shared/capability/registry'
 import { whatSheMayDo } from '../what-she-may-do'
+import { briefFor, resumeFor } from '../memory/brief'
 
 /**
  * Everything one session needs to know about who she is, assembled once.
@@ -52,6 +53,16 @@ export interface SessionConfigDeps {
   /** WRITE: this session belongs to her now. */
   readonly nowWearing: (personaId: string) => void
   /**
+   * WRITE: the briefing this session opened with.
+   *
+   * Reported rather than returned, because the renderer has no use for it and
+   * `SessionConfig` crosses IPC. Main needs it: a grant change rebuilds the
+   * whole instruction block and the renderer replaces what it holds, so a
+   * rebuild without this deletes the wake summary — or tells her to stop
+   * carrying on a conversation she is in the middle of.
+   */
+  readonly briefedWith: (text: string) => void
+  /**
    * WRITE: is this open replacing a session, rather than starting one?
    *
    * Consumed — it describes exactly one open. A greeting is for a wake and a
@@ -65,9 +76,97 @@ export interface SessionConfigDeps {
   /** The archive, or null when it is not open. */
   readonly transcripts: () => Transcripts | null
   readonly problemCount: () => number
+  /** Injected so the brief's "most recently…" is a value a test can fix. */
+  readonly now: () => number
   readonly note: (what: string, id: string | null, detail: string) => void
   readonly log: (line: string) => void
   readonly warn: (line: string) => void
+}
+
+/**
+ * What she is told about the conversation this session is joining.
+ *
+ * ## Two kinds, and sending the wrong one is worse than sending neither
+ *
+ * `brief.ts` argues it at length: a WAKE gets a dated summary of a conversation
+ * that ended, framed as background and explicitly not to be resumed. A
+ * RECONNECT gets the opposite instruction, because nothing ended — a connection
+ * dropped, §53 measured that it does so on the hour, and from the user's side
+ * she simply has to keep up.
+ *
+ * `replacing` is the one signal that tells them apart, and main is the only
+ * process that has it: from inside a session an open is an open.
+ *
+ * ## Why this had no caller until now
+ *
+ * `briefFor` and `resumeFor` were written, tested, and reached from nothing —
+ * found by widening `store/wiring.test.ts` to `src/main/memory` after the same
+ * thing turned out to be true of the summariser. The cost of the absence was
+ * not cosmetic: without `resumeFor`, an hour into a conversation the session is
+ * replaced and she has no record of any of it, because a new Realtime session
+ * starts with an empty context. She kept talking and had forgotten the morning.
+ *
+ * ## Empty is a real answer
+ *
+ * No archive, no prior conversation, or a reconnect with nothing said yet — all
+ * of them return `''`, and `instructionsFor` omits the section rather than
+ * printing a heading over nothing.
+ */
+function briefing(
+  deps: SessionConfigDeps,
+  personaId: string,
+  /**
+   * The conversation that was live BEFORE `wear()` ran, or null.
+   *
+   * Passed in rather than asked for, and that is the whole of this parameter.
+   * `wear()` calls `end()`, which sets `live = null` — so by the time this
+   * function runs, `liveToken()` answers null on every path and `resumeFor`
+   * had no production caller at all.
+   *
+   * It shipped that way and the test passed, because the test's stub returned
+   * a token unconditionally: a stub that cannot reach the broken state cannot
+   * fail on it. The stub now goes null on `wear`, which is what the real one
+   * does.
+   *
+   * The TURNS survive `end()` — it writes `ended_at` and nothing else — so the
+   * token is all that has to be carried across.
+   */
+  liveBefore: string | null,
+): string {
+  const store = deps.transcripts()
+  if (store === null) return ''
+  try {
+    /*
+      A LIVE CONVERSATION decides this, not the `replacing` flag.
+
+      They agree on the two paths anybody thinks about — sleep ends the
+      conversation, so a wake has none; an hourly reconnect leaves one open.
+      They disagree on a third: `did-finish-load` fires again when the renderer
+      RELOADS, and nothing sets `replacing` for that. She would have been told
+      not to resume a conversation that was still going on.
+
+      An open conversation is also the more direct question. "Is there
+      something to carry on from" is what these two prompts differ about, and
+      the flag is a proxy for it.
+    */
+    if (liveBefore !== null) {
+      return resumeFor(store.turns(personaId, liveBefore))
+    }
+    const past = store.sessions(personaId)
+    const last = past[0]
+    return briefFor({
+      sessions: past.length,
+      lastAt: last?.endedAt ?? last?.startedAt ?? null,
+      tail: last === undefined ? [] : store.turns(personaId, last.token),
+      now: deps.now(),
+    })
+  } catch (error: unknown) {
+    // Never a reason to refuse her a session. A brief that cannot be built is a
+    // session that opens without one, which is exactly the state every session
+    // was in before this was wired.
+    deps.warn(`[brief] could not be built: ${String(error)}`)
+    return ''
+  }
 }
 
 export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
@@ -75,13 +174,20 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
   // `reconnecting`: the flag describes exactly one open.
   const replacing = deps.replacingASession()
   const userData = deps.userData()
-  // Whether this installation has run before decides whether a one-time
-  // retention migration may run at all — a permissive default there would let a
-  // hand-placed package choose somebody's retention on a first launch.
   const catalog = deps.catalogue(userData)
   for (const problem of catalog.problems) {
-    deps.warn(`[persona] ${problem.kind}`)
-    deps.note('persona', null, problem.kind)
+    /*
+      NAMED, where the problem names something.
+
+      `retention-unsupported` refuses a whole character, and reporting it as a
+      bare kind against a null subject leaves somebody with a character that
+      vanished and no way to tell which package did it. Every kind that carries
+      an id or a source says so.
+    */
+    const about = 'id' in problem ? problem.id : 'source' in problem ? problem.source : null
+    const detail = about === null ? problem.kind : `${problem.kind}: ${about}`
+    deps.warn(`[persona] ${detail}`)
+    deps.note('persona', about, detail)
   }
   // Which persona was last worn, remembered across restarts. Getting this wrong
   // is not cosmetic: the archive is scoped per persona, so defaulting to the
@@ -96,6 +202,13 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
   // A new session is a new conversation. Ending the previous one here rather
   // than on teardown covers the reconnect path too, which is the common case:
   // §53 measured a session lasting exactly an hour, so this happens hourly.
+  /*
+    HELD BEFORE THE SWITCH, because the switch destroys it.
+
+    `wear()` calls `end()` on the way through, which nulls the live token. Any
+    reader of it after this line sees null — see `briefing`'s `liveBefore`.
+  */
+  const liveBefore = deps.conversation().liveToken()
   deps.conversation().wear(resolved.persona.id)
   deps.nowWearing(resolved.persona.id)
 
@@ -155,13 +268,15 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
         '— she cannot greet you, look anything up, or keep a note',
     )
   }
+  const brief = briefing(deps, resolved.persona.id, liveBefore)
+  deps.briefedWith(brief)
   const mayDo = whatSheMayDo(
     resolved.persona,
     note,
     grants,
     deps.registry.tools,
     readPrompt(userData),
-    deps.transcripts()?.kept.collections(resolved.persona.id) ?? [],
+    brief,
   )
   deps.log(
     `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars, bubble ${resolved.persona.bubble ? 'on' : 'off'}`,

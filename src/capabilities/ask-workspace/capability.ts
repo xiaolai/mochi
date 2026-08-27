@@ -120,9 +120,13 @@ export const capability: Capability = {
           model: null,
           profile: deps.codexProfile(),
           framing: deps.prompt('askWorkspace.framing'),
+          // FALSE here, and true for the sleep summariser. A lookup is asked
+          // for, and §65 settles that a profile's MCP servers are how somebody
+          // extends one. See `AskSettings.ignoreUserConfig`.
+          ignoreUserConfig: false,
         },
-        run: (path, args) => {
-          const handle = spawnCodex(path, args)
+        run: (path, args, input) => {
+          const handle = spawnCodex(path, args, input)
           const release = running.hold(handle)
           void handle.finished.finally(release)
           return handle

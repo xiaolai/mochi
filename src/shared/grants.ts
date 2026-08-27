@@ -14,7 +14,7 @@
  * W-F): capabilities are compiled in now, so a grant is not a fence around
  * somebody else's code. It is a statement about what this machine lets HER do.
  *
- * ## There were five. `microphone` was the one this machine already answered
+ * ## There were five, then three. `microphone` was the first to go
  *
  * "Hear you" opened and closed the audio track, and every state it could reach
  * was reachable twice over. macOS owns microphone permission for this
@@ -30,6 +30,12 @@
  * `LOOKING`'s header names — and it took `SessionConfig.microphone`, the
  * renderer's `mayHear`, `closeMicrophone`, the reconnect-on-regrant path and
  * the shelf's third microphone state with it.
+ *
+ * `keep_things` and `set_expression` went the same way and for a stronger
+ * reason: `usage.json` on the real installation records a last-called time for
+ * every tool that has ever run, and neither of those four tools appears in it
+ * at all. A switch governing something nothing has ever done is a decision
+ * nobody can make.
  *
  * ## App-level, not per character
  *
@@ -62,13 +68,7 @@ export type Prompts = (key: string) => string
 const CATALOGUE: readonly PromptSpec[] = promptsFor([])
 const defaultPrompts: Prompts = (key) => CATALOGUE.find((spec) => spec.key === key)?.text ?? ''
 
-export const GRANTS = [
-  'speak_first',
-  'ask_workspace',
-  'remember_this',
-  'keep_things',
-  'set_expression',
-] as const
+export const GRANTS = ['speak_first', 'ask_workspace', 'remember_this'] as const
 
 export type Grant = (typeof GRANTS)[number]
 
@@ -136,28 +136,6 @@ export const GRANT_SPECS: readonly GrantSpec[] = [
     capabilities: ['remember_this'],
     withheld: 'You can no longer write anything into your long-term notes.',
   },
-  {
-    id: 'keep_things',
-    label: 'Keep things',
-    detail: {
-      she: 'Write things into her own notes, and read them back later.',
-      he: 'Write things into his own notes, and read them back later.',
-      it: 'Write things into its own notes, and read them back later.',
-    },
-    capabilities: ['keep', 'look_up', 'forget_kept'],
-    withheld: 'You can no longer keep anything, or read back what you kept.',
-  },
-  {
-    id: 'set_expression',
-    label: 'Show a face',
-    detail: {
-      she: 'Choose one of her expressions for a reply.',
-      he: 'Choose one of his expressions for a reply.',
-      it: 'Choose one of its expressions for a reply.',
-    },
-    capabilities: ['set_expression'],
-    withheld: 'You can no longer change your expression; you keep the one face.',
-  },
 ]
 
 /**
@@ -174,8 +152,6 @@ export const DEFAULT_GRANTS: Grants = {
   speak_first: true,
   ask_workspace: true,
   remember_this: true,
-  keep_things: true,
-  set_expression: true,
 }
 
 /**
@@ -197,8 +173,6 @@ export const WITHHELD_GRANTS: Grants = {
   speak_first: false,
   ask_workspace: false,
   remember_this: false,
-  keep_things: false,
-  set_expression: false,
 }
 
 export function isGrant(value: unknown): value is Grant {
@@ -254,7 +228,7 @@ export function parseGrants(value: unknown): Grants {
 export function allowsCapability(grants: Grants, name: string): boolean {
   const spec = GRANT_SPECS.find((one) => one.capabilities.includes(name))
   // Not every capability has a grant — `recall_conversations` reads her own
-  // archive and is not one of the five. A capability with no switch is governed
+  // archive and is not one of the three. A capability with no switch is governed
   // by nothing here, which is a different answer from being switched off.
   return spec === undefined || grants[spec.id]
 }

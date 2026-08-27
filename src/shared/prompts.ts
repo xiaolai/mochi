@@ -1,5 +1,4 @@
 import type { CapabilityManifest } from './capability/manifest'
-import { KEPT_PROMPTS } from '@shared/prompts-kept'
 import type { PromptSpec } from './prompt-spec'
 
 /**
@@ -44,9 +43,10 @@ import type { PromptSpec } from './prompt-spec'
  * Re-exported rather than declared here.
  *
  * `PromptSpec` moved to `prompt-spec.ts` to break the one real import cycle in
- * the codebase — this file imports `KEPT_PROMPTS` from `prompts-kept.ts`, and
- * that file needed the type back. Every existing caller names it through this
- * module, so the address it moved to is invisible to them.
+ * the codebase: this file imported the kept tools' own catalogue, and that file
+ * needed the type back. Those tools are gone, so the cycle is too — the split
+ * stays because every existing caller names the type through this module, and
+ * moving it back would be a change of address for no reason.
  */
 export type { PromptSpec } from './prompt-spec'
 
@@ -58,8 +58,6 @@ export type { PromptSpec } from './prompt-spec'
  * ADDRESS and not of behaviour.
  */
 const FIXED: readonly PromptSpec[] = [
-  // Her own store's ten, kept together so they read as a set.
-  ...KEPT_PROMPTS,
   {
     key: 'notes.heading',
     title: 'Notes — heading',
@@ -113,7 +111,7 @@ const FIXED: readonly PromptSpec[] = [
       'Sent to Codex when she sleeps, to rewrite her long-term notes. Its answer is kept one version deep, so a bad rewrite is reviewable and revertible in the character sheet.',
     text: [
       'You maintain a small set of notes that a voice companion keeps about the person she talks with.',
-      'You are given her current notes and the conversation that has just finished.',
+      'You are given her current notes and every conversation since her notes were last brought up to date, oldest first.',
       'Return the notes as they should now stand: merge what is new, drop what has stopped being true, and keep the whole thing short.',
       'This is a REWRITE, not an append. Anything you leave out is forgotten.',
       'Write about the person, not about the conversation. No file paths, no URLs, no commands, no names of other characters.',
@@ -264,36 +262,6 @@ const FIXED: readonly PromptSpec[] = [
     purpose:
       'Attached when the note was kept, so she confirms it without making a speech about it.',
     text: 'It is written down and will still be there next time. Say so plainly and briefly — one short sentence.',
-    requires: [],
-  },
-  {
-    key: 'setExpression.noFaces',
-    title: 'Face — this character has none',
-    purpose: 'Handed back when the worn character defines no expressions at all.',
-    text: 'You have no expressions to choose from; keep the face you have.',
-    requires: [],
-  },
-  {
-    key: 'setExpression.notAnExpression',
-    title: 'Face — not one of the eight',
-    purpose:
-      'Handed back when she asks for a face this build does not draw. {face} is what she asked for, {faces} what she actually has.',
-    text: '"{face}" is not one of your expressions. You have: {faces}.',
-    requires: ['{face}', '{faces}'],
-  },
-  {
-    key: 'setExpression.notThisCharacter',
-    title: "Face — real, but not this character's",
-    purpose:
-      'Handed back when the face exists and this character does not use it. Listing the ones she DOES have is what stops her guessing through the rest.',
-    text: 'This character does not use "{face}". You have: {faces}.',
-    requires: ['{face}', '{faces}'],
-  },
-  {
-    key: 'setExpression.couldNotChange',
-    title: 'Face — she is not on screen',
-    purpose: 'Handed back when the face could not be changed, usually because her window is gone.',
-    text: 'Your face could not be changed just now; say what you mean in words.',
     requires: [],
   },
   {

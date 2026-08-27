@@ -601,7 +601,7 @@ export function readLegacyBubbleSide(userData: string): BubbleSide {
 /**
  * Whether that carry-over has already happened. Marked BEFORE it is done.
  *
- * ## Why the order is the opposite of `retentionMigrated`'s
+ * ## Why the order is the opposite of the retention migration's
  *
  * That marker may fail to write, and says so: its pass "only seeds where there
  * is no setting already", so running twice is harmless and losing the marker

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EMOTIONS } from '@shared/avatar'
-import { DEFAULT_PERSONA, type Persona } from '@shared/persona'
+import { DEFAULT_PERSONA } from '@shared/persona'
 import { DEFAULT_GRANTS, WITHHELD_GRANTS } from '@shared/grants'
 import type { WireTool } from '@shared/capability/registry'
 import { whatSheMayDo } from './what-she-may-do'
@@ -161,79 +160,5 @@ describe('whose prompt it builds', () => {
     expect(hers.instructions).not.toContain('their note')
     expect(theirs.instructions).toContain('their note')
     expect(theirs.instructions).not.toContain('her note')
-  })
-})
-
-describe('which faces she is offered', () => {
-  /** A tool list carrying `set_expression` as the registry declares it. */
-  function withFaces(): readonly WireTool[] {
-    return [
-      {
-        type: 'function',
-        name: 'set_expression',
-        description: 'Wear one of your expressions.',
-        parameters: {
-          type: 'object',
-          properties: { face: { type: 'string', description: 'Which.', enum: [...EMOTIONS] } },
-          required: ['face'],
-        },
-      },
-    ]
-  }
-
-  function facesOffered(persona: Persona): readonly string[] | undefined {
-    const may = whatSheMayDo(persona, '', DEFAULT_GRANTS, withFaces())
-    return may.tools[0]?.parameters.properties['face']?.enum
-  }
-
-  it('is all eight for a character that does not narrow them', () => {
-    expect(facesOffered(DEFAULT_PERSONA)).toEqual(EMOTIONS)
-  })
-
-  it('is only the ones this character uses', () => {
-    /*
-      NOT OFFERED rather than offered and discouraged, which is the same argument
-      as the grant filter one level up. A face left out of the enum is not on the
-      wire, so she cannot reach for it — where describing all eight and asking
-      her to use three is a rule she can break, at the moment she is least likely
-      to be reading rules carefully.
-    */
-    const three: Persona = { ...DEFAULT_PERSONA, faces: ['neutral', 'happy', 'thinking'] }
-    expect(facesOffered(three)).toEqual(['neutral', 'happy', 'thinking'])
-  })
-
-  it('does not offer the TOOL at all when a character wears one face', () => {
-    /*
-      It used to offer it with `enum: []`, which this test asserted and which
-      was wrong: a required field whose enum is empty is a schema no argument
-      can satisfy. She would see the tool, have no legal value for it, and
-      either fail the call or have the whole session configuration refused.
-
-      Not offered, rather than offered and unusable — the same rule the grant
-      filter one level up already follows.
-    */
-    const still: Persona = { ...DEFAULT_PERSONA, faces: [] }
-    const may = whatSheMayDo(still, '', DEFAULT_GRANTS, withFaces())
-    expect(may.tools.map((one) => one.name)).toEqual([])
-    expect(facesOffered(still)).toBeUndefined()
-  })
-
-  it('leaves every other tool alone', () => {
-    // A narrowing of one argument of one capability, not a hook that lets a
-    // downloaded character rewrite what any tool claims to do.
-    const other: readonly WireTool[] = [
-      {
-        type: 'function',
-        name: 'remember_this',
-        description: 'Keep a fact.',
-        parameters: {
-          type: 'object',
-          properties: { note: { type: 'string', description: 'The fact.' } },
-          required: ['note'],
-        },
-      },
-    ]
-    const narrow: Persona = { ...DEFAULT_PERSONA, faces: ['neutral'] }
-    expect(whatSheMayDo(narrow, '', DEFAULT_GRANTS, other).tools).toEqual(other)
   })
 })

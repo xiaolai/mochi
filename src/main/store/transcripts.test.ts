@@ -1470,3 +1470,97 @@ describe('what a forget request actually acts on', () => {
     expect(boundedForgetSet(['a', 'a', 'b'])).toEqual(['a', 'b'])
   })
 })
+
+describe('her old kept store is removed, not merely stopped being made', () => {
+  /*
+    `keep`, `look_up` and `forget_kept` went on 2026-08-26 because `usage.json`
+    recorded no call to any of them, ever. Dropping the `CREATE TABLE` from
+    `schema.ts` does nothing to a database that already HAS the table, so
+    without this the rows would sit on disk indefinitely: no reader, no export,
+    no way for anybody to remove them. That is the opposite of what every other
+    deletion path in this store promises.
+  */
+  function withOldStore(): string {
+    const home = mkdtempSync(join(tmpdir(), 'mochi-history-kept-'))
+    const path = join(home, TRANSCRIPTS_FILE)
+    const old = new DatabaseSync(path)
+    old.exec(`
+      CREATE TABLE session (
+        id INTEGER PRIMARY KEY, persona_id TEXT NOT NULL, started_at INTEGER NOT NULL,
+        ended_at INTEGER, token TEXT, UNIQUE (persona_id, started_at)
+      );
+      CREATE TABLE turn (
+        id INTEGER PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES session(id) ON DELETE CASCADE,
+        at INTEGER NOT NULL, who TEXT NOT NULL, text TEXT NOT NULL,
+        cut INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE VIRTUAL TABLE turn_fts USING fts5(body, turn_id UNINDEXED, persona_id UNINDEXED);
+      CREATE TABLE kept (
+        persona_id TEXT NOT NULL, collection TEXT NOT NULL, key TEXT NOT NULL,
+        value TEXT NOT NULL, previous TEXT, updated_at INTEGER NOT NULL,
+        PRIMARY KEY (persona_id, collection, key)
+      );
+      CREATE INDEX kept_by_collection ON kept (persona_id, collection, updated_at DESC);
+      INSERT INTO kept (persona_id, collection, key, value, updated_at)
+        VALUES ('ada', 'projects', 'one', 'something she was asked to keep', 1000);
+    `)
+    old.close()
+    return home
+  }
+
+  it('opens a database that still has it, and takes it away', () => {
+    const home = withOldStore()
+    const t = createTranscripts(home)
+    open.push(t)
+
+    const probe = new DatabaseSync(join(home, TRANSCRIPTS_FILE))
+    try {
+      const table = probe
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'kept'")
+        .get()
+      expect(table, 'the table is still there').toBeUndefined()
+      const index = probe
+        .prepare("SELECT name FROM sqlite_master WHERE name = 'kept_by_collection'")
+        .get()
+      expect(index, 'its index outlived it').toBeUndefined()
+    } finally {
+      probe.close()
+    }
+  })
+
+  it('does not leave the words legible in a freed page', () => {
+    /*
+      The OUTCOME, not a mechanism, and that distinction was earned.
+
+      This test first carried a comment claiming the schema had to `DELETE`
+      before it could `DROP`, because `secure_delete` was said to zero pages
+      only as rows are deleted. Running the test against a schema with the
+      `DELETE` removed passed — so the comment was describing a mechanism that
+      was not the one working.
+
+      Measured instead (2026-08-27, 200 rows, journal mode `delete`): with
+      `PRAGMA secure_delete = ON` a bare `DROP TABLE` leaves nothing readable,
+      and with it OFF the text survives even a `DELETE` first. The pragma is
+      the guarantee; the statement is not.
+
+      So what this asserts is the property somebody actually has — her words are
+      not recoverable from the file — and it fails if the pragma is ever lost,
+      which is the failure worth catching.
+    */
+    const home = withOldStore()
+    const t = createTranscripts(home)
+    open.push(t)
+    t.close()
+    open.pop()
+
+    const bytes = readFileSync(join(home, TRANSCRIPTS_FILE))
+    expect(bytes.includes(Buffer.from('something she was asked to keep'))).toBe(false)
+  })
+
+  it('costs an ordinary database nothing but one lookup', () => {
+    // A fresh store has never had the table, so the guard must not write.
+    const t = store()
+    expect(() => t.begin('ada')).not.toThrow()
+  })
+})

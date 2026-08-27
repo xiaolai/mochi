@@ -177,10 +177,22 @@ function quote(tail: readonly Turn[]): string {
     // the whole of continuity lost, silently, exactly when somebody has been
     // talking at length. The per-turn cap upstream is larger than this budget,
     // so this is reachable with entirely ordinary input.
+    /*
+      TRUNCATED FROM THE FRONT, like everything else here.
+
+      `slice(0, …)` kept the BEGINNING of an oversized turn and threw away its
+      end, which contradicts this function's own policy two paragraphs up —
+      "trimmed from the FRONT, so what survives is what was said last" — and
+      contradicts it in the one place it matters most. For `resumeFor` the
+      newest turn is the sentence she has to carry on from, and keeping its
+      opening while discarding its conclusion is keeping the half that cannot
+      be continued.
+    */
+    const roomForText = room - prefix.length - 1
     const line =
       prefix.length + text.length <= room
         ? `${prefix}${text}`
-        : `${prefix}${text.slice(0, room - prefix.length - 1)}…`
+        : `${prefix}…${text.slice(text.length - roomForText)}`
     rendered.push(line)
     total += line.length + (rendered.length === 1 ? 0 : 1)
   }

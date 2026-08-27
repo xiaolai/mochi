@@ -137,11 +137,18 @@ export interface Face {
    */
   showWords(shown: boolean): void
   /**
-   * Wear one of her expressions, until she changes it or is asked to rest.
+   * Wear one of her expressions, until it is replaced or she is asked to rest.
    *
-   * The caller is `set_expression`, and its absence is why six of the eight were
-   * drawn and unreachable: `setEmotion` had no caller outside the rig, so
-   * `neutral` and `sleepy` were the only two anybody ever saw.
+   * ONE caller: the `__mochi_face__` frame, which only the shelf's preview
+   * sends. `set_expression` was the other and was removed on 2026-08-26,
+   * unused in 275 sessions.
+   *
+   * `repose.ts` is NOT a caller, and a comment here briefly said it was —
+   * repose drives motion clips and contains no expression code. What changes
+   * her face without anybody asking is two reactions in this file: neutral
+   * when she sleeps, a perk when she wakes.
+   *
+   * Which is the same story the six unreachable faces always told.
    *
    * Held rather than timed. The rig can expire an emotion on its own clock, and
    * a face that faded after a few seconds would contradict what she is told —
@@ -1154,12 +1161,17 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       loopback.reset()
       avatar.setAsleep(asleep)
       /*
-        The FACE she chose ends here, because `set_expression` says it does.
+        WHATEVER FACE SHE WAS WEARING ends here.
 
-        Its manifest promises "the expression stays until you change it or until
-        you are asked to rest", and nothing cleared it — so a character told to
-        look `angry`, then asked to rest, woke up angry into a new session that
-        had never heard of it. A tool that describes a lifetime it does not have
+        The rule arrived with `set_expression`, whose manifest promised "the
+        expression stays until you change it or until you are asked to rest",
+        and nothing cleared it — so a character told to look `angry`, then asked
+        to rest, woke up angry into a new session that had never heard of it.
+
+        The tool went on 2026-08-26 and the clearing stays, because it was never
+        really about the tool: her face is time-driven now, and an expression
+        held across a sleep is a measurement of a mood nobody is in. A rule that
+        describes a lifetime it does not have
         is a rule she keeps and the app breaks.
 
         Only on the way DOWN. Waking must not stamp neutral over an expression

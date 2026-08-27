@@ -5,13 +5,21 @@
  *
  * Memory is a small curated string that goes into the system prompt on every
  * wake — so it is billed on every reconnect and bounded at 20,000 characters.
- * A transcript is a RECORD. It never enters a prompt: the live session already
- * holds its own context, and injecting a growing history would be an unbounded
- * billed request that gets worse the longer somebody uses the app.
+ * A transcript is a RECORD. It never enters HER prompt: the live session
+ * already holds its own context, and injecting a growing history would be an
+ * unbounded billed request that gets worse the longer somebody uses the app.
  *
- * So this store exists for two readers, and neither is the model: the person
- * who wants to find something she said, and whatever eventually decides what
- * is worth remembering.
+ * **It does reach a model, and that is worth stating precisely**, because an
+ * earlier version of this paragraph said "neither reader is the model" and
+ * stopped being true on 2026-08-26. The sleep summariser hands ONE ended
+ * presence to `codex exec` to rewrite her note from — off every latency path,
+ * on the Codex subscription, once, and never into the Realtime session. The
+ * distinction the design rests on is between the live prompt, which this must
+ * never grow, and one bounded job at sleep.
+ *
+ * So this store has three readers: the person who wants to find something she
+ * said, `recall_conversations`, and the summariser that decides what is worth
+ * remembering.
  *
  * ## SQLite, without a native dependency
  *
@@ -60,7 +68,6 @@ import { problems } from '../problems'
 import { readableInstant } from './instant'
 import { applySchema } from './schema'
 import { prepareAll } from './statements'
-import { type Kept, createKept } from './kept'
 
 export const TRANSCRIPTS_FILE = 'transcripts.db'
 
@@ -212,16 +219,6 @@ export interface Transcripts {
     above are the mechanism; they are the two that get controls.
   */
   close(): void
-
-  /**
-   * Her own store — the one place a persona may write.
-   *
-   * A property rather than a family of methods on this interface, which is
-   * already a hundred lines: `kept.ts` owns its own contract and this is the
-   * handle to it. It rides this database for `secure_delete` and the WAL
-   * checkpoint on close, which are exactly the properties her data wants.
-   */
-  readonly kept: Kept
 }
 
 /**
@@ -617,25 +614,6 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
   }
 
   /*
-    Her store gets `scrub` WITH the retry counter armed.
-
-    `retryScrubSoon` bails on `scrubsLeft <= 0`, and only the three transcript
-    deletes set it. `kept` was handed the bare `scrub`, so a checkpoint that
-    lost the race to a live reader warned once and scheduled nothing — the
-    documents stayed in the write-ahead log until an unrelated delete or a
-    clean quit. That is the exact defect the retry was written for, in the one
-    store whose whole justification is that deleting is real.
-
-    Armed here rather than inside `scrub()` itself, because `scrub` is also
-    what the retry timer calls: arming there would reset the budget on every
-    attempt and never stop.
-  */
-  const kept = createKept(stmt, () => {
-    scrubsLeft = SCRUB_TRIES
-    scrub()
-  })
-
-  /*
     SCRUBBED AT OPEN, before the store is handed to anybody.
 
     `forgetSessions` commits and then scrubs, which is the right order -- but a
@@ -651,7 +629,6 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
   scrub()
 
   return {
-    kept,
     begin(personaId, at = now()) {
       /*
         Checked FIRST, before the row exists.

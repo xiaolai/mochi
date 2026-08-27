@@ -59,7 +59,7 @@ export const MOOD_WHEN: Readonly<Record<Emotion, ByPronoun>> = {
 
     This read "while a lookup is running", which was a caption for machinery
     that does not exist: nothing in the build has ever set this face, and
-    `set_expression` is the only caller of `setEmotion` outside the rig. A
+    `setEmotion` has no caller outside the rig and this preview. A
     running lookup is now drawn by the bead travelling her halo — see
     `halo.ts` — which is the app's own statement about the app's own wait, and
     leaves this face meaning what the tool says it means.
@@ -75,7 +75,11 @@ export const MOOD_WHEN: Readonly<Record<Emotion, ByPronoun>> = {
 /**
  * The eight faces, and which of them she may reach for.
  *
- * This closes the gap the audit named: `faces` narrows `set_expression`'s enum
+ * `faces` used to narrow `set_expression`'s enum. That tool is gone (2026-08-26,
+ * never called in 275 sessions), and nothing has taken its place: no code reads
+ * `persona.faces` to decide what she wears. What this switchboard decides today
+ * is which tiles the preview below offers, and what her prompt says she has.
+ * The old note read: it narrowed the enum
  * before it goes on the wire and appears in her prompt, and until now the only
  * way to change it was hand-editing a manifest.
  *
@@ -97,9 +101,15 @@ export function moodSection(
       The DRAWING is the button, not the tile around it.
 
       Clicking it puts that expression on her at the size she appears on the
-      desktop, which is the only way to see six of the eight: `set_expression`'s
-      own manifest tells her not to change face every reply, rightly, so in
-      ordinary conversation most of them almost never come up.
+      desktop, and it is the ONLY way to see six of the eight. Two are reached
+      without asking — neutral when she sleeps, a perk when she wakes — and
+      nothing else changes her face at all.
+
+      Two earlier versions of this note were wrong about why, which is worth
+      recording because both sounded right. The first said `set_expression`'s
+      manifest told her not to change face every reply; that tool is gone. The
+      second said her face was driven by how long she had been left alone;
+      `repose.ts` drives MOTION and contains no expression code.
 
       Wrapping the whole tile was the first version and it is invalid HTML — the
       `allowed` checkbox lives inside it, and interactive content nested in a

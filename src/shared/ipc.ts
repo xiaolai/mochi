@@ -146,7 +146,6 @@ export const SHELF_CHANNELS = [
   /** Delete conversations: some of hers, all of hers, or every one there is. */
   'history:forget',
   /** Clear part of her store, or all of it. */
-  'shelf:forget-kept',
   /** Everything that went wrong, for the window that can show it. */
   'history:problems',
   /**
@@ -214,12 +213,15 @@ export const SHELF_CHANNELS = [
    *
    * ## Why the switches were not enough
    *
-   * Eight faces are drawn and six were, in practice, still hard to ever see.
-   * `set_expression` made them reachable BY HER, and her manifest asks her not
-   * to use one every reply — rightly, since a face that changes every sentence
-   * stops meaning anything. So somebody deciding which faces a character should
-   * use had a grid of 56px tiles and no way to see the answer at the size she
-   * actually appears on the desktop.
+   * Eight faces are drawn and six of them are, in practice, unreachable: the
+   * only things that change her expression are two built-in reactions in
+   * `face.ts` — neutral when she sleeps, a perk when she wakes — and this
+   * preview. `set_expression` was the route to the rest and was removed on
+   * 2026-08-26, having been called zero times in 275 sessions.
+   *
+   * So this preview is not a convenience. It is the only way to see six of the
+   * eight at the size she actually appears on the desktop, and the only thing
+   * that makes the face grid mean anything at all.
    *
    * ## It is not gated on `faces`, and that is the point
    *

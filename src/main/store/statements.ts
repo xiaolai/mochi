@@ -57,29 +57,6 @@ export function prepareAll(db: DatabaseSync) {
         WHERE s.token = ? AND s.persona_id = ?
       )
     `),
-    // --- kept: her own store. `persona_id` is always bound, never interpolated.
-    keepPut: db.prepare(
-      `INSERT INTO kept (persona_id, collection, key, value, previous, updated_at)
-       VALUES (?, ?, ?, ?, NULL, ?)
-       ON CONFLICT(persona_id, collection, key) DO UPDATE SET
-         previous = kept.value, value = excluded.value, updated_at = excluded.updated_at`,
-    ),
-    keptOne: db.prepare(
-      'SELECT value, previous, updated_at FROM kept WHERE persona_id = ? AND collection = ? AND key = ?',
-    ),
-    keptIn: db.prepare(
-      'SELECT key, value, updated_at FROM kept WHERE persona_id = ? AND collection = ? ORDER BY updated_at DESC LIMIT ?',
-    ),
-    keptCollections: db.prepare(
-      `SELECT collection, count(*) AS entries, max(updated_at) AS newest
-       FROM kept WHERE persona_id = ? GROUP BY collection ORDER BY collection`,
-    ),
-    keptCount: db.prepare('SELECT count(*) AS rows FROM kept WHERE persona_id = ?'),
-    keptForgetOne: db.prepare(
-      'DELETE FROM kept WHERE persona_id = ? AND collection = ? AND key = ?',
-    ),
-    keptForgetCollection: db.prepare('DELETE FROM kept WHERE persona_id = ? AND collection = ?'),
-    keptForgetAll: db.prepare('DELETE FROM kept WHERE persona_id = ?'),
     existing: db.prepare(
       'SELECT token, ended_at FROM session WHERE persona_id = ? AND started_at = ?',
     ),

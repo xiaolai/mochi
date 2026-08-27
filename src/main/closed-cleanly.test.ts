@@ -9,6 +9,7 @@ import type { ShutdownDeps } from './shutdown'
 /** Every step a no-op, so a test names only the one it is about. */
 const noopShutdown: ShutdownDeps = {
   stopLookups: () => 0,
+  removeScratch: () => 0,
   unanswered: () => [],
   undelivered: () => [],
   endConversation: () => undefined,
@@ -211,5 +212,47 @@ describe('once the archive is down it stays down', () => {
     const body = fn.slice(0, fn.indexOf('\n}'))
     expect(body).toContain('awaitingFlush.unref()')
     expect(body).toContain('if (shutDown) return')
+  })
+})
+
+describe('a summary scratch directory does not outlive the app', () => {
+  /*
+    The job's own `finally` is a continuation on a promise nobody awaits, and
+    quit does not wait for one: `stopLookups` kills the child synchronously and
+    the process can exit before that continuation runs — leaving a
+    `mochi-summary-*` directory holding somebody's transcript in the system
+    temp folder for the OS to reclaim whenever it gets round to it.
+  */
+  it('is swept, and after the child holding it is dead', () => {
+    const order: string[] = []
+    shutDown({
+      ...noopShutdown,
+      stopLookups: () => {
+        order.push('killed')
+        return 1
+      },
+      removeScratch: () => {
+        order.push('swept')
+        return 1
+      },
+    })
+    expect(order).toEqual(['killed', 'swept'])
+  })
+
+  it('does not stop the rest of the shutdown when it fails', () => {
+    // The archive closing is the step that must happen whatever else did not.
+    let closed = false
+    expect(() =>
+      shutDown({
+        ...noopShutdown,
+        removeScratch: () => {
+          throw new Error('EBUSY')
+        },
+        closeArchive: () => {
+          closed = true
+        },
+      }),
+    ).not.toThrow()
+    expect(closed, 'a scratch failure stranded the archive').toBe(true)
   })
 })

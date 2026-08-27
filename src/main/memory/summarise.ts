@@ -42,11 +42,27 @@
  * transcript handed to it in a prompt and returns JSON, and main does the
  * writing. `-s read-only` makes a write impossible by mechanism.
  *
- * ## It reads the working set, not the archive
+ * ## It reads every conversation since her note was last brought up to date
  *
- * So it runs with saving switched off, needs no large read at sleep, and takes
- * "this presence" as its unit -- which is the right one for deciding what was
- * worth keeping.
+ * The caller in `main/index.ts` holds a watermark per character and passes the
+ * turns of every conversation since it — filtered, so the hours nobody spoke
+ * in are dropped, and capped, so a long day cannot grow the prompt without
+ * bound. See `memory/presence.ts`.
+ *
+ * It used to be one conversation, looked up by the token that had just closed.
+ * That was wrong on a real installation for a reason worth keeping: §53
+ * measured a session lasting exactly an hour, and the conversation ends with
+ * it — so a day at the desk is many transcripts, and summarising the last one
+ * meant remembering the evening and not the morning.
+ *
+ * **This paragraph used to say it read a working set rather than the archive,
+ * and therefore ran with saving switched off.** It does not, and it never did:
+ * there was no caller at all when that was written, so the sentence described
+ * an intention. The turns come from `Transcripts.turns`, so an install that
+ * keeps no transcripts has nothing to summarise and her note does not move.
+ * That is a real limitation and it is stated rather than implied — the
+ * alternative would be holding a second copy of every turn in memory for the
+ * whole of a presence, which is a cost nobody has asked for yet.
  *
  * ## It can never block sleep
  *

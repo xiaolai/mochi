@@ -42,7 +42,6 @@
  */
 
 import type { CapabilityManifest } from '@shared/capability/manifest'
-import type { Emotion } from '@shared/avatar'
 import type { WebSearchMode } from '@shared/delegation'
 import type { Transcripts } from '../main/store/transcripts'
 
@@ -111,24 +110,6 @@ export interface CapabilityDeps {
   readonly workspace: () => string
   /** Inclusive top of the workspace guard's walk. See `workspace.ts`. */
   readonly guardStopAt: () => string
-  /**
-   * Which faces the worn character uses, in `EMOTIONS` order.
-   *
-   * Read rather than passed, like everything else here: a session outlives any
-   * one call, and she can be re-worn inside one.
-   */
-  readonly facesSheMayWear: () => readonly Emotion[]
-  /**
-   * Put one of her expressions on, and say whether it landed.
-   *
-   * The ONE thing in this interface that reaches the renderer, and it is
-   * deliberately this narrow. A general "send a frame to the companion" dep
-   * would let any capability push anything into her window, which is a much
-   * wider hole than the single number this needs. False when there is no window
-   * to draw in — she is hidden or between sessions — so the handler can say so
-   * rather than claim a face nobody can see.
-   */
-  readonly wearExpression: (face: Emotion) => boolean
   /** Whether a lookup may search the web. */
   readonly webSearch: () => WebSearchMode
   /**
