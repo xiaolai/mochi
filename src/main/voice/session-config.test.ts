@@ -29,7 +29,7 @@ function deps(over: Partial<SessionConfigDeps> = {}): SessionConfigDeps {
     briefedWith: () => undefined,
     replacingASession: () => false,
     resting: () => ({ asleep: false }),
-    registry: { tools: [] } as never,
+    tools: () => [],
     transcripts: () => null,
     problemCount: () => 0,
     // Fixed, so a brief's "most recently…" is a value rather than a moving target.

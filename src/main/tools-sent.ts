@@ -8,18 +8,27 @@ import type { WireTool } from '@shared/capability/registry'
  * The shelf's `Sent` tab answers *"what will she be told"* — and answered only
  * half of it. `whatSheMayDo` returns `{ instructions, tools }`, the tab drew
  * `instructions`, and the `tools` array was displayed nowhere at all. Those
- * `description` fields are the largest body of model-facing prose in the app
- * and every word of them is compiled in.
- *
- * That they are not editable is deliberate and argued: a description that
- * drifts from what the tool actually does makes her misreport the machine,
- * which is §11's measured failure — *"the model may invent a tool name or
- * pretend it completed the action"* — and `what-she-may-do.ts` refuses a
- * general "personas may edit manifests" hook for the same reason.
+ * `description` fields are the largest body of model-facing prose in the app.
  *
  * **Not editable is a different claim from not visible, and the second does not
  * follow from the first.** Nobody can reason about why she did something
  * without seeing what she was given.
+ *
+ * ## They are editable, and this paragraph used to say the opposite
+ *
+ * It argued at length that a description which drifts from what the tool
+ * actually does makes her misreport the machine, and concluded that the strings
+ * are compiled in. Both halves were stale. The prompt catalogue has offered
+ * every tool description and every argument for rewriting since it was written,
+ * and `prompts.ts`'s own header states the rule this file was contradicting:
+ * every string a model reads is displayed and overridable.
+ *
+ * What was true is that nothing read the overrides back, so the wire really did
+ * carry the compiled text — which is how a paragraph describing a deliberate
+ * decision survived beside a pane that disagreed with it. `describedTools` is
+ * the missing read, and the risk the old paragraph named is answered where it
+ * belongs: a bound at the point of saving, and the shipped text as the fallback
+ * when an override is empty or too long.
  *
  * ## Read from the wire value, never re-derived
  *

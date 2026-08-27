@@ -1364,6 +1364,23 @@ const machineHandlers: PaneHandlers = {
   lookup: (change) => {
     void writeMachine(() => window.mochiSettings.lookup(change), 'Saved.')
   },
+  chooseWorkspace: async () => {
+    const chosen = await window.mochiSettings.chooseWorkspace()
+    /*
+      RE-READ whatever came back, including the refusals.
+
+      `recheckCodex`'s rule: main is one read away and it is the only source.
+      A dismissal changes nothing and re-reading is a no-op; a save changes the
+      workspace AND the "nobody has chosen one, so this is the default" note
+      under it, and patching the field alone would leave that note contradicting
+      the value beside it.
+    */
+    await loadMachine()
+    return chosen
+  },
+  showProfile: () => {
+    window.mochiSettings.showProfile()
+  },
   screen: (change) => {
     void writeMachine(() => window.mochiSettings.screen(change), 'Saved.')
   },
@@ -1377,6 +1394,21 @@ const machineHandlers: PaneHandlers = {
   },
   grant: (change) => {
     void writeMachine(() => window.mochiSettings.grant(change), 'Saved.')
+  },
+  key: (change) => {
+    /*
+      Its own sentence, because the two outcomes are not the same news.
+
+      A rebind takes effect the moment it lands — `rebindShortcut` registers it
+      — so there is no "on her next wake" here. A reset says what it did rather
+      than "Saved.", for the reason the prompt reset does: nothing on screen
+      distinguishes a key that went back to the default from one that was moved
+      onto it, and those are different states in the file.
+    */
+    void writeMachine(
+      () => window.mochiSettings.key(change),
+      change.accelerator === null ? 'Back to the key the app ships.' : 'Saved.',
+    )
   },
   prompt: (key, text) => {
     /*

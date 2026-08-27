@@ -1,3 +1,5 @@
+import { type ByPronoun } from './pronoun'
+
 /**
  * The two keys that reach her without a mouse.
  *
@@ -13,13 +15,18 @@
  * while another application has focus — that is the entire point of a global
  * shortcut. `Control+Shift` is comparatively empty.
  *
- * ## Fixed, for now, and that is a scope decision rather than a view
+ * ## These are the DEFAULTS, not the bindings
  *
- * v1 made these editable, which cost an accelerator parser, a conflict
- * resolver, a settings pane and a persisted map. None of that is wrong; all of
- * it is a second feature. Two constants get the keys working today, and the
- * shape below — a named action per binding — is what an editor would have
- * needed anyway.
+ * They were fixed, and the note here priced the alternative: an accelerator
+ * parser, a conflict resolver, a settings pane and a persisted map. Three of
+ * those arrived for other reasons — the settings pane exists, `preferences.json`
+ * is already a store this build writes, and every other checked change on the
+ * bridge has `applyLookup`'s shape. `shared/accelerator.ts` is the fourth.
+ *
+ * So this is what ships and what a reset goes back to. What is BOUND right now
+ * is `store/keys.ts`, and nothing may register from this table directly: a
+ * caller that did would be a second answer to what the application is listening
+ * for, and it would be the answer that ignores everything somebody chose.
  */
 
 export const SHORTCUTS = {
@@ -35,3 +42,29 @@ export const SHORTCUTS = {
 } as const
 
 export type ShortcutId = keyof typeof SHORTCUTS
+
+/**
+ * What each key does, in words, one phrasing per pronoun.
+ *
+ * Here rather than in main, and that placement IS the fix. `listKeys` held this
+ * table and read "Let her rest, or wake her" — in a module that never sees
+ * `Persona.pronoun`, so a character worn as `he` or `it` was described in this
+ * window as `her`, which is the failure `SettingsView.pronoun`'s comment
+ * describes: validated, stored, migrated, tested, and never rendered.
+ *
+ * Beside the keys rather than with the window's other copy because it is the
+ * same fact the two comments above already state — a table of what these do,
+ * kept anywhere else, is a second place for somebody to change one of them.
+ */
+export const SHORTCUT_SAYS: Readonly<Record<ShortcutId, ByPronoun>> = {
+  rest: {
+    she: 'Let her rest, or wake her',
+    he: 'Let him rest, or wake him',
+    it: 'Let it rest, or wake it',
+  },
+  hide: {
+    she: 'Hide her, or bring her back',
+    he: 'Hide him, or bring him back',
+    it: 'Hide it, or bring it back',
+  },
+}

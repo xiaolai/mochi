@@ -1,4 +1,9 @@
-import type { CapabilityManifest } from './capability/manifest'
+import {
+  MAX_DESCRIPTION,
+  MAX_PROPERTY_DESCRIPTION,
+  type CapabilityManifest,
+} from './capability/manifest'
+import type { WireTool } from './capability/registry'
 import type { PromptSpec } from './prompt-spec'
 
 /**
@@ -315,6 +320,7 @@ export function promptsFor(manifests: readonly CapabilityManifest[]): readonly P
       purpose: `How ${manifest.name} is described to her. This is what decides when she reaches for it.`,
       text: manifest.description,
       requires: [],
+      limit: MAX_DESCRIPTION,
     },
     ...Object.entries(manifest.parameters.properties).map(([argument, property]) => ({
       key: toolArgumentKey(manifest.name, argument),
@@ -322,9 +328,78 @@ export function promptsFor(manifests: readonly CapabilityManifest[]): readonly P
       purpose: `How the ${argument} argument is described to her.`,
       text: property.description,
       requires: [],
+      limit: MAX_PROPERTY_DESCRIPTION,
     })),
   ])
   return [...FIXED, ...tools]
+}
+
+/**
+ * The wire tools, wearing whatever somebody has written for them.
+ *
+ * ## Why this had to exist
+ *
+ * `promptsFor` has offered `tool.<name>.description` and one entry per argument
+ * since the catalogue was written, the pane has drawn them, and
+ * `writePromptOverride` has been saving them to `prompts.json`. Nothing read
+ * them back. `createRegistry` copies `manifest.description` verbatim and every
+ * caller took that list straight to `session.update`, so an edit here was
+ * displayed, warned about, persisted, reported saved — and discarded on the way
+ * to the model, silently, for the whole of this build.
+ *
+ * `tools-sent.ts` still argues in prose that tool descriptions are deliberately
+ * not editable. That paragraph predates this catalogue and is the losing half of
+ * a contradiction: `prompts.ts`'s own header says every string a model reads is
+ * overridable, `no-hardcoded-prompts.test.ts` asserts each manifest's
+ * description and arguments appear here, and a pane, a persisted file and a
+ * warning system were all built on that reading. This is the missing quarter of
+ * it.
+ *
+ * ## An empty or over-long override falls back rather than shipping
+ *
+ * Not silent tolerance — both are refused at the point of saving, where a
+ * person is TOLD, which is the rule `applyHearing` states. This is the second
+ * layer, and it exists because `prompts.json` is hand-editable and the pane is
+ * not the only way in — `readSleepAfterMinutes` makes the same argument about
+ * the same file.
+ *
+ * The direction is chosen rather than defaulted. An empty description is not a
+ * prompt somebody wrote; it is a tool with no explanation, and a model handed
+ * one reaches for it blind — which is §11's measured failure, arriving through
+ * the exact field meant to prevent it. An over-long one is billed on every
+ * session for the life of it. In both cases the shipped text is a working
+ * answer, and shipping it is what keeps her usable while the pane still shows
+ * the override as edited, so the state is visible rather than papered over.
+ */
+export function describedTools(
+  tools: readonly WireTool[],
+  prompt: (key: string) => string,
+): readonly WireTool[] {
+  return tools.map((tool) => ({
+    ...tool,
+    description: within(prompt(toolDescriptionKey(tool.name)), tool.description, MAX_DESCRIPTION),
+    parameters: {
+      ...tool.parameters,
+      properties: Object.fromEntries(
+        Object.entries(tool.parameters.properties).map(([argument, property]) => [
+          argument,
+          {
+            ...property,
+            description: within(
+              prompt(toolArgumentKey(tool.name, argument)),
+              property.description,
+              MAX_PROPERTY_DESCRIPTION,
+            ),
+          },
+        ]),
+      ),
+    },
+  }))
+}
+
+/** The written text when it is usable, and what ships when it is not. */
+function within(written: string, shipped: string, limit: number): string {
+  return written.trim() === '' || written.length > limit ? shipped : written
 }
 
 /**

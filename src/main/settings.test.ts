@@ -19,6 +19,7 @@ import {
   applyScreen,
   folderFor,
   listAvatars,
+  applyKey,
   listCapabilities,
   listGrants,
   listKeys,
@@ -161,12 +162,12 @@ describe('what she can do', () => {
     // second half of this — capabilities found in a user's folder, shown with
     // their descriptions and marked refused — went with the folder that fed it,
     // and the `state`/`why` fields that carried the distinction went with it.
-    const listed = listCapabilities(createRegistry([parsed.manifest]))
+    const listed = listCapabilities(createRegistry([parsed.manifest]).tools)
     expect(listed).toEqual([{ name: 'weather', description: 'Look outside.' }])
   })
 
   it('says nothing at all when a build has none', () => {
-    expect(listCapabilities(createRegistry([]))).toEqual([])
+    expect(listCapabilities(createRegistry([]).tools)).toEqual([])
   })
 })
 
@@ -199,6 +200,7 @@ describe('how a lookup runs', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: null,
+      profileExists: false,
       codex: READY,
     })
     expect(shown.workspaceIsDefault).toBe(true)
@@ -209,6 +211,7 @@ describe('how a lookup runs', () => {
         webSearch: 'follow',
         profile: null,
         profilePath: null,
+        profileExists: false,
         codex: READY,
       }).workspaceIsDefault,
     ).toBe(false)
@@ -224,6 +227,7 @@ describe('how a lookup runs', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: null,
+      profileExists: false,
       codex: READY,
     })
     expect(shown.webSearchModes).toEqual([...WEB_SEARCH_MODES])
@@ -237,9 +241,57 @@ describe('how a lookup runs', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: '/somewhere/mochi.config.toml',
+      profileExists: false,
       codex: READY,
     })
     expect(shown.profilePath).toBeNull()
+  })
+
+  it('claims no profile file exists when no profile is in force', () => {
+    // Even when something IS at the path handed in. There is no profile, so
+    // there is no file of its to be there — and the pane draws the sentence and
+    // the Show button off this, so a stray `true` here is a button that reveals
+    // a file belonging to a setting nobody has made.
+    const shown = listLookup({
+      workspace: '/w',
+      defaultWorkspace: '/w',
+      webSearch: 'follow',
+      profile: null,
+      profilePath: '/somewhere/mochi.config.toml',
+      profileExists: true,
+      codex: READY,
+    })
+    expect(shown.profileExists).toBe(false)
+  })
+
+  it('reports the file as there when a profile is in force and it is', () => {
+    const shown = listLookup({
+      workspace: '/w',
+      defaultWorkspace: '/w',
+      webSearch: 'follow',
+      profile: 'mochi',
+      profilePath: '/somewhere/mochi.config.toml',
+      profileExists: true,
+      codex: READY,
+    })
+    expect(shown.profileExists).toBe(true)
+    expect(shown.profilePath).toBe('/somewhere/mochi.config.toml')
+  })
+
+  it('reports the file as missing when the profile names one that was never written', () => {
+    // A profile is a NAME. Nothing guarantees a file, and the pane said
+    // "settings for it live in <path>" about paths with nothing at them.
+    const shown = listLookup({
+      workspace: '/w',
+      defaultWorkspace: '/w',
+      webSearch: 'follow',
+      profile: 'never-made',
+      profilePath: '/somewhere/never-made.config.toml',
+      profileExists: false,
+      codex: READY,
+    })
+    expect(shown.profileExists).toBe(false)
+    expect(shown.profilePath).toBe('/somewhere/never-made.config.toml')
   })
 
   it('refuses a workspace that is not a full path', () => {
@@ -335,10 +387,17 @@ describe('the four standing grants, as the window draws them', () => {
 })
 
 describe('the two global keys, as the window shows them', () => {
+  const SAYS = { rest: 'Let her rest, or wake her', hide: 'Hide her, or bring her back' }
+  const SHIPPED = { rest: 'Control+Shift+L', hide: 'Control+Shift+M' }
+
   it('names what each one does rather than our word for it', () => {
     // "rest" is the internal id. "Let her rest, or wake her" is the thing
     // somebody scanning this pane is actually looking for.
-    const shown = listKeys([{ id: 'rest', accelerator: 'Control+Shift+L', refused: null }])
+    const shown = listKeys(
+      [{ id: 'rest', accelerator: 'Control+Shift+L', refused: null }],
+      SAYS,
+      SHIPPED,
+    )
     expect(shown[0]?.what).toContain('rest')
     expect(shown[0]?.accelerator).toBe('Control+Shift+L')
     expect(shown[0]?.refused).toBeNull()
@@ -348,16 +407,126 @@ describe('the two global keys, as the window shows them', () => {
     // THE case worth seeing. Hiding it would make it look as though this
     // application never wanted a key, which is the silent failure the row
     // exists to end.
-    const shown = listKeys([
-      { id: 'hide', accelerator: 'Control+Shift+M', refused: 'another application already has it' },
-    ])
+    const shown = listKeys(
+      [
+        {
+          id: 'hide',
+          accelerator: 'Control+Shift+M',
+          refused: 'another application already has it',
+        },
+      ],
+      SAYS,
+      SHIPPED,
+    )
     expect(shown).toHaveLength(1)
     expect(shown[0]?.refused).toBe('another application already has it')
   })
 
   it('still shows something for an id it has no wording for', () => {
-    const shown = listKeys([{ id: 'wobble', accelerator: 'F13', refused: null }])
+    const shown = listKeys([{ id: 'wobble', accelerator: 'F13', refused: null }], SAYS, SHIPPED)
     expect(shown[0]?.what).toBe('wobble')
+  })
+
+  it('calls a key unedited when it is on what ships', () => {
+    // The Reset button reads this. A row that reported itself edited while
+    // sitting on the default would offer a reset that changes nothing.
+    const shown = listKeys(
+      [{ id: 'rest', accelerator: 'Control+Shift+L', refused: null }],
+      SAYS,
+      SHIPPED,
+    )
+    expect(shown[0]?.edited).toBe(false)
+    expect(shown[0]?.shipped).toBe('Control+Shift+L')
+  })
+
+  it('calls a key edited when somebody has moved it', () => {
+    const shown = listKeys([{ id: 'rest', accelerator: 'Alt+F9', refused: null }], SAYS, SHIPPED)
+    expect(shown[0]?.edited).toBe(true)
+    // What it goes BACK to, not what it is on. A reset that offered the current
+    // combination would be a button that does nothing.
+    expect(shown[0]?.shipped).toBe('Control+Shift+L')
+  })
+
+  it('offers an id it does not ship its own combination, so a reset cannot unbind it', () => {
+    const shown = listKeys([{ id: 'wobble', accelerator: 'F13', refused: null }], SAYS, SHIPPED)
+    expect(shown[0]?.shipped).toBe('F13')
+    expect(shown[0]?.edited).toBe(false)
+  })
+})
+
+describe('rebinding one global key', () => {
+  const SHIPPED = { rest: 'Control+Shift+L', hide: 'Control+Shift+M' }
+  const BOUND = { rest: 'Control+Shift+L', hide: 'Control+Shift+M' }
+
+  it('accepts a usable combination for a key this build has', () => {
+    const asked = applyKey({ id: 'rest', accelerator: 'Alt+F9' }, BOUND, SHIPPED)
+    expect(asked).toEqual({ ok: true, id: 'rest', accelerator: 'Alt+F9' })
+  })
+
+  it('resolves null to what the app ships, rather than storing today words', () => {
+    // `null` is a reset, and the resolved value is what gets registered. A
+    // handler that registered `null` would unbind the key.
+    const asked = applyKey({ id: 'rest', accelerator: null }, BOUND, SHIPPED)
+    expect(asked).toEqual({ ok: true, id: 'rest', accelerator: 'Control+Shift+L' })
+  })
+
+  it('refuses a key this build does not have', () => {
+    const asked = applyKey({ id: 'wobble', accelerator: 'Alt+F9' }, BOUND, SHIPPED)
+    expect(asked).toEqual({ ok: false, why: 'There is no key by that name.' })
+  })
+
+  it('refuses an id that is only on Object.prototype', () => {
+    // `'toString' in shipped` is true. `in` would let this past the first check
+    // and leave it to be caught three checks later, which stops being an
+    // accident the moment somebody reorders the function.
+    for (const id of ['toString', 'constructor', 'hasOwnProperty', '__proto__']) {
+      const asked = applyKey({ id, accelerator: 'Alt+F9' }, BOUND, SHIPPED)
+      expect(asked, id).toEqual({ ok: false, why: 'There is no key by that name.' })
+    }
+  })
+
+  it('refuses a combination that would take a key from the whole machine', () => {
+    // The one mistake here that is easy to make and very hard to undo.
+    const asked = applyKey({ id: 'rest', accelerator: 'Shift+L' }, BOUND, SHIPPED)
+    expect(asked.ok).toBe(false)
+  })
+
+  it('refuses a combination the other key already has', () => {
+    /*
+      Electron does NOT refuse this. `register` on a combination this process
+      already holds replaces the handler and answers true — so without this
+      check, binding rest to hide's combination would silently make one key do
+      the other's job, and the pane would show both bound and working.
+    */
+    const asked = applyKey({ id: 'rest', accelerator: 'Control+Shift+M' }, BOUND, SHIPPED)
+    expect(asked.ok).toBe(false)
+    if (asked.ok) throw new Error('unreachable')
+    expect(asked.why).toContain('already doing something else')
+  })
+
+  it('lets a key keep the combination it already has', () => {
+    // Its OWN row is skipped, or saving a row without changing it would refuse.
+    const asked = applyKey({ id: 'rest', accelerator: 'Control+Shift+L' }, BOUND, SHIPPED)
+    expect(asked.ok).toBe(true)
+  })
+
+  it('refuses a reset that would collide with the other key', () => {
+    // Reachable: move hide onto rest's shipped combination, then reset rest.
+    // The default is held to the same rule as a choice, which is the one path
+    // nobody thinks to test.
+    const asked = applyKey(
+      { id: 'rest', accelerator: null },
+      { ...BOUND, hide: SHIPPED.rest },
+      SHIPPED,
+    )
+    expect(asked.ok).toBe(false)
+  })
+
+  it('refuses anything that is not a string or null', () => {
+    for (const accelerator of [7, {}, ['Alt+F9'], undefined]) {
+      const asked = applyKey({ id: 'rest', accelerator } as never, BOUND, SHIPPED)
+      expect(asked.ok, JSON.stringify(accelerator)).toBe(false)
+    }
   })
 })
 
@@ -535,6 +704,7 @@ describe('whether she can look anything up at all', () => {
       webSearch: 'follow',
       profile: null,
       profilePath: null,
+      profileExists: false,
       codex: MISSING,
     })
     expect(shown.codex).toEqual(MISSING)

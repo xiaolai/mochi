@@ -324,6 +324,59 @@ export const SETTINGS_CHANNELS = [
    * freezing at this release's wording — see `store/prompts.ts`.
    */
   'settings:prompt',
+  /**
+   * Open the system folder panel, and save whatever is chosen as the workspace.
+   *
+   * The path is chosen IN MAIN, which is the whole reason this is a channel of
+   * its own rather than a flag on `settings:lookup`. The list above promises
+   * that nothing here takes a path; a picker that answered with one and let the
+   * page send it back would keep the letter of that and lose the point. What
+   * crosses is a request with no argument at all, and the answer is what got
+   * saved.
+   *
+   * `history:export` sets the precedent and the reason is the same: a renderer
+   * that named the destination would be a renderer able to reach anywhere with
+   * this application's authority.
+   *
+   * It WRITES as well as asking, and that is deliberate. A picker that answered
+   * with a path for the page to send through `settings:lookup` would be two
+   * round trips with a window in between where the page could substitute a
+   * different one — the panel would have become decoration over a free-text
+   * field.
+   */
+  'settings:choose-workspace',
+  /**
+   * Show me the Codex profile file for the profile that is in force.
+   *
+   * NO ARGUMENT, which is what makes it safe: main already knows which profile
+   * is set and where Codex keeps its files, so there is no name to check and no
+   * path to refuse. A channel taking the profile name would be a channel that
+   * has to prove the name cannot escape `$CODEX_HOME`.
+   *
+   * Separate from `settings:reveal` rather than a new `Revealable`. That list
+   * is folders under `userData` resolved by `folderFor`, and this is a single
+   * file in another application's directory whose name depends on a setting —
+   * folding it in would make one function answer two unrelated questions.
+   */
+  'settings:show-profile',
+  /**
+   * Bind one global key, or give it back to what the app ships.
+   *
+   * ## `ok: false` here can mean "saved, and it does not work"
+   *
+   * Every other writer on this bridge answers `ok: true` when the write landed.
+   * This one has a third outcome the others do not: the preference is stored
+   * and the combination is refused by the operating system, because another
+   * application already holds it.
+   *
+   * It is stored anyway — the other application may be quit later, and refusing
+   * to save would mean a combination somebody wants can never be chosen while
+   * something else happens to hold it. But it does not work RIGHT NOW, and
+   * answering `ok: true` would put a green "Saved." over a dead key. So the
+   * answer is `ok: false` with a sentence that says both halves, and the row
+   * redraws underneath it carrying the same refusal.
+   */
+  'settings:key',
 ] as const
 
 export type SettingsChannel = (typeof SETTINGS_CHANNELS)[number]
@@ -431,14 +484,22 @@ export interface ScreenChange {
 }
 
 /**
- * One global key, and whether this application actually got it.
+ * One global key, what it does, and whether this application actually got it.
  *
- * Read-only: the keys are two constants (`shared/shortcuts.ts`), and an
- * editable system is a second feature that `plan-v2.md` records as deliberately
- * not carried over. What the window adds is the half that was invisible —
- * `globalShortcut.register` returns false when another application owns the
- * combination, and until now that failure only reached a log and the problems
- * strip.
+ * ## It was read-only, and the reason expired
+ *
+ * `plan-v2.md` recorded that not carrying v1's editable system over was
+ * deliberate, and priced it: an accelerator parser, a conflict resolver, a
+ * settings pane and a persisted map. Three of those four now exist for other
+ * reasons — the pane is here, the store writes into `preferences.json` already,
+ * and `applyKey` is the shape every other checked change on this bridge has.
+ * What was left was the grammar, which is `shared/accelerator.ts`.
+ *
+ * `refused` predates all of it and stays: `globalShortcut.register` returns
+ * false when another application owns the combination, and until that field
+ * existed the failure reached only a log. It matters more now, not less — a
+ * combination somebody has just chosen is far likelier to be taken than one
+ * this project picked for being empty.
  */
 export interface SettingsKey {
   readonly id: string
@@ -446,6 +507,36 @@ export interface SettingsKey {
   readonly accelerator: string
   /** Null when this application has it. The reason, when it does not. */
   readonly refused: string | null
+  /**
+   * What the app ships for this key.
+   *
+   * Sent so the pane can offer a reset and know whether to enable it, without
+   * holding a second copy of the defaults — `SettingsScreen.haloChoices` is
+   * sent for the same reason, and it is the same failure: a page with its own
+   * list is a second answer, and only one of the two is checked on the way
+   * back.
+   */
+  readonly shipped: string
+  /** Whether somebody has chosen this one, rather than it being what ships. */
+  readonly edited: boolean
+}
+
+/**
+ * Bind one global key, or give it back to what the app ships.
+ *
+ * `null` RESETS, and it deletes the stored answer rather than writing today's
+ * default into it — so a key reset now keeps tracking whatever later releases
+ * ship, instead of freezing at this one while reporting itself unchanged. It is
+ * `settings:prompt`'s rule, for the same reason `store/prompts.ts` gives.
+ *
+ * One key at a time, carrying which and what. `settings:grant`'s shape and its
+ * reason: sending the whole table would let two windows write each other's
+ * answers back.
+ */
+export interface KeyChange {
+  readonly id: string
+  /** An accelerator, unchecked — this is the WIRE shape. `applyKey` decides. */
+  readonly accelerator: string | null
 }
 
 /** What this build is, and where the rest of it went. */
@@ -590,6 +681,16 @@ export interface SettingsLookup {
   /** Where that file is, so somebody can go and edit it. Null when none. */
   readonly profilePath: string | null
   /**
+   * Whether anything is actually at `profilePath`.
+   *
+   * The pane said "Settings for it live in …" about a path with nothing at it,
+   * which is a sentence that sends somebody looking for a file that was never
+   * written — a profile name may be set for a file the user has yet to create.
+   * It also decides whether there is anything to show: a button that reveals a
+   * path with no file at it does nothing and looks broken.
+   */
+  readonly profileExists: boolean
+  /**
    * What the local Codex is actually worth, in seven states rather than two.
    *
    * It was `codexFound: boolean`, which answers one of the three questions that
@@ -608,6 +709,22 @@ export interface SettingsLookup {
    */
   readonly codex: SettingsCodex
 }
+
+/**
+ * What came back from the folder panel.
+ *
+ * `HistoryExport`'s three arms and for its reason: dismissing a panel is not a
+ * failure and must not be reported as one. The window says nothing at all when
+ * somebody changes their mind, which is the difference between a control that
+ * feels like a control and one that scolds.
+ *
+ * The chosen path comes BACK rather than being left for the next read, so the
+ * message can name what was saved. Main has already written it by then.
+ */
+export type ChosenWorkspace =
+  | { readonly ok: true; readonly workspace: string }
+  | { readonly ok: false; readonly cancelled: true }
+  | { readonly ok: false; readonly cancelled: false; readonly why: string }
 
 /** How ready Codex is, and what a person does about it. Nothing else. */
 export interface SettingsCodex {
@@ -747,6 +864,14 @@ export interface SettingsPrompt {
    * occasionally exactly what somebody meant.
    */
   readonly missing: readonly string[]
+  /**
+   * The longest an override may be, or absent when nothing bounds it.
+   *
+   * ENFORCED, unlike `missing`, and sent for the reason `SettingsHearing.most`
+   * is sent: the pane names the limit before a write is attempted rather than
+   * letting somebody paste nine thousand characters and only then be refused.
+   */
+  readonly limit?: number
 }
 
 export interface SettingsView {
@@ -875,7 +1000,22 @@ export interface MochiSettingsApi {
   /** Rewrite one catalogued prompt; `null` resets it. See `settings:prompt`. */
   prompt(key: string, text: string | null): Promise<SettingsWrite>
   grant(change: GrantChange): Promise<SettingsWrite>
+  /**
+   * Bind one global key; `null` gives it back to what the app ships.
+   *
+   * `ok: false` may mean the preference was stored and the combination refused
+   * by the system. See `settings:key`.
+   */
+  key(change: KeyChange): Promise<SettingsWrite>
   reveal(what: Revealable): void
+  /**
+   * Ask for the folder panel, and answer with what was saved.
+   *
+   * The renderer never names the folder. See `settings:choose-workspace`.
+   */
+  chooseWorkspace(): Promise<ChosenWorkspace>
+  /** Show the Codex profile file. Main knows which one; there is no argument. */
+  showProfile(): void
   /**
    * Ask the machine about Codex again. Answers with what it found.
    *

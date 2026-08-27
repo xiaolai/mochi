@@ -8,6 +8,7 @@
  */
 import { element } from '../element'
 import {
+  type ChosenWorkspace,
   type HearingChange,
   type LookupChange,
   type Revealable,
@@ -18,6 +19,21 @@ import {
 import { type ByPronoun } from '@shared/pronoun'
 export interface PaneHandlers {
   readonly lookup: (change: LookupChange) => void
+  /**
+   * Open the system folder panel, and answer with what got saved.
+   *
+   * A PROMISE, for the reason `recheckCodex` is one: the panel is open for as
+   * long as somebody takes to decide, and the pane disables its button for
+   * exactly that long. It carries the answer rather than returning nothing,
+   * because a dismissal must not be reported as anything at all — see
+   * `ChosenWorkspace`.
+   *
+   * It does not take a folder. The renderer never names a path; main opens the
+   * panel, checks what came back and writes it.
+   */
+  readonly chooseWorkspace: () => Promise<ChosenWorkspace>
+  /** Reveal the Codex profile file. Main knows which; there is no argument. */
+  readonly showProfile: () => void
   /**
    * Ask the machine about Codex again, and hand back what it said.
    *
@@ -32,6 +48,15 @@ export interface PaneHandlers {
   /** Rewrite one catalogued prompt; `null` resets it to what the app ships. */
   readonly prompt: (key: string, text: string | null) => void
   readonly grant: (change: { id: string; allowed: boolean }) => void
+  /**
+   * Bind one global key; `null` gives it back to what the app ships.
+   *
+   * A reset sends `null` rather than the shipped combination, so the stored
+   * answer is DELETED and the key keeps tracking whatever later releases ship.
+   * The pane knows the default — it is drawn — and sending it would pin this
+   * release's answer while reporting the key unedited.
+   */
+  readonly key: (change: { id: string; accelerator: string | null }) => void
   /**
    * Ask about deleting every conversation there is.
    *

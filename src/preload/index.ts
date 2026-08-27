@@ -8,10 +8,12 @@ import {
   type MochiApi,
   type MochiSettingsApi,
   type GrantChange,
+  type KeyChange,
   type LookupChange,
   type NoteAction,
   type PersonaAction,
   type PersonaChange,
+  type ChosenWorkspace,
   type Revealable,
   type HearingChange,
   type ScreenChange,
@@ -222,6 +224,12 @@ const settings: MochiSettingsApi = {
   reveal(what: Revealable) {
     ipcRenderer.send(guardSettings('settings:reveal'), what)
   },
+  async chooseWorkspace() {
+    return (await ipcRenderer.invoke(guardSettings('settings:choose-workspace'))) as ChosenWorkspace
+  },
+  showProfile() {
+    ipcRenderer.send(guardSettings('settings:show-profile'))
+  },
   async lookup(change: LookupChange) {
     return (await ipcRenderer.invoke(guardSettings('settings:lookup'), change)) as SettingsWrite
   },
@@ -236,6 +244,9 @@ const settings: MochiSettingsApi = {
   },
   async grant(change: GrantChange) {
     return (await ipcRenderer.invoke(guardSettings('settings:grant'), change)) as SettingsWrite
+  },
+  async key(change: KeyChange) {
+    return (await ipcRenderer.invoke(guardSettings('settings:key'), change)) as SettingsWrite
   },
   async recheckCodex() {
     return (await ipcRenderer.invoke(guardSettings('settings:codex-recheck'))) as SettingsCodex

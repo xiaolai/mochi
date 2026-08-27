@@ -78,6 +78,7 @@ export const MAY_DO: Pane = {
       ...rows,
       note,
       heading,
+      element('p', 'note', forPronoun(SAYS.toolWording, view.pronoun)),
       ...view.capabilities.map((capability) => {
         const block = element('div', 'cap')
         block.append(

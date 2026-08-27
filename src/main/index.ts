@@ -10,12 +10,13 @@ import {
   powerMonitor,
   screen,
   shell,
+  type OpenDialogOptions,
 } from 'electron'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { BUBBLE_SIDES, PERSONA_LIMITS, RECOMMENDED_VOICES, VOICE_NAMES } from '@shared/persona'
 import { BUILT_IN_ID } from '@shared/parse-persona'
 import { PROMPT_SLOTS } from '@shared/instructions'
-import { createRegistry } from '@shared/capability/registry'
+import { createRegistry, type WireTool } from '@shared/capability/registry'
 import { grantOutcome } from './grant-outcome'
 import { listener } from './ipc/listen'
 import { DRIFT_PX, createHerPlace } from './window/her-place'
@@ -32,7 +33,7 @@ import { createMintSlot } from './voice/mint-slot'
 import { reported } from './voice/reported'
 import { createNextSession } from './voice/next-session'
 import { renderTools } from './tools-sent'
-import { promptsFor } from '@shared/prompts'
+import { describedTools, promptsFor } from '@shared/prompts'
 import {
   promptRows,
   readPromptOverrides,
@@ -50,7 +51,7 @@ import {
   type SettingsWrite,
 } from '@shared/ipc'
 import { type HistoryExport, type ShelfView } from '@shared/history-window'
-import type { Pronoun } from '@shared/pronoun'
+import { forPronoun, type Pronoun } from '@shared/pronoun'
 import { CAPABILITIES } from '../capabilities'
 import { createLedger, type AnswerFrame } from './capability/ledger'
 import { handleCall } from './capability/dispatch'
@@ -88,9 +89,10 @@ import {
   type Resting,
 } from './store/worn'
 import { readGrants, writeGrant } from './store/grants'
-import { claimShortcuts, releaseShortcuts, type ShortcutOutcome } from './shortcuts'
+import { claimShortcuts, rebindShortcut, releaseShortcuts, type ShortcutOutcome } from './shortcuts'
+import { readShortcuts, writeShortcut } from './store/keys'
 import { MOST_LANGUAGES, OFFERED_LANGUAGES } from '@shared/transcription'
-import { SHORTCUTS } from '@shared/shortcuts'
+import { SHORTCUTS, SHORTCUT_SAYS, type ShortcutId } from '@shared/shortcuts'
 import { allowsCapability, isGrant, withheldGuidance } from '@shared/grants'
 import { avatarsRoot, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
@@ -98,7 +100,7 @@ import { problems } from './problems'
 import { leftoverCapabilities, legacyCapabilitiesRoot } from './capability/legacy'
 import type { CapabilityDeps } from '../capabilities/kind'
 import { EMOTIONS } from '@shared/avatar'
-import type { Forgotten, SettingsCodex } from '@shared/ipc'
+import type { ChosenWorkspace, Forgotten, KeyChange, SettingsCodex } from '@shared/ipc'
 import {
   codexHome,
   profileFile,
@@ -143,6 +145,7 @@ console.log(`[main] run ${runName(new Date())}`)
 const NOMINAL_BODY = { left: (WINDOW_W - 94) / 2, top: FEET_FROM_TOP - 73, width: 94, height: 73 }
 import {
   applyHearing,
+  applyKey,
   applyLookup,
   applyScreen,
   folderFor,
@@ -276,9 +279,17 @@ function menuModel(): TrayModel {
     },
     resting,
     listening,
+    /*
+      What was CLAIMED, never what ships.
+
+      These read `SHORTCUTS.rest` while checking the claimed outcome beside it,
+      which was two answers to one question and correct only while the
+      combinations could not be changed. A rebound key would have drawn the old
+      combination in the tray menu — next to the key that no longer does it.
+    */
     keys: {
-      rest: claimed.find((one) => one.id === 'rest')?.refused === null ? SHORTCUTS.rest : null,
-      hide: claimed.find((one) => one.id === 'hide')?.refused === null ? SHORTCUTS.hide : null,
+      rest: keyIfWorking('rest'),
+      hide: keyIfWorking('hide'),
     },
   }
 }
@@ -294,6 +305,42 @@ let resting: Resting = { asleep: false, hidden: false }
 
 /** What the two global keys actually got. See `shortcuts.ts`. */
 let claimed: readonly ShortcutOutcome[] = []
+
+/**
+ * What each global key does, as one value.
+ *
+ * A value rather than an object literal at the claim site, because a rebind
+ * needs the same handler: `globalShortcut.register` binds a function, so
+ * re-registering with a fresh closure would be fine and re-registering with a
+ * DIFFERENT one would be the bug that is invisible until somebody presses the
+ * key. One table, read twice.
+ */
+const keyHandlers = {
+  rest: () => {
+    setAsleep(!resting.asleep)
+  },
+  hide: () => {
+    setHidden(!resting.hidden)
+  },
+}
+
+/** What each key is bound to right now, from what was actually claimed. */
+function boundKeys(): Readonly<Record<string, string>> {
+  return Object.fromEntries(claimed.map((one) => [one.id, one.accelerator]))
+}
+
+/**
+ * The combination for a key, or null when it is not working.
+ *
+ * ONE derivation, for the tray menu and the shelf's strip. Both used to compare
+ * the claimed outcome and then draw the CONSTANT, which was already two answers
+ * to one question and became a wrong one the moment a key could be rebound.
+ * Null means "do not draw a key here", which is what both callers do with it.
+ */
+function keyIfWorking(id: ShortcutId): string | null {
+  const outcome = claimed.find((one) => one.id === id)
+  return outcome === undefined || outcome.refused !== null ? null : outcome.accelerator
+}
 
 /**
  * One frame to her window, or nothing if there is no window to send it to.
@@ -1780,6 +1827,45 @@ function promptsNow(): Prompts {
   return resolvePrompts(promptsFor(CAPABILITIES.manifests), read.overrides)
 }
 
+/**
+ * The tool list she is actually offered, wearing whatever has been written for
+ * it.
+ *
+ * ONE function, and every caller that puts tools somewhere goes through it —
+ * the session being configured, the live session being re-told after a grant
+ * change, the shelf's `Sent` card, and the settings window's list of what she
+ * can do. `registry.tools` is the SHIPPED text and nothing else may reach a
+ * reader now: four derivations of "what is she told about her tools" is four
+ * places for the pane and the wire to disagree, which is the failure this whole
+ * change exists to close.
+ *
+ * Read at CALL time, like `capabilityDeps.prompt` and for the same reason: an
+ * edit lands on her next wake rather than on the next relaunch.
+ */
+function toolsNow(): readonly WireTool[] {
+  return describedTools(registry.tools, promptsNow())
+}
+
+/**
+ * Where the Codex profile in force keeps its settings, or null for none.
+ *
+ * One derivation, because three things ask: the window shows it, the window
+ * asks whether it is there, and `settings:show-profile` reveals it. Two of
+ * those existed as an inline expression and the third would have been a third
+ * copy — and a copy that computed a different path from the one on screen is a
+ * button that opens somewhere else.
+ */
+function profilePathNow(): string | null {
+  const name = currentProfile()
+  return name === null ? null : profileFile(codexHome(process.env, app.getPath('home')), name)
+}
+
+/** Whether the profile in force has a file. Asked on every read of the window. */
+function profileFileIsThere(): boolean {
+  const path = profilePathNow()
+  return path !== null && existsSync(path)
+}
+
 const capabilityDeps: CapabilityDeps = {
   /*
     Read at CALL time, not captured at session open.
@@ -1988,7 +2074,7 @@ ipcMain.handle('voice:config', () => {
       return was
     },
     resting: () => resting,
-    registry,
+    tools: toolsNow,
     transcripts,
     problemCount: () => problems.count(),
     now: () => Date.now(),
@@ -2209,17 +2295,31 @@ ipcMain.handle('settings:read', (): SettingsView => {
     // Read the same way her face is, and from the same persona, so this window
     // and her own can never disagree about who is worn.
     pronoun: wornPronoun(userData),
-    capabilities: listCapabilities(registry),
+    /*
+      The DESCRIBED tools, so this pane and the Prompts pane cannot disagree.
+
+      It listed `registry.tools`, which is the shipped text — so somebody who
+      rewrote a tool description under Prompts saw their words in one pane of
+      this window and the original in another, with nothing saying which was
+      being sent. (Neither was: see `describedTools`.)
+    */
+    capabilities: listCapabilities(toolsNow()),
     grants: listGrants(readGrants(userData, wornId(), legacyGrants(userData)), readUsage(userData)),
     lookup: listLookup({
       workspace: readWorkspace(userData),
       defaultWorkspace: join(userData, WORKSPACE_DIR),
       webSearch: readWebSearch(userData),
       profile: currentProfile(),
-      profilePath: (() => {
-        const name = currentProfile()
-        return name === null ? null : profileFile(codexHome(process.env, app.getPath('home')), name)
-      })(),
+      profilePath: profilePathNow(),
+      /*
+        Whether anything is actually there.
+
+        The pane said "Settings for it live in …" about a path that may never
+        have been written — a profile name is a name, and nothing guarantees a
+        file. It also decides whether the Show button is drawn at all: revealing
+        a path with no file at it does nothing and reads as a broken button.
+      */
+      profileExists: profileFileIsThere(),
       // Seven states rather than "was a file found": the one that actually
       // fails is a token Codex is content with and this app cannot use.
       codex: codexForWindow(),
@@ -2245,7 +2345,18 @@ ipcMain.handle('settings:read', (): SettingsView => {
       file was supposed to say.
     */
     prompts: promptRows(promptsFor(CAPABILITIES.manifests), overridesOrDefaults(userData)),
-    keys: listKeys(claimed),
+    keys: listKeys(
+      claimed,
+      // Resolved for whoever is worn. This table lived in `listKeys` and said
+      // "her" whatever the character's pronoun was — see `SHORTCUT_SAYS`.
+      Object.fromEntries(
+        (Object.keys(SHORTCUT_SAYS) as ShortcutId[]).map((id) => [
+          id,
+          forPronoun(SHORTCUT_SAYS[id], wornPronoun(userData)),
+        ]),
+      ),
+      SHORTCUTS,
+    ),
     about: {
       name: app.getName(),
       version: app.getVersion(),
@@ -2306,14 +2417,127 @@ ipcMain.handle('settings:prompt', (_event, key: unknown, text: unknown): Setting
     return { ok: false, why: 'A prompt has to be text.' }
   }
   const specs = promptsFor(CAPABILITIES.manifests)
-  if (!specs.some((spec) => spec.key === key)) {
+  const spec = specs.find((one) => one.key === key)
+  if (spec === undefined) {
     return { ok: false, why: 'This build has no prompt by that name.' }
+  }
+  /*
+    REFUSED here, where somebody is told, rather than only trimmed at the wire.
+
+    `applyHearing` states the rule: a person who can see what they typed should
+    be told when it is not what got saved. The bound is the manifest's own —
+    these strings enter the model's context on every session and are billed for
+    the life of it, which is the argument `manifest.ts` makes about a
+    description regardless of who wrote it. `describedTools` guards the wire
+    again, because `prompts.json` is hand-editable and this pane is not the only
+    way in.
+  */
+  if (text !== null && spec.limit !== undefined && text.length > spec.limit) {
+    return {
+      ok: false,
+      why: `That is ${String(text.length)} characters and the most this one may be is ${String(spec.limit)}.`,
+    }
   }
   try {
     writePromptOverride(app.getPath('userData'), specs, key, text)
   } catch (error: unknown) {
     return { ok: false, why: String(error) }
   }
+  return { ok: true }
+})
+
+/**
+ * Bind one global key, or give it back to what the app ships.
+ *
+ * ## The order: check, register, then store
+ *
+ * Registering before storing is what makes a refusal cost nothing. The reverse
+ * order would write a preference and then discover the combination cannot be
+ * had, leaving a stored answer that disagrees with what the machine is actually
+ * listening for — and `settings:read` would show the stored one, so the pane
+ * would say the key works.
+ *
+ * Storing happens even when the claim is REFUSED, and that is deliberate rather
+ * than sloppy: another application holding a combination is a fact about this
+ * afternoon, not about the choice. Refusing to store would mean a combination
+ * somebody wants can never be set while something else happens to hold it, and
+ * the next launch would go back to the old one with no trace of what was asked
+ * for. What must not happen is silence — see the answer below.
+ *
+ * ## `ok: false` here can mean "saved, and it does not work"
+ *
+ * The one place on this bridge where it does. `SettingsWrite` drives a red
+ * message in the window, and a key that is stored but unclaimed is exactly a
+ * red-message state: nothing was lost, and the key does not work. Answering
+ * `ok: true` would put "Saved." over a dead combination. The sentence says both
+ * halves, and the row redraws under it carrying the same refusal.
+ */
+ipcMain.handle('settings:key', (_event, change: unknown): SettingsWrite => {
+  if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
+  const asked = applyKey(change as KeyChange, boundKeys(), SHORTCUTS)
+  if (!asked.ok) return refuse(asked.why)
+
+  const id = asked.id as ShortcutId
+  const was = claimed.find((one) => one.id === id)
+  if (was === undefined) return refuse('There is no key by that name.')
+
+  const moved = rebindShortcut(id, was.accelerator, asked.accelerator, keyHandlers[id])
+  // The live table first, so everything drawn from `claimed` — this pane, the
+  // tray menu, the shelf's strip — agrees with the machine from here on, and
+  // agrees with it even if the write below throws.
+  claimed = claimed.map((one) => (one.id === id ? moved.outcome : one))
+
+  if (moved.rolledBack) {
+    /*
+      NOT STORED. The combination was refused and the old one is back, so the
+      preference must keep describing the key that is actually working — a
+      stored value the machine is not listening for is the disagreement this
+      handler's ordering exists to prevent.
+
+      This is the only branch where nothing is written, and it is the branch
+      where nothing changed.
+    */
+    console.error(`[keys] ${asked.accelerator} refused; ${id} is back on ${was.accelerator}`)
+    if (moved.outcome.refused !== null) {
+      /*
+        Neither combination could be had, so the key is dead until somebody
+        chooses another or relaunches.
+
+        Vanishingly rare — it needs another application to take the old
+        combination during the moment between giving it back and asking for it
+        again — and reported rather than assumed away, because a key that has
+        silently stopped working is the state this whole module exists to make
+        visible.
+      */
+      console.error(`[keys] ${was.accelerator} could not be taken back either`)
+      problems.note(
+        'keys',
+        was.accelerator,
+        `${moved.outcome.refused} — this key is not working until another combination is chosen`,
+      )
+      return refuse(
+        `${asked.accelerator} could not be taken — another application already has it — and ` +
+          `${was.accelerator} could not be taken back. Nothing is saved, and this key is not ` +
+          `working until you choose another combination or restart.`,
+      )
+    }
+    return refuse(
+      `${asked.accelerator} could not be taken — another application already has it. ` +
+        `Nothing is saved; the key is still ${was.accelerator}.`,
+    )
+  }
+
+  try {
+    // `null` when the choice IS the shipped combination, so choosing the
+    // default by hand and pressing Reset leave the same file. `writeShortcut`
+    // does that collapsing; passing it through keeps the rule in one place.
+    writeShortcut(app.getPath('userData'), id, asked.accelerator)
+  } catch (error: unknown) {
+    console.error('[keys] could not store the binding:', error)
+    problems.note('keys', asked.accelerator, `the key could not be saved: ${String(error)}`)
+    return refuse(String(error))
+  }
+  console.log(`[keys] ${id} -> ${asked.accelerator}`)
   return { ok: true }
 })
 
@@ -2349,7 +2573,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     worn,
     note,
     readGrants(userData, worn.id, legacyGrants(userData)),
-    registry.tools,
+    toolsNow(),
     prompt,
   )
   return {
@@ -2365,7 +2589,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     // process because three things change it.
     state: {
       asleep: resting.asleep,
-      restKey: claimed.find((one) => one.id === 'rest')?.refused === null ? SHORTCUTS.rest : null,
+      restKey: keyIfWorking('rest'),
     },
     wornId: worn.id,
     characters: listPersonas(
@@ -2481,7 +2705,18 @@ ipcMain.handle('shelf:save', (_event, change: unknown): SettingsWrite => {
  * the one that already owns its own validation, so nothing here re-states a
  * rule that lives in the store.
  */
-ipcMain.handle('settings:lookup', (_event, change: unknown): SettingsWrite => {
+ipcMain.handle('settings:lookup', (_event, change: unknown): SettingsWrite => saveLookup(change))
+
+/**
+ * Check a lookup change and write the parts of it that survive.
+ *
+ * Extracted because the folder panel saves through it too, and a picker with
+ * its own write would be a second answer to what an acceptable workspace is —
+ * the one that skipped `applyLookup` would be the one that accepted a relative
+ * path. `showOpenDialog` cannot return one today; "cannot today" is how the
+ * second copy of a rule starts.
+ */
+function saveLookup(change: unknown): SettingsWrite {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
   const asked = applyLookup(change, isProfileName)
   if (!asked.ok) return refuse(asked.why)
@@ -2502,6 +2737,93 @@ ipcMain.handle('settings:lookup', (_event, change: unknown): SettingsWrite => {
   }
   console.log(`[settings] lookup changed: ${Object.keys(asked.change).join(', ')}`)
   return { ok: true }
+}
+
+/**
+ * The system folder panel, and the workspace it chose.
+ *
+ * ## The path is picked here, and saved here
+ *
+ * `history:export` established the first half — a renderer that named a
+ * location would be a renderer able to use this application's authority
+ * anywhere. The second half is why this writes rather than answering with the
+ * path for the page to send back: a round trip through the renderer is a window
+ * in which the page could substitute a different folder, which would make the
+ * panel a decoration over the free-text field it sits beside.
+ *
+ * It still goes through `applyLookup`. The panel can only return a real
+ * absolute directory today, so every check will pass — and the check stays,
+ * because the one that is skipped for being unreachable is the one that is
+ * wrong after the next change.
+ *
+ * ## Dismissing is not a failure
+ *
+ * `history:export`'s rule, and the window says nothing at all in that case. A
+ * toast for changing your mind is a toast that teaches people to stop reading
+ * them.
+ */
+ipcMain.handle('settings:choose-workspace', async (event): Promise<ChosenWorkspace> => {
+  /*
+    Attached to the window that asked, so it opens as a sheet rather than
+    floating loose. `history:export` does not do this and predates the shell:
+    an app-modal panel over a window that is one of three is a panel somebody
+    has to go and find.
+  */
+  const asking = BrowserWindow.fromWebContents(event.sender)
+  const options: OpenDialogOptions = {
+    title: 'Choose a workspace',
+    // The folder she may READ. `createDirectory` so somebody can make one
+    // rather than having to leave, make it, and come back.
+    properties: ['openDirectory', 'createDirectory'],
+    defaultPath: readWorkspace(app.getPath('userData')),
+  }
+  const chosen =
+    asking === null
+      ? await dialog.showOpenDialog(options)
+      : await dialog.showOpenDialog(asking, options)
+  if (chosen.canceled) return { ok: false, cancelled: true }
+  const folder = chosen.filePaths[0]
+  if (folder === undefined) {
+    // Not cancelled and nothing chosen should be unreachable. Reported rather
+    // than treated as a dismissal: a panel that answers neither way is a fault
+    // worth seeing, and calling it a dismissal would hide it forever.
+    return { ok: false, cancelled: false, why: 'The folder panel answered with nothing.' }
+  }
+  const saved = saveLookup({ workspace: folder })
+  return saved.ok
+    ? { ok: true, workspace: folder }
+    : { ok: false, cancelled: false, why: saved.why }
+})
+
+/**
+ * Show the Codex profile file, if there is one and it is there.
+ *
+ * No argument: main already holds the profile name and knows where Codex keeps
+ * its files, so there is nothing to check and nothing to refuse. A channel
+ * taking the name would be a channel that has to prove the name cannot escape
+ * `$CODEX_HOME` — `isProfileName` does prove that, and not having to is better.
+ *
+ * `showItemInFolder` rather than `openPath`: the file is a `.toml`, and which
+ * application that opens is somebody's system setting rather than a decision
+ * this app should make for them. Revealing it puts it in front of them either
+ * way.
+ *
+ * The absent cases are LOGGED rather than silent. The pane only draws the
+ * button when the file was there on the last read, so both are races — and a
+ * button that does nothing with no trace anywhere is the failure this whole
+ * pass is about.
+ */
+listenTo('settings:show-profile', () => {
+  const path = profilePathNow()
+  if (path === null) {
+    console.error('[settings] refusing to show a profile file: no profile is set')
+    return
+  }
+  if (!existsSync(path)) {
+    console.error(`[settings] the profile file is not there to show: ${path}`)
+    return
+  }
+  shell.showItemInFolder(path)
 })
 
 /**
@@ -2926,7 +3248,7 @@ function tellTheSession(): boolean {
     persona,
     recall(userData, live),
     grants,
-    registry.tools,
+    toolsNow(),
     readPrompt(userData),
     sessionBriefing,
   )
@@ -3456,14 +3778,7 @@ const startup = app.whenReady().then(
      * application owns is an ordinary outcome; a key that silently does nothing
      * is the bug.
      */
-    claimed = claimShortcuts({
-      rest: () => {
-        setAsleep(!resting.asleep)
-      },
-      hide: () => {
-        setHidden(!resting.hidden)
-      },
-    })
+    claimed = claimShortcuts(keyHandlers, readShortcuts(app.getPath('userData')))
     for (const outcome of claimed) {
       if (outcome.refused === null) {
         console.log(`[keys] ${outcome.accelerator} -> ${outcome.id}`)

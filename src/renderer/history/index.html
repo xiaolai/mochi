@@ -766,9 +766,62 @@
         padding: var(--s3) 0;
         border-bottom: 1px solid var(--rule);
       }
+      /*
+        A field and the button that fills it, on one line.
+
+        The button sits AFTER the input and does not grow: the field is the part
+        that has to be readable at a glance -- a workspace is a long path -- and
+        a two-column grid would give a four-word button as much room as it.
+      */
+      .picker {
+        display: flex;
+        align-items: center;
+        gap: var(--s3);
+        min-width: 0;
+      }
+      .picker > input {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .picker > .btn {
+        flex: none;
+      }
       .folder .refused {
         font-size: var(--t-data);
         color: var(--red);
+      }
+      .keys-right {
+        display: flex;
+        align-items: center;
+        gap: var(--s3);
+        flex: none;
+      }
+      /*
+        The combination, as the control that changes it.
+
+        Monospaced and fixed-width so a row does not jump as the label swaps
+        between a combination and "Press a combination…" -- a button that
+        resizes under the pointer is one that gets mis-clicked.
+      */
+      .btn.key {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        min-width: 18ch;
+        text-align: center;
+      }
+      /*
+        Listening. It takes HER colour rather than a warning colour: nothing is
+        wrong, the control is waiting, and her colour is the one thing on screen
+        that already means "this is live".
+
+        `--her`, not `--accent`. There is no `--accent` — `accent.ts` renamed it
+        and says why — and a rule naming one would have been a state that draws
+        exactly like the resting one, which is a capture control with no way to
+        tell whether it is capturing.
+      */
+      .btn.key.listening {
+        border-color: var(--her);
+        color: var(--her);
       }
       .note.bad {
         color: var(--red);

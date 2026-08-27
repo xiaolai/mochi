@@ -31,6 +31,7 @@ function settled(): SettingsView {
       webSearchModes: ['follow'],
       profile: null,
       profilePath: null,
+      profileExists: false,
       codex: { readiness: 'ready', remedy: null },
     },
     hearing: {
@@ -49,8 +50,22 @@ function settled(): SettingsView {
       sleepAfterChoices: [0, 5, 15],
     },
     keys: [
-      { id: 'rest', what: 'Let her rest', accelerator: 'Control+Shift+L', refused: null },
-      { id: 'hide', what: 'Hide her', accelerator: 'Control+Shift+M', refused: null },
+      {
+        id: 'rest',
+        what: 'Let her rest',
+        accelerator: 'Control+Shift+L',
+        refused: null,
+        shipped: 'Control+Shift+L',
+        edited: false,
+      },
+      {
+        id: 'hide',
+        what: 'Hide her',
+        accelerator: 'Control+Shift+M',
+        refused: null,
+        shipped: 'Control+Shift+M',
+        edited: false,
+      },
     ],
     about: { name: 'Mochi', version: '0.0.1', electron: '43.0.0', userData: '/u' },
     prompts: [],
@@ -172,6 +187,8 @@ describe('the dot, and what it is for', () => {
           what: 'Hide her',
           accelerator: 'Control+Shift+M',
           refused: 'another application already has it',
+          shipped: 'Control+Shift+M',
+          edited: false,
         },
       ],
     }

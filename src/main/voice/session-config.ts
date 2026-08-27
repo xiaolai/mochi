@@ -11,7 +11,7 @@ import { readPrompt } from '../store/prompt'
 import { legacyGrants, readTranscriptionLanguages, readWornPersonaId } from '../store/worn'
 import type { Transcripts } from '../store/transcripts'
 import type { Conversation } from '../store/conversation'
-import type { Registry } from '@shared/capability/registry'
+import type { WireTool } from '@shared/capability/registry'
 import { whatSheMayDo } from '../what-she-may-do'
 import { briefFor, resumeFor } from '../memory/brief'
 
@@ -72,7 +72,17 @@ export interface SessionConfigDeps {
   readonly replacingASession: () => boolean
   /** Whether she is resting. */
   readonly resting: () => { readonly asleep: boolean }
-  readonly registry: Registry
+  /**
+   * The tools she is offered, already wearing any rewritten descriptions.
+   *
+   * A THUNK over the registry it used to hold, for the reason every other
+   * reader in `index.ts` is one: a tool description is editable, and reading
+   * the list once at wiring time would make an edit land on the next relaunch
+   * instead of the next wake. `toolsNow` is the single place that list is
+   * built; this dep exists so nothing here can reach past it to the shipped
+   * text.
+   */
+  readonly tools: () => readonly WireTool[]
   /** The archive, or null when it is not open. */
   readonly transcripts: () => Transcripts | null
   readonly problemCount: () => number
@@ -274,7 +284,7 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
     resolved.persona,
     note,
     grants,
-    deps.registry.tools,
+    deps.tools(),
     readPrompt(userData),
     brief,
   )

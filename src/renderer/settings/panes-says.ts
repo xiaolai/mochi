@@ -58,6 +58,60 @@ export const SAYS = {
     he: 'Nothing. He is offered no tools at all, which is a fault in this build.',
     it: 'Nothing. It is offered no tools at all, which is a fault in this build.',
   },
+  /*
+    Where the words in this column come from, and that they are not fixed.
+
+    Every description here is an entry in the prompt catalogue and has been
+    rewritable the whole time -- but only from another group, under a title that
+    does not obviously cover "what a tool is for". Somebody reading a
+    description they disagree with had nothing on screen telling them it could
+    be changed, which is `prompts.ts`'s own complaint about the state before
+    that pane existed, one pane along.
+  */
+  /* The hint inside the empty workspace field. Unreachable in practice — the
+     workspace always resolves to at least the default — and it keeps the box's
+     edge while it is empty, which is what `:placeholder-shown` reads. */
+  /* Under the keys, and it says what a reset actually does — deleting the
+     stored answer rather than writing today's default in, so the key keeps
+     tracking whatever later releases ship. */
+  keysReset: {
+    she:
+      'Reset gives a key back to what the app ships, and keeps it there: it stops being a ' +
+      'choice of yours rather than becoming a copy of today\u2019s answer. Both work while she ' +
+      'is asleep.',
+    he:
+      'Reset gives a key back to what the app ships, and keeps it there: it stops being a ' +
+      'choice of yours rather than becoming a copy of today\u2019s answer. Both work while he ' +
+      'is asleep.',
+    it:
+      'Reset gives a key back to what the app ships, and keeps it there: it stops being a ' +
+      'choice of yours rather than becoming a copy of today\u2019s answer. Both work while it ' +
+      'is asleep.',
+  },
+  workspacePlaceholder: {
+    she: 'a folder she may read',
+    he: 'a folder he may read',
+    it: 'a folder it may read',
+  },
+  /* Said after the folder panel, and it NAMES the folder: a picker that
+     answered "Saved." alone would leave somebody checking the field to find out
+     what they had just agreed to. */
+  workspaceSaved: {
+    she: 'Saved. She reads ',
+    he: 'Saved. He reads ',
+    it: 'Saved. It reads ',
+  },
+  toolWording: {
+    she:
+      'Not fixed. Every description here can be rewritten under "What she is told", and what ' +
+      'you write is what she is sent.',
+    he:
+      'Not fixed. Every description here can be rewritten under "What he is told", and what ' +
+      'you write is what he is sent.',
+    it:
+      'Not fixed. Every description here can be rewritten under "What it is told", and what ' +
+      'you write is what it is sent.',
+  },
   noCli: {
     she: 'The Codex CLI could not be found, so she cannot look anything up.',
     he: 'The Codex CLI could not be found, so he cannot look anything up.',

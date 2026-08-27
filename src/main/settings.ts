@@ -28,6 +28,7 @@ import type {
   HearingChange,
   LookupChange,
   ScreenChange,
+  KeyChange,
   SettingsGrant,
   SettingsKey,
   SettingsCodex,
@@ -39,12 +40,13 @@ import type {
   SettingsPersona,
   SettingsWrite,
 } from '@shared/ipc'
+import { acceleratorProblem } from '@shared/accelerator'
 import { GRANT_SPECS, type Grants } from '@shared/grants'
 import { MOST_LANGUAGES, isLanguageCode } from '@shared/transcription'
 
 import type { Usage } from './store/usage'
 import { WEB_SEARCH_MODES, isWebSearchMode, type WebSearchMode } from '@shared/delegation'
-import type { Registry } from '@shared/capability/registry'
+import type { WireTool } from '@shared/capability/registry'
 import { type PersonaCatalog } from './store/personas'
 import { PERSONAS_DIR } from './store/persona-files'
 import { AVATARS_DIR } from './store/avatars'
@@ -138,11 +140,19 @@ export function listPersonas(
  * descriptions and marked refused, because the settings window was the one
  * place that attacker-controlled text was safe to show. Nothing loads from that
  * folder any more: a capability is a folder in the source that whoever built
- * this compiled, so every description here came from the same place the code
- * did.
+ * this compiled.
+ *
+ * ## The wire list, not the registry
+ *
+ * It took a `Registry` and read `.tools` off it, which is the SHIPPED text.
+ * Those descriptions are editable — `describedTools` explains how long they
+ * were editable without being read — so the pane was showing the source's
+ * wording while a different string went to the model. Taking the list means
+ * this cannot reach past `toolsNow` to the original, which is the only way the
+ * two panes of one window are guaranteed to agree.
  */
-export function listCapabilities(registry: Registry): readonly SettingsCapability[] {
-  return registry.tools.map((tool) => ({ name: tool.name, description: tool.description }))
+export function listCapabilities(tools: readonly WireTool[]): readonly SettingsCapability[] {
+  return tools.map((tool) => ({ name: tool.name, description: tool.description }))
 }
 
 /**
@@ -194,6 +204,14 @@ export function listLookup(input: {
   readonly profile: string | null
   readonly profilePath: string | null
   /**
+   * Whether anything is actually at that path.
+   *
+   * Handed in rather than stat-ed here for the reason `codex` is: this module
+   * is the shape of a page and not a reader of disk, and a function that
+   * touched the filesystem could not be tested without one.
+   */
+  readonly profileExists: boolean
+  /**
    * How ready Codex is, already reduced to what a window may hear.
    *
    * Handed in rather than checked here, because the check spawns processes with
@@ -211,6 +229,9 @@ export function listLookup(input: {
     webSearchModes: [...WEB_SEARCH_MODES],
     profile: input.profile,
     profilePath: input.profile === null ? null : input.profilePath,
+    // False when there is no profile at all, because there is then no file to
+    // be missing — the pane draws neither the sentence nor the button.
+    profileExists: input.profile !== null && input.profileExists,
     codex: input.codex,
   }
 }
@@ -223,6 +244,15 @@ export function listLookup(input: {
  * accelerator is shown whether or not it was claimed: a key another
  * application owns is exactly the case worth seeing, and hiding the row would
  * make it look as though this app never wanted one.
+ *
+ * ## The labels are passed IN, and that is the pronoun bug
+ *
+ * They were a table here, reading "Let her rest, or wake her" — in main, where
+ * `Persona.pronoun` is not, so a character worn as `he` or `it` was described
+ * in this window as `her`. That is the exact failure `SettingsView.pronoun`'s
+ * own comment names: the field was validated, stored, migrated and tested for
+ * the length of this build and never rendered. The words belong beside every
+ * other sentence about her, in `panes-says.ts`; this takes them.
  */
 export function listKeys(
   outcomes: readonly {
@@ -230,17 +260,80 @@ export function listKeys(
     readonly accelerator: string
     readonly refused: string | null
   }[],
+  /** What each key does, in this interface's words for whoever is worn. */
+  what: Readonly<Record<string, string>>,
+  /** What the app ships for each, so the pane can offer a reset. */
+  shipped: Readonly<Record<string, string>>,
 ): readonly SettingsKey[] {
-  const what: Readonly<Record<string, string>> = {
-    rest: 'Let her rest, or wake her',
-    hide: 'Hide her, or bring her back',
-  }
   return outcomes.map((one) => ({
     id: one.id,
     what: what[one.id] ?? one.id,
     accelerator: one.accelerator,
     refused: one.refused,
+    // The id's own default, and `accelerator` when there is none — an id this
+    // build does not ship is already showing itself as its own label above, and
+    // a reset button pointing at `undefined` would be a button that unbinds it.
+    shipped: shipped[one.id] ?? one.accelerator,
+    edited: one.accelerator !== (shipped[one.id] ?? one.accelerator),
   }))
+}
+
+/**
+ * Check a request to rebind one global key, before anything is registered.
+ *
+ * `applyLookup`'s shape and `applyLookup`'s reason: the wire type accepts
+ * whatever a page sent, so every field is checked here rather than passed on.
+ * A malformed accelerator does not merely store badly — `globalShortcut.register`
+ * THROWS on one — so this is the line between a control somebody operated and a
+ * crash in the middle of the launch path.
+ *
+ * ## The collision check is here and nowhere else
+ *
+ * Electron does NOT refuse a combination this process already holds: it
+ * replaces the handler and answers true. So two keys bound to the same
+ * combination is not an error anything reports — it is one key that silently
+ * does the other one's job, and the pane would show both bound and working.
+ * `shared/accelerator.ts` writes one spelling per combination precisely so this
+ * check can be a string comparison.
+ *
+ * `null` means "back to what the app ships", and is checked against the same
+ * rules: the shipped combination for one key must not collide with a chosen
+ * combination for the other either.
+ */
+export function applyKey(
+  change: KeyChange,
+  /** What every key is bound to now, including the one being changed. */
+  bound: Readonly<Record<string, string>>,
+  /** What the app ships for each, so a reset can be resolved and checked. */
+  shipped: Readonly<Record<string, string>>,
+):
+  | { readonly ok: true; readonly id: string; readonly accelerator: string }
+  | { readonly ok: false; readonly why: string } {
+  const id = change.id
+  // `Object.hasOwn`, not `in`: `'toString' in shipped` is true, so `in` would
+  // let an id off `Object.prototype` past this line. It is refused three checks
+  // later either way, which is the kind of accident that stops being an
+  // accident the moment somebody reorders the function.
+  if (typeof id !== 'string' || !Object.hasOwn(shipped, id)) {
+    return { ok: false, why: 'There is no key by that name.' }
+  }
+  if (change.accelerator !== null && typeof change.accelerator !== 'string') {
+    return { ok: false, why: 'That is not a key combination.' }
+  }
+  // Resolved BEFORE the checks below, so a reset is held to the same rules a
+  // choice is. A default that collided would otherwise be reachable by
+  // resetting, which is the one path nobody thinks to test.
+  const wanted = change.accelerator ?? shipped[id]
+  if (wanted === undefined) return { ok: false, why: 'There is no key by that name.' }
+  const problem = acceleratorProblem(wanted)
+  if (problem !== null) return { ok: false, why: problem }
+  for (const [other, accelerator] of Object.entries(bound)) {
+    if (other === id) continue
+    if (accelerator === wanted) {
+      return { ok: false, why: `${wanted} is already doing something else in this application.` }
+    }
+  }
+  return { ok: true, id, accelerator: wanted }
 }
 
 /**

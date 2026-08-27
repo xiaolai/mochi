@@ -53,6 +53,27 @@ export const PROMPTS: Pane = {
       box.rows = Math.min(10, Math.max(3, one.text.split('\n').length + 1))
       nodes.push(box)
 
+      /*
+        The bound, said while somebody is typing rather than after they save.
+
+        `hearing.ts` refuses its own limit in the pane for this reason and
+        states it: a control somebody can see should name the limit before a
+        write is attempted. It cannot put a textarea back the way that pane puts
+        a selection back — that would delete what was typed — so it holds the
+        Save button instead and says why.
+      */
+      const overLong = element('p', 'note alarm')
+      overLong.hidden = true
+      const tooLong = (value: string): boolean =>
+        one.limit !== undefined && value.length > one.limit
+      const sayLength = (value: string): void => {
+        if (one.limit === undefined) return
+        overLong.hidden = !tooLong(value)
+        overLong.textContent = `That is ${String(value.length)} characters and the most this one may be is ${String(one.limit)}. It is sent on every session and paid for as long as that session lasts.`
+      }
+      sayLength(one.text)
+      nodes.push(overLong)
+
       if (one.missing.length > 0) {
         // Named, not counted: "it is missing something" sends somebody reading
         // the whole box to work out what.
@@ -73,8 +94,11 @@ export const PROMPTS: Pane = {
       reset.disabled = !one.edited
       box.addEventListener('input', () => {
         // Enabled by a DIFFERENCE, not by having typed: typing a character and
-        // deleting it is not a change to save.
-        save.disabled = box.value === one.text
+        // deleting it is not a change to save. And never while it is over the
+        // bound, which main would refuse anyway — an enabled button whose only
+        // outcome is a refusal is a button that teaches people to distrust it.
+        save.disabled = box.value === one.text || tooLong(box.value)
+        sayLength(box.value)
       })
       save.addEventListener('click', () => {
         handlers.prompt(one.key, box.value)

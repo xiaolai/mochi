@@ -133,9 +133,21 @@ export function isCapabilityName(value: unknown): value is string {
   return typeof value === 'string' && NAME.test(value)
 }
 
-/** The description enters the model's context on every session. */
-const MAX_DESCRIPTION = 4096
-const MAX_PROPERTY_DESCRIPTION = 1024
+/**
+ * The description enters the model's context on every session.
+ *
+ * EXPORTED, because a manifest is no longer the only way one of these strings
+ * reaches the wire. The prompt catalogue offers every tool description and every
+ * argument description for rewriting, and an override is written to a file this
+ * function never sees — so the bound has to be applied a second time, where the
+ * override is saved and again where the wire list is built. The header's
+ * argument is what makes that necessary rather than tidy: these bounds were
+ * never about the manifest being a stranger's, and a 100 KB description
+ * somebody pasted this morning is billed for the life of every session just as
+ * surely as a downloaded one.
+ */
+export const MAX_DESCRIPTION = 4096
+export const MAX_PROPERTY_DESCRIPTION = 1024
 const MAX_PROPERTIES = 8
 
 function isRecord(value: unknown): value is Record<string, unknown> {

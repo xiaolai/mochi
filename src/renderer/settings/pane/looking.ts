@@ -48,6 +48,58 @@ export const LOOKING: Pane = {
       handlers.lookup({ workspace: workspace.value })
     })
 
+    /*
+      The system folder panel, beside the field rather than instead of it.
+
+      This was a bare text box for a filesystem path, with a refusal — "a
+      workspace has to be a full path, starting with a slash" — as the only
+      guidance anybody got. That is a control which asks somebody to type
+      something they can see on screen in another application, and then tells
+      them off for the way they typed it.
+
+      The field STAYS. Pasting a path is faster than walking a panel to it when
+      you already have one, and a picker that replaced the field would make the
+      quick way impossible in order to make the slow way safe.
+
+      The path is chosen and saved in main; nothing here names a folder. See
+      `settings:choose-workspace`.
+    */
+    const browse = element('button', 'btn', 'Choose…')
+    browse.type = 'button'
+    browse.addEventListener('click', () => {
+      /*
+        Disabled for as long as the panel is open, which is `recheckCodex`'s
+        reason: a second panel behind the first is two answers arriving in an
+        order nobody chose.
+
+        Nothing is redrawn from the answer either, for `recheckCodex`'s other
+        reason: main has already written the workspace, and the handler re-reads
+        — which is the one path that cannot leave this field showing a folder
+        the store disagrees with.
+      */
+      browse.disabled = true
+      void handlers.chooseWorkspace().then(
+        (chosen) => {
+          browse.disabled = false
+          // Said nowhere at all when somebody changes their mind. A toast for a
+          // dismissal is a toast that teaches people to stop reading them.
+          if (!chosen.ok && chosen.cancelled) return
+          handlers.say(
+            chosen.ok
+              ? forPronoun(SAYS.workspaceSaved, view.pronoun) + chosen.workspace
+              : chosen.why,
+            !chosen.ok,
+          )
+        },
+        (error: unknown) => {
+          browse.disabled = false
+          handlers.say(`The folder could not be chosen: ${String(error)}`, true)
+        },
+      )
+    })
+    const wherever = element('div', 'picker')
+    wherever.append(workspace, browse)
+
     const search = document.createElement('select')
     options(
       search,
@@ -75,7 +127,7 @@ export const LOOKING: Pane = {
     })
 
     const parts: Node[] = [
-      field('Workspace', workspace),
+      field('Workspace', wherever),
       field('Web search', search),
       field('Codex profile', profile),
     ]
@@ -84,12 +136,41 @@ export const LOOKING: Pane = {
       parts.push(element('p', 'note', 'Nobody has chosen one, so this is the default.'))
     }
     if (view.lookup.profilePath !== null) {
-      // The FILE is the thing somebody edits. "There is a profile, somewhere,
-      // called something" is not an instruction anybody can follow.
-      const note = element('p', 'note')
+      /*
+        The FILE is the thing somebody edits, so it is named — and now reachable.
+
+        "There is a profile, somewhere, called something" is not an instruction
+        anybody can follow, which is why the path was printed. A path printed
+        beside no way of opening it is the same sentence one step further along:
+        it tells somebody where to go and leaves them to get there.
+
+        Two states, because the file may not be there. A profile is a NAME, and
+        nothing guarantees a file was ever written for it — the old line said
+        "settings for it live in" about a path that could be empty, and the
+        button would have done nothing at all.
+      */
+      const row = element('div', 'folder')
+      const left = element('div')
+      const said = element('div')
       const path = element('code', undefined, view.lookup.profilePath)
-      note.append('Settings for it live in ', path)
-      parts.push(note)
+      if (view.lookup.profileExists) {
+        said.append('Settings for it live in ', path)
+      } else {
+        said.append('Nothing is there yet — ', path, ' has not been written.')
+      }
+      left.append(said)
+      row.append(left)
+      if (view.lookup.profileExists) {
+        const open = element('button', 'btn', 'Show')
+        open.type = 'button'
+        // No argument. Main holds the profile name and knows where Codex keeps
+        // its files, so the page never names the path it is displaying.
+        open.addEventListener('click', () => {
+          handlers.showProfile()
+        })
+        row.append(open)
+      }
+      parts.push(row)
     }
     return parts
   },

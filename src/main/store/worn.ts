@@ -90,8 +90,13 @@ export function writeWornPersonaId(userData: string, id: string): void {
  * Change some keys and keep the rest.
  *
  * Read, change, write the whole object back — see the note at the top of this
- * file. Two callers now, which is why it is a function: a second one that
+ * file. Several callers now, which is why it is a function: a second one that
  * wrote only its own key would silently drop the first one's.
+ *
+ * EXPORTED, because `store/keys.ts` writes into the same file. That module owns
+ * a key of its own and nothing else here reads it, but it must not own a second
+ * writer: two functions merging into `preferences.json` is precisely the
+ * dropped-key failure this one exists to prevent.
  */
 /**
  * The keys this build does not write, and does not delete either.
@@ -129,7 +134,7 @@ export const V1_KEYS = [
   'sound',
 ] as const
 
-function writeMerged(userData: string, changes: Record<string, unknown>): void {
+export function writeMerged(userData: string, changes: Record<string, unknown>): void {
   // Everything already there, kept — including `V1_KEYS` above, which is why
   // that list is documentation rather than a thing this function consults.
   let existing: Record<string, unknown> = {}

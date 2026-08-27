@@ -106,6 +106,14 @@ export interface PromptRow {
    * not do is fail silently, which is what it did when there was no screen.
    */
   readonly missing: readonly string[]
+  /**
+   * The longest this one may be, or absent when nothing bounds it.
+   *
+   * Carried to the pane rather than left to main alone, for the reason the
+   * hearing pane states about its own limit: a control somebody can see should
+   * name the limit before a write is attempted, not after one is refused.
+   */
+  readonly limit?: number
 }
 
 export function promptRows(
@@ -123,6 +131,7 @@ export function promptRows(
       fallback: spec.text,
       edited: override !== undefined,
       missing: missingFrom(spec, text),
+      ...(spec.limit === undefined ? {} : { limit: spec.limit }),
     }
   })
 }

@@ -31,4 +31,19 @@ export interface PromptSpec {
   readonly text: string
   /** Phrases whose absence is worth reporting. Never enforced. */
   readonly requires: readonly string[]
+  /**
+   * The longest an override may be, or absent when nothing bounds it.
+   *
+   * ENFORCED, unlike `requires`, and the difference is the failure each one
+   * describes. A dropped phrase breaks something downstream that a person may
+   * have meant to break; an over-long description breaks nothing and is simply
+   * paid for, on every session, for as long as the session lasts. There is no
+   * version of it somebody meant.
+   *
+   * Only the tool entries carry one today. Their bound is `manifest.ts`'s own —
+   * the same number a manifest is checked against at load — because an override
+   * lands in the same field on the same wire, and a limit that applied only to
+   * the shipped text would be a limit with a door beside it.
+   */
+  readonly limit?: number
 }
