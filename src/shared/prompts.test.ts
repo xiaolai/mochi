@@ -111,6 +111,26 @@ describe('a rewritten tool description reaches the wire', () => {
     }
   })
 
+  it('keeps the schema around the descriptions it rewrites', () => {
+    /*
+      `describedTools` rebuilds `parameters` and `properties` to swap two
+      strings. Everything else in those objects has to come through untouched —
+      `required` decides whether the model may omit an argument, and `type` is
+      what makes the payload a function call at all. A spread that lost one
+      would produce a tool that still reads correctly and is wrong on the wire.
+    */
+    const sent = withOverrides({ [toolDescriptionKey(first.name)]: 'changed' })
+    for (const tool of sent) {
+      const shipped = registry.tools.find((one) => one.name === tool.name)
+      expect(tool.type, tool.name).toBe('function')
+      expect(tool.parameters.type, tool.name).toBe('object')
+      expect(tool.parameters.required, tool.name).toEqual(shipped?.parameters.required)
+      expect(Object.keys(tool.parameters.properties), tool.name).toEqual(
+        Object.keys(shipped?.parameters.properties ?? {}),
+      )
+    }
+  })
+
   it('keeps an argument enum, which is what constrains what she can ask for', () => {
     // Spreading a property must not drop `enum`: it is the half that narrows
     // the wire, and losing it turns a closed set into free text silently.

@@ -89,12 +89,12 @@ describe('every catalogued prompt is asked for', () => {
     check that read prose would have passed it for the wrong reason and stayed
     green when the resolver went away.
 
-    So the rule is: the key appears as a string literal, in code, outside the
-    file that declares it. That over-collects — a key in a test fixture counts —
-    and over-collecting is the safe direction here, because a false alarm is a
-    test nobody trusts.
+    So the rule is: the key appears as a string literal, in PRODUCTION code,
+    outside the file that declares it. Tests are excluded deliberately — a key
+    named only in a fixture is a key nothing sends, and counting it would make
+    this pass for a prompt that reaches no model.
   */
-  const everything = sourceOf(filesUnder(SRC, true).filter((path) => !path.endsWith('prompts.ts')))
+  const everything = sourceOf(filesUnder(SRC).filter((path) => !path.endsWith('prompts.ts')))
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^[ \t]*\/\/.*$/gm, '')
 

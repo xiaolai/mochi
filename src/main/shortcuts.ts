@@ -66,9 +66,47 @@ export function claimShortcuts(
   handlers: ShortcutHandlers,
   accelerators: Readonly<Record<ShortcutId, string>>,
 ): readonly ShortcutOutcome[] {
-  return (Object.keys(accelerators) as ShortcutId[]).map((id) =>
-    claimOne(id, accelerators[id], handlers[id]),
-  )
+  /*
+    A COMBINATION THIS PASS HAS ALREADY TAKEN IS REFUSED, not registered twice.
+
+    `applyKey` refuses a collision on the way in from the window, and that is
+    not enough on its own: `preferences.json` is hand-editable, so two ids can
+    arrive here holding one combination without that check ever running. It is
+    the argument `readSleepAfterMinutes` makes about the same file — the pane is
+    not the only way in.
+
+    Electron does not refuse the second registration. It REPLACES the handler
+    and answers true, so without this the second id silently does the first
+    one's job, `refused` is null for both, and the pane draws two keys that are
+    working. One of them is not.
+
+    Refused rather than reset, and that is the whole reason this belongs here
+    rather than in the store: `refused` is a state this build already draws — in
+    red, under the row, with a dot in the nav — so the honest outcome is
+    already expressible. Correcting the file instead would throw away a
+    combination somebody typed and say nothing about it.
+  */
+  const taken = new Map<string, ShortcutId>()
+  return (Object.keys(accelerators) as ShortcutId[]).map((id) => {
+    const accelerator = accelerators[id]
+    const owner = taken.get(accelerator)
+    if (owner !== undefined) {
+      /*
+        Not named. `owner` is an internal id — "rest" — and `listKeys` exists
+        because that is our word for it rather than anything a person is looking
+        for. There are two keys, so "another of this application's" is
+        unambiguous without leaking the id into a sentence somebody reads.
+      */
+      void owner
+      return { id, accelerator, refused: `another of this application's keys already has it` }
+    }
+    const outcome = claimOne(id, accelerator, handlers[id])
+    // Only when it was actually claimed. A combination another application owns
+    // is not one this pass holds, and marking it taken would refuse a second id
+    // for a reason that is not true.
+    if (outcome.refused === null) taken.set(accelerator, id)
+    return outcome
+  })
 }
 
 /** Claim one, and say what happened. The single place `register` is called. */
@@ -99,11 +137,26 @@ export function claimOne(
  */
 export function rebindShortcut(
   id: ShortcutId,
-  from: string,
+  /**
+   * What this id is holding, or null when it holds nothing.
+   *
+   * NULL IS NOT THE SAME AS "the old combination", and conflating them steals a
+   * working key. A key can be showing a combination it does not have — refused
+   * because another application owns it, or because the other id in this
+   * application got there first — and `release` is by COMBINATION, not by id.
+   * So releasing it on the way past hands back whatever is registered under that
+   * string, which in the self-collision case is the OTHER key's live binding.
+   *
+   * That makes the obvious repair the destructive one: two keys land on one
+   * combination in a hand-edited file, somebody moves the broken one off it, and
+   * the key that was working stops. Measured, not reasoned about — it
+   * unregistered `Alt+F9` and never put it back.
+   */
+  from: string | null,
   to: string,
   handler: () => void,
 ): { readonly outcome: ShortcutOutcome; readonly rolledBack: boolean } {
-  release(from)
+  if (from !== null) release(from)
   const taken = claimOne(id, to, handler)
   if (taken.refused === null) return { outcome: taken, rolledBack: false }
   /*
@@ -114,6 +167,10 @@ export function rebindShortcut(
     control where trying is how you find out.
   */
   release(to)
+  // Nothing to go back to. The id held nothing before and holds nothing now,
+  // which is no worse than it was — and reporting it as a rollback would tell
+  // the caller a working binding was restored when none existed.
+  if (from === null) return { outcome: taken, rolledBack: false }
   const back = claimOne(id, from, handler)
   return { outcome: back, rolledBack: true }
 }

@@ -2483,7 +2483,20 @@ ipcMain.handle('settings:key', (_event, change: unknown): SettingsWrite => {
   const was = claimed.find((one) => one.id === id)
   if (was === undefined) return refuse('There is no key by that name.')
 
-  const moved = rebindShortcut(id, was.accelerator, asked.accelerator, keyHandlers[id])
+  /*
+    NULL when this key is not actually holding its combination.
+
+    `release` works by combination, not by id, so passing the string a refused
+    key is merely SHOWING would hand back whatever is registered under it — and
+    in the self-collision case that is the other key's live binding. Repairing
+    the broken key would break the working one.
+  */
+  const moved = rebindShortcut(
+    id,
+    was.refused === null ? was.accelerator : null,
+    asked.accelerator,
+    keyHandlers[id],
+  )
   // The live table first, so everything drawn from `claimed` — this pane, the
   // tray menu, the shelf's strip — agrees with the machine from here on, and
   // agrees with it even if the write below throws.
@@ -2540,6 +2553,20 @@ ipcMain.handle('settings:key', (_event, change: unknown): SettingsWrite => {
     return refuse(String(error))
   }
   console.log(`[keys] ${id} -> ${asked.accelerator}`)
+  /*
+    Stored, and still not working.
+
+    Reachable when the key was holding nothing to begin with — refused at launch
+    — and the combination just chosen is refused too. There is no rollback for
+    that case and nothing was lost, so the preference IS saved; what must not
+    happen is a green "Saved." over a key that does nothing.
+  */
+  if (moved.outcome.refused !== null) {
+    return refuse(
+      `Saved, but ${asked.accelerator} could not be taken — ${moved.outcome.refused}. ` +
+        `It will start working if that changes.`,
+    )
+  }
   return { ok: true }
 })
 
