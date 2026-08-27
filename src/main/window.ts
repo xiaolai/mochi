@@ -427,8 +427,15 @@ function iconPath(file: string): string {
  * An image handed to `dock.setIcon` is not promised the system's squircle crop
  * — that is applied to a bundle's icon, not to a `NativeImage` set at runtime —
  * so the full-bleed 1024 square meant for the `.icns` would appear as a square
- * among rounded neighbours. `dock.png` is the version already carrying its own
- * rounded plate, which is why it exists as a separate asset.
+ * among rounded neighbours. `dock.png` is the version carrying its own rounded
+ * plate, which is why it exists as a separate asset.
+ *
+ * That sentence was true of the hand-drawn original, then false for five days,
+ * and is true again. When the assets moved to a generator the plate became a
+ * full-bleed square — all `rig/svg.ts` could draw — and the mark it framed went
+ * from 62% of a plate to 51% of a tile without any number changing. A
+ * screenshot of the real Dock caught it at 50.8% while every neighbour filled
+ * theirs. `rig/icons.ts` carries the measurements it was rebuilt from.
  *
  * Absent is not fatal, unlike the tray: a missing Dock tile falls back to
  * Electron's own, while a missing tray icon is an app nobody can quit.

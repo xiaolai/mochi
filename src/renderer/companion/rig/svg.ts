@@ -47,8 +47,28 @@ export interface Treatment {
   readonly body: string
   /** The fill behind it, offset by `shadowX`/`shadowY`. See `paintBody`. */
   readonly shadow: string
-  /** A vertical gradient behind her, or null for transparency. */
-  readonly background: { readonly from: string; readonly to: string } | null
+  /**
+   * A vertical gradient behind her, or null for transparency.
+   *
+   * `size` and `radius` describe a PLATE rather than a full-bleed square, and
+   * they exist because leaving them out lost an asset. `icons/dock.png` was
+   * hand-drawn as an 852px rounded plate inside a 1024 canvas with transparent
+   * margin — the pre-masked tile `dock.setIcon` needs, because an image set at
+   * runtime gets no squircle from the system. When every asset was moved to
+   * this generator the plate became `<rect width="px" height="px">`, a
+   * full-bleed square, and the mark it framed went from 62% of a plate to 51%
+   * of a tile without a single number changing.
+   *
+   * Both default to the full square, so every other treatment is untouched.
+   */
+  readonly background: {
+    readonly from: string
+    readonly to: string
+    /** Side of the plate as a fraction of the square. 1 is full bleed. */
+    readonly size?: number
+    /** Corner radius as a fraction of the PLATE, not of the square. */
+    readonly radius?: number
+  } | null
   /**
    * Her width as a fraction of the square.
    *
@@ -154,6 +174,27 @@ export function outlineFor(
  * recognisable by. Two paths and a `clipPath` reproduce her; two paths alone
  * reproduce something else.
  */
+/**
+ * The plate she sits on: the whole square, or a rounded tile inside it.
+ *
+ * Centred, and the original artwork was not quite — its margins were 86 either
+ * side and 99 over 74 top to bottom, so the plate sat 12px low in a 1024
+ * square. That is a tenth of a percent of the tile and reproducing it would be
+ * reproducing a wobble rather than a decision.
+ */
+function plateRect(px: number, background: Treatment['background']): string {
+  if (background === null) return ''
+  const size = Math.round(px * (background.size ?? 1))
+  const at = Math.round((px - size) / 2)
+  const radius = Math.round(size * (background.radius ?? 0))
+  return (
+    `<rect x="${String(at)}" y="${String(at)}" ` +
+    `width="${String(size)}" height="${String(size)}" ` +
+    (radius > 0 ? `rx="${String(radius)}" ry="${String(radius)}" ` : '') +
+    `fill="url(#bg)"/>`
+  )
+}
+
 export function mochiSvg(face: FaceSpec, px: number, treatment: Treatment): string {
   const { points, offset } = outlineFor(face, px, treatment.width)
   const d = toD(points)
@@ -169,12 +210,9 @@ export function mochiSvg(face: FaceSpec, px: number, treatment: Treatment): stri
         `<stop offset="0" stop-color="${treatment.background.from}"/>` +
         `<stop offset="1" stop-color="${treatment.background.to}"/>` +
         `</linearGradient>`
-  // OUTSIDE the clip: the plate is the whole square, and clipping it to her
+  // OUTSIDE the clip: the plate is what she sits on, and clipping it to her
   // would produce an icon that is only her, on nothing.
-  const plate =
-    treatment.background === null
-      ? ''
-      : `<rect width="${String(px)}" height="${String(px)}" fill="url(#bg)"/>`
+  const plate = plateRect(px, treatment.background)
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${String(px)}" height="${String(px)}" ` +
