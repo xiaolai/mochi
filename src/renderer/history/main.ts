@@ -80,6 +80,7 @@ import {
 import { say } from './status'
 import { empty, facts, iconButton, marked, toolChips } from './bits'
 import { freshness } from './freshness'
+import { PLACES, alongTabs, type Place } from './tabs'
 import { sureExportEl } from './elements'
 import { offerACopyFirst } from './keep-a-copy'
 
@@ -479,14 +480,7 @@ function openCharacter(): void {
  * wake" panel and a "conversations" panel side by side in a 380px column, and
  * conversations now have the whole window. One tab strip, one subject.
  */
-type Place = 'cast' | 'archive' | 'machine'
 let place: Place = 'cast'
-
-const PLACES: readonly { readonly id: Place; readonly label: string }[] = [
-  { id: 'cast', label: 'Cast' },
-  { id: 'archive', label: 'Archive' },
-  { id: 'machine', label: 'Machine' },
-]
 
 function showPlace(next: Place): void {
   place = next
@@ -547,6 +541,28 @@ function showPlace(next: Place): void {
  */
 const tabs = new Map<Place, HTMLButtonElement>()
 
+/**
+ * The whole `tab` contract, not a third of it.
+ *
+ * The strip declared `role="tablist"` and gave its buttons `role="tab"` — and
+ * then marked the live one with `aria-current` alone. That is a valid attribute
+ * and it is not the one this pattern is read through: assistive technology asks
+ * a tab for `aria-selected`, and a tablist whose tabs never answer it presents
+ * as three buttons with no state, inside a container promising state. Declaring
+ * a role and then not honouring its contract is worse than declaring none,
+ * because the promise is what a reader navigates by.
+ *
+ * `aria-current` STAYS. The stylesheet selects on it — `.shell-tab[aria-current='true']`
+ * — and the two attributes are not rivals: one says "this is where you are in
+ * the app", the other says "this tab is the selected one".
+ *
+ * ## And the keyboard
+ *
+ * A tablist is one stop, not three: `Tab` enters it and arrows move within it.
+ * Three buttons each taking a tab stop is what the comment above this function
+ * already complains about from the other direction. Roving `tabindex` is what
+ * makes the container one stop.
+ */
 function renderPlaces(): void {
   if (tabs.size === 0) {
     for (const one of PLACES) {
@@ -554,15 +570,34 @@ function renderPlaces(): void {
       button.className = 'shell-tab'
       button.type = 'button'
       button.setAttribute('role', 'tab')
+      // Named, so the panel can point back at it and be labelled by the word
+      // somebody clicked rather than by nothing.
+      button.id = `tab-for-${one.id}`
+      button.setAttribute('aria-controls', `tab-${one.id}`)
       button.textContent = one.label
       button.addEventListener('click', () => {
         showPlace(one.id)
+      })
+      button.addEventListener('keydown', (event: KeyboardEvent) => {
+        const moved = alongTabs(event.key, one.id)
+        if (moved === null) return
+        // Taken, so the arrow does not also scroll the pane behind the strip.
+        event.preventDefault()
+        showPlace(moved)
+        tabs.get(moved)?.focus()
       })
       tabs.set(one.id, button)
       shellTabsEl.append(button)
     }
   }
-  for (const [id, button] of tabs) button.setAttribute('aria-current', String(id === place))
+  for (const [id, button] of tabs) {
+    const here = id === place
+    button.setAttribute('aria-current', String(here))
+    button.setAttribute('aria-selected', String(here))
+    // ROVING: only the selected tab is a tab stop, so `Tab` enters the strip
+    // once and the arrows move inside it.
+    button.tabIndex = here ? 0 : -1
+  }
 }
 
 function renderWake(): void {

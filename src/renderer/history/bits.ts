@@ -135,6 +135,20 @@ export function toolChips(tools: readonly { name: string; uses: number }[]): rea
     // The sentence, for a reader that does not get the layout. `time`/`times`
     // rather than the `×`, which a screen reader says as "x".
     chip.title = `${tool.name}, called ${String(tool.uses)} ${tool.uses === 1 ? 'time' : 'times'}`
+    /*
+      `role="img"` is what lets the label be heard at all.
+
+      A `<span>` has no implicit role, and ARIA PROHIBITS an accessible name on
+      a generic element — so `aria-label` here was ignored and a screen reader
+      announced the visible parts instead: the tool's snake-case name read out
+      as words, and `×2` read as "x two". The sentence written for exactly that
+      reader was the one thing not said.
+
+      `img` is the role for a composite that should be heard as ONE thing under
+      a name of its own. It also stops the two inner spans announcing
+      separately, which is the other half of the same problem.
+    */
+    chip.setAttribute('role', 'img')
     chip.setAttribute('aria-label', chip.title)
     return chip
   })

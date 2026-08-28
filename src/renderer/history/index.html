@@ -2384,7 +2384,7 @@
         are in a column beneath. A list holds as many as you like in the space a
         row of four needed.
       -->
-      <section class="tab-pane cast" id="tab-cast">
+      <section class="tab-pane cast" id="tab-cast" role="tabpanel" aria-labelledby="tab-for-cast">
         <aside class="cast-list">
           <div class="strip">
             <h3>Characters</h3>
@@ -2421,7 +2421,13 @@
         without a long scroll — and search, which is the third question, already
         has the strip above.
       -->
-      <section class="tab-pane archive" id="tab-archive" hidden>
+      <section
+        class="tab-pane archive"
+        id="tab-archive"
+        role="tabpanel"
+        aria-labelledby="tab-for-archive"
+        hidden
+      >
         <div class="archive-body">
           <aside class="archive-side">
             <div class="cal" id="calendar"></div>
@@ -2437,7 +2443,13 @@
         withheld grant removes a row from it, so the two belong side by side or
         the connection is a scroll away.
       -->
-      <section class="tab-pane machine" id="tab-machine" hidden>
+      <section
+        class="tab-pane machine"
+        id="tab-machine"
+        role="tabpanel"
+        aria-labelledby="tab-for-machine"
+        hidden
+      >
         <nav class="nav" id="nav">
           <h3 class="nav-head">This machine</h3>
           <div id="nav-groups"></div>
