@@ -763,6 +763,21 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * what that cost.
    */
   window.addEventListener('mouseup', () => {
+    /*
+      ONLY WHEN A DRAG WAS RUNNING, which the backstop above already checks and
+      this did not.
+
+      Every release over this window came through here — a click on a bubble
+      control, the copy button, her chip — and each one sent `companion:drop`.
+      That is a read-merge-atomic-write of `preferences.json` per click, and it
+      records a PLACEMENT: whatever position she happens to be at when somebody
+      pressed a button that has nothing to do with moving her.
+
+      The `mousemove` backstop thirty lines up guards on `dragging` for exactly
+      this reason. Two listeners ending one drag, and only one of them asked
+      whether a drag was happening.
+    */
+    if (!dragging) return
     dragging = false
     window.mochi.drop()
   })
@@ -1210,6 +1225,20 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         attention = 'idle'
         waiting = 'none'
         thinking = false
+        /*
+          AND HER GAZE, which this left where the beat had put it.
+
+          The thinking beat aims her off the cursor — `lookAt(0.35, -0.5)`, the
+          way anybody's eyes go when they start thinking — and the beat's own
+          exit path puts it back with `lookAtPointer` on the same frame.
+
+          A session dying while the beat is held does not take that path. It
+          comes through here, which cleared every other piece of the state and
+          not this one, so she was left staring into the middle distance until
+          some later reconnect happened to call `opened()`. The one moment she
+          looks least present is the moment her connection has just gone.
+        */
+        lookAtPointer()
       }
     },
     sleeps: (asleep: boolean) => {

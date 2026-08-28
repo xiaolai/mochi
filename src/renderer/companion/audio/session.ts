@@ -396,6 +396,21 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   })
 
   channel.addEventListener('message', (event: MessageEvent<string>) => {
+    /*
+      NOTHING FROM A DEAD SESSION.
+
+      `shutdown` closes the peer and sets `closed`, and frames already queued on
+      the channel can still be delivered after it. Every case below acts: a
+      `tool-call` is forwarded to main and DISPATCHED, `session-created` reports
+      an expiry and moves the state to `listening` — over the `closed` this
+      session announced on its way out — and the transcript cases write turns
+      into a conversation that has been ended.
+
+      The expiry case is the sharp one: a session that failed or expired would
+      put the light back on and the window back to listening, describing a
+      connection that is gone.
+    */
+    if (closed) return
     const frame = parseServerFrame(event.data)
     switch (frame.kind) {
       case 'session-created':
@@ -800,7 +815,7 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   }
 
   // Sent the instant the channel opens, with everything already in hand.
-  channel.addEventListener('open', () => {
+  const onOpen = (): void => {
     put(sessionUpdate())
     confirming = setTimeout(() => {
       confirming = null
@@ -815,7 +830,25 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
           'An `error` frame above says which field was refused.',
       })
     }, CONFIRM_MS)
-  })
+  }
+  channel.addEventListener('open', onOpen)
+  /*
+    AND RUN IT NOW IF THE CHANNEL IS ALREADY OPEN.
+
+    The channel is created before the offer and this listener is attached after
+    the answer comes back, so there is a whole SDP round trip between them. A
+    channel that reached `open` inside that window never fired this: no
+    `session.update` was sent, and the session ran on the service's defaults —
+    no instructions, the wrong voice, `server_vad` instead of semantic turns.
+
+    Silently, which is the part that matters. The "NOT CONFIGURED" note below
+    is armed by this same handler, so the one thing built to notice this exact
+    state was never scheduled either.
+
+    `open` fires once on the transition, so a channel already past it will not
+    fire again and this cannot run twice.
+  */
+  if (channel.readyState === 'open') onOpen()
 
   return {
     bubble: config.bubble,
