@@ -1,6 +1,5 @@
 import type { ShelfView } from '@shared/history-window'
 import { forPronoun } from '@shared/pronoun'
-import type {} from '@shared/avatar-spec'
 import { element } from '../element'
 import { SAYS } from './shelf-says'
 import { colourSection } from './sheet/colour'

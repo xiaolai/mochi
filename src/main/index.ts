@@ -64,7 +64,6 @@ import { deletePersona, discardWrite, sweepDeletions } from './store/delete-pers
 import { readEdits, restoreBuiltIn } from './store/her-edits'
 import type { PersonaCatalog } from './store/personas'
 import { keepsFor, writePolicy } from './store/policy'
-import type { Policy } from '@shared/policy'
 import { checkPrompt, promptFile, readPrompt, seedPrompt, writePrompt } from './store/prompt'
 import {
   readResting,
@@ -1125,16 +1124,6 @@ async function titleConversations(personaId: string): Promise<void> {
  * defaults are a working character, and refusing to start because a rename
  * could not be read would be a worse failure than starting un-renamed.
  */
-/**
- * Policies that could not be written, from the last load.
- *
- * Kept here because `keeps` is asked on every turn and loading the whole
- * catalogue to answer it would read every package off disk per utterance. It is
- * refreshed by the one function that loads them, so it cannot drift from the
- * catalogue the app is actually using -- and a stale entry is harmless anyway,
- * because `keepsFor` prefers the policy store whenever it has an answer.
- */
-let carriedPolicies: ReadonlyMap<string, Policy> = new Map()
 
 function catalogue(userData: string): PersonaCatalog {
   const { edits, problem } = readEdits(userData)
@@ -1143,7 +1132,6 @@ function catalogue(userData: string): PersonaCatalog {
     problems.note('persona', null, `the character edits could not be read: ${problem}`)
   }
   const loaded = loadPersonas(userData, edits)
-  carriedPolicies = loaded.carriedPolicies
   return loaded
 }
 
@@ -1908,7 +1896,7 @@ function conversation(): Conversation {
       transcripts: transcripts(),
       // Read per turn, inside the module. Turning saving off has to take effect
       // on the next thing said, not on the next wake.
-      keeps: (personaId) => keepsFor(userData, personaId, carriedPolicies),
+      keeps: (personaId) => keepsFor(userData, personaId),
       log: (text) => console.log(`[archive] ${text}`),
     })
   }
@@ -2875,7 +2863,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
           one.theme,
           one.size,
         ).face,
-      (id) => keepsFor(userData, id, carriedPolicies),
+      (id) => keepsFor(userData, id),
     ),
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],

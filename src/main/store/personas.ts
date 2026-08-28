@@ -31,8 +31,6 @@ import { DEFAULT_PERSONA, type Persona } from '@shared/persona'
 import { BUILT_IN_ID, deriveId, parsePersona, type PersonaLoadProblem } from '@shared/parse-persona'
 import { PACKAGE_FACE } from './avatars'
 import { readBounded } from './read-bounded'
-import type {} from './transcripts'
-import { type Policy } from '@shared/policy'
 import { EDITS, type PersonaEdits, builtInPersona, writeEdits } from './her-edits'
 import { unfinishedDeletions } from './deleting'
 import {
@@ -100,7 +98,6 @@ export interface PersonaCatalog {
    * recording, silently, which is the one direction this must never fail in.
    * Held in memory for this run so the effective answer stays theirs.
    */
-  readonly carriedPolicies: ReadonlyMap<string, Policy>
 }
 
 /**
@@ -114,7 +111,6 @@ interface Candidate {
   readonly source: string
   readonly persona: Persona
   /** A retention setting found in an older manifest, awaiting migration. */
-  readonly legacy: Policy | null
   /** The manifest asked for retention this build cannot honour. */
   readonly declaresRetention: boolean
 }
@@ -135,9 +131,6 @@ export function loadPersonas(userData: string, edits: PersonaEdits): PersonaCata
   // `catalog.personas.get(BUILT_IN_ID)` describing a mochi nobody is wearing.
   const personas = new Map<string, Persona>([[BUILT_IN_ID, builtInPersona(edits)]])
   const sources = new Map<string, string>()
-  // Retention carried out of an old manifest that could not be written to its
-  // own file. Empty in the ordinary case -- see `PersonaCatalog`.
-  const carriedPolicies = new Map<string, Policy>()
   let files: string[]
   try {
     files = readdirSync(root, { withFileTypes: true })
@@ -163,7 +156,7 @@ export function loadPersonas(userData: string, edits: PersonaEdits): PersonaCata
     if (!missing) {
       problems.push({ kind: 'folder-unreadable' })
     }
-    return { personas, sources, problems, carriedPolicies, reserved: new Set() }
+    return { personas, sources, problems, reserved: new Set() }
   }
 
   // BOUNDED, before anything is read.
@@ -255,7 +248,7 @@ export function loadPersonas(userData: string, edits: PersonaEdits): PersonaCata
     sources.set(id, first.source)
   }
 
-  return { personas, sources, problems, carriedPolicies, reserved: new Set(deleting.keys()) }
+  return { personas, sources, problems, reserved: new Set(deleting.keys()) }
 }
 
 /**
@@ -277,27 +270,25 @@ function readCandidate(
 ): {
   readonly candidate: Candidate | null
   readonly problem: PersonaLoadProblem | null
-  readonly retry: boolean
 } {
   const read = readBounded(join(root, source, MANIFEST))
   if (!read.ok) {
     // `absent` is a race -- the file was listed and then removed -- and is
     // as unremarkable as never having existed.
-    if (read.reason.kind === 'absent') return { candidate: null, problem: null, retry: false }
-    return { candidate: null, problem: { kind: 'unreadable', source }, retry: true }
+    if (read.reason.kind === 'absent') return { candidate: null, problem: null }
+    return { candidate: null, problem: { kind: 'unreadable', source } }
   }
   let parsed: unknown
   try {
     parsed = JSON.parse(read.text)
   } catch {
-    return { candidate: null, problem: { kind: 'malformed', source }, retry: false }
+    return { candidate: null, problem: { kind: 'malformed', source } }
   }
   const result = parsePersona(parsed)
   if (!result.ok) {
     return {
       candidate: null,
       problem: { kind: 'invalid', source, problems: result.problems },
-      retry: false,
     }
   }
   // The reserved id is refused HERE rather than in `parsePersona`, which
@@ -306,23 +297,20 @@ function readCandidate(
     return {
       candidate: null,
       problem: { kind: 'reserved-id', id: BUILT_IN_ID, source },
-      retry: false,
     }
   }
   // A package cannot both carry a face and name one. Only the loader can
   // see both, which is why this is checked here rather than in the parser.
   if (result.persona.avatarId !== null && hasOwnFace(join(root, source))) {
-    return { candidate: null, problem: { kind: 'two-faces', source }, retry: false }
+    return { candidate: null, problem: { kind: 'two-faces', source } }
   }
   return {
     candidate: {
       source,
       persona: result.persona,
-      legacy: result.legacy,
       declaresRetention: result.declaresRetention,
     },
     problem: null,
-    retry: false,
   }
 }
 

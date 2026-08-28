@@ -58,22 +58,6 @@ export const SAYS = {
     he: 'Nothing. He is offered no tools at all, which is a fault in this build.',
     it: 'Nothing. It is offered no tools at all, which is a fault in this build.',
   },
-  /*
-    Where the words in this column come from, and that they are not fixed.
-
-    Every description here is an entry in the prompt catalogue and has been
-    rewritable the whole time -- but only from another group, under a title that
-    does not obviously cover "what a tool is for". Somebody reading a
-    description they disagree with had nothing on screen telling them it could
-    be changed, which is `prompts.ts`'s own complaint about the state before
-    that pane existed, one pane along.
-  */
-  /* The hint inside the empty workspace field. Unreachable in practice — the
-     workspace always resolves to at least the default — and it keeps the box's
-     edge while it is empty, which is what `:placeholder-shown` reads. */
-  /* Under the keys, and it says what a reset actually does — deleting the
-     stored answer rather than writing today's default in, so the key keeps
-     tracking whatever later releases ship. */
   /* The prompts group's own name. It was the one pane label with a pronoun in
      it and it was a bare string, so a character worn as `he` or `it` was
      offered "What she is told" in the nav -- the failure `SettingsView.pronoun`
@@ -123,6 +107,9 @@ export const SAYS = {
     he: 'never on his own',
     it: 'never on its own',
   },
+  /* Under the keys, and it says what a reset actually does — deleting the
+     stored answer rather than writing today's default in, so the key keeps
+     tracking whatever later releases ship. */
   keysReset: {
     she:
       'Reset gives a key back to what the app ships, and keeps it there: it stops being a ' +
@@ -137,6 +124,9 @@ export const SAYS = {
       'choice of yours rather than becoming a copy of today\u2019s answer. Both work while it ' +
       'is asleep.',
   },
+  /* The hint inside the empty workspace field. Unreachable in practice — the
+     workspace always resolves to at least the default — and it keeps the box's
+     edge while it is empty, which is what `:placeholder-shown` reads. */
   workspacePlaceholder: {
     she: 'a folder she may read',
     he: 'a folder he may read',
@@ -150,6 +140,16 @@ export const SAYS = {
     he: 'Saved. He reads ',
     it: 'Saved. It reads ',
   },
+  /*
+    Where the words in this column come from, and that they are not fixed.
+
+    Every description here is an entry in the prompt catalogue and has been
+    rewritable the whole time -- but only from another group, under a title that
+    does not obviously cover "what a tool is for". Somebody reading a
+    description they disagree with had nothing on screen telling them it could
+    be changed, which is `prompts.ts`'s own complaint about the state before
+    that pane existed, one pane along.
+  */
   toolWording: {
     she:
       'Not fixed. Every description here can be rewritten under "What she is told", and what ' +

@@ -806,6 +806,26 @@ function row(
   return button
 }
 
+/**
+ * Take one turn's words, on hover.
+ *
+ * The bubbles are selectable — `user-select: text` — but selecting one by hand
+ * means dragging across a rounded shape and stopping before the next, and the
+ * thing people want from a transcript is almost always one whole turn.
+ *
+ * The RAW text, not what is on screen. The rendered bubble is chopped into
+ * `<mark>` elements when a search term is live, so reading it back out of the
+ * DOM would copy the words with the highlighting's seams in them.
+ *
+ * Reachable by keyboard as well as by pointer: it is revealed on `:focus-within`
+ * as well as on `:hover`, so tabbing through a transcript surfaces it rather
+ * than moving focus to a control nobody can see.
+ *
+ * This lived in `bits.ts` until 2026-08-28, stacked above `iconButton`'s own
+ * JSDoc and documenting neither: the function it describes is here, and the one
+ * it sat on is a generic button builder. Moved rather than deleted — the
+ * reasoning is the part worth keeping, and it is only misleading where it was.
+ */
 function copyButton(text: string): HTMLButtonElement {
   const button = iconButton(
     'copy',

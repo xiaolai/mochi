@@ -37,7 +37,7 @@ function fileATurn(): number {
   try {
     const talk = createConversation({
       transcripts,
-      keeps: (id) => keepsFor(userData, id, new Map()),
+      keeps: (id) => keepsFor(userData, id),
     })
     talk.wear('ada')
     talk.file('you', 'something worth remembering')
@@ -58,7 +58,7 @@ describe('turning the saving of conversations off', () => {
   it('survives a restart', () => {
     writePolicy(userData, 'ada', { keeps: false })
     expect(policyState(userData, 'ada').policy.keeps).toBe(false)
-    expect(keepsFor(userData, 'ada', new Map())).toBe(false)
+    expect(keepsFor(userData, 'ada')).toBe(false)
   })
 
   it('leaves the conversations already there alone', () => {
@@ -80,7 +80,7 @@ describe('turning the saving of conversations off', () => {
   it('is on unless somebody has said otherwise', () => {
     // Turning it off for everyone who never opened the sheet would be a silent
     // data change in the other direction.
-    expect(keepsFor(userData, 'ada', new Map())).toBe(true)
+    expect(keepsFor(userData, 'ada')).toBe(true)
   })
 })
 

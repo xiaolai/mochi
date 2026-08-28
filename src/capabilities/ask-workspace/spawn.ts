@@ -107,12 +107,26 @@ export function spawnCodex(path: string, args: readonly string[], input?: string
         return true
       } catch (error: unknown) {
         /*
-          ESRCH IS THE ORDINARY RACE. Anything else is a possible leak, and says so.
+          ESRCH IS THE ORDINARY RACE — ON POSIX. On Windows it is the leak.
 
-          `ESRCH` means the group is gone — the child exited between the
-          deadline firing and this line, which happens and costs nothing. A
-          group persists while any member is in it, so this cannot be ESRCH
-          while a descendant is still running.
+          `ESRCH` means the group is gone: the child exited between the deadline
+          firing and this line, which happens and costs nothing. A group
+          persists while any member is in it, so this cannot be ESRCH while a
+          descendant is still running.
+
+          That last sentence is true where process groups exist and MEASURABLY
+          FALSE on Windows, which has no such concept. Measured on a real
+          Windows 11 box, 2026-08-28, with the control that makes it mean
+          something:
+
+              process.kill(-19556, 'SIGTERM')  ->  ESRCH
+              process.kill( 19556, 'SIGTERM')  ->  ok
+
+          The direct kill succeeding a line later proves the process was alive.
+          So `ESRCH` there does not mean "no such process", it means "no such
+          process GROUP" — and because the warning below was gated on it, the
+          one platform where the group kill can never work is the one platform
+          where the warning never fired. The leak was routed into the silence.
 
           Every other errno is different in kind: the group is THERE and could
           not be signalled, and the fallback below reaches only the leader. That
@@ -121,7 +135,7 @@ export function spawnCodex(path: string, args: readonly string[], input?: string
           the thing it replaced is how the first version of this went unnoticed.
         */
         const code = (error as NodeJS.ErrnoException).code
-        if (code !== 'ESRCH') {
+        if (code !== 'ESRCH' || process.platform === 'win32') {
           console.warn(
             `[codex] could not signal the process group (${code ?? 'unknown'}); ` +
               'falling back to the leader alone, and any children it started may survive',

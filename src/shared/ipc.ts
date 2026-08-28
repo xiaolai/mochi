@@ -145,7 +145,6 @@ export const SHELF_CHANNELS = [
   'history:search',
   /** Delete conversations: some of hers, all of hers, or every one there is. */
   'history:forget',
-  /** Clear part of her store, or all of it. */
   /** Everything that went wrong, for the window that can show it. */
   'history:problems',
   /**

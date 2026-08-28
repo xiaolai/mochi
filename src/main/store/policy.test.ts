@@ -11,7 +11,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, symlinkSync } from '
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_POLICY, parsePolicy, type Policy } from '@shared/policy'
+import { DEFAULT_POLICY, parsePolicy } from '@shared/policy'
 import { forgetPolicy, keepsFor, policyRoot, policyState, writePolicy } from './policy'
 
 function workspace(): string {
@@ -169,36 +169,27 @@ describe('whether a setting exists at all', () => {
  * test named after something it cannot see.
  */
 describe('whether her conversations are kept', () => {
-  const NO_CARRY = new Map<string, Policy>()
-
   it('uses the file when there is one', () => {
     const home = workspace()
     writePolicy(home, 'ada', { keeps: false })
-    expect(keepsFor(home, 'ada', NO_CARRY)).toBe(false)
+    expect(keepsFor(home, 'ada')).toBe(false)
   })
 
-  it('falls back to a carried answer only when NOTHING was ever written', () => {
-    // The migration's parking place. It is for "nobody has chosen yet", not for
-    // "this file could not be opened".
-    const carried = new Map<string, Policy>([['nobody', { keeps: false }]])
-    expect(keepsFor(workspace(), 'nobody', carried)).toBe(false)
+  it('uses the app default when nothing was ever written', () => {
+    // Keep, and keep indefinitely — what the app did before the switch existed.
+    expect(keepsFor(workspace(), 'nobody')).toBe(DEFAULT_POLICY.keeps)
   })
 
-  it('uses the default when nothing is written and nothing was carried', () => {
-    expect(keepsFor(workspace(), 'nobody', NO_CARRY)).toBe(DEFAULT_POLICY.keeps)
-  })
-
-  it('does NOT reach for a carried answer when the file is there but unreadable', () => {
+  it('does not resolve an unreadable file as the default, which would record', () => {
     /*
-      The one that would decide a retention question with a value nobody wrote.
-      An unreadable file means the answer cannot be established, and this
-      store's rule for that is its own unreadable answer — not whatever a
-      migration parked under the same id.
+      The direction that must never be guessed. `DEFAULT_POLICY` keeps, so
+      answering an unreadable policy with the default turns a `keeps: false`
+      somebody chose into recording — and this store's rule for "the answer
+      cannot be established" is its own unreadable answer, not a guess.
     */
     const home = workspace()
     plant(home, 'ada', 'not json at all')
-    const carried = new Map<string, Policy>([['ada', { keeps: true }]])
-    expect(keepsFor(home, 'ada', carried)).toBe(policyState(home, 'ada').policy.keeps)
-    expect(keepsFor(home, 'ada', carried)).toBe(false)
+    expect(keepsFor(home, 'ada')).toBe(false)
+    expect(keepsFor(home, 'ada')).toBe(policyState(home, 'ada').policy.keeps)
   })
 })

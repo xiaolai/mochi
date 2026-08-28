@@ -187,25 +187,20 @@ export function forgetPolicy(userData: string, id: string): void {
  * every read, so the information was never lost — it simply had no consumer:
  * the map was built, filled, returned, and read by nothing.
  *
- * **Both halves went with the v1 migration layer on 2026-08-26.** The map is
- * still on `PersonaCatalog` and is now always empty; what replaced the carry is
- * a refusal, because a declaration that cannot be honoured must not be admitted
- * quietly — see `retention-unsupported` in `parse-persona.ts`.
- * `UNREADABLE_POLICY` makes exactly this argument one step later, for a policy
- * that exists and cannot be parsed.
+ * **Both halves went with the v1 migration layer on 2026-08-26**, and the
+ * PLUMBING outlived them by two days: the map stayed on `PersonaCatalog`, was
+ * threaded through `index.ts`, and arrived here as a parameter that was always
+ * empty. This comment said so — "is now always empty" — and the argument below
+ * about why the store wins was reasoning about a case that could no longer
+ * happen. Removed on 2026-08-28: the same map, built and returned and read by
+ * nothing, one layer up from where it was first found.
  *
- * ## Why the store still wins
- *
- * A parked entry is a policy that has not landed yet, not an override. Once the
- * disk accepts the write, `hasPolicy` is true and the file is authoritative --
- * which also makes a stale carry harmless, since it is only consulted where
- * there is nothing better.
+ * What replaced the carry is a refusal, because a declaration that cannot be
+ * honoured must not be admitted quietly — see `retention-unsupported` in
+ * `parse-persona.ts`. `UNREADABLE_POLICY` makes exactly this argument one step
+ * later, for a policy that exists and cannot be parsed.
  */
-export function keepsFor(
-  userData: string,
-  personaId: string,
-  carried: ReadonlyMap<string, Policy>,
-): boolean {
+export function keepsFor(userData: string, personaId: string): boolean {
   /*
     ONE read, answering both questions.
 
@@ -225,8 +220,5 @@ export function keepsFor(
     file says — so the carried map is consulted only when there is genuinely no
     file, which is what `hasPolicy` was being asked.
   */
-  const present = policyState(userData, personaId)
-  if (present.exists) return present.policy.keeps
-  const parked = carried.get(personaId)
-  return parked === undefined ? present.policy.keeps : parked.keeps
+  return policyState(userData, personaId).policy.keeps
 }
