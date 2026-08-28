@@ -6,7 +6,14 @@
  * the failure that keeping memory inside `Persona` would have made possible.
  */
 
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -235,6 +242,76 @@ describe('how far her note has been brought up to date', () => {
     conversation she never had was already summarised.
   */
   const AT = 1_700_000_000_000
+
+  it('REFUSES a cursor the reader would not accept', () => {
+    /*
+      `summarisedThrough` has always taken only a non-negative safe integer — a
+      cursor read from nonsense would silently skip whatever it landed past —
+      while the writer stored whatever it was handed. So a NaN, an infinity, a
+      negative or a fraction was written happily and read back as 0, which
+      re-summarises the whole history on every sleep, for ever, with nothing
+      anywhere to say why.
+
+      One predicate on both sides now, so the two cannot disagree again.
+    */
+    for (const bad of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      -1,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 2,
+    ]) {
+      const dir = workspace()
+      markSummarised(dir, 'ada', bad)
+      /*
+        ASSERTED ON WHETHER THE FILE IS WRITTEN, not on what reads back.
+
+        The first version of this checked `summarisedThrough` came back 0, and
+        it passed against the defect — mutation testing caught it, review did
+        not. `JSON.stringify` turns `NaN` and both infinities into `null`, so an
+        unguarded write stores `null` and the reader answers 0 for that too. The
+        two are indistinguishable from outside. What differs is that a refusal
+        writes NOTHING, and on a persona with no memory file yet that is visible.
+      */
+      expect(
+        existsSync(join(memoryRoot(dir), 'ada.json')),
+        `a refused cursor (${String(bad)}) wrote a file anyway`,
+      ).toBe(false)
+      expect(summarisedThrough(dir, 'ada'), String(bad)).toBe(0)
+    }
+  })
+
+  it('CONTROL: a good cursor does write the file', () => {
+    // Without this, the assertion above passes for a `markSummarised` that
+    // never writes anything at all.
+    const dir = workspace()
+    markSummarised(dir, 'ada', 1_700_000_000_000)
+    expect(existsSync(join(memoryRoot(dir), 'ada.json'))).toBe(true)
+  })
+
+  it('does not throw for an id the path builder refuses', () => {
+    /*
+      Its docblock says "Never throws: a cursor that could not be stored costs a
+      repeated summary, and the alternative is failing a sleep over
+      bookkeeping." The `try` covered the write and not the `recallState` before
+      it — and `memoryPath` refuses an unusable id LOUDLY and deliberately, so
+      the half more likely to fail was the half outside the promise.
+    */
+    expect(() => markSummarised(workspace(), '../escape', 1_700_000_000_000)).not.toThrow()
+  })
+
+  it('keeps the rollback version when only the cursor moves', () => {
+    // `markSummarised` used to read the notes here and `previous` through a
+    // second read of the same file. One read now, so the two halves it writes
+    // cannot come from different versions of it.
+    const dir = workspace()
+    remember(dir, 'ada', 'first')
+    remember(dir, 'ada', 'second')
+    expect(previousNote(dir, 'ada')).toBe('first')
+    markSummarised(dir, 'ada', 1_700_000_000_000)
+    expect(previousNote(dir, 'ada')).toBe('first')
+    expect(recall(dir, 'ada')).toBe('second')
+  })
 
   it('is absent until something summarises her', () => {
     expect(summarisedThrough(workspace(), 'ada')).toBe(0)

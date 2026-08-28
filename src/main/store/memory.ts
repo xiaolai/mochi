@@ -100,7 +100,27 @@ export function recall(userData: string, id: string): string {
  * talked to has not got a problem.
  */
 export type Recalled =
-  { readonly ok: true; readonly notes: string } | { readonly ok: false; readonly why: string }
+  | {
+      readonly ok: true
+      readonly notes: string
+      /**
+       * The other two fields of the same file, from the SAME read.
+       *
+       * Carried here rather than fetched by a second call, because there is
+       * only one file and a writer that reads it twice can compose a hybrid:
+       * `remember` took the notes through this function and then the cursor
+       * through `summarisedThrough`, and `markSummarised` took the notes here
+       * and then `previous` through `previousNote`. An edit landing between the
+       * two reads — hers from another path, or somebody's by hand — produces an
+       * object whose halves never coexisted on disk.
+       *
+       * `recallState` already parses the whole value to find `notes`, so this
+       * costs nothing and removes the second read entirely.
+       */
+      readonly previous: string | null
+      readonly summarisedThrough: number
+    }
+  | { readonly ok: false; readonly why: string }
 
 export function recallState(userData: string, id: string): Recalled {
   // OUTSIDE the try, and that placement is the whole point. Inside it, the
@@ -115,7 +135,8 @@ export function recallState(userData: string, id: string): Recalled {
   // it points at to a model. See `read-bounded.ts`.
   const read = readBounded(path)
   if (!read.ok) {
-    if (read.reason.kind === 'absent') return { ok: true, notes: '' }
+    if (read.reason.kind === 'absent')
+      return { ok: true, notes: '', previous: null, summarisedThrough: 0 }
     const why = logBoundedRead(read.reason)
     console.warn(`[memory] ${id} ${why}`)
     return { ok: false, why }
@@ -147,7 +168,17 @@ export function recallState(userData: string, id: string): Recalled {
 
     It also marks the cut with an ellipsis, which the silent slice did not.
   */
-  return { ok: true, notes: boundedHead(notes, PERSONA_LIMITS.memory) }
+  const heldPrevious = (value as { previous?: unknown } | null)?.previous
+  const heldCursor = (value as { summarisedThrough?: unknown } | null)?.summarisedThrough
+  return {
+    ok: true,
+    notes: boundedHead(notes, PERSONA_LIMITS.memory),
+    // Bounded like the notes, and for the same reason: this reaches a window,
+    // and a file edited by hand can hold anything.
+    previous:
+      typeof heldPrevious === 'string' ? boundedHead(heldPrevious, PERSONA_LIMITS.memory) : null,
+    summarisedThrough: isCursor(heldCursor) ? heldCursor : 0,
+  }
 }
 
 /**
@@ -207,7 +238,8 @@ export function remember(userData: string, id: string, notes: string): void {
   writeJsonAtomically(memoryPath(userData, id), {
     notes: kept,
     previous,
-    summarisedThrough: summarisedThrough(userData, id),
+    // From the SAME read as `previous` above, not a second one. See `Recalled`.
+    summarisedThrough: held.summarisedThrough,
   })
 }
 
@@ -239,6 +271,21 @@ export function remember(userData: string, id: string, notes: string): void {
  * `main/index.ts` starts from launch instead, because summarising a whole
  * history on first sleep is not what "the presence that just ended" means.
  */
+/**
+ * Whether a value can be a summary cursor.
+ *
+ * ONE predicate, used by the reader and now by the writer. `summarisedThrough`
+ * has always refused anything that is not a non-negative safe integer — a
+ * cursor read from nonsense would silently skip whatever it landed past — while
+ * `markSummarised` stored whatever it was handed. So a `NaN`, an infinity, a
+ * negative or a fraction was written happily and read back as 0, which
+ * re-summarises the whole history on every sleep, for ever, with nothing to say
+ * why.
+ */
+function isCursor(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
 export function summarisedThrough(userData: string, id: string): number {
   const read = readBounded(memoryPath(userData, id))
   if (!read.ok) return 0
@@ -248,7 +295,7 @@ export function summarisedThrough(userData: string, id: string): number {
     // A stored instant has to be one. Anything else is a file somebody edited
     // by hand, and a cursor read from nonsense would silently skip whatever it
     // happened to land past.
-    return typeof held === 'number' && Number.isSafeInteger(held) && held >= 0 ? held : 0
+    return isCursor(held) ? held : 0
   } catch {
     // Unreadable JSON is `recallState`'s problem to report; here it simply
     // means no cursor, which re-summarises rather than skipping.
@@ -264,12 +311,36 @@ export function summarisedThrough(userData: string, id: string): number {
  * repeated summary, and the alternative is failing a sleep over bookkeeping.
  */
 export function markSummarised(userData: string, id: string, at: number): void {
-  const held = recallState(userData, id)
-  if (!held.ok) return
+  /*
+    REFUSED rather than stored, because the reader will not accept it either.
+
+    `summarisedThrough` takes only a non-negative safe integer; anything else
+    reads back as 0, which re-summarises the whole history on every sleep for
+    ever. Writing one is therefore not a cursor that is slightly wrong, it is a
+    cursor that silently does not exist — and the write reported success.
+  */
+  if (!isCursor(at)) {
+    console.warn(`[memory] refusing to store ${String(at)} as ${id}'s summary cursor`)
+    return
+  }
+  /*
+    THE WHOLE BODY, so "never throws" is true.
+
+    `recallState` sat outside this `try` and can throw: `memoryPath` refuses an
+    unusable id loudly and deliberately — its own comment explains why that
+    assertion must not be swallowed — and the store root can fail. So the
+    docblock's promise held for the write and not for the read before it, which
+    is the half more likely to fail on a machine having a bad day. A sleep is
+    not a thing to fail over bookkeeping, which is what the promise is for.
+  */
   try {
+    const held = recallState(userData, id)
+    if (!held.ok) return
     writeJsonAtomically(memoryPath(userData, id), {
       notes: held.notes,
-      previous: previousNote(userData, id),
+      // From the SAME read as the notes. Two reads could compose a hybrid: a
+      // newer note overwritten by a stale one while keeping the newer rollback.
+      previous: held.previous,
       summarisedThrough: at,
     })
   } catch (error: unknown) {
