@@ -212,6 +212,103 @@ const arrived = { rest: 0, problems: 0, bubbleSide: 0 }
 let problems = 0
 let bubbleSide = 'auto'
 
+/**
+ * Put everything the new session came back with onto her.
+ *
+ * ## Why this is a function
+ *
+ * `open()` did four things: guard a generation, negotiate a session, check the
+ * generation again, and then seventy lines of applying what came back. Only the
+ * last is about her APPEARANCE, and it reads nothing from the negotiation
+ * except the answer.
+ *
+ * ## The order in here is load-bearing and stays exactly as it was
+ *
+ * `wear` drops the previous voice's learned speaking rate, so it comes before
+ * she can speak — the first utterance is then paced against the right voice
+ * rather than the last one's. `opened()` is last, because nothing from the
+ * previous session is owed by this one.
+ *
+ * `before` is the arrival count from before the negotiation: `keepsNewer` uses
+ * it to tell "main has not said" from "main said this while we were opening",
+ * so a frame that landed mid-negotiation is not overwritten by the snapshot the
+ * session was configured from.
+ */
+function wearWhatCameBack(next: Session, before: typeof arrived): void {
+  // Off unless this persona asked for it. The surface is opaque paper rather
+  // than her colour: the design settles it as a rule — anything carrying words
+  // gets its own opaque surface, because she may sit on anything, a photograph
+  // included, and a translucent one has no contrast ratio at all.
+  // Her appearance first: `wear` also drops the previous voice's learned
+  // speaking rate, and doing it before she can speak means the first utterance
+  // is paced against the right voice rather than the last one's.
+  /*
+    Her colour on the document BEFORE the rig reads it back.
+
+    `face.wear` re-resolves the palette so the halo takes the worn character's
+    green; that read is only correct if `applyAccent` has already run. The two
+    were the other way round, which would have left the halo one character
+    behind on every switch.
+  */
+  /*
+    The load-time contrast guard, in the window she actually lives in.
+
+    `contrastFailures` is the reason a persona cannot ship an unreadable
+    interface, and it was running in the two windows somebody opens on purpose
+    and not in the one that is on screen all day. It runs here for the same
+    reason it runs there — this is the moment a stranger's hue first exists —
+    and it is SAID rather than swallowed, because falling back silently leaves
+    somebody looking at a green companion wondering why the character they chose
+    had no effect.
+  */
+  const unreadable = applyAccent(document.documentElement, next.face)
+  if (unreadable.length > 0) {
+    window.mochi.report({
+      kind: 'note',
+      // PRONOUN-FREE. This reaches the Troubles drawer through `report`, so it
+      // is read by a person — and the companion has no pronoun to resolve:
+      // `SessionConfig` does not carry one, and adding a field to every session
+      // to word two diagnostics is the wrong trade. `says.ts` states the rule.
+      text: `the character's colour was refused and the built-in used instead — ${unreadable.join('; ')}`,
+    })
+  }
+  face.wear(next.face)
+  face.showWords(next.bubble)
+  // Whatever main could not do while assembling all of the above. Usually none;
+  // when there are any, the shoulder control says so on its own.
+  problems = keepsNewer(next.problems, problems, arrived.problems !== before.problems)
+  face.troubled(problems)
+  bubbleSide = keepsNewer(next.bubbleSide, bubbleSide, arrived.bubbleSide !== before.bubbleSide)
+  face.prefersBubble(bubbleSide as Parameters<typeof face.prefersBubble>[0])
+  /*
+    How she was left — unless she was told otherwise while this was negotiating.
+
+    `next.asleep` is a snapshot taken when the session was configured, and this
+    line applied it unconditionally after two network round trips. Toggle rest in
+    that window and the stale answer won, in both directions and neither
+    self-correcting: `setAsleep` in main returns early when the value has not
+    changed, so main never re-sends a value it believes the renderer already has.
+    The two halves stay disagreeing until somebody toggles rest twice.
+
+    Woken during a negotiation, she kept `asleep: true` — eyes held shut by
+    `blink: 1` and the microphone closed — while main thought she was up and went
+    on driving her voice. That is talking with her eyes closed and not hearing a
+    word, which is what this was reported as.
+
+    Put to REST during one, she kept `asleep: false`, and that is the direction
+    that matters more: her microphone stayed open after somebody had asked her to
+    stop listening.
+
+    Exactly the shape `held` fixes for grants, three lines up.
+  */
+  asleep = keepsNewer(next.asleep, asleep, arrived.rest !== before.rest)
+  face.sleeps(asleep)
+  // Nothing from the last session is owed by this one. A beat still held when
+  // the hour ran out would otherwise carry into the new session and go overdue
+  // there, asking somebody to repeat something they never said to it.
+  face.opened()
+}
+
 async function open(): Promise<void> {
   const mine = ++opening
   // Taken BEFORE the negotiation, so what arrives during it can be told apart
@@ -310,78 +407,7 @@ async function open(): Promise<void> {
   }
   session = next
 
-  // Off unless this persona asked for it. The surface is opaque paper rather
-  // than her colour: the design settles it as a rule — anything carrying words
-  // gets its own opaque surface, because she may sit on anything, a photograph
-  // included, and a translucent one has no contrast ratio at all.
-  // Her appearance first: `wear` also drops the previous voice's learned
-  // speaking rate, and doing it before she can speak means the first utterance
-  // is paced against the right voice rather than the last one's.
-  /*
-    Her colour on the document BEFORE the rig reads it back.
-
-    `face.wear` re-resolves the palette so the halo takes the worn character's
-    green; that read is only correct if `applyAccent` has already run. The two
-    were the other way round, which would have left the halo one character
-    behind on every switch.
-  */
-  /*
-    The load-time contrast guard, in the window she actually lives in.
-
-    `contrastFailures` is the reason a persona cannot ship an unreadable
-    interface, and it was running in the two windows somebody opens on purpose
-    and not in the one that is on screen all day. It runs here for the same
-    reason it runs there — this is the moment a stranger's hue first exists —
-    and it is SAID rather than swallowed, because falling back silently leaves
-    somebody looking at a green companion wondering why the character they chose
-    had no effect.
-  */
-  const unreadable = applyAccent(document.documentElement, next.face)
-  if (unreadable.length > 0) {
-    window.mochi.report({
-      kind: 'note',
-      // PRONOUN-FREE. This reaches the Troubles drawer through `report`, so it
-      // is read by a person — and the companion has no pronoun to resolve:
-      // `SessionConfig` does not carry one, and adding a field to every session
-      // to word two diagnostics is the wrong trade. `says.ts` states the rule.
-      text: `the character's colour was refused and the built-in used instead — ${unreadable.join('; ')}`,
-    })
-  }
-  face.wear(next.face)
-  face.showWords(next.bubble)
-  // Whatever main could not do while assembling all of the above. Usually none;
-  // when there are any, the shoulder control says so on its own.
-  problems = keepsNewer(next.problems, problems, arrived.problems !== before.problems)
-  face.troubled(problems)
-  bubbleSide = keepsNewer(next.bubbleSide, bubbleSide, arrived.bubbleSide !== before.bubbleSide)
-  face.prefersBubble(bubbleSide as Parameters<typeof face.prefersBubble>[0])
-  /*
-    How she was left — unless she was told otherwise while this was negotiating.
-
-    `next.asleep` is a snapshot taken when the session was configured, and this
-    line applied it unconditionally after two network round trips. Toggle rest in
-    that window and the stale answer won, in both directions and neither
-    self-correcting: `setAsleep` in main returns early when the value has not
-    changed, so main never re-sends a value it believes the renderer already has.
-    The two halves stay disagreeing until somebody toggles rest twice.
-
-    Woken during a negotiation, she kept `asleep: true` — eyes held shut by
-    `blink: 1` and the microphone closed — while main thought she was up and went
-    on driving her voice. That is talking with her eyes closed and not hearing a
-    word, which is what this was reported as.
-
-    Put to REST during one, she kept `asleep: false`, and that is the direction
-    that matters more: her microphone stayed open after somebody had asked her to
-    stop listening.
-
-    Exactly the shape `held` fixes for grants, three lines up.
-  */
-  asleep = keepsNewer(next.asleep, asleep, arrived.rest !== before.rest)
-  face.sleeps(asleep)
-  // Nothing from the last session is owed by this one. A beat still held when
-  // the hour ran out would otherwise carry into the new session and go overdue
-  // there, asking somebody to repeat something they never said to it.
-  face.opened()
+  wearWhatCameBack(next, before)
 
   /**
    * The held grants BEFORE the microphone is touched, and that order is kept.

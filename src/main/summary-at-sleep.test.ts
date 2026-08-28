@@ -49,6 +49,25 @@ function theRewrite(): string {
   return body.slice(0, body.indexOf('\n}\n') + 2)
 }
 
+/**
+ * The four checks that decide whether a finished summary may be written.
+ *
+ * They were written out inside `rewriteNote` and are their own function now:
+ * one question — "is what this was built from still there" — asked in the
+ * middle of a two-hundred-line job about something else.
+ *
+ * Scanned SEPARATELY rather than folded into `theRewrite`, because the two
+ * things these tests check are different. That the guard exists and says which
+ * of the four fired is this function's; that `rewriteNote` consults it before
+ * `remember` is the rewrite's, and is asserted there.
+ */
+function theGuards(): string {
+  const from = MAIN.indexOf('function whyNotToWrite(')
+  expect(from, 'whyNotToWrite is gone').toBeGreaterThan(-1)
+  const body = MAIN.slice(from)
+  return body.slice(0, body.indexOf('\n}\n') + 2)
+}
+
 describe('the presence that just ended is summarised into her note', () => {
   it('is started from the one place that ends a presence', () => {
     const ends = MAIN.slice(MAIN.indexOf('function endPresence'))
@@ -162,7 +181,7 @@ describe('the presence that just ended is summarised into her note', () => {
     // in a file that outlives the deletion.
     const rewrite = theRewrite()
     expect(rewrite).toContain('const forgottenBefore = historyForgotten')
-    expect(rewrite).toContain('historyForgotten !== forgottenBefore')
+    expect(theGuards()).toContain('historyForgotten !== at.forgottenBefore')
     const forget = MAIN.slice(MAIN.indexOf("ipcMain.handle('history:forget'"))
     expect(forget.slice(0, forget.indexOf('\n})'))).toContain('historyForgotten += 1')
   })
@@ -233,7 +252,7 @@ describe('the presence that just ended is summarised into her note', () => {
     // Her note is editable by hand in the shelf and has a Clear. Four minutes
     // is long enough for somebody to use either, and a rewrite built from the
     // version before it would revert their change with nothing to explain it.
-    expect(theRewrite()).toContain('recall(userData, personaId) !== before')
+    expect(theGuards()).toContain('recall(at.userData, at.personaId) !== at.before')
   })
 
   it('does not recreate the note of a persona that was deleted while it ran', () => {
@@ -241,7 +260,7 @@ describe('the presence that just ended is summarised into her note', () => {
     // handed out again once free. A write landing after a deletion recreates
     // the file — and if the name has come round, it hands one person's
     // transcript-derived notes to a different character.
-    expect(theRewrite()).toContain('catalogue(userData).personas.has(personaId)')
+    expect(theGuards()).toContain('catalogue(at.userData).personas.has(at.personaId)')
   })
 
   it('drops the rewrite if any character was deleted while it ran', () => {
@@ -258,9 +277,11 @@ describe('the presence that just ended is summarised into her note', () => {
       A counter that any deletion bumps answers the question the other two
       cannot.
     */
-    const rewrite = theRewrite()
-    expect(rewrite).toContain('const incarnation = personasDeleted')
-    expect(rewrite).toContain('personasDeleted !== incarnation')
+    // Captured in the rewrite, compared in the guard: the two halves live in
+    // two functions now and both have to be there for the check to mean
+    // anything.
+    expect(theRewrite()).toContain('const incarnation = personasDeleted')
+    expect(theGuards()).toContain('personasDeleted !== at.incarnation')
   })
 
   it('counts a deletion where the deletion happens, not at the end of the handler', () => {

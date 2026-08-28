@@ -659,6 +659,52 @@ let historyForgotten = 0
  */
 const summaryScratch = new Set<string>()
 
+/**
+ * Why a finished summary must NOT be written, or null when it may be.
+ *
+ * ## Four ways the world moves under a four-minute job
+ *
+ * A summary is built from what was on disk when it started and lands minutes
+ * later. Each of these is a way the base it was built on stopped existing:
+ *
+ * - **A character was deleted.** Even if this id is still in the catalogue
+ *   holding an identical note, it may be a DIFFERENT character wearing a
+ *   recycled name — see `personasDeleted`.
+ * - **This character is gone.** Writing would recreate her note under an id
+ *   `deriveId` has already released.
+ * - **Her note changed.** It is editable by hand in the shelf and has a Clear;
+ *   four minutes is long enough to use either, and a rewrite built from the
+ *   version before would revert it with nothing to explain it.
+ * - **Conversations were deleted.** The summary carries their substance, and a
+ *   file that outlives the deletion is the deletion not having happened.
+ *
+ * Discarded rather than merged or retried. A summary is a nice-to-have whose
+ * own module says a note that fails to improve is a non-event; a note built on
+ * a base that no longer exists is not.
+ *
+ * Its own function because these four are one question — "is what this was
+ * built from still there" — asked in the middle of a two-hundred-line job about
+ * something else, and because saying WHICH of them fired is the whole value of
+ * the log line.
+ */
+function whyNotToWrite(at: {
+  readonly userData: string
+  readonly personaId: string
+  readonly incarnation: number
+  readonly before: string
+  readonly forgottenBefore: number
+}): string | null {
+  if (personasDeleted !== at.incarnation) return 'a character was deleted while this ran'
+  if (!catalogue(at.userData).personas.has(at.personaId)) {
+    return `${at.personaId} is gone, so her note is not being recreated`
+  }
+  if (recall(at.userData, at.personaId) !== at.before) {
+    return `${at.personaId}'s note changed while this ran`
+  }
+  if (historyForgotten !== at.forgottenBefore) return 'history was deleted while this ran'
+  return null
+}
+
 async function rewriteNote(personaId: string): Promise<void> {
   const userData = app.getPath('userData')
   /*
@@ -877,26 +923,9 @@ async function rewriteNote(personaId: string): Promise<void> {
       whose own module says a note that fails to improve is a non-event; a note
       built on a base that no longer exists is not.
     */
-    if (personasDeleted !== incarnation) {
-      // Somebody was deleted while this ran. Even if this id is still in the
-      // catalogue holding an identical note, it may be a different character
-      // wearing a recycled name — see `personasDeleted`.
-      console.warn(`[summary] a character was deleted while this ran; the rewrite is dropped`)
-      return
-    }
-    if (!catalogue(userData).personas.has(personaId)) {
-      console.warn(`[summary] ${personaId} is gone; her note is not being recreated`)
-      return
-    }
-    if (recall(userData, personaId) !== before) {
-      console.warn(`[summary] ${personaId}'s note changed while this ran; the rewrite is dropped`)
-      return
-    }
-    if (historyForgotten !== forgottenBefore) {
-      // Conversations were deleted while this ran, and this summary was built
-      // from what was on disk before that. Writing it would keep the substance
-      // of a deleted conversation in a file that outlives the deletion.
-      console.warn('[summary] history was deleted while this ran; the rewrite is dropped')
+    const stale = whyNotToWrite({ userData, personaId, incarnation, before, forgottenBefore })
+    if (stale !== null) {
+      console.warn(`[summary] ${stale}; the rewrite is dropped`)
       return
     }
     remember(userData, personaId, result.note)
