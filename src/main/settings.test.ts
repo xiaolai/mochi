@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -19,6 +19,7 @@ import {
   applyScreen,
   folderFor,
   listAvatars,
+  listPersonas,
   applyKey,
   listCapabilities,
   listGrants,
@@ -32,6 +33,8 @@ import { HALO_WHEN } from '@shared/ipc'
 import type { Usage } from './store/usage'
 import { createRegistry } from '@shared/capability/registry'
 import { parseManifest } from '@shared/capability/manifest'
+import { problems } from './problems'
+import { MOCHI } from '@shared/avatar-spec'
 
 function avatarFolder(names: readonly string[]): string {
   const root = mkdtempSync(join(tmpdir(), 'mochi-avatars-'))
@@ -39,6 +42,53 @@ function avatarFolder(names: readonly string[]): string {
   for (const name of names) writeFileSync(join(root, name), '{}')
   return root
 }
+
+/**
+ * Two characters with the same name, which is an ordinary thing to have.
+ *
+ * Ids are made unique by suffixing; NAMES are not, so "Ada" twice is expected.
+ * The comparator was `(a, b) => a.name < b.name ? -1 : 1`, which never answers
+ * 0 — for two equal names it says both that a follows b and that b follows a.
+ * That is not a well-ordering, and what a sort does with one is unspecified.
+ */
+describe('the order the shelf is listed in', () => {
+  function shelfOf(names: readonly string[]): readonly string[] {
+    const personas = new Map(
+      names.map((name, index) => [
+        `p${String(index)}`,
+        { ...DEFAULT_PERSONA, id: `p${String(index)}`, name },
+      ]),
+    )
+    const listed = listPersonas(
+      { personas, sources: new Map(), problems: [], reserved: new Set() } as never,
+      () => MOCHI,
+      () => true,
+    )
+    return listed.map((one) => one.name)
+  }
+
+  it('is by name, for a list somebody reads', () => {
+    expect(shelfOf(['Zoe', 'Ada', 'Mo'])).toEqual(['Ada', 'Mo', 'Zoe'])
+  })
+
+  it('is the SAME order every time when two names are equal', () => {
+    /*
+      The property a comparator has to have. Run twice over inputs that differ
+      only in their starting order: a well-ordering gives one answer, and the
+      old one was free to give either.
+    */
+    const first = shelfOf(['Ada', 'Ada', 'Ada', 'Bo'])
+    const again = shelfOf(['Ada', 'Ada', 'Ada', 'Bo'])
+    expect(first).toEqual(again)
+    expect(first).toEqual(['Ada', 'Ada', 'Ada', 'Bo'])
+  })
+
+  it('puts an accented name where a reader expects it, not where its code point falls', () => {
+    // `localeCompare`, not `<`. By code point every accented capital sorts
+    // after `Z`, so "Ärger" landed at the end of a list of Latin names.
+    expect(shelfOf(['Zoe', 'Ärger', 'Ada'])).toEqual(['Ada', 'Ärger', 'Zoe'])
+  })
+})
 
 describe('what somebody can wear', () => {
   it('offers the built-in as null, which is what a persona stores', () => {
@@ -66,6 +116,36 @@ describe('what somebody can wear', () => {
   it('answers with the built-in when the folder is not there at all', () => {
     // Ordinary on a fresh install, not an error to report.
     expect(listAvatars(join(tmpdir(), 'mochi-nonexistent-avatars'))).toEqual([{ id: null }])
+  })
+
+  it('SAYS SO when the folder is there and cannot be read', () => {
+    /*
+      A missing folder and an unreadable one were the same answer: an empty
+      list. So a permission error hid every custom face somebody had, behind a
+      window that looked exactly like a fresh install — no error, no problem
+      noted, nothing to search for.
+
+      `readBounded` states the general rule this now follows: absent means
+      "nothing yet", anything else means "cannot tell", and cannot-tell must
+      not become an answer.
+    */
+    const folder = avatarFolder(['mine.json'])
+    problems.clear()
+    chmodSync(folder, 0o000)
+    try {
+      const listed = listAvatars(folder)
+      // Still falls back — the built-in is a working answer and refusing to
+      // open the window would be worse. What changed is that it is reported.
+      expect(listed).toEqual([{ id: null }])
+      expect(
+        problems
+          .all()
+          .map((one) => one.detail)
+          .join(' '),
+      ).toContain('could not be read')
+    } finally {
+      chmodSync(folder, 0o700)
+    }
   })
 })
 
@@ -894,6 +974,27 @@ describe('which languages she should expect to hear', () => {
     const asked = applyHearing({ languages: many })
     expect(asked.ok).toBe(false)
     if (!asked.ok) expect(asked.why).toContain(String(MOST_LANGUAGES))
+  })
+
+  it('counts what will be STORED, not what was typed', () => {
+    /*
+      The bound was applied to the raw request, so asking for one language six
+      times was refused as "too many" while the value that would have been
+      stored is one language. The comment beside the deduplication already says
+      the stored answer must be the answer that was asked for; the count has to
+      be taken on the same footing.
+    */
+    const repeated = Array.from({ length: MOST_LANGUAGES + 3 }, () => 'en')
+    const asked = applyHearing({ languages: repeated })
+    expect(asked.ok, asked.ok ? '' : asked.why).toBe(true)
+    if (asked.ok) expect(asked.change.languages).toEqual(['en'])
+  })
+
+  it('still refuses more DISTINCT languages than may be chosen', () => {
+    // The bound has to bind, or the change above is a hole rather than a fix.
+    const many = ['en', 'zh', 'es', 'hi', 'ar', 'pt', 'ru']
+    expect(new Set(many).size).toBeGreaterThan(MOST_LANGUAGES)
+    expect(applyHearing({ languages: [...many, ...many] }).ok).toBe(false)
   })
 
   it('refuses anything that is not a list', () => {

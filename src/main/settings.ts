@@ -17,6 +17,7 @@
  */
 
 import { readdirSync } from 'node:fs'
+import { problems } from './problems'
 import type { FaceSpec } from '@shared/avatar-spec'
 import { isThemeId, type Theme } from '@shared/theme'
 import { join } from 'node:path'
@@ -71,9 +72,31 @@ export function listAvatars(avatarsFolder: string): readonly SettingsAvatar[] {
       .map((entry) => entry.name.slice(0, -'.json'.length))
       .filter((name) => isPersonaId(name))
       .sort()
-  } catch {
-    // A missing folder is ordinary on a fresh install: the built-in is the
-    // answer, and `seedAvatars` will make the folder the next time it runs.
+  } catch (error: unknown) {
+    /*
+      ENOENT ONLY, which is the rule this project applies everywhere else it
+      reads something it did not write.
+
+      A missing folder is ordinary on a fresh install: the built-in is the
+      answer and `seedAvatars` makes it the next time it runs. A permission
+      error, an I/O failure or a folder that is not a folder are all different
+      in kind — the avatars ARE there and could not be listed — and treating
+      them as "none" hides every custom face somebody has, silently, behind a
+      window that looks like a fresh install.
+
+      `readBounded` states the general form: absent means "nothing yet",
+      anything else means "cannot tell", and cannot-tell must not become an
+      answer. `unmarkDeleting` was corrected to it on the same grounds.
+    */
+    const code = (error as NodeJS.ErrnoException).code
+    if (code !== 'ENOENT') {
+      console.warn(`[settings] the avatars folder could not be listed (${code ?? 'unknown'})`)
+      problems.note(
+        'avatar',
+        null,
+        `the avatars folder could not be read (${code ?? 'unknown'}), so any custom faces are not listed`,
+      )
+    }
     names = []
   }
   // The built-in first, and as `null`: that is literally what a persona stores
@@ -99,37 +122,53 @@ export function listPersonas(
    */
   keepsFor: (personaId: string) => boolean,
 ): readonly SettingsPersona[] {
-  return [...catalog.personas.values()]
-    .map((persona) => ({
-      id: persona.id,
-      name: persona.name,
-      voice: persona.voice,
-      bubble: persona.bubble,
-      bubbleSide: persona.bubbleSide,
-      bubbleSides: [...BUBBLE_SIDES],
-      size: persona.size,
-      keeps: keepsFor(persona.id),
-      avatarId: persona.avatarId,
-      source: catalog.sources.get(persona.id) ?? null,
-      // Injected rather than resolved here: resolution needs the avatars root
-      // and the persona's package folder, and this module is the shape of a
-      // page rather than a reader of disk.
-      face: faceFor(persona),
-      pronoun: persona.pronoun,
-      addressUser: persona.addressUser,
-      // A `CustomTheme` object is a hue nobody picked from the swatches, and
-      // the grid cannot show one — so it is reported as absent rather than as
-      // the nearest of the eight. See `SettingsPersona.theme`.
-      theme: isThemeId(persona.theme) ? persona.theme : null,
-      style: persona.style,
-      // The INSTRUCTION half only. `verbatim` is exact words a manifest author
-      // wrote and no control offers it, so sending it to a page that cannot
-      // express it is how it gets overwritten with the other half.
-      greeting: persona.greeting.instruction,
-      farewell: persona.farewell.instruction,
-      faces: persona.faces,
-    }))
-    .sort((a, b) => (a.name < b.name ? -1 : 1))
+  return (
+    [...catalog.personas.values()]
+      .map((persona) => ({
+        id: persona.id,
+        name: persona.name,
+        voice: persona.voice,
+        bubble: persona.bubble,
+        bubbleSide: persona.bubbleSide,
+        bubbleSides: [...BUBBLE_SIDES],
+        size: persona.size,
+        keeps: keepsFor(persona.id),
+        avatarId: persona.avatarId,
+        source: catalog.sources.get(persona.id) ?? null,
+        // Injected rather than resolved here: resolution needs the avatars root
+        // and the persona's package folder, and this module is the shape of a
+        // page rather than a reader of disk.
+        face: faceFor(persona),
+        pronoun: persona.pronoun,
+        addressUser: persona.addressUser,
+        // A `CustomTheme` object is a hue nobody picked from the swatches, and
+        // the grid cannot show one — so it is reported as absent rather than as
+        // the nearest of the eight. See `SettingsPersona.theme`.
+        theme: isThemeId(persona.theme) ? persona.theme : null,
+        style: persona.style,
+        // The INSTRUCTION half only. `verbatim` is exact words a manifest author
+        // wrote and no control offers it, so sending it to a page that cannot
+        // express it is how it gets overwritten with the other half.
+        greeting: persona.greeting.instruction,
+        farewell: persona.farewell.instruction,
+        faces: persona.faces,
+      }))
+      /*
+      A REAL comparator, where this returned 1 for two equal names.
+
+      `(a, b) => a.name < b.name ? -1 : 1` never answers 0, so for equal names
+      it says both that a follows b and that b follows a. That is not a
+      well-ordering, and what a sort does with one is unspecified — V8's is
+      stable for consistent comparators and has no obligation here.
+
+      Names can repeat: ids are made unique by suffixing, names are not, so two
+      characters called "Ada" is an ordinary thing to have. `localeCompare` is
+      what a list somebody READS wants — it puts accented and CJK names where a
+      person expects rather than where their code points fall — and the id
+      breaks the remaining tie so the order is the same on every load.
+    */
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+  )
 }
 
 /**
@@ -539,7 +578,16 @@ export function applyHearing(
     if (!Array.isArray(change.languages)) {
       return { ok: false, why: 'That is not a list of languages.' }
     }
-    const asked = change.languages
+    /*
+      DEDUPLICATED FIRST, so the count is of what will actually be stored.
+
+      The bound used to be applied to the raw request, so asking for the same
+      language six times was refused as "too many" while the value that would
+      have been stored is one language. The comment below already says the
+      stored answer must be the answer that was asked for; the count has to be
+      taken on the same footing.
+    */
+    const asked = [...new Set(change.languages as readonly string[])]
     if (asked.length > MOST_LANGUAGES) {
       return {
         ok: false,
@@ -560,11 +608,11 @@ export function applyHearing(
     for (const one of asked) {
       if (!isLanguageCode(one)) return { ok: false, why: `${String(one)} is not a language code.` }
     }
-    // Deduplicated here so the answer main stores is the answer that was
-    // asked for -- `writeTranscriptionLanguages` would collapse them anyway,
-    // and a stored value that differs from the request is the thing this
-    // function exists to prevent.
-    next.languages = [...new Set(asked as readonly string[])]
+    // Already deduplicated above, where the bound is taken.
+    // `writeTranscriptionLanguages` would collapse them anyway, and a stored
+    // value that differs from the request is what this function exists to
+    // prevent.
+    next.languages = asked
   }
 
   return { ok: true, change: next }
