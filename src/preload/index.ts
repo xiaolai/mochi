@@ -44,20 +44,30 @@ import {
  * The types say it cannot be wrong; the types do not survive the boundary,
  * because the caller is a web page and its compiler is not ours.
  */
-function guard(channel: string): string {
-  if (!isCompanionChannel(channel)) throw new Error(`refusing unknown channel: ${channel}`)
-  return channel
+/**
+ * One guard, made three times over its allowlist.
+ *
+ * The three were identical apart from which predicate they called, and three
+ * copies of a security check is three chances to write the fourth one
+ * differently — the difference being, in this case, whether it throws at all.
+ * A guard that returns the channel unchecked looks exactly like one that
+ * checked it.
+ *
+ * The message names the ROLE as well as the channel. `guardShelf` and
+ * `guardSettings` both threw "refusing unknown channel: x" and a shelf page
+ * asking for a settings channel got the same sentence as one asking for
+ * nonsense, which is the case somebody actually has to debug.
+ */
+function guarding(role: string, allowed: (channel: string) => boolean) {
+  return (channel: string): string => {
+    if (!allowed(channel)) throw new Error(`refusing unknown ${role} channel: ${channel}`)
+    return channel
+  }
 }
 
-function guardShelf(channel: string): string {
-  if (!isShelfChannel(channel)) throw new Error(`refusing unknown channel: ${channel}`)
-  return channel
-}
-
-function guardSettings(channel: string): string {
-  if (!isSettingsChannel(channel)) throw new Error(`refusing unknown channel: ${channel}`)
-  return channel
-}
+const guard = guarding('companion', isCompanionChannel)
+const guardShelf = guarding('shelf', isShelfChannel)
+const guardSettings = guarding('settings', isSettingsChannel)
 
 /**
  * Which document this is, from `additionalArguments`.

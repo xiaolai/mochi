@@ -123,6 +123,39 @@ function herWindowOrigin(stored: Place | null): { x: number; y: number } {
  * frame, with nothing in the log. It is the same failure `store/avatars.ts`
  * calls the least debuggable outcome this application can produce.
  */
+/**
+ * The web preferences every window in this application gets.
+ *
+ * ## Why this is one function
+ *
+ * It was written out twice, differing only in the role — and the companion's
+ * copy carried the whole argument for the three flags while the shelf's carried
+ * none of them. Two copies of a SECURITY configuration is one that gets
+ * hardened and one that quietly does not: the next person to add a flag adds it
+ * where they are looking.
+ *
+ * ## The flags
+ *
+ * All three, and none of them is optional. Drop any one and the allowlist in
+ * `@shared/ipc` becomes decorative, because page content could reach IPC
+ * without passing through the bridge that enforces it.
+ *
+ * The role is NAMED rather than defaulted. The preload used to fall back to
+ * `companion` when none was passed, which meant the most privileged API in this
+ * application was what a window got for saying nothing — the bridge failing
+ * open in exactly the direction it argues against. It refuses an absent role
+ * now, and this is what keeps both windows working.
+ */
+function bridgeFor(role: 'companion' | 'history'): Electron.WebPreferences {
+  return {
+    preload: join(__dirname, '../preload/index.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: true,
+    additionalArguments: [`--mochi-role=${role}`],
+  }
+}
+
 function loadRenderer(window: BrowserWindow, page: 'companion' | 'history'): void {
   // Checked against `undefined` rather than for truthiness, so an empty value
   // fails loudly instead of silently loading the packaged document while
@@ -199,21 +232,7 @@ export function createCompanionWindow(): BrowserWindow {
     hasShadow: false,
     // Not in the window list and not in the app switcher. She is furniture.
     skipTaskbar: true,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      // All three, and none of them is optional. Drop any one and the allowlist
-      // in `@shared/ipc` becomes decorative, because page content could reach
-      // IPC without passing through the bridge that enforces it.
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      // NAMED, like the other two. The preload used to default to `companion`
-      // when no role was passed, which meant the most privileged API in this
-      // application was what a window got for saying nothing — so the bridge
-      // failed open in exactly the direction it argues against. It refuses an
-      // absent role now, and this is what keeps her own window working.
-      additionalArguments: ['--mochi-role=companion'],
-    },
+    webPreferences: bridgeFor('companion'),
   })
 
   /**
@@ -611,13 +630,7 @@ export function showHistoryWindow(): BrowserWindow {
     title: app.getName(),
     // Her window hides from this; this one belongs in it.
     skipTaskbar: false,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      additionalArguments: ['--mochi-role=history'],
-    },
+    webPreferences: bridgeFor('history'),
   })
   history = window
   /*

@@ -22,6 +22,41 @@ import { PRONOUNS, forPronoun } from '@shared/pronoun'
  * artifact: the largest thing on the pane is her name, and the fact that it is
  * editable is worth less than the fact that it is her name.
  */
+/**
+ * A one-line field that saves what was typed, and puts itself back when nothing
+ * was.
+ *
+ * Both fields on this band did the same four things — set a value, set a
+ * placeholder, compare a trimmed edit against what is stored, and either put
+ * the box back or dispatch a save. Written out twice, and the halves that are
+ * easy to lose are the two that are not about saving: the reset, and comparing
+ * the TRIMMED value so that typing a space and deleting it is not a change.
+ *
+ * A control displaying a value that was never stored is the small version of
+ * the failure this whole window exists to avoid.
+ */
+function savedField(options: {
+  readonly className: string
+  readonly value: string
+  readonly placeholder: string
+  readonly save: (value: string) => void
+}): HTMLInputElement {
+  const field = element('input', options.className)
+  field.type = 'text'
+  field.placeholder = options.placeholder
+  field.value = options.value
+  field.addEventListener('change', () => {
+    if (field.value.trim() === options.value) {
+      // Nothing to save — and the field is put back rather than left showing
+      // the spaces somebody added.
+      field.value = options.value
+      return
+    }
+    options.save(field.value)
+  })
+  return field
+}
+
 export function whoBand(
   view: ShelfView,
   worn: ShelfCharacter,
@@ -33,37 +68,29 @@ export function whoBand(
   const band = element('div', 'who-band')
   band.append(faceTile(worn.face, 108))
 
-  const name = element('input', 'who-name')
-  name.type = 'text'
-  // Her name can be cleared to nothing in the field before it is put back on
-  // `change`, and the h1 has no box of its own — so without this there is one
-  // keystroke of a pane with nothing on it. See the field rule in `tokens.css`.
-  name.placeholder = forPronoun(SAYS.namePlaceholder, view.pronoun)
-  name.value = worn.name
-  name.addEventListener('change', () => {
-    if (name.value.trim() === worn.name) {
-      // Nothing to save — and the field is put back rather than left showing
-      // the spaces somebody added. A control displaying a value that was never
-      // stored is the small version of the failure this window avoids.
-      name.value = worn.name
-      return
-    }
-    handlers.save({ id: worn.id, name: name.value })
+  const name = savedField({
+    className: 'who-name',
+    value: worn.name,
+    // Her name can be cleared to nothing in the field before it is put back on
+    // `change`, and the h1 has no box of its own — so without this there is one
+    // keystroke of a pane with nothing on it. See the field rule in `tokens.css`.
+    placeholder: forPronoun(SAYS.namePlaceholder, view.pronoun),
+    save: (value) => {
+      handlers.save({ id: worn.id, name: value })
+    },
   })
 
-  const called = element('input', 'inline')
-  called.type = 'text'
-  called.value = worn.addressUser
-  // The placeholder is what she DOES when the field is empty, not a suggestion.
-  // `addressLine` omits the instruction entirely rather than telling her to call
-  // somebody "you", so an empty box is a real answer and says which one.
-  called.placeholder = 'nobody has said'
-  called.addEventListener('change', () => {
-    if (called.value.trim() === worn.addressUser) {
-      called.value = worn.addressUser
-      return
-    }
-    handlers.save({ id: worn.id, addressUser: called.value })
+  const called = savedField({
+    className: 'inline',
+    value: worn.addressUser,
+    // The placeholder is what she DOES when the field is empty, not a
+    // suggestion. `addressLine` omits the instruction entirely rather than
+    // telling her to call somebody "you", so an empty box is a real answer and
+    // says which one.
+    placeholder: 'nobody has said',
+    save: (value) => {
+      handlers.save({ id: worn.id, addressUser: value })
+    },
   })
 
   const facts = element('div', 'who-facts')

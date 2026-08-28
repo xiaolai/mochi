@@ -492,6 +492,23 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
     scrubRetry.unref()
   }
 
+  /**
+   * Flush deleted text out of the write-ahead log, from the start of the budget.
+   *
+   * The pair — reset the retries, then attempt one — was written out at four
+   * destructive sites, and the reset is the half that is easy to leave off. A
+   * `scrub()` alone after an earlier failure runs with `scrubsLeft` already
+   * spent, so it tries once, finds a reader still holding the log, and never
+   * comes back: the words somebody deleted stay on disk and the only thing that
+   * would have retried has given up.
+   *
+   * The retry budget belongs to the DELETION, not to the process.
+   */
+  function scrubNow(): void {
+    scrubsLeft = SCRUB_TRIES
+    scrub()
+  }
+
   function scrub(): void {
     try {
       const row = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
@@ -728,8 +745,7 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
     This is the one store whose entire justification is that deleting is real.
     A checkpoint on a database with nothing to clear costs a single pragma.
   */
-  scrubsLeft = SCRUB_TRIES
-  scrub()
+  scrubNow()
 
   return {
     begin(personaId, at = now()) {
@@ -1044,8 +1060,7 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         }
         return removed
       })
-      scrubsLeft = SCRUB_TRIES
-      scrub()
+      scrubNow()
       return gone
     },
     forgetEverything() {
@@ -1056,8 +1071,7 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         db.exec('DELETE FROM turn_fts')
         db.exec('DELETE FROM session')
       })
-      scrubsLeft = SCRUB_TRIES
-      scrub()
+      scrubNow()
     },
     forget(personaId) {
       // The INDEX first, though the transaction is what makes that safe rather
@@ -1069,8 +1083,7 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         stmt.forgetIndex.run(personaId)
         stmt.forget.run(personaId)
       })
-      scrubsLeft = SCRUB_TRIES
-      scrub()
+      scrubNow()
     },
     scrubPending: () => pendingScrub,
     close() {

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { promptsFor } from '@shared/prompts'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 /**
  * The shipped framing, so these hold what she is ACTUALLY sent.
@@ -383,35 +383,43 @@ describe('a child that will not die', () => {
       slot open exactly as the un-escalated version did.
     */
     const signals: NodeJS.Signals[] = []
-    const result = await ask('q', {
-      codexPath: '/bin/codex',
-      workspace: '/work',
-      settings: SETTINGS,
-      // Never settles, whatever it is sent. This is the wedged case.
-      run: () => ({
-        finished: new Promise<{ code: number; stderr: string }>(() => undefined),
-        kill: (signal?: NodeJS.Signals) => {
-          signals.push(signal ?? 'SIGTERM')
-          return true
-        },
-      }),
-      /*
-        TWENTY-FIVE, not five, and the margin is the reason.
+    /*
+      FAKE TIMERS, because the real ones made this flaky.
 
-        `ask` abandons at `timeoutMs + grace * 2` and escalates to SIGKILL at
-        `timeoutMs + grace`, so the two are exactly one `grace` apart. At 5ms
-        that is five milliseconds of slack on an event loop running the whole
-        suite in parallel — and it is not enough: this test failed once in a
-        full run and passed three times on its own, which is the signature of a
-        margin rather than a defect.
+      `ask` abandons at `timeoutMs + grace * 2` and escalates to SIGKILL at
+      `timeoutMs + grace`, exactly one `grace` apart. With real timers that gap
+      is wall-clock slack on an event loop running the whole suite in parallel,
+      and it was lost twice: at 5ms and again at 25ms, each time passing alone
+      and failing in a full run.
 
-        A flaky test is worse than a missing one. It teaches the reader to
-        re-run rather than to look, and the next real failure here is the one
-        that gets re-run away.
-      */
-      timeoutMs: 25,
-      graceMs: 25,
-    })
+      Widening it further is guessing at a number. Driving the clock removes the
+      race instead — the ordering is what the test is about, and now it is the
+      only thing the test depends on.
+    */
+    vi.useFakeTimers()
+    let result
+    try {
+      const running = ask('q', {
+        codexPath: '/bin/codex',
+        workspace: '/work',
+        settings: SETTINGS,
+        // Never settles, whatever it is sent. This is the wedged case.
+        run: () => ({
+          finished: new Promise<{ code: number; stderr: string }>(() => undefined),
+          kill: (signal?: NodeJS.Signals) => {
+            signals.push(signal ?? 'SIGTERM')
+            return true
+          },
+        }),
+        timeoutMs: 5,
+        graceMs: 5,
+      })
+      // The deadline, then the escalation, then the last bound.
+      await vi.advanceTimersByTimeAsync(20)
+      result = await running
+    } finally {
+      vi.useRealTimers()
+    }
     expect(signals).toEqual(['SIGTERM', 'SIGKILL'])
     expect(result.ok).toBe(false)
     if (result.ok) throw new Error('unreachable')
@@ -422,16 +430,23 @@ describe('a child that will not die', () => {
 
   it('escalates to SIGKILL when SIGTERM is ignored', async () => {
     const child = stubborn()
-    const result = await ask('q', {
-      codexPath: '/bin/codex',
-      workspace: '/work',
-      settings: SETTINGS,
-      run: child.run,
-      // Twenty-five for the reason the test above gives: five leaves five
-      // milliseconds between the escalation and the abandon.
-      timeoutMs: 25,
-      graceMs: 25,
-    })
+    // Driven rather than waited on, for the reason the test above gives.
+    vi.useFakeTimers()
+    let result
+    try {
+      const running = ask('q', {
+        codexPath: '/bin/codex',
+        workspace: '/work',
+        settings: SETTINGS,
+        run: child.run,
+        timeoutMs: 5,
+        graceMs: 5,
+      })
+      await vi.advanceTimersByTimeAsync(20)
+      result = await running
+    } finally {
+      vi.useRealTimers()
+    }
     expect(child.signals).toEqual(['SIGTERM', 'SIGKILL'])
     expect(result.ok).toBe(false)
   })
