@@ -121,3 +121,84 @@ describe('what happens to live children when the app quits', () => {
     expect(child.signals).toEqual(['SIGKILL'])
   })
 })
+
+/**
+ * Holding a child and letting go of it, as one operation.
+ *
+ * It was two lines at three call sites, all ending
+ * `void handle.finished.finally(release)`. `finally` returns a NEW promise that
+ * rejects when the original does, and `void` discards it — so a rejecting
+ * `finished` produced an unhandled rejection in the main process, from a run
+ * that was being handled perfectly well.
+ *
+ * `spawnCodex` never rejects, so it was latent. Latent in three places, with a
+ * type that permits a rejecting handle and tests that supply their own.
+ */
+describe('holding a child until it finishes', () => {
+  function handleThat(finished: Promise<{ code: number | null; stderr: string }>): RunHandle {
+    return { finished, kill: () => true }
+  }
+
+  /*
+    PROBED WITH `stopAll`, not with `count`.
+
+    `count()` reports `inFlight` — slots taken through `begin()` — and holding a
+    handle does not take one. The first version of these tests read it anyway
+    and failed on their own first assertion against code that was working,
+    which is the useful kind of wrong: it named the observable I actually
+    needed. `stopAll` answers how many were being held, which is the question.
+  */
+  async function settle(): Promise<void> {
+    // A MACROTASK, not one microtask turn. `finally` schedules its callback and
+    // `catch` schedules after it, so a single `await` lands between the two.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
+  it('lets go when the child finishes normally', async () => {
+    const running = createRunning()
+    const done = Promise.resolve({ code: 0, stderr: '' })
+    running.holdUntilDone(handleThat(done))
+    await done
+    await settle()
+    expect(running.stopAll(), 'a finished child was still being held').toBe(0)
+  })
+
+  it('lets go when the child REJECTS, and does not leave the rejection unhandled', async () => {
+    /*
+      The case `void ... .finally(...)` got wrong. `finally` passes a rejection
+      through to the promise it returns, and `void` discarded that — so the
+      process logged an unhandled rejection while the release itself worked,
+      which is what made it invisible: correct behaviour, noise sent to a
+      console a packaged app does not have.
+    */
+    const running = createRunning()
+    const failed = Promise.reject(new Error('the child blew up'))
+    running.holdUntilDone(handleThat(failed))
+    await failed.catch(() => undefined)
+    await settle()
+    expect(running.stopAll(), 'a failed child was still being held').toBe(0)
+  })
+
+  it('CONTROL: a child that has not finished IS still held', () => {
+    // Without this, both assertions above pass for a `holdUntilDone` that never
+    // holds anything at all.
+    const running = createRunning()
+    running.holdUntilDone(handleThat(new Promise(() => undefined)))
+    expect(running.stopAll()).toBe(1)
+  })
+
+  it('still stops a child it is holding', () => {
+    // The point of holding at all: `stopAll` at quit must reach it.
+    const running = createRunning()
+    let killed = false
+    running.holdUntilDone({
+      finished: new Promise(() => undefined),
+      kill: () => {
+        killed = true
+        return true
+      },
+    })
+    expect(running.stopAll()).toBe(1)
+    expect(killed).toBe(true)
+  })
+})

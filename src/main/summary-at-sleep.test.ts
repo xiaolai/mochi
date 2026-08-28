@@ -226,7 +226,7 @@ describe('the presence that just ended is summarised into her note', () => {
       because the failure is invisible from inside the app: it happens after
       the app is gone.
     */
-    expect(theRewrite()).toContain('running.hold(handle)')
+    expect(theRewrite()).toContain('running.holdUntilDone(handle)')
   })
 
   it('does not write over a note somebody edited while it ran', () => {
@@ -299,9 +299,21 @@ describe('the presence that just ended is summarised into her note', () => {
   })
 
   it('releases the hold when the child finishes', () => {
-    // Otherwise the list grows one dead handle per sleep, for the life of the
-    // process, and `stopAll` signals corpses at quit.
-    expect(theRewrite()).toContain('handle.finished.finally(release)')
+    /*
+      Otherwise the list grows one dead handle per sleep, for the life of the
+      process, and `stopAll` signals corpses at quit.
+
+      This used to check for `handle.finished.finally(release)` written out
+      here. The hold and the release are one operation — `holdUntilDone` — for a
+      reason worth keeping in view: all three call sites ended with `void` in
+      front of that expression, and `finally` returns a NEW promise that rejects
+      when the original does. `void` discarded it, so a rejecting `finished`
+      produced an unhandled rejection from a run that was being handled.
+
+      The release is asserted where it now lives, in `running.test.ts`, which
+      can watch it happen rather than read that it was written.
+    */
+    expect(theRewrite()).toContain('running.holdUntilDone(handle)')
   })
 })
 

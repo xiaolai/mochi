@@ -50,6 +50,25 @@ export interface Running {
   /** Hold a live child so it can be stopped at quit. */
   hold(handle: RunHandle): () => void
   /**
+   * Hold it, and let go when it finishes — however it finishes.
+   *
+   * ## Why this is a method and not three lines at each call site
+   *
+   * It WAS three lines at each call site, written out identically in the
+   * lookup capability, the note rewrite and the conversation titler. All three
+   * ended `void handle.finished.finally(release)`, and `finally` returns a NEW
+   * promise that rejects when the original does. `void` discards it, so a
+   * rejecting `finished` produced an unhandled rejection — in the main process,
+   * where Electron's default is to log it and carry on, from a run that was
+   * being handled perfectly well.
+   *
+   * `spawnCodex`'s `finished` resolves on every path and never rejects, so this
+   * is latent rather than live. It is latent in three places, the type permits
+   * a handle that rejects, and tests supply their own — which is the shape that
+   * becomes live the day somebody writes a fourth caller.
+   */
+  holdUntilDone(handle: RunHandle): void
+  /**
    * Stop every live child. Called when the app is going away.
    *
    * SIGKILL, not SIGTERM: this runs inside `will-quit`, which Electron waits
@@ -85,6 +104,16 @@ export function createRunning(mostAtOnce = MOST_AT_ONCE): Running {
     hold(handle) {
       live.add(handle)
       return () => live.delete(handle)
+    },
+
+    holdUntilDone(handle) {
+      live.add(handle)
+      const release = (): void => {
+        live.delete(handle)
+      }
+      // `catch` on the promise `finally` RETURNS, which is the one this has to
+      // handle: `finally` passes a rejection straight through.
+      handle.finished.finally(release).catch(() => undefined)
     },
 
     stopAll() {

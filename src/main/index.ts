@@ -828,8 +828,7 @@ async function rewriteNote(personaId: string): Promise<void> {
           */
           run: (path, args, input) => {
             const handle = spawnCodex(path, args, input)
-            const release = running.hold(handle)
-            void handle.finished.finally(release)
+            running.holdUntilDone(handle)
             return handle
           },
           timeoutMs: SUMMARY_TIMEOUT_MS,
@@ -1064,8 +1063,7 @@ async function titleConversations(personaId: string): Promise<void> {
         */
         run: (path, args, input) => {
           const handle = spawnCodex(path, args, input)
-          const release = running.hold(handle)
-          void handle.finished.finally(release)
+          running.holdUntilDone(handle)
           return handle
         },
         timeoutMs: SUMMARY_TIMEOUT_MS,
