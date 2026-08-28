@@ -122,9 +122,29 @@ export function unfinishedDeletions(userData: string): ReadonlyMap<string, strin
   let files: string[]
   try {
     files = readdirSync(join(personasRoot(userData), MARKS))
-  } catch {
-    // No directory is the ordinary state: nothing has been deleted, or every
-    // deletion finished.
+  } catch (error: unknown) {
+    /*
+      ENOENT ONLY. No directory is the ordinary state — nothing has been
+      deleted, or every deletion finished — and it is the case this catch was
+      written for.
+
+      Anything else means the marks ARE there and could not be listed, and
+      answering "none" for that silently switches recovery off: every
+      interrupted deletion stays interrupted, so data somebody asked to have
+      removed sits on disk with nothing anywhere saying why. Same rule as
+      `readBounded`, `unmarkDeleting` and `listAvatars`.
+    */
+    const code = (error as NodeJS.ErrnoException).code
+    if (code !== 'ENOENT') {
+      console.warn(
+        `[personas] the unfinished-deletion folder could not be listed (${code ?? 'unknown'})`,
+      )
+      problems.note(
+        'personas',
+        null,
+        `unfinished deletions could not be read (${code ?? 'unknown'}), so none can be resumed on this launch`,
+      )
+    }
     return found
   }
   for (const file of files) {
@@ -151,7 +171,18 @@ export function unfinishedDeletions(userData: string): ReadonlyMap<string, strin
       const source = parsed['source']
       // Both are PATH SEGMENTS downstream, so both go through the allowlist
       // rather than a list of values somebody thought to forbid.
-      if (!isPersonaId(id)) continue
+      if (!isPersonaId(id)) {
+        // Said, like every other way this file can be unusable. It was the one
+        // silent branch of three, and it suppresses a deletion permanently:
+        // the mark is never removed and never acted on, so the record of
+        // somebody's request outlives the request with nothing to show for it.
+        problems.note(
+          'personas',
+          null,
+          `an unfinished deletion names an unusable character and was left (${file})`,
+        )
+        continue
+      }
       if (!isPackageFolder(source)) {
         problems.note(
           'personas',

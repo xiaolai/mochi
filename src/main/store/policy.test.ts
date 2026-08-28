@@ -13,6 +13,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_POLICY, parsePolicy } from '@shared/policy'
 import { forgetPolicy, keepsFor, policyRoot, policyState, writePolicy } from './policy'
+import { problems } from '../problems'
 
 function workspace(): string {
   return mkdtempSync(join(tmpdir(), 'mochi-policy-'))
@@ -47,6 +48,50 @@ describe('reading a policy', () => {
     const dir = workspace()
     plant(dir, 'ada', JSON.stringify({ keeps: 'yes please' }))
     expect(policyState(dir, 'ada').policy.keeps).toBe(false)
+  })
+
+  it('does not tell somebody the DEFAULT is in force, because it is not', () => {
+    /*
+      The message said "the default is in force". `DEFAULT_POLICY` is
+      `{ keeps: true }` and this branch returns `UNREADABLE_POLICY`, which is
+      `{ keeps: false }` — and that constant's own comment says "Not the
+      default, and the distinction is the point."
+
+      So the one sentence somebody gets about their privacy setting said the
+      opposite of what the app was doing. Recording nothing is the SAFE
+      direction and it is still a change they did not ask for; a message naming
+      it wrongly is worse than none, because it stops them looking.
+    */
+    const dir = workspace()
+    problems.clear()
+    plant(dir, 'ada', '{ this is not json')
+    policyState(dir, 'ada')
+    const said = problems
+      .all()
+      .map((one) => one.detail)
+      .join(' ')
+    expect(said).not.toContain('default is in force')
+    expect(said).toContain('nothing is being recorded')
+  })
+
+  it('REPORTS valid JSON that is not a policy, like it reports invalid JSON', () => {
+    /*
+      This branch went to `console.warn` alone — and a packaged app has no
+      console, which is the entire reason `problems.ts` exists. So the two ways
+      the file can be wrong were treated differently for no reason: a stray
+      comma was visible and a renamed field was not, while both stop her
+      recording anything.
+    */
+    const dir = workspace()
+    problems.clear()
+    plant(dir, 'ada', JSON.stringify({ keeps: 'yes please' }))
+    policyState(dir, 'ada')
+    expect(
+      problems
+        .all()
+        .map((one) => one.detail)
+        .join(' '),
+    ).toContain('not one this build understands')
   })
 
   it('reads back what was written', () => {

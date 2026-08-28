@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -96,15 +96,56 @@ describe('a mark nobody can act on is reported, not skipped in silence', () => {
     ).toContain('unfinished deletion')
   })
 
-  it('skips a record whose id is not one, and does not invent a path segment', () => {
-    // `id` and `source` are both joined into paths downstream. A traversal
-    // sequence in either is the reason they are checked here rather than there.
+  it('skips a record whose id is not one, and SAYS SO', () => {
+    /*
+      `id` and `source` are both joined into paths downstream. A traversal
+      sequence in either is the reason they are checked here rather than there.
+
+      The id branch was the one silent one of three: the folder branch reported,
+      the unparseable branch reported, and an unusable id was dropped without a
+      word. It suppresses a deletion permanently — the mark is never removed and
+      never acted on — so the record of somebody's request outlives the request
+      with nothing to show for it.
+    */
     const dir = workspace()
     mkdirSync(marksIn(dir), { recursive: true })
     writeFileSync(join(marksIn(dir), 'bad.json'), JSON.stringify({ id: '../..', source: 'ada' }))
     writeFileSync(join(marksIn(dir), 'worse.json'), JSON.stringify({ id: 'ada', source: '../..' }))
+    problems.clear()
 
     expect(unfinishedDeletions(dir).size).toBe(0)
+    const said = problems
+      .all()
+      .map((one) => one.detail)
+      .join(' ')
+    expect(said).toContain('unusable character')
+    expect(said).toContain('unusable folder')
+  })
+
+  it('SAYS SO when the folder is there and cannot be listed', () => {
+    /*
+      Every `readdirSync` failure answered "no pending deletions". A missing
+      folder is the ordinary state and is what that catch was written for; a
+      permission or I/O error means the marks ARE there and could not be read,
+      and answering "none" silently switches recovery off — every interrupted
+      deletion stays interrupted, with data somebody asked to have removed
+      sitting on disk and nothing anywhere saying why.
+    */
+    const dir = workspace()
+    markDeleting(dir, 'ada', 'ada')
+    problems.clear()
+    chmodSync(marksIn(dir), 0o000)
+    try {
+      expect(unfinishedDeletions(dir).size).toBe(0)
+      expect(
+        problems
+          .all()
+          .map((one) => one.detail)
+          .join(' '),
+      ).toContain('could not be read')
+    } finally {
+      chmodSync(marksIn(dir), 0o700)
+    }
   })
 
   it('one unreadable record does not take the readable ones with it', () => {

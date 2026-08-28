@@ -112,18 +112,43 @@ function policyFrom(read: BoundedRead, id: string): Policy {
     value = JSON.parse(read.text)
   } catch (error: unknown) {
     console.warn(`[policy] ${id} is not valid JSON:`, error)
-    // Falls back to a default retention. How long her conversations are kept is
-    // not a thing to change silently.
+    /*
+      IT SAYS WHAT ACTUALLY APPLIES, which is not the default.
+
+      This read "the default is in force". `DEFAULT_POLICY` is `{ keeps: true }`
+      and `UNREADABLE_POLICY` — what this branch returns — is `{ keeps: false }`.
+      Its own comment says so in as many words: "Not the default, and the
+      distinction is the point."
+
+      So the one sentence somebody gets about their privacy setting told them
+      the opposite of what the app was doing. Recording nothing is the SAFE
+      direction and it is still a change they did not ask for; a message that
+      names it wrongly is worse than no message, because it stops them looking.
+    */
     problems.note(
       'retention',
       id,
-      'the retention setting is not valid JSON; the default is in force',
+      'the retention setting is not valid JSON, so nothing is being recorded until it is fixed',
     )
     return UNREADABLE_POLICY
   }
   const parsed = parsePolicy(value)
   if (parsed === null) {
+    /*
+      REPORTED, like the branch above it.
+
+      Valid JSON that is not a policy went to `console.warn` alone — and a
+      packaged app has no console, which is the entire reason `problems.ts`
+      exists. So the two ways this file can be wrong were treated differently
+      for no reason: a stray comma was visible and a renamed field was not,
+      while both stop her recording anything.
+    */
     console.warn(`[policy] ${id} does not hold a retention policy`)
+    problems.note(
+      'retention',
+      id,
+      'the retention setting is not one this build understands, so nothing is being recorded until it is fixed',
+    )
     return UNREADABLE_POLICY
   }
   return parsed
