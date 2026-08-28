@@ -156,7 +156,37 @@ export function rebindShortcut(
   to: string,
   handler: () => void,
 ): { readonly outcome: ShortcutOutcome; readonly rolledBack: boolean } {
-  if (from !== null) release(from)
+  /*
+    THE SAME COMBINATION IS A NO-OP, not a release and a re-register.
+
+    Saving a settings pane without touching a key sends the combination it
+    already has. Releasing it and asking for it back is a window — short, and
+    genuinely long enough — in which this application holds nothing and anything
+    else on the machine can take it. So an unchanged save could lose the key it
+    was saving, which is the one outcome nobody would look for.
+
+    `from === to` means the id holds this and is being asked for it again. The
+    caller passes `null` for a key that holds NOTHING (see `from`), so this
+    cannot be confused with a key that merely displays the combination.
+  */
+  if (from !== null && from === to) {
+    return { outcome: { id, accelerator: to, refused: null }, rolledBack: false }
+  }
+  /*
+    A RELEASE THAT FAILED IS NOT A RELEASE.
+
+    `release` used to swallow the failure and this went on to register the new
+    combination, so both stayed bound: the old one still firing this handler,
+    and nothing anywhere saying so. `unregister` throwing is rare and it is
+    exactly the case where carrying on is wrong, because the thing that follows
+    depends on it having worked.
+  */
+  if (from !== null && !release(from)) {
+    return {
+      outcome: { id, accelerator: from, refused: 'the old key could not be given back' },
+      rolledBack: false,
+    }
+  }
   const taken = claimOne(id, to, handler)
   if (taken.refused === null) return { outcome: taken, rolledBack: false }
   /*
@@ -176,18 +206,25 @@ export function rebindShortcut(
 }
 
 /**
- * Give one combination back, tolerating one that was never held.
+ * Give one combination back. ANSWERS whether it went.
  *
  * `unregister` on a combination this process does not hold is a no-op in
  * Electron, and this is called in exactly that case during a rollback — the
- * refused registration may or may not have taken. Wrapped anyway: a throw here
- * would abandon a rebind halfway, with the old key already released.
+ * refused registration may or may not have taken. Wrapped, because a throw here
+ * would abandon a rebind halfway with the old key already released.
+ *
+ * The ANSWER is the part that was missing. This returned `void`, so a caller
+ * could not tell a release from a failed one, and `rebindShortcut` went on to
+ * register the new combination either way — leaving both bound, the old one
+ * still firing, with nothing anywhere saying so.
  */
-function release(accelerator: string): void {
+function release(accelerator: string): boolean {
   try {
     globalShortcut.unregister(accelerator)
+    return true
   } catch (error: unknown) {
     console.error(`[keys] could not give back ${accelerator}:`, error)
+    return false
   }
 }
 

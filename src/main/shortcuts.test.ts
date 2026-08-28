@@ -18,6 +18,8 @@ let held = new Map<string, () => void>()
 let calls: string[] = []
 /** A combination whose registration throws, standing in for a malformed one. */
 let throwsOn: string | null = null
+/** A combination whose RELEASE throws. Rare, and the case that used to be lost. */
+let refusesRelease: string | null = null
 
 vi.mock('electron', () => ({
   globalShortcut: {
@@ -30,6 +32,7 @@ vi.mock('electron', () => ({
     },
     unregister: (accelerator: string) => {
       calls.push(`unregister ${accelerator}`)
+      if (accelerator === refusesRelease) throw new Error('it will not let go')
       held.delete(accelerator)
     },
     unregisterAll: () => {
@@ -46,6 +49,7 @@ beforeEach(() => {
   held = new Map()
   calls = []
   throwsOn = null
+  refusesRelease = null
 })
 
 describe('claiming the keys at launch', () => {
@@ -96,6 +100,48 @@ describe('moving a key to another combination', () => {
     */
     rebindShortcut('rest', 'Control+Shift+L', 'Alt+F9', handler)
     expect(calls).toEqual(['unregister Control+Shift+L', 'register Alt+F9'])
+  })
+
+  it('does NOTHING when the combination is the one it already holds', () => {
+    /*
+      Saving a settings pane without touching a key sends the combination it
+      already has. This released it and asked for it back — a window in which
+      the application holds nothing and anything else on the machine can take
+      it. An unchanged save could therefore lose the key it was saving, which is
+      the one outcome nobody would go looking for.
+    */
+    claimShortcuts(
+      { rest: () => undefined, hide: () => undefined },
+      { rest: 'Alt+F9', hide: 'Alt+F10' },
+    )
+    calls.length = 0
+    const moved = rebindShortcut('rest', 'Alt+F9', 'Alt+F9', handler)
+    expect(calls).toEqual([])
+    expect(moved.outcome).toEqual({ id: 'rest', accelerator: 'Alt+F9', refused: null })
+    expect(held.has('Alt+F9')).toBe(true)
+  })
+
+  it('refuses to take the new key when the old one could not be given back', () => {
+    /*
+      `release` swallowed the failure and answered nothing, so this went on to
+      register the new combination either way — leaving BOTH bound, the old one
+      still firing this handler, with nothing anywhere saying so.
+
+      Rare, and exactly the case where carrying on is wrong: what follows
+      depends on the release having worked.
+    */
+    claimShortcuts(
+      { rest: () => undefined, hide: () => undefined },
+      { rest: 'Alt+F9', hide: 'Alt+F10' },
+    )
+    refusesRelease = 'Alt+F9'
+    calls.length = 0
+    const moved = rebindShortcut('rest', 'Alt+F9', 'Alt+F11', handler)
+    expect(moved.outcome.refused).toContain('could not be given back')
+    // The new one was never asked for, so nothing else on the machine was
+    // disturbed and the pane can say what is actually bound.
+    expect(calls.some((one) => one.startsWith('register'))).toBe(false)
+    expect(moved.outcome.accelerator).toBe('Alt+F9')
   })
 
   it('answers the new combination when it was taken', () => {

@@ -104,7 +104,19 @@ function row(key: SettingsKey, handlers: PaneHandlers): HTMLElement {
     */
     event.preventDefault()
     event.stopPropagation()
-    if (event.key === 'Escape') {
+    /*
+      A BARE Escape leaves; Escape with a modifier is a combination.
+
+      `Escape` is in the accepted key set, so `Command+Escape` is a shortcut
+      somebody is entitled to choose — and this treated every event whose `key`
+      is `Escape` as cancel, which made every combination containing it
+      unreachable through the only control that can set one. A grammar that
+      accepts a value and a control that cannot express it is the same defect as
+      a limit checked in two units.
+    */
+    const bareEscape =
+      event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey
+    if (bareEscape) {
       // Out, unchanged. A capture control with no way to leave it is a control
       // that has to be escaped by pressing something you did not want.
       stop()

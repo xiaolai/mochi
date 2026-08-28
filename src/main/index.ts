@@ -2774,9 +2774,32 @@ ipcMain.handle('settings:key', (_event, change: unknown): SettingsWrite => {
     // does that collapsing; passing it through keeps the rule in one place.
     writeShortcut(app.getPath('userData'), id, asked.accelerator)
   } catch (error: unknown) {
+    /*
+      BOUND NOW AND NOT SAVED, which is a third state and has to be said as one.
+
+      The rebind above already happened: the combination is registered, the live
+      table describes it, and the key works. Only the file failed. Answering
+      with the bare error told somebody their change had not taken while the key
+      they had just chosen was working under their hands — and it will be gone
+      after a relaunch, which is the part they cannot see and would not think to
+      check.
+
+      NOT rolled back. Un-registering a combination that works, to make the
+      machine agree with a file that could not be written, takes away the thing
+      they asked for in exchange for consistency they cannot observe. Saying
+      what is true is the cheaper answer, and it lets them try the save again
+      without losing the key in the meantime.
+    */
     console.error('[keys] could not store the binding:', error)
-    problems.note('keys', asked.accelerator, `the key could not be saved: ${String(error)}`)
-    return refuse(String(error))
+    problems.note(
+      'keys',
+      asked.accelerator,
+      `the key works now but could not be saved, so it goes back to ${was.accelerator} on the next launch: ${String(error)}`,
+    )
+    return refuse(
+      `${asked.accelerator} is working now, but it could not be saved — it will go back to ` +
+        `${was.accelerator} when mochi restarts. ${String(error)}`,
+    )
   }
   console.log(`[keys] ${id} -> ${asked.accelerator}`)
   /*
