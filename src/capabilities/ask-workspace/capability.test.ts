@@ -233,7 +233,16 @@ describe('the bound covers the scan, not only the spawn', () => {
     // Fill every slot. These pass the guard and park inside `ask`.
     const running: Promise<unknown>[] = []
     for (let i = 0; i < MOST_AT_ONCE; i += 1) running.push(call({ question: 'q' }, deps))
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    /*
+      WAITED ON THE CONDITION, not on a tick.
+
+      This was `setTimeout(0)`, which is not a guarantee that the filling calls
+      have reached `ask` — under a loaded event loop they had not, so the
+      over-limit call took a free slot, parked in `ask` like the others, and the
+      test hung until vitest killed it at five seconds. It passed alone and
+      timed out in a full run, which is the signature.
+    */
+    while (held.length < MOST_AT_ONCE) await new Promise((resolve) => setTimeout(resolve, 1))
     const before = scans.n
     expect(before, 'the filling calls never scanned, so nothing is being measured').toBeGreaterThan(
       0,

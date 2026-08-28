@@ -282,6 +282,17 @@ const open = new Set<string>()
  * process already has open; see `open`.
  */
 /** `lstat`, or null when there is nothing there. Does NOT follow a link. */
+/**
+ * Whether two stats describe different files.
+ *
+ * Inode AND device: an inode number is only unique within a filesystem, so a
+ * path that moved between mounts can reuse one. Both are numbers on every
+ * platform this ships to.
+ */
+function notTheSameFile(before: Stats, after: Stats): boolean {
+  return before.ino !== after.ino || before.dev !== after.dev
+}
+
 function statSyncOrNull(path: string): Stats | null {
   try {
     return lstatSync(path)
@@ -321,6 +332,32 @@ export function createTranscripts(userData: string): Transcripts {
     throw new Error(`${path} is already open in this process`)
   }
   const db = new DatabaseSync(path)
+  /*
+    CHECKED AGAIN, against the file we are now holding.
+
+    `lstat` and `new DatabaseSync` are two operations. Something that replaces
+    the file with a symlink between them wins the first check, and every
+    conversation and the write-ahead log then land wherever it points, with this
+    process's privileges.
+
+    It cannot be closed portably: `DatabaseSync` takes a path, not a descriptor,
+    so there is no `fstat` on the handle to ask. What CAN be done is ask again
+    afterwards and compare identity — a swap that happened in the window is
+    visible as a different inode, and one that happened after is at least caught
+    as a non-regular file.
+
+    So this is not "a symlink cannot be opened". It is "a symlink present before
+    or after the open is refused", which leaves only a swap-and-swap-back inside
+    a window of microseconds, by something already able to write this
+    directory. `read-bounded.ts` states the same limit in the same words for the
+    same reason: a comment claiming a guarantee this code does not provide is
+    worse than the gap.
+  */
+  const after = statSyncOrNull(path)
+  if (after === null || !after.isFile() || (held !== null && notTheSameFile(held, after))) {
+    db.close()
+    throw new Error(`refusing to open ${TRANSCRIPTS_FILE}: it changed while it was being opened`)
+  }
   open.add(path)
   // EXCEPTION-SAFE from here on. Anything that throws between the registration
   // above and the store below used to leak the handle AND leave the path
@@ -717,7 +754,30 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         return null
       }
       const token = randomUUID()
-      stmt.begin.run(personaId, at, token)
+      try {
+        stmt.begin.run(personaId, at, token)
+      } catch (error: unknown) {
+        /*
+          THE SAME ANSWER AS THE CHECK ABOVE, for the same condition.
+
+          `taken.get` and this insert are two statements, so another connection
+          can take `(persona_id, started_at)` in between — and the interface
+          promises `null` for an occupied instant, not a throw. A throw here
+          fails her wake, which is what the check above exists to avoid.
+
+          Narrow: this store says it is the only writer and the app takes a
+          single-instance lock. It needs an external process on the same file,
+          which is exactly the case a UNIQUE constraint is for — and the
+          constraint is doing its job, so the only thing to fix is the shape of
+          the answer.
+
+          Refused rather than retried at another instant, for the reason the
+          check above gives: advancing the stored time would date a conversation
+          after the things said in it.
+        */
+        console.warn(`[transcripts] ${personaId} was given a conversation at ${String(at)}:`, error)
+        return null
+      }
       return token
     },
     say(token, who, text, at = now(), cut = false) {
