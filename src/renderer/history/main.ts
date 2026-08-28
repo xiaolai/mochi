@@ -79,6 +79,7 @@ import {
 } from './elements'
 import { say } from './status'
 import { empty, facts, iconButton, marked, toolChips } from './bits'
+import { freshness } from './freshness'
 import { sureExportEl } from './elements'
 import { offerACopyFirst } from './keep-a-copy'
 
@@ -679,8 +680,16 @@ async function reload(): Promise<void> {
   }
 }
 
+/** See `freshness`. Concurrent writes each call `reload`, which calls this. */
+const shelfReads = freshness()
+
 async function readShelf(): Promise<void> {
+  const newest = shelfReads.begin()
   const view = await window.mochiHistory.shelf()
+  // Two saves settling at once each re-read, and the slower one used to land
+  // last: a stale sheet painted over a newer write, including her accent, which
+  // is applied from this view on every read.
+  if (!newest()) return
   shelf = view
   /**
    * HER colour, before anything is drawn with it.
@@ -1261,9 +1270,17 @@ function group(hits: readonly HistoryHit[]): readonly HitGroup[] {
  */
 let listed: string | null = null
 
+/** See `freshness`. Overlapping reads of the archive replace each other. */
+const archiveReads = freshness()
+
 async function readConversations(): Promise<void> {
+  const newest = archiveReads.begin()
   try {
     const answer = await window.mochiHistory.list()
+    // An older answer arriving last would repaint a list that has already been
+    // replaced — or, on the failure path below, replace a list somebody can see
+    // with an error about a read they are no longer waiting for.
+    if (!newest()) return
     conversations = answer.conversations
     if (answer.persona !== listed) {
       listed = answer.persona
@@ -1544,10 +1561,23 @@ async function writeMachine(run: () => Promise<SettingsWrite>, ok: string): Prom
   await loadMachine()
 }
 
+/** See `freshness`. Tab entries, writes, workspace picks and rechecks all read. */
+const machineReads = freshness()
+
 async function loadMachine(): Promise<void> {
+  const newest = machineReads.begin()
   try {
-    machine = await window.mochiSettings.read()
+    const read = await window.mochiSettings.read()
+    // Entering the tab twice, or a write settling while a recheck is in flight,
+    // put two of these in the air. An older one landing last restores settings
+    // that have been changed since.
+    if (!newest()) return
+    machine = read
   } catch (error: unknown) {
+    // The same rule on the way out. An older FAILURE is the visible half of
+    // this: it would tear down the nav and the tool column over a newer read
+    // that had just succeeded.
+    if (!newest()) return
     /*
       The OLD view goes with the error, and so do the controls beside it.
 
