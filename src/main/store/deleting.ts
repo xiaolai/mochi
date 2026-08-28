@@ -149,8 +149,6 @@ export function unfinishedDeletions(userData: string): ReadonlyMap<string, strin
       const parsed = JSON.parse(read.text) as Record<string, unknown>
       const id = parsed['id']
       const source = parsed['source']
-      // Both are PATH SEGMENTS downstream, so they are checked here rather than
-      // joined on trust.
       // Both are PATH SEGMENTS downstream, so both go through the allowlist
       // rather than a list of values somebody thought to forbid.
       if (!isPersonaId(id)) continue
