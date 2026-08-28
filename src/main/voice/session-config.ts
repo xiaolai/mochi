@@ -15,6 +15,7 @@ import type { WireTool } from '@shared/capability/registry'
 import type { Prompts } from '@shared/grants'
 import { whatSheMayDo } from '../what-she-may-do'
 import { briefFor, resumeFor } from '../memory/brief'
+import type { Persona } from '@shared/persona'
 
 /**
  * Everything one session needs to know about who she is, assembled once.
@@ -188,6 +189,61 @@ function briefing(
   }
 }
 
+/**
+ * Say what could not be loaded, per package.
+ *
+ * NAMED, where the problem names something. `retention-unsupported` refuses a
+ * whole character, and reporting it as a bare kind against a null subject
+ * leaves somebody with a character that vanished and no way to tell which
+ * package did it. Every kind that carries an id or a source says so.
+ *
+ * Its own function because `sessionConfig` is about assembling one session, and
+ * this is about the shelf it was assembled from — a loop over problems that
+ * reads nothing else in that function and that nothing else there reads.
+ */
+function reportCatalogue(catalog: PersonaCatalog, deps: SessionConfigDeps): void {
+  for (const problem of catalog.problems) {
+    const about = 'id' in problem ? problem.id : 'source' in problem ? problem.source : null
+    const detail = about === null ? problem.kind : `${problem.kind}: ${about}`
+    deps.warn(`[persona] ${detail}`)
+    deps.note('persona', about, detail)
+  }
+}
+
+/**
+ * The face she is drawn with, and a line for every file that could not be read.
+ *
+ * LOUD, and per file. An avatar that silently did not load presents as "the app
+ * ignored my file", which the store's own comment calls the least debuggable
+ * outcome this feature can have.
+ *
+ * Its own function for the reason `reportCatalogue` is: resolving a face is not
+ * assembling a session, and the reporting around it reads nothing else in that
+ * function.
+ */
+function faceWorn(
+  userData: string,
+  catalog: PersonaCatalog,
+  persona: Persona,
+  deps: SessionConfigDeps,
+): ReturnType<typeof resolveFaceFor> {
+  const avatars = avatarsRoot(userData)
+  seedAvatars(avatars)
+  const face = resolveFaceFor(
+    avatars,
+    packageFolder(persona.id, catalog.sources),
+    persona.avatarId,
+    persona.theme,
+    persona.size,
+  )
+  for (const problem of face.problems) {
+    deps.warn(`[avatar] ${problem.file}: ${problem.reason}`)
+    deps.note('avatar', problem.file, problem.reason)
+  }
+  deps.log(`[avatar] ${face.source ?? 'built-in'}`)
+  return face
+}
+
 export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
   // CONSUMED here, whatever else this read goes on to decide. See
   // `reconnecting`: the flag describes exactly one open.
@@ -204,20 +260,7 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
   deps.replacingASession()
   const userData = deps.userData()
   const catalog = deps.catalogue(userData)
-  for (const problem of catalog.problems) {
-    /*
-      NAMED, where the problem names something.
-
-      `retention-unsupported` refuses a whole character, and reporting it as a
-      bare kind against a null subject leaves somebody with a character that
-      vanished and no way to tell which package did it. Every kind that carries
-      an id or a source says so.
-    */
-    const about = 'id' in problem ? problem.id : 'source' in problem ? problem.source : null
-    const detail = about === null ? problem.kind : `${problem.kind}: ${about}`
-    deps.warn(`[persona] ${detail}`)
-    deps.note('persona', about, detail)
-  }
+  reportCatalogue(catalog, deps)
   // Which persona was last worn, remembered across restarts. Getting this wrong
   // is not cosmetic: the archive is scoped per persona, so defaulting to the
   // built-in on an installation whose history is under another name shows her
@@ -250,23 +293,7 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
    * with no reader. `seedAvatars` writes the folder, an example and a README on
    * first run, because a plugin format nobody can see the shape of is not one.
    */
-  const avatars = avatarsRoot(userData)
-  seedAvatars(avatars)
-  const avatar = resolveFaceFor(
-    avatars,
-    packageFolder(resolved.persona.id, catalog.sources),
-    resolved.persona.avatarId,
-    resolved.persona.theme,
-    resolved.persona.size,
-  )
-  // LOUD, and per file. An avatar that silently did not load presents as "the
-  // app ignored my file", which the store's own comment calls the least
-  // debuggable outcome this feature can have.
-  for (const problem of avatar.problems) {
-    deps.warn(`[avatar] ${problem.file}: ${problem.reason}`)
-    deps.note('avatar', problem.file, problem.reason)
-  }
-  deps.log(`[avatar] ${avatar.source ?? 'built-in'}`)
+  const avatar = faceWorn(userData, catalog, resolved.persona, deps)
 
   const note = recall(userData, resolved.persona.id)
   /**
