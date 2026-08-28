@@ -1230,3 +1230,193 @@ describe('where she looks', () => {
     expect(pupilsAt(-50, 0)).toBe(pupilsAt(-1, 0))
   })
 })
+
+/**
+ * `prefers-reduced-motion`, which nothing consulted until now.
+ *
+ * The token file has carried a `prefers-reduced-motion` block since the design
+ * system landed, and it is honest that it is a placeholder: it zeroes two
+ * duration tokens for motion the shelf does not have. There are no CSS
+ * transitions and no keyframes in either window. SHE is the only thing in this
+ * app that moves — breath, drift, the blink schedule, and the ambient loops —
+ * and none of it asked.
+ *
+ * Asserted in PIXELS, over a real rasteriser, because that is the only claim
+ * worth making: a flag that is set and a body that still moves is the defect,
+ * not the flag.
+ */
+describe('asked for less movement', () => {
+  /** Every pixel of a frame, so "did anything move" is a whole-canvas question. */
+  function frame(r: Rig, at: number): string {
+    r.ctx.clearRect(0, 0, WIDTH, HEIGHT)
+    r.avatar.render(at)
+    return Buffer.from(r.ctx.getImageData(0, 0, WIDTH, HEIGHT).data).toString('base64')
+  }
+
+  // Half a breath apart, so the idle layer is at its two extremes rather than
+  // wherever a round number happens to land.
+  const APART = BREATH_PERIOD_MS / 2
+
+  /** Sixty frames of spring settling, so a comparison is about the idle layer. */
+  function settled(r: Rig): Rig {
+    for (let at = 0; at <= 3000; at += 16) frame(r, at)
+    return r
+  }
+  const AFTER = 3016
+
+  it('CONTROL: she moves between two instants when nothing is asked', () => {
+    /*
+      The arm that makes the next one mean something. If she were still at these
+      two timestamps for some unrelated reason, the assertion below would pass
+      against a rig that ignores the flag completely — which is the shape of
+      every vacuous test in this repository's history.
+    */
+    const r = settled(rig())
+    expect(frame(r, AFTER)).not.toBe(frame(r, AFTER + APART))
+  })
+
+  it('is still, at the same two instants', () => {
+    const r = rig()
+    r.avatar.setReducedMotion(true)
+    settled(r)
+    expect(frame(r, AFTER)).toBe(frame(r, AFTER + APART))
+  })
+
+  it('moves again when the preference is turned back off', () => {
+    // Somebody changes it while the app is open, which is the case the listener
+    // in `face.ts` exists for. A one-way flag would leave her frozen until relaunch.
+    const r = rig()
+    r.avatar.setReducedMotion(true)
+    r.avatar.setReducedMotion(false)
+    settled(r)
+    expect(frame(r, AFTER)).not.toBe(frame(r, AFTER + APART))
+  })
+})
+
+describe('which clips still play when less movement is asked for', () => {
+  /** Does the body sit somewhere other than where a still body sits? */
+  function movedFrom(r: Rig, at: number, rest: string): boolean {
+    r.ctx.clearRect(0, 0, WIDTH, HEIGHT)
+    r.avatar.render(at)
+    return Buffer.from(r.ctx.getImageData(0, 0, WIDTH, HEIGHT).data).toString('base64') !== rest
+  }
+
+  function restingFrame(r: Rig): string {
+    r.ctx.clearRect(0, 0, WIDTH, HEIGHT)
+    r.avatar.render(0)
+    return Buffer.from(r.ctx.getImageData(0, 0, WIDTH, HEIGHT).data).toString('base64')
+  }
+
+  it('refuses a LOOP, which is ambient by definition', () => {
+    // `sway` stands for a state rather than answering an event -- `stopMotion`'s
+    // own comment describes it running from the first turn to the end of a
+    // session. That is exactly the movement the preference is about.
+    expect(BUILT_IN_MOTIONS['sway']?.loop).toBe(true)
+    const r = rig()
+    r.avatar.setReducedMotion(true)
+    const rest = restingFrame(r)
+    r.avatar.playMotion('sway')
+    /*
+      TWO frames, and the second is the one that carries the assertion.
+
+      The first version of this test checked a single frame and PASSED against a
+      build with the guard deleted — caught by mutation testing, not by reading
+      it. The reason is the same one the one-shot test documents: the first
+      render after `playMotion` only starts the clip's clock and draws its t=0
+      key, which for `sway` is the resting pose. So "she has not moved" was true
+      for a rig that had happily accepted the loop.
+
+      A quarter of the way in is where `sway` is at full lean.
+    */
+    expect(movedFrom(r, 900, rest)).toBe(false)
+    expect(movedFrom(r, 900 + 3800 / 4, rest)).toBe(false)
+  })
+
+  it('still plays a ONE-SHOT, which is a reply', () => {
+    /*
+      Deliberately not suppressed. `nod` and `hop` happen because she was spoken
+      to or picked up; a companion who answers nothing is a picture, not a
+      quieter companion. The preference asks for less movement, not for no
+      feedback -- and a one-shot ends by itself, which is the whole difference.
+    */
+    expect(BUILT_IN_MOTIONS['nod']?.loop).toBe(false)
+    const r = rig()
+    r.avatar.setReducedMotion(true)
+    const rest = restingFrame(r)
+    r.avatar.playMotion('nod')
+    /*
+      TWO renders, and the first one is not a spare.
+
+      `playMotion` leaves `motionStartedAt` null so the clip is timed from the
+      frame it is first seen on, not from whenever it was asked for. So the
+      first render after it starts the clock and draws the t=0 key — which for
+      every clip in the library is the resting pose. Asserting on that frame
+      would have called a working one-shot dead.
+    */
+    expect(movedFrom(r, 200, rest)).toBe(false)
+    expect(movedFrom(r, 360, rest)).toBe(true)
+  })
+
+  it('stops a loop that was ALREADY running when the preference arrives', () => {
+    // The check inside `playMotion` only sees clips that have not started. A
+    // loop never ends by itself, so without the second half she would go on
+    // swaying until something else happened to change her state.
+    const r = rig()
+    r.avatar.playMotion('sway')
+    r.avatar.render(0)
+    r.avatar.setReducedMotion(true)
+    const rest = restingFrame(r)
+    expect(movedFrom(r, 900, rest)).toBe(false)
+  })
+})
+
+describe('the tuner switch and the accessibility preference are different things', () => {
+  it('leaves the asleep breath running for the tuner, and stops it for the preference', () => {
+    /*
+      `setIdle(false)` is what the shelf's preview tiles call so a face can be
+      measured against a still body, and the asleep branch deliberately kept
+      breathing through it -- "asleep: eyes shut, and the breath left running".
+
+      Gating that branch on `idle` while adding reduced motion would have made a
+      preview tile stop breathing as a side effect of an accessibility fix.
+      Caught by reading the diff, so it is pinned here.
+    */
+    const shot = (r: Rig, at: number): string => {
+      r.ctx.clearRect(0, 0, WIDTH, HEIGHT)
+      r.avatar.render(at)
+      return Buffer.from(r.ctx.getImageData(0, 0, WIDTH, HEIGHT).data).toString('base64')
+    }
+
+    /*
+      SETTLED at frame rate before either comparison, not with two coarse jumps.
+
+      `spring.ts` integrates against `dt`, so `render(0)` then `render(1700)` is
+      one enormous step and the body scale has not converged on either frame.
+      Comparing those two shows the spring still arriving, which is
+      indistinguishable from the idle layer breathing — this test failed exactly
+      that way against code that turned out to be correct, and the probe that
+      settled at 16ms steps was what told the two apart.
+
+      A test whose failure mode is "the physics has not finished" would have
+      been read as a defect in the thing under test. Sixty frames of settling is
+      the cheap price for an assertion that means what it says.
+    */
+    const settle = (r: Rig): Rig => {
+      for (let at = 0; at <= 3000; at += 16) shot(r, at)
+      return r
+    }
+    const SETTLED = 3016
+
+    const tuner = rig()
+    tuner.avatar.setAsleep(true)
+    tuner.avatar.setIdle(false)
+    settle(tuner)
+    expect(shot(tuner, SETTLED)).not.toBe(shot(tuner, SETTLED + BREATH_PERIOD_MS / 2))
+
+    const asked = rig()
+    asked.avatar.setAsleep(true)
+    asked.avatar.setReducedMotion(true)
+    settle(asked)
+    expect(shot(asked, SETTLED)).toBe(shot(asked, SETTLED + BREATH_PERIOD_MS / 2))
+  })
+})

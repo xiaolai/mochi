@@ -142,6 +142,21 @@ export class MochiAvatar implements AvatarBackend {
 
   private mouthOpen = 0
   private idle = true
+  /**
+   * Somebody asked their system for less movement, and this is where it lands.
+   *
+   * The one flag, because there are two kinds of motion here and both are
+   * ambient: the idle layer — breath, drift, the blink schedule — and any clip
+   * that LOOPS. A looping clip is ambient by definition; it stands for a state
+   * rather than answering an event, which is what `stopMotion`'s own comment
+   * says about `sway` running from the first turn to the end of the session.
+   *
+   * One-shots are left alone deliberately. `nod`, `hop` and `turn` are replies
+   * — she was spoken to, or she was picked up — and a companion who answers
+   * nothing is a picture, not a quieter companion. The preference asks for less
+   * movement, not for no feedback.
+   */
+  private reducedMotion = false
   private emotion: EmotionSignal = NEUTRAL_SIGNAL
   private emotionExpiresAt: number | null = null
   /** A hold requested before the first frame, when there was no clock to add it to. */
@@ -308,8 +323,46 @@ export class MochiAvatar implements AvatarBackend {
       console.warn(`[rig] no motion called ${JSON.stringify(name)}`)
       return
     }
+    /*
+      REFUSED HERE rather than at the two call sites that start one.
+
+      `face.ts` starts an ambient loop from `repose.step` and starts `sway` when
+      she is thinking, and a third site is one feature away. A rule applied at
+      the door every caller already goes through cannot be forgotten by the next
+      one — the same argument `discardWrite` and `finishDeletion` make about
+      guarding both paths into one `rmSync`.
+
+      Anything already looping is cleared, so turning the preference on mid
+      session stops her rather than waiting for a state change that may not
+      come: a loop never ends by itself.
+    */
+    if (this.reducedMotion && clip.loop) {
+      this.motion = null
+      this.motionStartedAt = null
+      return
+    }
     this.motion = clip
     this.motionStartedAt = null
+  }
+
+  /**
+   * Honour `prefers-reduced-motion`, or stop honouring it.
+   *
+   * Separate from `setIdle`, which is the TUNER's switch: that one exists so a
+   * face can be measured against a still body, and it is called by the shelf's
+   * preview tiles. Folding the two together would mean a preview could not be
+   * told apart from an accessibility preference, and one of them wants the
+   * blink schedule re-armed on the way out while the other does not care.
+   */
+  setReducedMotion(on: boolean): void {
+    if (on === this.reducedMotion) return
+    this.reducedMotion = on
+    // A loop that is already running has to be cleared here too: the check in
+    // `playMotion` only sees clips that have not started yet.
+    if (on && this.motion?.loop === true) this.stopMotion()
+    // Re-armed rather than resumed, for the reason `setIdle` gives: seeding the
+    // blink schedule from a stale timestamp puts the first blink in the past.
+    if (!on) this.idleSeededAt = null
   }
 
   /**
@@ -519,12 +572,18 @@ export class MochiAvatar implements AvatarBackend {
       `idle` gates it for the same reason it gates the breath: the tuner wants
       her still, and a still she can be measured against.
     */
-    const drift = this.idle ? driftAt(now, this.asleep ? ASLEEP_DRIFT : 1) : NO_DRIFT
+    const stirring = this.idle && !this.reducedMotion
+    const drift = stirring ? driftAt(now, this.asleep ? ASLEEP_DRIFT : 1) : NO_DRIFT
 
     const shutEyes = this.asleep && !this.speaking
     const pose = shutEyes
-      ? { blink: 1, breath: this.idleLayer.pose(now).breath }
-      : this.idle
+      ? // The asleep breath is gated by the PREFERENCE only, never by `idle`.
+        // `idle` is the tuner's switch and this branch deliberately kept
+        // breathing through it — "asleep: eyes shut, and the breath left
+        // running", above. Widening the gate here would have made a preview
+        // tile stop breathing as a side effect of an accessibility fix.
+        { blink: 1, breath: this.reducedMotion ? 0 : this.idleLayer.pose(now).breath }
+      : stirring
         ? this.idleLayer.pose(now)
         : { blink: 0, breath: 0 }
 

@@ -279,6 +279,30 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   let worn: FaceSpec = MOCHI
   const avatar = new MochiAvatar(ctx, { size: worn.size, face: worn })
 
+  /*
+    Ask the system whether she should be moving, and keep asking.
+
+    She is the ONLY surface in this app with motion. The stylesheets have no
+    transitions and no keyframes at all — `tokens.css` carries a
+    `prefers-reduced-motion` block that zeroes two duration tokens, and it is
+    honest that it is a placeholder for motion the shelf does not yet have. So
+    the preference was declared and never once consulted where anything moves:
+    the breath, the drift, the blink schedule and the ambient loops all ran
+    regardless.
+
+    A LISTENER rather than one read at startup. This is a preference somebody
+    changes because something on screen is making them ill, and an app that only
+    checks it at launch asks them to quit and reopen at the exact moment they
+    least want to look at it. `matchMedia` fires on change and Electron passes
+    the OS setting through.
+  */
+  const stillness = window.matchMedia('(prefers-reduced-motion: reduce)')
+  avatar.setReducedMotion(stillness.matches)
+  const onStillness = (event: MediaQueryListEvent): void => {
+    avatar.setReducedMotion(event.matches)
+  }
+  stillness.addEventListener('change', onStillness)
+
   /** Her rectangle inside her own window. See `boxFor`. */
   function herBox(): { left: number; top: number; width: number; height: number } {
     return boxFor(worn, pad, feet, roomy)
@@ -1406,6 +1430,10 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       audio = null
       analyser = null
       samples = null
+      // Taken off, like the media sources above it. A `MediaQueryList` outlives
+      // this face, so a listener left on it keeps the whole closure — and the
+      // disposed avatar it calls into — alive for the life of the window.
+      stillness.removeEventListener('change', onStillness)
       avatar.dispose()
     },
   }
