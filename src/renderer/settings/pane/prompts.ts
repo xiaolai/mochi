@@ -29,6 +29,7 @@
 import { element } from '../../element'
 import { type Pane } from '../pane'
 import { SAYS } from '../panes-says'
+import { canSave, lengthNote } from './prompt-edit'
 export const PROMPTS: Pane = {
   id: 'prompts',
   // A TABLE, because the name has a pronoun in it. It was the one pane label
@@ -68,13 +69,10 @@ export const PROMPTS: Pane = {
         Save button instead and says why.
       */
       const overLong = element('p', 'note bad')
-      overLong.hidden = true
-      const tooLong = (value: string): boolean =>
-        one.limit !== undefined && value.length > one.limit
       const sayLength = (value: string): void => {
-        if (one.limit === undefined) return
-        overLong.hidden = !tooLong(value)
-        overLong.textContent = `That is ${String(value.length)} characters and the most this one may be is ${String(one.limit)}. It is sent on every session and paid for as long as that session lasts.`
+        const note = lengthNote(value, one.limit)
+        overLong.hidden = note === null
+        if (note !== null) overLong.textContent = note
       }
       sayLength(one.text)
       nodes.push(overLong)
@@ -105,11 +103,9 @@ export const PROMPTS: Pane = {
       reset.type = 'button'
       reset.disabled = !one.edited
       box.addEventListener('input', () => {
-        // Enabled by a DIFFERENCE, not by having typed: typing a character and
-        // deleting it is not a change to save. And never while it is over the
-        // bound, which main would refuse anyway — an enabled button whose only
-        // outcome is a refusal is a button that teaches people to distrust it.
-        save.disabled = box.value === one.text || tooLong(box.value)
+        // See `canSave`: a difference rather than having typed, and never over
+        // the bound.
+        save.disabled = !canSave(box.value, one.text, one.limit)
         sayLength(box.value)
       })
       /*

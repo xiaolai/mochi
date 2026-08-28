@@ -31,10 +31,10 @@
  */
 import { element } from '../../element'
 import { type Pane, type PaneHandlers } from '../pane'
-import { acceleratorFrom, acceleratorProblem } from '@shared/accelerator'
 import { type SettingsKey } from '@shared/ipc'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
+import { whatWasPressed } from './pressed'
 
 export const KEYS: Pane = {
   id: 'keys',
@@ -105,43 +105,26 @@ function row(key: SettingsKey, handlers: PaneHandlers): HTMLElement {
     event.preventDefault()
     event.stopPropagation()
     /*
-      A BARE Escape leaves; Escape with a modifier is a combination.
+      The DECISION is `whatWasPressed`, and it is somewhere a test can reach.
 
-      `Escape` is in the accepted key set, so `Command+Escape` is a shortcut
-      somebody is entitled to choose — and this treated every event whose `key`
-      is `Escape` as cancel, which made every combination containing it
-      unreachable through the only control that can set one. A grammar that
-      accepts a value and a control that cannot express it is the same defect as
-      a limit checked in two units.
+      This was five branches in the middle of a DOM builder, tangled with the
+      button's label and the `listening` flag — so the rules could only be
+      exercised by constructing the row, and the suite runs in node. That is why
+      `Command+Escape` being unreachable went unnoticed: there was no seam.
     */
-    const bareEscape =
-      event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey
-    if (bareEscape) {
-      // Out, unchanged. A capture control with no way to leave it is a control
-      // that has to be escaped by pressing something you did not want.
-      stop()
+    const said = whatWasPressed(event, key.accelerator)
+    if (said.kind === 'ignore') return
+    if (said.kind === 'refuse') {
+      // Said, and STILL LISTENING — somebody most of the way to a good answer
+      // should not have to start again.
+      combo.textContent = said.pressed
+      handlers.say(said.why, true)
       return
     }
-    const pressed = acceleratorFrom(event)
-    // A modifier on its own, or a key outside the accepted set. Neither ends
-    // the capture: somebody on the way to ⌃⇧K holds two modifiers first, and a
-    // control that gave up on the first would record `Control`.
-    if (pressed === null) return
-    const problem = acceleratorProblem(pressed)
-    if (problem !== null) {
-      // Said, and still listening. A combination that is refused for having no
-      // real modifier is somebody most of the way to a good answer, and closing
-      // the capture would make them start again.
-      combo.textContent = pressed
-      handlers.say(problem, true)
-      return
-    }
+    // Everything else ends the capture. A control with no way to leave it is
+    // one that has to be escaped by pressing something you did not want.
     stop()
-    // Unchanged is not a change to save. It would round-trip cleanly — main
-    // would release the combination and take it straight back — and it would
-    // put a "Saved." over a key nobody moved.
-    if (pressed === key.accelerator) return
-    handlers.key({ id: key.id, accelerator: pressed })
+    if (said.kind === 'save') handlers.key({ id: key.id, accelerator: said.pressed })
   }
 
   combo.addEventListener('click', () => {
