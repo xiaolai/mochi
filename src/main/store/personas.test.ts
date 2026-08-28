@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createTranscripts, type Transcripts } from './transcripts'
-import { hasPolicy, readPolicy, writePolicy } from './policy'
+import { policyState, writePolicy } from './policy'
 import { DEFAULT_POLICY } from '@shared/policy'
 import { PACKAGE_FACE } from './avatars'
 import { DEFAULT_PERSONA, type Persona } from '@shared/persona'
@@ -636,7 +636,7 @@ describe('deleting a persona takes her notes with her', () => {
     // package half-removed -- worth knowing, and a separate problem from this
     // one. What must not happen is her surviving in ANY form with the opt-out
     // silently replaced by the keep-everything default.
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false })
+    expect(policyState(dir, 'ada').policy).toEqual({ keeps: false })
   })
 
   it('refuses when her folder has moved since the catalog was read', async () => {
@@ -787,10 +787,10 @@ describe('the retention setting is hers, not her package’s', () => {
       'Ada 2',
     )
 
-    expect(hasPolicy(dir, made.id)).toBe(false)
-    expect(readPolicy(dir, made.id)).toEqual(DEFAULT_POLICY)
+    expect(policyState(dir, made.id).exists).toBe(false)
+    expect(policyState(dir, made.id).policy).toEqual(DEFAULT_POLICY)
     // Hers is untouched.
-    expect(readPolicy(dir, 'ada')).toEqual({ keeps: false })
+    expect(policyState(dir, 'ada').policy).toEqual({ keeps: false })
   })
 
   it('survives putting the built-in back to how she ships', () => {
@@ -802,7 +802,7 @@ describe('the retention setting is hers, not her package’s', () => {
 
     restoreBuiltIn(dir)
 
-    expect(readPolicy(dir, BUILT_IN_ID)).toEqual({ keeps: false })
+    expect(policyState(dir, BUILT_IN_ID).policy).toEqual({ keeps: false })
   })
 
   it('goes when she does, so the next persona of that name does not inherit it', () => {
@@ -812,8 +812,8 @@ describe('the retention setting is hers, not her package’s', () => {
 
     deletePersona(dir, loadPersonas(dir, {}), 'ada', history)
 
-    expect(hasPolicy(dir, 'ada')).toBe(false)
-    expect(readPolicy(dir, 'ada')).toEqual(DEFAULT_POLICY)
+    expect(policyState(dir, 'ada').exists).toBe(false)
+    expect(policyState(dir, 'ada').policy).toEqual(DEFAULT_POLICY)
   })
 })
 

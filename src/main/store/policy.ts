@@ -19,7 +19,7 @@ import { join } from 'node:path'
 import { isPersonaId } from '@shared/parse-persona'
 import { DEFAULT_POLICY, UNREADABLE_POLICY, parsePolicy, type Policy } from '@shared/policy'
 import { writeJsonAtomically } from './json-file'
-import { logBoundedRead, readBounded } from './read-bounded'
+import { type BoundedRead, logBoundedRead, readBounded } from './read-bounded'
 import { rawObject } from './json-file'
 import { problems } from '../problems'
 
@@ -53,10 +53,6 @@ function policyPath(userData: string, id: string): string {
  * so asking it alone let the migration below overwrite a stored opt-out with
  * a value from a manifest, on the grounds that it could not read it.
  */
-export function hasPolicy(userData: string, id: string): boolean {
-  const read = readBounded(policyPath(userData, id))
-  return read.ok || read.reason.kind !== 'absent'
-}
 
 /**
  * What she is set to, the default if nobody has said, or off if it is broken.
@@ -65,9 +61,47 @@ export function hasPolicy(userData: string, id: string): boolean {
  * there: caught by the handler below, a refused id would come back as "nobody
  * has chosen", which is an answer this function legitimately gives every day.
  */
-export function readPolicy(userData: string, id: string): Policy {
-  const path = policyPath(userData, id)
-  const read = readBounded(path)
+/**
+ * Whether she has a policy file, and what it says — from ONE read.
+ *
+ * The single public reader, and it replaces two. `hasPolicy` and `readPolicy`
+ * were separate trips to disk with the second deciding what the first meant,
+ * and `keepsFor` called them in sequence: a policy written between them was
+ * missed, one removed was read as the default, and either could resolve to
+ * `keeps` for a character somebody had just switched recording off for.
+ *
+ * `readGrantsState` states the rule about the same shape one module along:
+ * *"ONE reader for two questions, because the second decides what the first
+ * means... Two separate checks would be two chances to get 'was this readable'
+ * subtly differently."* This had exactly those two chances.
+ *
+ * `exists` is false ONLY for a genuinely absent file. One that is there and
+ * cannot be read is `exists: true` carrying the unreadable answer, because the
+ * carried map `keepsFor` consults is a fallback for "nothing was ever written",
+ * not for "this could not be opened" — resolving an unreadable policy from a
+ * migration's leftovers would answer a retention question with a value nobody
+ * wrote.
+ */
+export function policyState(
+  userData: string,
+  id: string,
+): { readonly exists: boolean; readonly policy: Policy } {
+  const read = readBounded(policyPath(userData, id))
+  if (!read.ok && read.reason.kind === 'absent') {
+    return { exists: false, policy: DEFAULT_POLICY }
+  }
+  return { exists: true, policy: policyFrom(read, id) }
+}
+
+/**
+ * What one read of a policy file means, in one place.
+ *
+ * Extracted so `keepsFor` can ask "is there one, and what does it say" from a
+ * SINGLE read rather than two — see the rule it quotes. Nothing here changed
+ * except where the read happens: a caller that has already done it hands the
+ * result in, and one that has not goes through `readPolicy` above.
+ */
+function policyFrom(read: BoundedRead, id: string): Policy {
   if (!read.ok) {
     if (read.reason.kind === 'absent') return DEFAULT_POLICY
     console.warn(`[policy] ${id} ${logBoundedRead(read.reason)}`)
@@ -172,7 +206,27 @@ export function keepsFor(
   personaId: string,
   carried: ReadonlyMap<string, Policy>,
 ): boolean {
-  if (hasPolicy(userData, personaId)) return readPolicy(userData, personaId).keeps
+  /*
+    ONE read, answering both questions.
+
+    `hasPolicy` then `readPolicy` was two trips to disk with the second deciding
+    what the first meant, and the file can change between them: a policy written
+    in that window is missed, one removed is read as the default, and the
+    direction that matters is that either can resolve to `keeps` for a character
+    somebody had just switched recording off for.
+
+    `readGrantsState` states the rule this follows, about the same shape one
+    module along: *"ONE reader for two questions, because the second decides what
+    the first means... Two separate checks would be two chances to get 'was this
+    readable' subtly differently."* This had exactly those two chances.
+
+    `readPolicy` already distinguishes all three outcomes internally — absent is
+    the default, unreadable is `UNREADABLE_POLICY`, and anything else is what the
+    file says — so the carried map is consulted only when there is genuinely no
+    file, which is what `hasPolicy` was being asked.
+  */
+  const present = policyState(userData, personaId)
+  if (present.exists) return present.policy.keeps
   const parked = carried.get(personaId)
-  return parked === undefined ? readPolicy(userData, personaId).keeps : parked.keeps
+  return parked === undefined ? present.policy.keeps : parked.keeps
 }

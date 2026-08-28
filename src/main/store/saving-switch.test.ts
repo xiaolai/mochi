@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { createConversation } from './conversation'
-import { keepsFor, readPolicy, writePolicy } from './policy'
+import { keepsFor, policyState, writePolicy } from './policy'
 import { createTranscripts } from './transcripts'
 
 /**
@@ -57,7 +57,7 @@ describe('turning the saving of conversations off', () => {
 
   it('survives a restart', () => {
     writePolicy(userData, 'ada', { keeps: false })
-    expect(readPolicy(userData, 'ada').keeps).toBe(false)
+    expect(policyState(userData, 'ada').policy.keeps).toBe(false)
     expect(keepsFor(userData, 'ada', new Map())).toBe(false)
   })
 
