@@ -73,14 +73,28 @@ describe('choosing what to delete', () => {
   })
 
   it('does not open a transcript while choosing', () => {
-    // A click that also navigated would make "this one" and "show me this one"
-    // impossible to tell apart.
-    const click = MAIN.slice(MAIN.indexOf("button.addEventListener('click', () => {"))
-    const body = click.slice(0, click.indexOf('\n  })'))
-    const guard = body.slice(body.indexOf('if (picking) {'), body.indexOf('open = token'))
-    expect(guard, 'the choosing branch falls through into opening the transcript').toContain(
+    /*
+      A click that also navigated would make "this one" and "show me this one"
+      impossible to tell apart.
+
+      ANCHORED ON THE GUARD, not on the first click listener in the file. This
+      took `MAIN.indexOf("button.addEventListener('click'")` — which finds the
+      SHELL TABS listener, three hundred lines earlier — and then sliced to the
+      first `\n  })` after it. That window reached the real handler only because
+      nothing between the two happened to close a callback at that indentation,
+      and it stopped doing so the moment something did. The test then failed
+      while the guard it checks was untouched, which is the worst way for a
+      source-scanning test to be wrong: it accuses the code.
+    */
+    const guard = MAIN.slice(MAIN.indexOf('if (picking) {'))
+    const branch = guard.slice(0, guard.indexOf('\n    }'))
+    expect(branch, 'the choosing branch falls through into opening the transcript').toContain(
       'return',
     )
+    // And the guard really is inside a click handler, which is the half the
+    // anchor above no longer proves on its own.
+    const before = MAIN.slice(0, MAIN.indexOf('if (picking) {'))
+    expect(before.slice(before.lastIndexOf('addEventListener'))).toContain("'click'")
   })
 
   it('clears the selection when the archive is left', () => {

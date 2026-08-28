@@ -45,19 +45,33 @@ export const HEARING: Pane = {
       option.selected = chosen.has(one.code)
       languages.append(option)
     }
+    /*
+      What this control has actually ASKED FOR, which is not always what was
+      rendered.
+
+      The over-limit branch below puts the selection back, and it put it back to
+      `chosen` — the set captured when this pane was built. A valid change saved
+      since then has not redrawn the pane yet, so the reset restored a selection
+      that is two changes old and reported it as what is stored.
+
+      Updated as each accepted change is dispatched, so the reset is to the last
+      thing this control asked main for rather than to a snapshot of the past.
+    */
+    let accepted = new Set(chosen)
     languages.addEventListener('change', () => {
       const picked = [...languages.selectedOptions].map((one) => one.value)
       // Refused HERE as well as in main, so the message names the limit before
       // a write is attempted -- and the control is put back to what is actually
       // stored rather than left showing a selection that was never saved.
       if (picked.length > view.hearing.most) {
-        for (const option of languages.options) option.selected = chosen.has(option.value)
+        for (const option of languages.options) option.selected = accepted.has(option.value)
         handlers.say(
           `Choose at most ${String(view.hearing.most)}${forPronoun(SAYS.tooManyLanguages, view.pronoun)}`,
           true,
         )
         return
       }
+      accepted = new Set(picked)
       handlers.hearing({ languages: picked })
     })
 

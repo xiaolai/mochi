@@ -651,22 +651,29 @@ const handlers: ShelfHandlers = {
  * conversations are re-read too, because wearing somebody changes whose they
  * are — the archive is scoped per character.
  */
+/** The shelf's queue. Same argument as `machineQueue`. */
+let shelfQueue: Promise<void> = Promise.resolve()
+
 async function write(act: () => Promise<SettingsWrite>, done: string): Promise<void> {
-  try {
-    const result = await act()
-    say(result.ok ? done : result.why, !result.ok)
-  } catch (error: unknown) {
-    say(String(error), true)
-  }
-  /**
-   * Re-read after EVERY outcome, including a throw.
-   *
-   * The controls are populated from the last read, so a change that was not
-   * accepted leaves a select or a checkbox showing a value nothing took. A
-   * refusal used to re-read and a throw used to return — so the one failure
-   * that says least about itself was also the one that left the window lying.
-   */
-  await reload()
+  const mine = shelfQueue.then(async () => {
+    try {
+      const result = await act()
+      say(result.ok ? done : result.why, !result.ok)
+    } catch (error: unknown) {
+      say(String(error), true)
+    }
+    /*
+      Re-read after EVERY outcome, including a throw.
+
+      The controls are populated from the last read, so a change that was not
+      accepted leaves a select or a checkbox showing a value nothing took. A
+      refusal used to re-read and a throw used to return — so the one failure
+      that says least about itself was also the one that left the window lying.
+    */
+    await reload()
+  })
+  shelfQueue = mine.catch(() => undefined)
+  await mine
 }
 
 /** Everything, from main, in the order the panes are drawn. */
@@ -1549,16 +1556,39 @@ const machineHandlers: PaneHandlers = {
   },
 }
 
+/**
+ * Writes run ONE AT A TIME, in the order they were asked for.
+ *
+ * Every control here dispatches into the void — `hearing`, `grant`, `screen`
+ * and the rest are `void writeMachine(...)` — so two changes in quick
+ * succession were two independent chains racing to main. The second selection
+ * could be written first and the first one last, leaving the setting on the
+ * value somebody moved OFF, with a "Saved." for the one they moved to.
+ *
+ * `freshness` is the answer for READS, which replace each other and where the
+ * newest wins. A write is not like that: every one has to happen, and the order
+ * is the whole meaning. So they queue.
+ *
+ * The queue must never reject, or one failed write skips every later one. The
+ * body already catches everything it can; the `catch` on the chain is for
+ * whatever it cannot.
+ */
+let machineQueue: Promise<void> = Promise.resolve()
+
 async function writeMachine(run: () => Promise<SettingsWrite>, ok: string): Promise<void> {
-  try {
-    const answer = await run()
-    // Main's own refusal sentence when it has one — it knows why, and a generic
-    // "could not save" would replace a reason with a shrug.
-    say(answer.ok ? ok : answer.why, !answer.ok)
-  } catch (error: unknown) {
-    say(String(error), true)
-  }
-  await loadMachine()
+  const mine = machineQueue.then(async () => {
+    try {
+      const answer = await run()
+      // Main's own refusal sentence when it has one — it knows why, and a generic
+      // "could not save" would replace a reason with a shrug.
+      say(answer.ok ? ok : answer.why, !answer.ok)
+    } catch (error: unknown) {
+      say(String(error), true)
+    }
+    await loadMachine()
+  })
+  machineQueue = mine.catch(() => undefined)
+  await mine
 }
 
 /** See `freshness`. Tab entries, writes, workspace picks and rechecks all read. */

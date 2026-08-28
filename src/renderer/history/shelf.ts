@@ -266,6 +266,20 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
   cancel.disabled = true
 
   save.addEventListener('click', () => {
+    /*
+      THE BOX GOES WITH THE BUTTONS.
+
+      Only the buttons were disabled, so the box stayed live for the whole
+      round trip — and the save ends in a `reload`, which rebuilds this panel
+      from what main now holds. Anything typed in between was replaced without a
+      word: the caret jumped, the words went, and the only thing that had
+      happened was a save somebody asked for.
+
+      Disabled rather than left alone and merged afterwards: there is one
+      document here and two writers, and the honest answer to that is to have
+      one of them wait. The round trip is an IPC call, not a network one.
+    */
+    editor.disabled = true
     save.disabled = true
     cancel.disabled = true
     handlers.prompt(editor.value)

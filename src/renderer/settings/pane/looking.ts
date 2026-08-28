@@ -14,6 +14,15 @@ import { type SettingsCodex, type SettingsView } from '@shared/ipc'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
 import { field, options } from '../pane'
+
+/**
+ * Whether a Codex check is in flight, across redraws of this pane.
+ *
+ * Module scope on purpose. See the click handler below: the pane is rebuilt on
+ * every read, a check causes a read, and a lock living on the button therefore
+ * unlocked itself halfway through the thing it was locking.
+ */
+let checking = false
 export const LOOKING: Pane = {
   id: 'looking',
   label: 'Looking things up',
@@ -245,18 +254,37 @@ function codexBlock(
     box.append(element('p', 'note', forPronoun(SAYS.noCliLong, pronoun)))
   }
 
+  /*
+    THE LOCK IS ON THE MODULE, not on the button.
+
+    `again.disabled = true` locks one ELEMENT, and this pane is rebuilt from
+    scratch on every read — which a check itself causes, because main answers
+    and the window re-reads. So the redraw handed back a brand new button with
+    `disabled` false while the first check was still running, and a second click
+    started a second one. Two checks spawn child processes and the later answer
+    does not necessarily land last, so the shared Codex status could end up
+    holding the OLDER result.
+
+    A module-level flag survives the redraw, which is the whole point: the thing
+    being guarded is the check, and the check outlives the button that started
+    it.
+  */
+  again.disabled = checking
+  if (checking) again.textContent = 'Checking…'
   again.addEventListener('click', () => {
-    // Disabled for the whole round trip. Two checks in flight would spawn four
-    // child processes and the later answer would not necessarily land last.
+    if (checking) return
+    checking = true
     again.disabled = true
     again.textContent = 'Checking…'
     void handlers.recheckCodex().then(
       () => {
-        // Nothing to redraw here: main answers and the window re-reads, which
-        // is the one path that cannot show a status the rest of the pane
-        // disagrees with.
+        // Cleared even though nothing is redrawn here: main answers and the
+        // window re-reads, and the redraw reads this flag to decide whether the
+        // button it is making should be live.
+        checking = false
       },
       (error: unknown) => {
+        checking = false
         again.disabled = false
         again.textContent = 'Check again'
         handlers.say(`Codex could not be checked: ${String(error)}`, true)

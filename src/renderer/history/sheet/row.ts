@@ -56,6 +56,23 @@ export function chooser(
   chosen: string,
   pick: (value: string) => void,
 ): HTMLElement {
+  /*
+    What this row has actually ASKED FOR, which stops being `chosen` on the
+    first click.
+
+    `chosen` is captured when the sheet is drawn and never moves — the redraw
+    comes from an asynchronous save and reload, and until it lands every button
+    still believes the original answer. So a second click on the option
+    somebody had just selected dispatched a duplicate write, and two quick
+    clicks on different options dispatched both.
+
+    Tracked here rather than read back off `aria-current`, because the DOM is
+    the thing being corrected: a value the row has asked for is a fact about
+    this row, not about what is drawn.
+  */
+  let asked = chosen
+  /** Every button by its value, so the row can move its own mark. */
+  const drawn = new Map<string, HTMLElement>()
   const wrap = element('div', className)
   for (const entry of entries) {
     const button = element('button', undefined, entry.label)
@@ -79,8 +96,16 @@ export function chooser(
     button.addEventListener('click', () => {
       // Nothing to save when it is already the answer, and a write would
       // redraw the pane under the pointer for no change.
-      if (entry.value !== chosen) pick(entry.value)
+      if (entry.value === asked) return
+      asked = entry.value
+      // Moved here too, so the row shows what it asked for while the save is
+      // in flight rather than the answer it is replacing.
+      for (const [other, control] of drawn) {
+        control.setAttribute('aria-current', String(other === entry.value))
+      }
+      pick(entry.value)
     })
+    drawn.set(entry.value, button)
     wrap.append(button)
   }
   return wrap
