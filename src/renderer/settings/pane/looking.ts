@@ -41,10 +41,19 @@ export const LOOKING: Pane = {
   render(view, handlers) {
     const workspace = element('input')
     workspace.type = 'text'
-    // Present so the field keeps an edge while it is empty — the rule in
-    // `tokens.css` reads `:placeholder-shown`, and an empty box with nothing in
-    // it does not say what it is for either. Never reachable in practice: the
-    // workspace always resolves to at least the default.
+    /*
+      Present so the field keeps an edge while it is empty — the rule in
+      `tokens.css` reads `:placeholder-shown`, and an empty box with nothing in
+      it does not say what it is for either.
+
+      This used to end "Never reachable in practice: the workspace always
+      resolves to at least the default", which is true of the value this pane is
+      DRAWN with and not of the field. Clear the box and the placeholder is
+      exactly what is on screen — and that is the one moment the styling matters,
+      because a field with no edge and no text reads as a gap rather than a
+      control. An audit read the comment and concluded the assignment was dead;
+      it is the sentence that was wrong.
+    */
     workspace.placeholder = forPronoun(SAYS.workspacePlaceholder, view.pronoun)
     workspace.value = view.lookup.workspace
     workspace.spellcheck = false

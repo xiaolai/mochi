@@ -1226,3 +1226,79 @@ describe('a folder that has been swapped since it was identified', () => {
     expect(existsSync(join(root, 'taken', 'someone.json'))).toBe(true)
   })
 })
+
+/**
+ * A copy whose grants could not be written.
+ *
+ * `seedGrants` ran AFTER the rename that publishes the package and outside the
+ * `try`. A failure there threw out of `copyPersonaTo` without returning
+ * `Written` — and the caller has nothing to roll back with, because
+ * `discardWrite` takes an id and a source and neither had been handed over.
+ *
+ * So the persona stayed on the shelf, published, with no grants file: and
+ * `readGrants` falls back to the one pre-upgrade global setting when a
+ * character has no file, which is the exact hazard seeding exists to prevent.
+ */
+describe('a new character is seeded before she is published', () => {
+  it('writes her grants file, and it is there when she is', () => {
+    const dir = workspace()
+    const catalog = loadPersonas(dir, {})
+    const built = catalog.personas.get(BUILT_IN_ID)
+    expect(built).toBeDefined()
+    const written = copyPersonaTo(dir, catalog, built!, 'Ada')
+    // Both, and the order is the point: by the time the package is readable,
+    // her permissions are already her own.
+    expect(existsSync(join(personasRoot(dir), written.source, MANIFEST))).toBe(true)
+    expect(existsSync(join(dir, 'grants', `${written.id}.json`))).toBe(true)
+  })
+
+  it('leaves NO character behind when her GRANTS cannot be written', () => {
+    /*
+      The case the ordering is actually about, and the one my first attempt did
+      not reach: it failed the copy at `createPackage`, which is before
+      `seedGrants` in either ordering, so the mutant survived.
+
+      Here the personas root is writable and the GRANTS folder is not. With
+      seeding after the rename, the package is published and then the throw
+      leaves a character on the shelf with no grants file — falling back to the
+      pre-upgrade global setting, which is the hazard seeding exists to prevent.
+      With it before, the rollback takes her.
+    */
+    const dir = workspace()
+    const catalog = loadPersonas(dir, {})
+    const built = catalog.personas.get(BUILT_IN_ID)
+    mkdirSync(join(dir, 'grants'), { recursive: true })
+    chmodSync(join(dir, 'grants'), 0o500)
+    try {
+      expect(() => copyPersonaTo(dir, catalog, built!, 'Ada')).toThrow()
+    } finally {
+      chmodSync(join(dir, 'grants'), 0o700)
+    }
+    expect(
+      loadPersonas(dir, {}).personas.has('ada'),
+      'she is on the shelf with no permissions of her own',
+    ).toBe(false)
+  })
+
+  it('leaves NEITHER behind when the copy fails', () => {
+    /*
+      The rollback the old ordering could not reach. `seedGrants` is inside the
+      `try` now, so a failure anywhere in the copy takes the staging folder and
+      the reservation with it — and there is no half-made character on the shelf
+      holding somebody else's permissions.
+    */
+    const dir = workspace()
+    const catalog = loadPersonas(dir, {})
+    const built = catalog.personas.get(BUILT_IN_ID)
+    // A personas root that cannot be written to, so the copy fails partway. It
+    // is created lazily, so it has to exist before it can be made read-only.
+    mkdirSync(personasRoot(dir), { recursive: true })
+    chmodSync(personasRoot(dir), 0o500)
+    try {
+      expect(() => copyPersonaTo(dir, catalog, built!, 'Ada')).toThrow()
+    } finally {
+      chmodSync(personasRoot(dir), 0o700)
+    }
+    expect(loadPersonas(dir, {}).personas.has('ada')).toBe(false)
+  })
+})

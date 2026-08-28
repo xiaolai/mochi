@@ -475,6 +475,26 @@ export function copyPersonaTo(
       mkdirSync(staging, { recursive: true })
     }
     savePersonaManifest(staging, persona, id, name)
+    /*
+      HER GRANTS BEFORE SHE IS PUBLISHED, not after.
+
+      `readGrants` falls back to the one pre-upgrade global setting when a
+      character has no file — which is what stops an unfinished migration
+      granting everything, and what makes a character created today inherit a
+      permission decision made about somebody else.
+
+      This ran after the rename, outside the `try`. So a failure there threw out
+      of `copyPersonaTo` WITHOUT returning `Written`, and the caller has nothing
+      to roll back with: `discardWrite` takes an id and a source, and neither
+      had been handed over. The persona stayed on the shelf, published, with no
+      grants file and the legacy fallback deciding what she may do.
+
+      Inside the try it is covered by the same rollback as everything else. If
+      the rename then fails, the grants file is orphaned — and that costs
+      nothing, because what it holds IS the defaults, which is what the next
+      character of that id would be seeded with anyway.
+    */
+    seedGrants(userData, id)
     // Onto the reservation this call made, which `rename` may replace because
     // it is an empty directory and it is ours.
     renameSync(staging, join(root, id))
@@ -514,17 +534,7 @@ export function copyPersonaTo(
     }
     throw error
   }
-  /*
-    A NEW character starts at the defaults, not at somebody else's answer.
-
-    `readGrants` falls back to the one pre-upgrade global setting when a
-    character has no file, which is what stops an unfinished migration granting
-    everything. Left unseeded, a character created today would inherit that
-    fallback — a permission decision made about a different character, before
-    per-character permissions existed. Writing her own file is what makes the
-    fallback mean only "from before the upgrade".
-  */
-  seedGrants(userData, id)
+  // Her grants were written above, before the rename — see the note there.
   return { id, source: id }
 }
 

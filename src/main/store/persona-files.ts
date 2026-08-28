@@ -60,7 +60,26 @@ export function personasRoot(userData: string): string {
 }
 
 /**
- * Take a package name, exclusively, or fail because somebody else has it.
+ * Take a package name, or fail because somebody else already has it.
+ *
+ * ## What it guarantees, and what it does not
+ *
+ * This said "exclusively", which overstates it. `mkdir` is atomic AT THE MOMENT
+ * IT RUNS: either this call created the directory or somebody else already had
+ * it, with no window between the question and the answer. That is the whole
+ * value and it is real.
+ *
+ * It is not a LOCK held until the caller is finished. `copyPersonaTo` reserves,
+ * builds a staging folder, and then renames onto the reservation — and `rename`
+ * silently replaces an EMPTY destination directory. So an actor that removes
+ * the reservation and recreates it as an empty folder in between loses that
+ * folder to the rename. Nothing portable closes that: it needs the directory
+ * held open across the two operations, which neither Node nor POSIX offers for
+ * a rename target.
+ *
+ * The window is milliseconds and the actor has to be inside the app's own data
+ * directory, so the residual is narrow. Stating it is the point — a docblock
+ * claiming exclusivity is what stops the next person looking for the gap.
  *
  * The ONE creation primitive, used by every path that makes a package. Each of
  * them used to ask `entryExists` and then write, which is a check-then-act
