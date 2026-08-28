@@ -6,6 +6,7 @@ import type {
   HistoryTurn,
   MochiHistoryApi,
   ShelfView,
+  ToolUse,
 } from '@shared/history-window'
 import { DEFAULT_PRONOUN, forPronoun, label as paneLabel, type Pronoun } from '@shared/pronoun'
 import { applyAccent } from '../design/apply-accent'
@@ -75,7 +76,7 @@ import {
   wakeEl,
 } from './elements'
 import { say } from './status'
-import { empty, facts, iconButton, marked } from './bits'
+import { empty, facts, iconButton, marked, toolChips } from './bits'
 import { countByDay, openingDay } from './month'
 import { sureExportEl } from './elements'
 import { offerACopyFirst } from './keep-a-copy'
@@ -825,13 +826,19 @@ function copyButton(text: string): HTMLButtonElement {
  * lookup would leave the header blank exactly when somebody arrived from a
  * search. The turns are already in hand and answer all three facts.
  *
- * The artifact also draws a row of tool chips here: `ask_workspace ×2`,
- * `remember_this ×1`. Nothing archives a call. `transcripts.ts` stores turns —
- * `{at, who, text, cut}` — and a capability's answer reaches the model and the
- * problem log and never the record, so those chips would be invented. Left out,
- * with what it would take written into `plan-v2.md` W5.
+ * The artifact also draws a row of tool chips here: `ask_workspace ×2`. Those
+ * were left out rather than invented, because nothing archived a call — the
+ * store held turns and a capability's answer reached the model and the problem
+ * log and never the record. `plan-v2.md` W5 wrote down what it would take;
+ * `session_tool` is that table, written from the same observer that records
+ * "last used", and these are its chips.
+ *
+ * They come from the CONVERSATION row rather than from the turns, because a
+ * call is not a turn — she can look something up without saying anything, and
+ * deriving chips from what was said would miss exactly the lookups that took
+ * long enough to be worth showing.
  */
-function transcriptHead(turns: readonly HistoryTurn[]): HTMLElement {
+function transcriptHead(turns: readonly HistoryTurn[], tools: readonly ToolUse[]): HTMLElement {
   const head = document.createElement('div')
   head.className = 'talk-head'
 
@@ -865,6 +872,16 @@ function transcriptHead(turns: readonly HistoryTurn[]): HTMLElement {
   meta.append(...said)
 
   head.append(title, meta)
+  // Its own row, under the facts. A chip is a name and the facts are marks, so
+  // a single line holding both reads as one list of unlike things — and the
+  // ordinary conversation has no chips at all, which would leave the row empty
+  // half the time if they shared it.
+  if (tools.length > 0) {
+    const called = document.createElement('div')
+    called.className = 'talk-tools'
+    called.append(...toolChips(tools))
+    head.append(called)
+  }
   return head
 }
 
@@ -900,7 +917,11 @@ async function show(token: string, term: string): Promise<void> {
   */
   const transcript = document.createElement('div')
   transcript.className = 'transcript'
-  transcript.append(transcriptHead(turns))
+  // From the conversation the list already holds. `history:turns` answers turns
+  // alone, and a second round trip for two numbers would be a request per open.
+  transcript.append(
+    transcriptHead(turns, conversations.find((one) => one.token === token)?.tools ?? []),
+  )
 
   let run: HTMLElement | null = null
   let said: HTMLElement | null = null

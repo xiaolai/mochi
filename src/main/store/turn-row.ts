@@ -57,6 +57,24 @@ export interface Session {
   /** Null while she is still awake. */
   readonly endedAt: number | null
   readonly turns: number
+  /**
+   * Which capabilities she reached for in it, and how many times each.
+   *
+   * EMPTY is the ordinary answer: most conversations call nothing. It is a
+   * list rather than a map so the order is the query's — by name — and two
+   * readers cannot disagree about it.
+   *
+   * The archive header drew `ask_workspace ×2` from the day it was designed
+   * and nothing stored it, so the chips were left out rather than faked. This
+   * is the thing they were waiting for.
+   */
+  readonly tools: readonly ToolUse[]
+}
+
+/** One capability, and how many times it was called in one conversation. */
+export interface ToolUse {
+  readonly name: string
+  readonly uses: number
 }
 
 export interface Hit {

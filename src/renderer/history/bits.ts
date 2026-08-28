@@ -7,6 +7,7 @@
  * function that decides which characters of a search result are highlighted,
  * had no test and no way to get one.
  */
+import { element } from '../element'
 import { highlight } from './format'
 import { RAN_FOR, TURNS, fact } from './glyph'
 export function empty(parent: HTMLElement, text: string): void {
@@ -120,4 +121,36 @@ export function facts(turns: number, length: string | null): readonly Node[] {
   // answer at all rather than reporting a backwards span as a real duration.
   if (length !== null) said.push(fact(RAN_FOR, length, `ran for ${length}`))
   return said
+}
+
+/**
+ * What she reached for in one conversation, as chips.
+ *
+ * ## Why chips rather than another glyph
+ *
+ * `facts` says how many turns and how long, in marks, because those are two
+ * nouns repeated down a whole column and the numbers are what somebody
+ * compares. A capability is the opposite shape: the NAME is the information
+ * and the count is the footnote. `ask_workspace` cannot be a mark somebody
+ * learns, and there is no column of them to deduplicate — a conversation has
+ * none, one, or two.
+ *
+ * ## The count is only drawn when it is more than one
+ *
+ * `ask_workspace ×1` is the same fact as `ask_workspace` with more to read,
+ * and every chip carrying a `×1` makes the one that says `×3` harder to spot
+ * rather than easier. The accessible name carries the whole sentence either
+ * way, which is the rule `glyph.ts` states for the marks above.
+ */
+export function toolChips(tools: readonly { name: string; uses: number }[]): readonly Node[] {
+  return tools.map((tool) => {
+    const chip = element('span', 'tool-chip')
+    chip.append(element('span', 'tool-name', tool.name))
+    if (tool.uses > 1) chip.append(element('span', 'tool-uses', `×${String(tool.uses)}`))
+    // The sentence, for a reader that does not get the layout. `time`/`times`
+    // rather than the `×`, which a screen reader says as "x".
+    chip.title = `${tool.name}, called ${String(tool.uses)} ${tool.uses === 1 ? 'time' : 'times'}`
+    chip.setAttribute('aria-label', chip.title)
+    return chip
+  })
 }

@@ -53,6 +53,7 @@ import {
   type Hit,
   type LiveSession,
   type Session,
+  type ToolUse,
   type SessionToken,
   type Speaker,
   type Turn,
@@ -138,6 +139,21 @@ export interface Transcripts {
    */
   say(session: LiveSession, who: Speaker, text: string, at?: number, cut?: boolean): void
   end(session: LiveSession, at?: number): void
+  /**
+   * Record that she reached for a capability in this conversation.
+   *
+   * Called on ARRIVAL, from the same observer that records "last used" — a call
+   * that arrived is one she made whether or not it answered, and a lookup that
+   * fails after twenty seconds is exactly the one worth seeing in a transcript.
+   *
+   * Silently does nothing when the token names no OPEN conversation of hers.
+   * That is the ordinary case rather than an error: she can call a capability
+   * during a session in which nobody has spoken yet, and `begin` deliberately
+   * does not open a conversation until the first turn — so there is genuinely
+   * nowhere to put it, and refusing loudly would report a fault on a path that
+   * is working as designed.
+   */
+  tooled(session: LiveSession, name: string, at?: number): void
   sessions(personaId: string): readonly Session[]
   /**
    * What was said in one conversation of HERS, named by its opaque token.
@@ -547,12 +563,34 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
 
   /** Her conversations, newest first. Closed over so `exportFor` needs no `this`. */
   function sessionsOf(personaId: string): readonly Session[] {
-    return stmt.sessions.all(personaId).map((row) => ({
-      token: String(row['token']),
-      startedAt: Number(row['started_at']),
-      endedAt: row['ended_at'] === null ? null : Number(row['ended_at']),
-      turns: Number(row['turns']),
-    }))
+    /*
+      ONE query for every conversation's tools, not one per conversation.
+
+      The list is drawn on every open of the archive and a query per row is how
+      a pane that is fine with twenty conversations stops being fine with two
+      hundred. Grouped into a map here rather than joined onto `sessions`,
+      because joining a second one-to-many through a query that already counts
+      turns multiplies the rows before the count runs -- `toolsFor` says so.
+    */
+    const byToken = new Map<string, ToolUse[]>()
+    for (const row of stmt.toolsFor.all(personaId)) {
+      const token = String(row['token'])
+      const uses = byToken.get(token) ?? []
+      uses.push({ name: String(row['name']), uses: Number(row['uses']) })
+      byToken.set(token, uses)
+    }
+    return stmt.sessions.all(personaId).map((row) => {
+      const token = String(row['token'])
+      return {
+        token,
+        startedAt: Number(row['started_at']),
+        endedAt: row['ended_at'] === null ? null : Number(row['ended_at']),
+        turns: Number(row['turns']),
+        // EMPTY, never absent. Most conversations call nothing, and a caller
+        // that had to tell "none" from "not loaded" would get it wrong once.
+        tools: byToken.get(token) ?? [],
+      }
+    })
   }
 
   /**
@@ -755,6 +793,24 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       }
       const floor = floorFor(row.id, row.startedAt)
       stmt.end.run(at < floor ? floor : at, row.id)
+    },
+    tooled(token, name, at = now()) {
+      // The boundary guard every write here carries. `at` reaches this store
+      // from a clock main owns rather than from the renderer, so this is
+      // cheaper than `say`'s case — and it is applied anyway, because
+      // `instant.ts` exists precisely because one of three write paths was
+      // missing the check the other two had.
+      if (!readableInstant(at)) {
+        console.error(`[transcripts] refusing to file a capability call at an unusable instant`)
+        return
+      }
+      const row = openSession(token)
+      // No OPEN conversation of hers. Ordinary rather than an error — see the
+      // interface. Nothing to attach it to, and nothing to report.
+      if (row === null) return
+      atomically(() => {
+        stmt.tooled.run(row.id, name, at)
+      })
     },
     sessions: sessionsOf,
     turns: turnsOf,

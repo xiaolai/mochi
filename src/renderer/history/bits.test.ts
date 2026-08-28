@@ -33,7 +33,7 @@ afterEach(() => {
 
 // Imported after the stub is described, but the module reads `document` per
 // call rather than at load, so a normal import is fine.
-const { empty, facts, iconButton, marked } = await import('./bits')
+const { empty, facts, iconButton, marked, toolChips } = await import('./bits')
 
 /** The double is structural; the module is typed against the real DOM. */
 const asNode = (value: unknown): FakeNode => value as FakeNode
@@ -227,5 +227,50 @@ describe('emptying a pane', () => {
     empty(host as unknown as HTMLElement, 'Second.')
     expect(host.children).toHaveLength(1)
     expect(textOf(host)).toBe('Second.')
+  })
+})
+
+/**
+ * The chips the header drew in the artifact and could not draw in the build.
+ *
+ * `transcriptHead` carried a comment saying they were left out rather than
+ * invented, because nothing archived a capability call. `session_tool` is what
+ * closed that; these are the rules for what the chips say.
+ */
+describe('what she reached for, as chips', () => {
+  it('draws one chip per capability, naming it', () => {
+    const chips = toolChips([
+      { name: 'ask_workspace', uses: 1 },
+      { name: 'remember_this', uses: 1 },
+    ])
+    expect(chips).toHaveLength(2)
+    expect(textOf(asNode(chips[0]))).toBe('ask_workspace')
+    expect(textOf(asNode(chips[1]))).toBe('remember_this')
+  })
+
+  it('shows a count only when it is more than one', () => {
+    /*
+      `ask_workspace ×1` is the same fact as `ask_workspace` with more to read,
+      and every chip carrying a ×1 makes the one that says ×3 harder to find
+      rather than easier.
+    */
+    const [once] = toolChips([{ name: 'ask_workspace', uses: 1 }])
+    expect(textOf(asNode(once))).toBe('ask_workspace')
+    const [twice] = toolChips([{ name: 'ask_workspace', uses: 2 }])
+    expect(textOf(asNode(twice))).toBe('ask_workspace×2')
+  })
+
+  it('carries the whole sentence as the accessible name, either way', () => {
+    // The rule `glyph.ts` states for the marks above: the shape is for the
+    // eye, and the sentence survives for a reader that does not get it.
+    const [once] = toolChips([{ name: 'ask_workspace', uses: 1 }])
+    expect(asNode(once).attributes.get('aria-label')).toBe('ask_workspace, called 1 time')
+    const [twice] = toolChips([{ name: 'remember_this', uses: 3 }])
+    expect(asNode(twice).attributes.get('aria-label')).toBe('remember_this, called 3 times')
+  })
+
+  it('says nothing at all when she reached for nothing', () => {
+    // The ordinary conversation. An empty row would be a row half the time.
+    expect(toolChips([])).toEqual([])
   })
 })

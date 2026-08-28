@@ -34,6 +34,25 @@ export interface HistoryConversation {
   readonly startedAt: number
   readonly endedAt: number | null
   readonly turns: number
+  /**
+   * Which capabilities she reached for in it, and how many times each.
+   *
+   * EMPTY is the ordinary answer — most conversations call nothing — and it is
+   * a list rather than a map so the order is the query's and two readers cannot
+   * disagree about it.
+   *
+   * The transcript header has drawn a row of tool chips in the artifact since
+   * it was designed, and `transcriptHead` carried a comment saying they were
+   * left out rather than invented because nothing archived a call. `plan-v2.md`
+   * W5 is where that was written down; `session_tool` is what closed it.
+   */
+  readonly tools: readonly ToolUse[]
+}
+
+/** One capability, and how many times it was called in one conversation. */
+export interface ToolUse {
+  readonly name: string
+  readonly uses: number
 }
 
 /** One thing said in one. */

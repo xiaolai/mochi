@@ -43,6 +43,27 @@ export function prepareAll(db: DatabaseSync) {
       WHERE s.token = ? AND s.persona_id = ?
       ORDER BY t.at, t.id
     `),
+    tooled: db.prepare('INSERT INTO session_tool (session_id, name, at) VALUES (?, ?, ?)'),
+    /*
+      What she reached for, per conversation, for one character.
+
+      A SECOND query rather than a join onto `sessions`. That one already
+      groups by session to count turns, and joining a second one-to-many
+      through it multiplies the rows before the count runs -- a conversation
+      with three turns and two lookups would report six turns. The two results
+      are stitched in `sessionsOf`.
+
+      Scoped to the persona IN the statement, like every other read here: a
+      query that fetched every session's tools and narrowed afterwards leaks
+      through the first caller who forgets to narrow.
+    */
+    toolsFor: db.prepare(`
+      SELECT s.token, st.name, count(st.id) AS uses
+      FROM session_tool st JOIN session s ON s.id = st.session_id
+      WHERE s.persona_id = ?
+      GROUP BY s.id, st.name
+      ORDER BY st.name
+    `),
     forget: db.prepare('DELETE FROM session WHERE persona_id = ?'),
     forgetIndex: db.prepare('DELETE FROM turn_fts WHERE persona_id = ?'),
     // Both scoped to the persona IN the statement rather than behind a check

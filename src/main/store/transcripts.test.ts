@@ -1564,3 +1564,137 @@ describe('her old kept store is removed, not merely stopped being made', () => {
     expect(() => t.begin('ada')).not.toThrow()
   })
 })
+
+/**
+ * What she reached for, filed against the conversation she reached in.
+ *
+ * The archive header has drawn `ask_workspace ×2` since it was designed and
+ * nothing stored it, so the chips were left out rather than faked. These are
+ * the assertions that let them be drawn.
+ */
+describe('capabilities she called', () => {
+  it('is empty for a conversation where she called nothing', () => {
+    // The ordinary case. A caller that had to tell "none" from "not loaded"
+    // would get it wrong once.
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'hello', 1_001)
+    expect(t.sessions('ada')[0]?.tools).toEqual([])
+  })
+
+  it('counts each capability separately, by name', () => {
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'look something up', 1_001)
+    t.tooled(live, 'ask_workspace', 1_002)
+    t.tooled(live, 'ask_workspace', 1_003)
+    t.tooled(live, 'remember_this', 1_004)
+    expect(t.sessions('ada')[0]?.tools).toEqual([
+      { name: 'ask_workspace', uses: 2 },
+      { name: 'remember_this', uses: 1 },
+    ])
+  })
+
+  it('keeps one row per call rather than a tally', () => {
+    // A count is derivable from rows and rows are not derivable from a count.
+    // What is lost by storing a tally is WHEN in the conversation she reached.
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'twice', 1_001)
+    t.tooled(live, 'ask_workspace', 1_002)
+    t.tooled(live, 'ask_workspace', 1_009)
+    expect(count(t, 'SELECT count(*) AS n FROM session_tool')).toBe(2)
+    expect(count(t, 'SELECT count(DISTINCT at) AS n FROM session_tool')).toBe(2)
+  })
+
+  it('does not leak one conversation calls into another', () => {
+    const t = store()
+    const first = t.begin('ada', 1_000)
+    const second = t.begin('ada', 2_000)
+    if (first === null || second === null) throw new Error('no conversation')
+    t.say(first, 'you', 'one', 1_001)
+    t.say(second, 'you', 'two', 2_001)
+    t.tooled(first, 'ask_workspace', 1_002)
+    const sessions = t.sessions('ada')
+    expect(sessions.find((one) => one.token === first)?.tools).toEqual([
+      { name: 'ask_workspace', uses: 1 },
+    ])
+    expect(sessions.find((one) => one.token === second)?.tools).toEqual([])
+  })
+
+  it('does not leak across characters', () => {
+    // Every read in this store takes the persona. A query that fetched every
+    // session's tools and narrowed afterwards leaks through the first caller
+    // who forgets to narrow.
+    const t = store()
+    const hers = t.begin('ada', 1_000)
+    const theirs = t.begin('bob', 1_000)
+    if (hers === null || theirs === null) throw new Error('no conversation')
+    t.say(hers, 'you', 'mine', 1_001)
+    t.say(theirs, 'you', 'yours', 1_001)
+    t.tooled(hers, 'ask_workspace', 1_002)
+    t.tooled(theirs, 'remember_this', 1_002)
+    expect(t.sessions('ada')[0]?.tools).toEqual([{ name: 'ask_workspace', uses: 1 }])
+    expect(t.sessions('bob')[0]?.tools).toEqual([{ name: 'remember_this', uses: 1 }])
+  })
+
+  it('counts turns correctly when a conversation also has tool calls', () => {
+    /*
+      The join this table was NOT allowed to be. `sessions` already groups to
+      count turns; joining a second one-to-many through it multiplies the rows
+      before the count runs, so three turns and two calls would report six
+      turns. Asserted because it is invisible until somebody uses both.
+    */
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'one', 1_001)
+    t.say(live, 'her', 'two', 1_002)
+    t.say(live, 'you', 'three', 1_003)
+    t.tooled(live, 'ask_workspace', 1_004)
+    t.tooled(live, 'remember_this', 1_005)
+    expect(t.sessions('ada')[0]?.turns).toBe(3)
+  })
+
+  it('forgets them with the conversation they belong to', () => {
+    /*
+      The privacy half, and the reason it is asserted against the TABLE rather
+      than through `sessions()`. A row the cascade left behind is invisible to
+      every query that joins through `session` — which is how deleting
+      `PRAGMA foreign_keys = ON` left thirty tests in this file green.
+    */
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'hello', 1_001)
+    t.tooled(live, 'ask_workspace', 1_002)
+    expect(count(t, 'SELECT count(*) AS n FROM session_tool')).toBe(1)
+    expect(t.forgetSessions('ada', [live])).toBe(1)
+    expect(count(t, 'SELECT count(*) AS n FROM session_tool')).toBe(0)
+  })
+
+  it('files nothing when the token names no open conversation', () => {
+    // Ordinary rather than an error: she can call a capability in a session
+    // where nobody has spoken, and `begin` does not open one until the first
+    // turn — so there is genuinely nowhere to put it.
+    const t = store()
+    expect(() => {
+      t.tooled('a-token-that-is-not-hers', 'ask_workspace', 1_000)
+    }).not.toThrow()
+    expect(count(t, 'SELECT count(*) AS n FROM session_tool')).toBe(0)
+  })
+
+  it('refuses an instant the store could not read back', () => {
+    // `instant.ts` exists because one of three write paths was missing the
+    // check the other two had. This is the fourth.
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'hello', 1_001)
+    t.tooled(live, 'ask_workspace', 1e17)
+    expect(count(t, 'SELECT count(*) AS n FROM session_tool')).toBe(0)
+  })
+})

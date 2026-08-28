@@ -1596,6 +1596,33 @@ const ledger = createLedger({
       console.error(`[usage] could not record that ${name} was used:`, error)
       problems.note('capability', name, `its use could not be recorded: ${String(error)}`)
     }
+    /*
+      The same arrival, filed against the CONVERSATION rather than the machine.
+
+      Two records of one event, and they answer different questions.
+      `usage.json` is per machine and keeps one instant per capability — the
+      autonomy panel's "last used" column. This is per conversation and keeps
+      every call, because the archive's header has drawn `ask_workspace ×2`
+      since it was designed and nothing stored it.
+
+      Guarded SEPARATELY from the write above rather than sharing its `try`. A
+      failure in one must not cost the other: they are independent records, and
+      wrapping both would make a full disk lose the transcript's copy because
+      the panel's copy went first.
+
+      Not reported to `problems`, unlike the panel's copy. A missing chip is a
+      chip that is not drawn; a missing "last used" is a column that states a
+      falsehood, which is the asymmetry that decides which one is worth
+      interrupting somebody about.
+    */
+    const talking = conversation().liveToken()
+    if (talking !== null) {
+      try {
+        transcripts()?.tooled(talking, name, at)
+      } catch (error: unknown) {
+        console.error(`[transcripts] could not file ${name} against the conversation:`, error)
+      }
+    }
   },
   // `isDestroyed` as well as null. A window that has been closed is still a
   // non-null `BrowserWindow`, and `send` on its `webContents` throws — which
@@ -2206,6 +2233,7 @@ ipcMain.handle('history:list', () => {
         startedAt: one.startedAt,
         endedAt: one.endedAt,
         turns: one.turns,
+        tools: one.tools,
       })),
   }
 })

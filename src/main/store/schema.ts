@@ -100,6 +100,30 @@ export function applySchema(db: DatabaseSync): SchemaApplied {
     );
     CREATE INDEX IF NOT EXISTS turn_by_session ON turn (session_id, at);
 
+    -- Which capabilities she reached for, and when, in one conversation.
+    --
+    -- ONE ROW PER CALL rather than a count per name. A count is derivable from
+    -- rows and rows are not derivable from a count, and the thing that would
+    -- want them later -- when in the conversation she looked something up -- is
+    -- gone for ever the moment this is stored as a tally.
+    --
+    -- ON DELETE CASCADE, like \`turn\`. Forgetting a conversation has to forget
+    -- what she did in it; a row surviving its session would be a record of
+    -- somebody's activity outliving the delete they asked for, in the store
+    -- that runs \`secure_delete\` precisely so it does not.
+    --
+    -- No foreign key to a capability name on purpose. Names come and go -- four
+    -- tools were cut on 2026-08-26 -- and an archive that could not record a
+    -- call to a capability this build no longer has would be an archive that
+    -- rewrites its own history at upgrade time.
+    CREATE TABLE IF NOT EXISTS session_tool (
+      id         INTEGER PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES session(id) ON DELETE CASCADE,
+      name       TEXT    NOT NULL,
+      at         INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS session_tool_by_session ON session_tool (session_id, at);
+
     -- CONTENTLESS-adjacent: the searchable copy is segmented and the readable
     -- one lives in \`turn\`. Storing only the segmented form would mean showing
     -- somebody their own words with spaces between every character.

@@ -1796,6 +1796,45 @@
         color: var(--ink-3);
       }
       /*
+        What she reached for, on its own row under the facts.
+
+        Wrapping, because the number of capabilities is not bounded by this
+        stylesheet -- a build with six would otherwise push the row off its
+        column rather than taking a second line.
+      */
+      .talk-tools {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--s2);
+      }
+      /*
+        A chip reads as a THING SHE DID, not as a control.
+
+        No border and no pointer: nothing here is clickable, and a pill with an
+        outline in a window whose other pills are buttons would invite the
+        click it cannot answer. The wash carries her colour, so the row belongs
+        to the character whose conversation it is.
+      */
+      .tool-chip {
+        display: inline-flex;
+        align-items: baseline;
+        gap: var(--s1);
+        padding: 2px var(--s3);
+        border-radius: 999px;
+        background: var(--her-wash);
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-2);
+      }
+      .tool-name {
+        font-weight: 500;
+      }
+      /* Drawn only above one, and quieter than the name it qualifies. */
+      .tool-uses {
+        color: var(--ink-3);
+      }
+      /*
         A glyph and a number, in the two places that draw the same two facts.
 
         `14 turns · 7 min` was the same two nouns down a whole column, and the
