@@ -395,7 +395,20 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
     }
   })
 
-  channel.addEventListener('message', (event: MessageEvent<string>) => {
+  /**
+   * One frame off the data channel, dispatched.
+   *
+   * A NAMED function rather than two hundred lines of `switch` inside an
+   * `addEventListener` inside a seven-hundred-line factory. It stays a closure
+   * because every arm reads or writes this session's own state — `closed`,
+   * `spoken`, the callbacks, the expiry — and threading those out would make
+   * the seam wider than the thing it separates.
+   *
+   * What the separation buys is that the LISTENER is now one line, so the
+   * `closed` guard at the top of this function is visible as the first thing
+   * that happens to every frame rather than as line three of a wall.
+   */
+  function heard(event: MessageEvent<string>): void {
     /*
       NOTHING FROM A DEAD SESSION.
 
@@ -621,7 +634,9 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
       default:
         break
     }
-  })
+  }
+
+  channel.addEventListener('message', heard)
 
   /**
    * Main hands back the ledger's answers; the channel is here, so it puts them.
