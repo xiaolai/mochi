@@ -15,7 +15,7 @@ import { readBounded } from './read-bounded'
 import { type Transcripts } from './transcripts'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { markDeleting, unfinishedDeletions, unmarkDeleting } from './deleting'
+import { isPackageFolder, markDeleting, unfinishedDeletions, unmarkDeleting } from './deleting'
 import { forgetGrants } from './grants'
 import { problems } from '../problems'
 /**
@@ -28,6 +28,15 @@ import { problems } from '../problems'
  * the caller is responsible for telling the two apart.
  */
 export function discardWrite(userData: string, source: string): void {
+  // The allowlist, at the last thing before a recursive remove. `deleting.ts`
+  // carries the argument: `'.'` passed the old blocklist and `join(root, '.')`
+  // IS the root, so one bad value took every persona. That guard was added
+  // where marks are read; these two removals are the other doors to the same
+  // `rmSync`, and a rule applied at one door is not a rule.
+  if (!isPackageFolder(source)) {
+    console.error(`[persona] refusing to discard an unusable folder: ${source}`)
+    return
+  }
   try {
     // A package is a FOLDER. This was `unlinkSync`, which is from before that
     // was true -- so it threw `EPERM` on every call, got caught by the handler
@@ -128,6 +137,16 @@ function finishDeletion(
   // The WHOLE package. Her face lives in there too, and leaving an orphaned
   // folder behind would be read as a persona that failed to load rather than
   // one that was deleted.
+  //
+  // Guarded like `discardWrite`, and it is the sharper of the two: this runs
+  // from the recovery sweep as well as from a deliberate delete, so its
+  // `source` can come from a mark file somebody edited. THROWS rather than
+  // returning, because a deletion that silently skipped the package would
+  // unmark her below and leave the folder behind for ever — the one state this
+  // function's ordering exists to prevent.
+  if (!isPackageFolder(source)) {
+    throw new Error(`refusing to delete an unusable folder: ${source}`)
+  }
   rmSync(join(personasRoot(userData), source), { recursive: true, force: true })
   // LAST. While this is here she is deleted and the work may be unfinished;
   // once it is gone, every store agrees she never existed.

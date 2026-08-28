@@ -1043,3 +1043,56 @@ describe('a v1 retention choice this build cannot carry refuses the package', ()
     expect(loadPersonas(dir, {}).personas.has('ada')).toBe(true)
   })
 })
+
+/**
+ * Every recursive removal under the personas root goes through the allowlist.
+ *
+ * `deleting.ts` carries the argument: `'.'` passed the old blocklist and
+ * `join(personasRoot, '.')` IS the root, so one bad value took every persona.
+ * That guard was added where MARKS are read. These two removals are the other
+ * doors to the same `rmSync`, and a rule applied at one door is not a rule.
+ *
+ * Exercised against real folders — created, then deleted — rather than a stub,
+ * because what is being asserted is which directory `rmSync` is pointed at.
+ */
+describe('what may be removed under the personas root', () => {
+  it('deletes a real persona it created, and leaves her neighbours', () => {
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
+    write(dir, 'bo', { ...tutor, id: 'bo', name: 'Bo' })
+    expect(loadPersonas(dir, {}).personas.has('ada')).toBe(true)
+
+    deletePersona(dir, loadPersonas(dir, {}), 'ada', history)
+
+    expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(false)
+    // The one that matters: the sibling package is untouched and still loads.
+    expect(existsSync(join(personasRoot(dir), 'bo'))).toBe(true)
+    expect(loadPersonas(dir, {}).personas.has('bo')).toBe(true)
+  })
+
+  it('refuses to discard a folder name that names the root itself', () => {
+    /*
+      `discardWrite` force-removes recursively and validated nothing. `'.'`
+      resolves to `personasRoot`, so a rollback with a bad source would have
+      taken every persona on the machine — while rolling back a FAILED SAVE,
+      which is the moment somebody least expects to lose anything.
+    */
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
+    for (const bad of ['.', '..', '', 'a/b']) {
+      discardWrite(dir, bad)
+    }
+    expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(true)
+    expect(loadPersonas(dir, {}).personas.has('ada')).toBe(true)
+  })
+
+  it('still discards the fork it was meant to discard', () => {
+    // The guard has to refuse the dangerous values without refusing the job.
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
+    write(dir, 'fork', { ...tutor, id: 'fork', name: 'Fork' })
+    discardWrite(dir, 'fork')
+    expect(existsSync(join(personasRoot(dir), 'fork'))).toBe(false)
+    expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(true)
+  })
+})
