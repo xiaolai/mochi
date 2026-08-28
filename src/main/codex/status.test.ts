@@ -1,10 +1,25 @@
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { EXPIRY_MARGIN_MS, authModeOf, readTokenState } from './auth'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { needsShell, checkCodex, pathOf, readinessOf, remedyFor, type CodexStatus } from './status'
 import { CODEX_READINESS, CODEX_SAYS, REMEDY_SAYS, type Remedy } from '@shared/delegation'
+
+/*
+  A LONGER DEADLINE, because these tests start real processes.
+
+  Vitest's default is five seconds per test, which is generous for arithmetic
+  and thin for `spawn` on a machine already running the rest of this suite in
+  parallel. `status.test.ts` timed out once at 5,005ms in a full run and passed
+  three times on its own — the signature of a budget rather than a defect.
+
+  The processes are deliberate and are the point: `status.ts` is about what a
+  real exit code means, and `spawn.ts` about what a real signal reaches. A
+  stubbed child would make both look tested. So the deadline moves, not the
+  method.
+*/
+vi.setConfig({ testTimeout: 30_000 })
 
 /** A JWT with the given `exp`. Only the payload matters; nothing verifies it. */
 function jwt(expSeconds: number | null): string {

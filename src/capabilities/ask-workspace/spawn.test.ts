@@ -1,8 +1,23 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnCodex, taskkillPath, type RunHandle } from './spawn'
+
+/*
+  A LONGER DEADLINE, because these tests start real processes.
+
+  Vitest's default is five seconds per test, which is generous for arithmetic
+  and thin for `spawn` on a machine already running the rest of this suite in
+  parallel. `status.test.ts` timed out once at 5,005ms in a full run and passed
+  three times on its own — the signature of a budget rather than a defect.
+
+  The processes are deliberate and are the point: `status.ts` is about what a
+  real exit code means, and `spawn.ts` about what a real signal reaches. A
+  stubbed child would make both look tested. So the deadline moves, not the
+  method.
+*/
+vi.setConfig({ testTimeout: 30_000 })
 
 /**
  * The process this module actually starts, and the kill that actually lands.
