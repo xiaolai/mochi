@@ -111,6 +111,60 @@ describe('shutting down', () => {
     expect(closed).toBe(true)
   })
 
+  it('closes it even when the REPORTER throws', () => {
+    /*
+      The one step nobody guards, guarding everything after it.
+
+      Each block used to be `try { step() } catch { deps.warn(...) }`. A `warn`
+      that throws inside one of those catches is caught by nothing: it leaves
+      `shutDown` entirely, so a failure in the reporter strands every step
+      below — including this close, which is what flushes deleted text out of
+      the write-ahead log.
+
+      Reporting is not usually thought of as a step that can fail. It is a
+      `console.warn` in production and a callback everywhere else, and either
+      can be replaced by something that throws.
+    */
+    let closed = false
+    shutDown({
+      ...noopShutdown,
+      stopLookups: () => {
+        throw new Error('no')
+      },
+      warn: () => {
+        throw new Error('and the reporter is broken too')
+      },
+      closeArchive: () => {
+        closed = true
+      },
+    })
+    expect(closed).toBe(true)
+  })
+
+  it('asks what was undelivered even when the unanswered read throws', () => {
+    /*
+      Two INDEPENDENT obligations that shared one `try`, so the first throwing
+      silently answered the second. "She was interrupted" and "a frame was
+      silently dropped" are the two facts this sequence exists to tell apart,
+      and one could take the other with it.
+    */
+    let asked = false
+    const noted: string[] = []
+    shutDown({
+      ...noopShutdown,
+      unanswered: () => {
+        throw new Error('the ledger is unreadable')
+      },
+      undelivered: () => {
+        asked = true
+        return ['call_2']
+      },
+      note: (_what, detail) => noted.push(detail),
+    })
+    expect(asked).toBe(true)
+    expect(noted.join(' ')).toContain('come back to 1')
+  })
+
   it('reports what was still owed before it goes', () => {
     // `unanswered()` and `undelivered()` had no production caller at all until
     // this sequence asked. Shutdown is the last moment the difference between

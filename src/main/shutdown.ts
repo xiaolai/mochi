@@ -71,58 +71,113 @@ export interface ShutdownDeps {
  * failures are reported, not raised, because there is nobody left to handle
  * one.
  */
-export function shutDown(deps: ShutdownDeps): void {
+/**
+ * One step, guarded — including the reporting of its own failure.
+ *
+ * ## Two defects, and they are the same shape
+ *
+ * The sequence was five `try { … } catch { deps.warn(…) }` blocks. A `warn`
+ * that throws inside one of those catches is not caught by anything: it leaves
+ * `shutDown` entirely, so a failure in the REPORTER strands every step after
+ * it — including closing the archive, which is what flushes deleted text out of
+ * the write-ahead log. The one thing here that must always happen was behind
+ * the one thing nobody guards, because reporting is not usually thought of as a
+ * step that can fail. It is a `console.warn` in production and a callback in
+ * every other caller, and either can be replaced.
+ *
+ * And the second: two INDEPENDENT obligations shared one block, so
+ * `unanswered()` throwing meant `undelivered()` was never asked. "She was
+ * interrupted" and "a frame was silently dropped" are the two facts this
+ * sequence exists to tell apart, and one of them could take the other with it.
+ *
+ * A helper rather than five more nested `try`s: five copies of a defensive
+ * pattern is five chances to write the fourth one differently, which is how the
+ * shared block came to exist in the first place.
+ */
+function step(deps: ShutdownDeps, what: string, run: () => void): void {
   try {
+    run()
+  } catch (error: unknown) {
+    try {
+      deps.warn(what, error)
+    } catch {
+      /*
+        Nothing left to tell, and that is genuinely the end of the line.
+
+        This is the only empty catch in the module and it is the correct one:
+        the reporter is what failed, so there is nowhere to report it to, and
+        anything else here would be the same defect one level down. What matters
+        is that the archive still closes.
+      */
+    }
+  }
+}
+
+/**
+ * Run the sequence.
+ *
+ * Every step is independently guarded: this is called from `will-quit` and
+ * from both `app.exit()` paths, where a throw strands whatever has not run
+ * yet. Returning normally is not a claim that everything succeeded — the
+ * failures are reported, not raised, because there is nobody left to handle
+ * one.
+ */
+export function shutDown(deps: ShutdownDeps): void {
+  step(deps, '[main] a running Codex run could not be stopped:', () => {
     const stopped = deps.stopLookups()
     // "Codex run", not "lookup". The sleep summariser shares this registry
     // now, so a shutdown log naming every child a lookup misidentifies half of
     // what it stopped — and this log is the only record that they were.
     if (stopped > 0) deps.log(`[main] stopped ${String(stopped)} running Codex run(s)`)
-  } catch (error: unknown) {
-    deps.warn('[main] a running Codex run could not be stopped:', error)
-  }
+  })
 
-  try {
+  step(deps, '[main] a summary scratch directory could not be removed:', () => {
     // Straight after the kill, and before anything slower: the child that was
     // reading this directory is gone as of the line above.
     const swept = deps.removeScratch()
     if (swept > 0) deps.log(`[main] removed ${String(swept)} summary scratch director(ies)`)
-  } catch (error: unknown) {
-    deps.warn('[main] a summary scratch directory could not be removed:', error)
-  }
+  })
 
-  try {
+  /*
+    TWO STEPS, where there was one block holding both.
+
+    They are independent obligations about different failures — a call that was
+    never acknowledged, and one she promised to come back to and did not — and
+    sharing a `try` meant the first one throwing silently answered the second.
+    Shutdown is the last instant either can be recorded at all.
+  */
+  step(deps, '[capability] the unanswered calls could not be read:', () => {
     const hanging = deps.unanswered()
+    if (hanging.length === 0) return
+    deps.warn(`[capability] ${String(hanging.length)} call(s) were never answered`)
+    deps.note(
+      'capability',
+      `${String(hanging.length)} tool call(s) were never answered before quitting`,
+    )
+  })
+
+  step(deps, '[capability] the undelivered calls could not be read:', () => {
     const promised = deps.undelivered()
-    if (hanging.length > 0) {
-      deps.warn(`[capability] ${String(hanging.length)} call(s) were never answered`)
-      deps.note(
-        'capability',
-        `${String(hanging.length)} tool call(s) were never answered before quitting`,
-      )
-    }
-    if (promised.length > 0) {
-      deps.warn(`[capability] ${String(promised.length)} deferred call(s) never came back`)
-      deps.note(
-        'capability',
-        `she said she would come back to ${String(promised.length)} thing(s) and did not`,
-      )
-    }
-  } catch (error: unknown) {
-    deps.warn('[capability] the outstanding calls could not be read:', error)
-  }
+    if (promised.length === 0) return
+    deps.warn(`[capability] ${String(promised.length)} deferred call(s) never came back`)
+    deps.note(
+      'capability',
+      `she said she would come back to ${String(promised.length)} thing(s) and did not`,
+    )
+  })
 
   try {
-    deps.endConversation()
-  } catch (error: unknown) {
-    deps.warn('[main] the conversation could not be ended:', error)
+    step(deps, '[main] the conversation could not be ended:', () => {
+      deps.endConversation()
+    })
   } finally {
     // In a `finally`, so a conversation that cannot be ended does not leave the
-    // database open behind it.
-    try {
+    // database open behind it. `step` already swallows the ordinary failure;
+    // this is the belt for anything it cannot — a throw from `step` itself is
+    // unreachable by construction, and the archive is too important to rest on
+    // a proof rather than a `finally`.
+    step(deps, '[main] the archive could not be closed:', () => {
       deps.closeArchive()
-    } catch (error: unknown) {
-      deps.warn('[main] the archive could not be closed:', error)
-    }
+    })
   }
 }
