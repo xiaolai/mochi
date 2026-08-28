@@ -25,7 +25,7 @@
  * makes that a change here rather than at every call site.
  */
 
-import { cpSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
+import { cpSync, mkdirSync, readdirSync, renameSync, rmdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_PERSONA, type Persona } from '@shared/persona'
 import { BUILT_IN_ID, deriveId, parsePersona, type PersonaLoadProblem } from '@shared/parse-persona'
@@ -487,7 +487,35 @@ export function copyPersonaTo(
     // Left behind, either would be a directory the catalog cannot read and the
     // next copy cannot take.
     rmSync(staging, { recursive: true, force: true })
-    rmSync(join(root, id), { recursive: true, force: true })
+    /*
+      The reservation removed NON-RECURSIVELY, which is the whole guarantee.
+
+      `createPackage` takes the destination with a bare `mkdirSync` — no
+      `recursive` — precisely because that either creates the directory or
+      fails, in one step, with nothing in between to race. The teardown has to
+      be its mirror image and was not: a recursive force-remove deletes whatever
+      is at that path, and what is at that path is only OURS if nobody has
+      touched it since. A sync client restoring a backup, a second instance, or
+      somebody with a file manager can put a real package there while the copy
+      is being built, and this line would have taken it.
+
+      `rmdir` refuses a directory with anything in it. Our reservation is empty
+      by construction, so the honest teardown succeeds exactly when the thing
+      being removed is still the empty folder we made, and fails with `ENOTEMPTY`
+      when it is somebody's data. Both outcomes are right, which is why the
+      failure is only logged: the original error is what the caller needs, and a
+      throw from cleanup would replace it.
+    */
+    try {
+      rmdirSync(join(root, id))
+    } catch (cleanup: unknown) {
+      const code = (cleanup as NodeJS.ErrnoException).code
+      // Gone already is fine. Anything else means the reservation is not what
+      // we left there, and it stays.
+      if (code !== 'ENOENT') {
+        console.warn(`[persona] left ${id} in place after a failed copy (${code ?? 'unknown'})`)
+      }
+    }
     throw error
   }
   /*

@@ -13,11 +13,90 @@ import { MANIFEST, manifestId, personasRoot } from './persona-files'
 import { forgetPolicy } from './policy'
 import { readBounded } from './read-bounded'
 import { type Transcripts } from './transcripts'
-import { rmSync } from 'node:fs'
+import { renameSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { isPackageFolder, markDeleting, unfinishedDeletions, unmarkDeleting } from './deleting'
 import { forgetGrants } from './grants'
 import { problems } from '../problems'
+/**
+ * What was at a package path once we had taken it, and nobody else could.
+ *
+ * `absent` and `notHers` are different answers and callers act on them
+ * differently — one is the ordinary idempotent case, the other is the one this
+ * whole mechanism exists to refuse.
+ */
+type Claim =
+  | { readonly kind: 'held'; readonly path: string }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'notHers'; readonly claims: string | null }
+
+/**
+ * Take a package OUT of the personas root, then ask what it is.
+ *
+ * ## Why the order is that way round
+ *
+ * Every destructive path here used to read the manifest, decide the folder was
+ * hers, and then remove it — two operations on a path anybody else can swap in
+ * between. `deletePersona` did the read and `finishDeletion` did the remove,
+ * with four filesystem operations between them; the recovery sweep did no read
+ * at all and removed whatever folder a mark file happened to name.
+ *
+ * Checking harder does not close that. A check answers a question about the
+ * past tense, and `rmSync` acts in the present.
+ *
+ * `renameSync` does close it, because it is one operation and it takes the
+ * DIRECTORY ENTRY. Once it returns, the thing we are about to delete sits at a
+ * path nobody else has a name for, so the manifest read afterwards describes
+ * exactly the bytes that will be removed. If it turns out not to be hers, it
+ * goes back where it was and nothing has been destroyed.
+ *
+ * ## The leftover, and why clearing it is safe
+ *
+ * A process killed between the rename and the remove leaves `.discarding-<x>`
+ * behind. It is dot-prefixed, so `loadPersonas` skips it exactly as it skips
+ * `.staging-<id>`, and the name is derived from the source rather than random —
+ * which is what lets the next attempt clear it rather than accumulate one per
+ * try. It is ours by construction: no other code in this project writes that
+ * prefix.
+ */
+function claimPackage(userData: string, id: string, source: string): Claim {
+  const root = personasRoot(userData)
+  const from = join(root, source)
+  const held = join(root, `.discarding-${source}`)
+  rmSync(held, { recursive: true, force: true })
+  try {
+    renameSync(from, held)
+  } catch (error: unknown) {
+    // Already gone. The ordinary case on a retry, and on a deletion somebody
+    // finished by hand.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'absent' }
+    throw error
+  }
+  const standing = readBounded(join(held, MANIFEST))
+  const claims = standing.ok ? manifestId(standing.text) : null
+  if (claims === id) return { kind: 'held', path: held }
+  /*
+    PUT BACK, because we are holding somebody else's package.
+
+    A rename back can itself fail — the original name may have been taken in the
+    moment we held it — and then the package is parked under a dot-prefixed name
+    the catalogue does not read, which looks to its owner exactly like it
+    vanished. Reported rather than swallowed for that reason: it is recoverable
+    by hand, and only if somebody is told.
+  */
+  try {
+    renameSync(held, from)
+  } catch (error: unknown) {
+    console.error(`[persona] could not put ${source} back after refusing to delete it:`, error)
+    problems.note(
+      'personas',
+      id,
+      `a folder that is not ${id} was moved aside and could not be put back; it is at .discarding-${source}`,
+    )
+  }
+  return { kind: 'notHers', claims }
+}
+
 /**
  * Remove a persona file that was just written and must not survive.
  *
@@ -27,7 +106,7 @@ import { problems } from '../problems'
  * somebody's, and rolling that back would turn a failed save into data loss;
  * the caller is responsible for telling the two apart.
  */
-export function discardWrite(userData: string, source: string): void {
+export function discardWrite(userData: string, id: string, source: string): void {
   // The allowlist, at the last thing before a recursive remove. `deleting.ts`
   // carries the argument: `'.'` passed the old blocklist and `join(root, '.')`
   // IS the root, so one bad value took every persona. That guard was added
@@ -38,12 +117,27 @@ export function discardWrite(userData: string, source: string): void {
     return
   }
   try {
-    // A package is a FOLDER. This was `unlinkSync`, which is from before that
-    // was true -- so it threw `EPERM` on every call, got caught by the handler
-    // below, and logged. The rollback it exists to perform has never once
-    // happened: a fork whose follow-up failed stayed on disk, the save
-    // reported failure, and the extra persona was in the list anyway.
-    rmSync(join(personasRoot(userData), source), { recursive: true, force: true })
+    /*
+      CLAIMED, then checked, then removed — and the id is why this takes one.
+
+      The rollback used to remove `source` on the strength of it having been
+      created a moment ago. That is true and it is not enough: "a moment ago" is
+      four filesystem operations and a `writeWornPersonaId` away, and a sync
+      client restoring a backup into that name in between would have had its
+      package deleted by our rollback. `Written` already carries the id, so
+      there was never a reason not to ask.
+
+      A package is a FOLDER, which is the other thing this used to get wrong:
+      it was `unlinkSync`, so it threw `EPERM` on every call and the rollback it
+      exists to perform never once happened.
+    */
+    const claim = claimPackage(userData, id, source)
+    if (claim.kind === 'held') rmSync(claim.path, { recursive: true, force: true })
+    else if (claim.kind === 'notHers') {
+      console.warn(
+        `[persona] not rolling back ${source}: it now claims ${claim.claims ?? 'nothing'}, not ${id}`,
+      )
+    }
   } catch (error: unknown) {
     // Best effort. An orphan persona is visible in the list and recoverable by
     // hand; failing the rollback loudly here would replace one survivable mess
@@ -147,7 +241,31 @@ function finishDeletion(
   if (!isPackageFolder(source)) {
     throw new Error(`refusing to delete an unusable folder: ${source}`)
   }
-  rmSync(join(personasRoot(userData), source), { recursive: true, force: true })
+  /*
+    AND IT MUST STILL BE HERS, which only one of this function's two callers
+    ever checked.
+
+    `deletePersona` reads the manifest and refuses when the folder no longer
+    claims the id — good, and it happens before the mark, five filesystem
+    operations before the removal below. `sweepDeletions` does not check at all:
+    it takes an `id` and a `source` out of a file on disk and deletes whatever
+    folder that names. A mark left by a crash, and a package renamed by hand
+    afterwards, is enough to erase a different character entirely.
+
+    So the check moves HERE, where both callers reach it, and it is done by
+    claiming the folder rather than by reading it — see `claimPackage` for why
+    a read cannot close this and a rename can.
+
+    `absent` is not a failure. The package being gone already is the ordinary
+    state on a retry, and the remaining stores below have been emptied.
+  */
+  const claim = claimPackage(userData, id, source)
+  if (claim.kind === 'notHers') {
+    throw new Error(
+      `${source} claims ${claim.claims ?? 'nothing'}, not ${id}; refusing to delete it`,
+    )
+  }
+  if (claim.kind === 'held') rmSync(claim.path, { recursive: true, force: true })
   // LAST. While this is here she is deleted and the work may be unfinished;
   // once it is gone, every store agrees she never existed.
   unmarkDeleting(userData, id)

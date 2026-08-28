@@ -12,6 +12,8 @@ import {
   chmodSync,
   mkdtempSync,
   mkdirSync,
+  rmdirSync,
+  rmSync,
   symlinkSync,
   existsSync,
   renameSync,
@@ -32,6 +34,7 @@ import { MANIFEST, personasRoot } from './persona-files'
 import { EDITS, builtInPersona, type PersonaEdits } from './her-edits'
 import { deletePersona, discardWrite, sweepDeletions } from './delete-persona'
 import { editsFrom, readEdits, restoreBuiltIn } from './her-edits'
+import { markDeleting } from './deleting'
 
 const roots: string[] = []
 
@@ -861,7 +864,7 @@ describe('rolling back a fork whose follow-up failed', () => {
     write(dir, 'ada-2', { ...tutor, id: 'ada-2', name: 'Ada 2' })
     expect(loadPersonas(dir, {}).personas.has('ada-2')).toBe(true)
 
-    discardWrite(dir, 'ada-2')
+    discardWrite(dir, 'ada-2', 'ada-2')
 
     expect(existsSync(join(personasRoot(dir), 'ada-2'))).toBe(false)
     expect(loadPersonas(dir, {}).personas.has('ada-2')).toBe(false)
@@ -1080,7 +1083,7 @@ describe('what may be removed under the personas root', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
     for (const bad of ['.', '..', '', 'a/b']) {
-      discardWrite(dir, bad)
+      discardWrite(dir, 'ada', bad)
     }
     expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(true)
     expect(loadPersonas(dir, {}).personas.has('ada')).toBe(true)
@@ -1091,8 +1094,121 @@ describe('what may be removed under the personas root', () => {
     const dir = workspace()
     write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
     write(dir, 'fork', { ...tutor, id: 'fork', name: 'Fork' })
-    discardWrite(dir, 'fork')
+    discardWrite(dir, 'fork', 'fork')
     expect(existsSync(join(personasRoot(dir), 'fork'))).toBe(false)
     expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(true)
+  })
+})
+
+/**
+ * A folder that is not hers, at the path a destructive operation was aimed at.
+ *
+ * ## One defect wearing four faces
+ *
+ * Every removal under the personas root used to read the manifest, conclude the
+ * folder was hers, and then remove it — with the read and the removal separated
+ * by anything from four filesystem operations to a whole process restart:
+ *
+ * | path | what it checked | how far apart |
+ * | --- | --- | --- |
+ * | `deletePersona` → `finishDeletion` | the manifest, in the caller | four stores emptied in between |
+ * | `sweepDeletions` → `finishDeletion` | **nothing at all** | a crash and a relaunch |
+ * | `discardWrite` | nothing; it trusted "created a moment ago" | a `writeWornPersonaId` |
+ * | `copyPersonaTo` cleanup | nothing; it force-removed its own reservation | the whole copy |
+ *
+ * A check answers a question about the past tense and `rmSync` acts in the
+ * present, so checking harder was never the answer. `claimPackage` renames the
+ * folder out of the root first — one operation, on the directory entry — and
+ * asks afterwards, when the bytes it is describing are the bytes that will go.
+ *
+ * These tests do the substitution the real world does slowly: swap the folder,
+ * then run the destructive path.
+ */
+describe('a folder that has been swapped since it was identified', () => {
+  it('is not deleted by the recovery sweep, which used to check nothing', () => {
+    /*
+      The sharpest of the four. A mark names an id and a folder; a crash leaves
+      it behind; the folder is renamed or replaced before the next launch. The
+      sweep then deleted whatever that name pointed at — a different character
+      entirely, with no check and no report.
+    */
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
+    const catalog = loadPersonas(dir, {})
+    // Interrupted: marked, then the process dies before the package goes.
+    markDeleting(dir, 'ada', 'ada')
+    void catalog
+    // Somebody else's package moves into the name the mark points at.
+    rmSync(join(personasRoot(dir), 'ada'), { recursive: true, force: true })
+    write(dir, 'ada', { ...tutor, id: 'bea', name: 'Bea' })
+
+    sweepDeletions(dir, history)
+
+    // Bea is untouched, and the mark stays so the failure is not forgotten.
+    expect(existsSync(join(personasRoot(dir), 'ada', MANIFEST))).toBe(true)
+    expect(readFileSync(join(personasRoot(dir), 'ada', MANIFEST), 'utf8')).toContain('bea')
+  })
+
+  it('is put back rather than left parked under a name nothing reads', () => {
+    // The folder is moved aside to be identified. A version that stopped there
+    // would look to its owner exactly like the package vanishing, because
+    // `loadPersonas` skips every dot-prefixed entry.
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'bea', name: 'Bea' })
+    markDeleting(dir, 'ada', 'ada')
+
+    sweepDeletions(dir, history)
+
+    expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(true)
+    expect(existsSync(join(personasRoot(dir), '.discarding-ada'))).toBe(false)
+  })
+
+  it('is not deleted by a fork rollback', () => {
+    // `discardWrite` removed `source` on the strength of having created it a
+    // moment ago. `Written` carries the id, so there was never a reason not to
+    // ask — and "a moment ago" is a `writeWornPersonaId` away.
+    const dir = workspace()
+    write(dir, 'fork', { ...tutor, id: 'someone-else', name: 'Someone Else' })
+
+    discardWrite(dir, 'fork', 'fork')
+
+    expect(existsSync(join(personasRoot(dir), 'fork'))).toBe(true)
+  })
+
+  it('CONTROL: the same paths still remove a folder that IS hers', () => {
+    /*
+      The arm that makes the three above mean something. A `claimPackage` that
+      refused everything would pass all of them and break deletion entirely,
+      which is the shape a too-strict guard takes.
+    */
+    const dir = workspace()
+    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada' })
+    markDeleting(dir, 'ada', 'ada')
+    sweepDeletions(dir, history)
+    expect(existsSync(join(personasRoot(dir), 'ada'))).toBe(false)
+
+    write(dir, 'fork', { ...tutor, id: 'fork', name: 'Fork' })
+    discardWrite(dir, 'fork', 'fork')
+    expect(existsSync(join(personasRoot(dir), 'fork'))).toBe(false)
+  })
+
+  it('leaves a reservation somebody has filled, rather than force-removing it', () => {
+    /*
+      `createPackage` takes the destination with a bare `mkdirSync` — no
+      `recursive` — because that either creates or fails in one step. The
+      teardown was a recursive force-remove, which is not its mirror image: it
+      deletes whatever is at the path, and what is at the path is only ours if
+      nobody has touched it. `rmdir` refuses a directory with anything in it,
+      so it succeeds exactly when the thing being removed is still our empty
+      folder.
+    */
+    const dir = workspace()
+    const root = personasRoot(dir)
+    mkdirSync(join(root, 'taken'), { recursive: true })
+    writeFileSync(join(root, 'taken', 'someone.json'), '{}')
+
+    // The teardown path, run directly against a filled reservation.
+    expect(() => rmdirSync(join(root, 'taken'))).toThrow(/ENOTEMPTY|EEXIST/)
+    expect(existsSync(join(root, 'taken', 'someone.json'))).toBe(true)
   })
 })

@@ -3315,7 +3315,7 @@ ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
   try {
     writeWornPersonaId(userData, written.id)
   } catch (error: unknown) {
-    discardWrite(userData, written.source)
+    discardWrite(userData, written.id, written.source)
     console.error(`[persona] could not wear the new ${written.id}, rolled back:`, error)
     return refuse(String(error))
   }
