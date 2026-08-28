@@ -110,6 +110,19 @@ const FIXED: readonly PromptSpec[] = [
     requires: ['sources', 'spoken'],
   },
   {
+    key: 'subject.instruction',
+    title: 'Conversation subject — what to call one',
+    purpose:
+      'Titles ONE conversation for the archive list, and is not the note rewriter — that one is cumulative and about a person, this is about one afternoon. Read by `subjectPrompt` when a conversation is titled after it ends.',
+    text:
+      'Give this conversation a short subject line, as a librarian would title a ' +
+      'file: what it was ABOUT, in a few words, in the language it was held in. ' +
+      'No more than a dozen words, no trailing full stop, and never a quotation ' +
+      'from it — the first thing somebody said is not what the conversation was ' +
+      'about. Answer with nothing else.',
+    requires: [],
+  },
+  {
     key: 'summariser.instruction',
     title: 'Note rewriter — instruction',
     purpose:

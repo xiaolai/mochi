@@ -29,8 +29,36 @@ export function prepareAll(db: DatabaseSync) {
     lastTurnAt: db.prepare('SELECT MAX(at) AS at FROM turn WHERE session_id = ?'),
     index: db.prepare('INSERT INTO turn_fts (body, turn_id, persona_id) VALUES (?, ?, ?)'),
     taken: db.prepare('SELECT 1 FROM session WHERE persona_id = ? AND started_at = ?'),
+    /*
+      Title one conversation of HERS.
+
+      Scoped to the persona IN the statement, like every write in this file: a
+      titler holding a token from another character would otherwise write
+      across the boundary every read here is careful to keep.
+
+      `ended_at IS NOT NULL` as well. A conversation still being had is not
+      finished being about anything, and titling one mid-sentence would pin a
+      subject to its first half.
+    */
+    retitle: db.prepare(
+      'UPDATE session SET subject = ? WHERE token = ? AND persona_id = ? AND ended_at IS NOT NULL',
+    ),
+    /*
+      Her finished conversations that have no subject yet, newest first.
+
+      `turns > 0` in the statement rather than filtered afterwards: a
+      conversation nobody spoke in has nothing to title, and asking a model
+      about an empty transcript is a subprocess spent to be told so.
+    */
+    untitled: db.prepare(`
+      SELECT s.token
+      FROM session s JOIN turn t ON t.session_id = s.id
+      WHERE s.persona_id = ? AND s.subject IS NULL AND s.ended_at IS NOT NULL
+      GROUP BY s.id HAVING count(t.id) > 0
+      ORDER BY s.started_at DESC LIMIT ?
+    `),
     sessions: db.prepare(`
-      SELECT s.token, s.started_at, s.ended_at, count(t.id) AS turns
+      SELECT s.token, s.started_at, s.ended_at, s.subject, count(t.id) AS turns
       FROM session s LEFT JOIN turn t ON t.session_id = s.id
       WHERE s.persona_id = ? GROUP BY s.id ORDER BY s.started_at DESC
     `),

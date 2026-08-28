@@ -1731,6 +1731,26 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
       }
+      /*
+        What the conversation was about, under the clock.
+
+        Darker and heavier than a snippet, because it is the thing somebody
+        scans the column FOR — the snippet is evidence for a search, and this is
+        the row's own name for itself.
+
+        Clamped to one line, not two. A subject is bounded at 80 characters, so
+        a second line only happens in a narrow column — and a title that wraps
+        stops being scannable, which is the whole reason it is not the first
+        line of the transcript.
+      */
+      .entry .subject {
+        font-size: var(--t-sm);
+        color: var(--ink);
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
       /* ---- a conversation, as a conversation ------------------------------ */
       /*

@@ -726,6 +726,21 @@ function row(
   detail: string | readonly Node[],
   token: string,
   snippet: { text: string; term: string } | null,
+  /**
+   * What the conversation was about, or null.
+   *
+   * Drawn on its own line under the clock, which is where the artifact has
+   * always put it and where `plan-v2.md` W5 says it belongs. Null is ordinary
+   * — a conversation is titled after it ends, and every conversation in an
+   * archive written before this existed has none — so the line is absent
+   * rather than empty.
+   *
+   * Drawn on a search hit too, above the matched text. The two answer different
+   * questions: the subject says what the conversation was about and the snippet
+   * says what matched, and somebody scanning results wants the first to decide
+   * whether the second is the one they meant.
+   */
+  subject: string | null,
 ): HTMLButtonElement {
   const button = document.createElement('button')
   button.className = chosen.has(token) ? 'entry picked' : 'entry'
@@ -752,6 +767,13 @@ function row(
     for (const fact of detail) when.append(fact)
   }
   button.append(when)
+
+  if (subject !== null) {
+    const line = document.createElement('div')
+    line.className = 'subject'
+    line.textContent = subject
+    button.append(line)
+  }
 
   if (snippet !== null) {
     const line = document.createElement('div')
@@ -1137,6 +1159,7 @@ function renderList(now: number): void {
         facts(one.turns, lengthLabel(one.startedAt, one.endedAt)),
         one.token,
         null,
+        one.subject,
       ),
     ),
   )
@@ -1174,6 +1197,9 @@ function renderHits(hits: readonly HitGroup[], term: string): void {
           `${String(hit.count)} ${hit.count === 1 ? 'match' : 'matches'}`,
           hit.token,
           { text: hit.text, term },
+          // From the conversation list the window already holds. A hit carries
+          // the matched turn, not the conversation it is in.
+          conversations.find((one) => one.token === hit.token)?.subject ?? null,
         ),
       )
     }

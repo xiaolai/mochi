@@ -190,6 +190,23 @@ export function applySchema(db: DatabaseSync): SchemaApplied {
   }
 
   /*
+    What one conversation was about, in a few words.
+
+    NULLABLE with no default, and null is the ordinary state rather than a gap
+    to be filled: a conversation is titled after it ends, by a model call that
+    may not have happened yet, may have failed, or may have answered nothing
+    usable. Every one of those is "no subject", and the archive drew rows
+    without one for its whole life before this column existed.
+
+    Additive, like `token` and `cut` above it: ADD COLUMN rewrites no rows and
+    rebuilds no table, so the foreign key from `turn` to `session` is never in
+    play — which is the trap this file names twice already.
+  */
+  if (!columns.some((column) => String(column['name']) === 'subject')) {
+    db.exec('ALTER TABLE session ADD COLUMN subject TEXT')
+  }
+
+  /*
     HER OLD STORE, removed rather than left unreadable.
 
     `kept` held whatever the `keep` tool wrote. That tool and its two siblings

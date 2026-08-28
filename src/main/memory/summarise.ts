@@ -447,7 +447,7 @@ export async function summarise(
 }
 
 /** The conversation as text the model can read. */
-function transcriptOf(turns: readonly Turn[]): string {
+export function transcriptOf(turns: readonly Turn[]): string {
   return turns
     .map((turn) => `${turn.who === 'her' ? 'Her' : 'Them'}: ${oneLine(turn.text)}`)
     .join('\n')

@@ -1698,3 +1698,156 @@ describe('capabilities she called', () => {
     expect(count(t, 'SELECT count(*) AS n FROM session_tool')).toBe(0)
   })
 })
+
+/**
+ * What a conversation was about, stored beside it.
+ *
+ * The archive drew a subject line in the artifact and had nothing to put there,
+ * so it was left out rather than filled with the first line of the transcript.
+ * `plan-v2.md` W5 says why that alternative is worse than nothing.
+ */
+describe('what a conversation was about', () => {
+  it('is null until something titles it', () => {
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'hello', 1_001)
+    expect(t.sessions('ada')[0]?.subject).toBeNull()
+  })
+
+  it('keeps a subject once one is written', () => {
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'the parser', 1_001)
+    t.end(live, 1_002)
+    expect(t.retitle('ada', live, 'the parser and its comma')).toBe(true)
+    expect(t.sessions('ada')[0]?.subject).toBe('the parser and its comma')
+  })
+
+  it('refuses to title a conversation that has not ended', () => {
+    // One still being had is not finished being about anything, and titling it
+    // mid-sentence would pin a subject to its first half.
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'still talking', 1_001)
+    expect(t.retitle('ada', live, 'too early')).toBe(false)
+    expect(t.sessions('ada')[0]?.subject).toBeNull()
+  })
+
+  it('refuses to title another character conversation', () => {
+    // Scoped in the statement, like every write here: ownership is settled by
+    // the write that actually ran, not by a read a moment earlier.
+    const t = store()
+    const theirs = t.begin('bob', 1_000)
+    if (theirs === null) throw new Error('no conversation')
+    t.say(theirs, 'you', 'theirs', 1_001)
+    t.end(theirs, 1_002)
+    expect(t.retitle('ada', theirs, 'not mine to name')).toBe(false)
+    expect(t.sessions('bob')[0]?.subject).toBeNull()
+  })
+
+  it('clears a subject when handed null, so a re-title is not additive', () => {
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'x', 1_001)
+    t.end(live, 1_002)
+    t.retitle('ada', live, 'first answer')
+    expect(t.retitle('ada', live, null)).toBe(true)
+    expect(t.sessions('ada')[0]?.subject).toBeNull()
+  })
+
+  it('refuses one that is empty or over the bound', () => {
+    // The store is the last thing before disk. `subjectFrom` checks what a
+    // model said; this checks what any caller passes.
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'x', 1_001)
+    t.end(live, 1_002)
+    expect(t.retitle('ada', live, '   ')).toBe(false)
+    expect(t.retitle('ada', live, 'x'.repeat(81))).toBe(false)
+    expect(t.sessions('ada')[0]?.subject).toBeNull()
+  })
+})
+
+describe('which conversations still need a subject', () => {
+  it('answers the ended, spoken-in, untitled ones, newest first', () => {
+    const t = store()
+    const older = t.begin('ada', 1_000)
+    const newer = t.begin('ada', 2_000)
+    if (older === null || newer === null) throw new Error('no conversation')
+    t.say(older, 'you', 'one', 1_001)
+    t.say(newer, 'you', 'two', 2_001)
+    t.end(older, 1_002)
+    t.end(newer, 2_002)
+    expect(t.untitled('ada', 10)).toEqual([newer, older])
+  })
+
+  it('leaves out one that is still being had', () => {
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'talking', 1_001)
+    expect(t.untitled('ada', 10)).toEqual([])
+  })
+
+  it('leaves out one nobody spoke in', () => {
+    // Asking a model about an empty transcript is a subprocess spent to be
+    // told so.
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.end(live, 1_002)
+    expect(t.untitled('ada', 10)).toEqual([])
+  })
+
+  it('leaves out one that already has a subject', () => {
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'x', 1_001)
+    t.end(live, 1_002)
+    t.retitle('ada', live, 'already named')
+    expect(t.untitled('ada', 10)).toEqual([])
+  })
+
+  it('does not offer another character conversations', () => {
+    const t = store()
+    const theirs = t.begin('bob', 1_000)
+    if (theirs === null) throw new Error('no conversation')
+    t.say(theirs, 'you', 'theirs', 1_001)
+    t.end(theirs, 1_002)
+    expect(t.untitled('ada', 10)).toEqual([])
+  })
+
+  it('honours the bound, which is what keeps one sleep finite', () => {
+    const t = store()
+    for (let i = 0; i < 5; i += 1) {
+      const live = t.begin('ada', 1_000 + i * 10)
+      if (live === null) throw new Error('no conversation')
+      t.say(live, 'you', `talk ${String(i)}`, 1_001 + i * 10)
+      t.end(live, 1_002 + i * 10)
+    }
+    expect(t.untitled('ada', 2)).toHaveLength(2)
+    expect(t.untitled('ada', 5)).toHaveLength(5)
+  })
+
+  it('treats a non-positive bound as none, never as all', () => {
+    /*
+      `LIMIT -1` in SQLite means NO limit. Passing a caller's mistake straight
+      through would turn it into every conversation she has — which is the one
+      answer this bound exists to prevent.
+    */
+    const t = store()
+    const live = t.begin('ada', 1_000)
+    if (live === null) throw new Error('no conversation')
+    t.say(live, 'you', 'x', 1_001)
+    t.end(live, 1_002)
+    expect(t.untitled('ada', 0)).toEqual([])
+    expect(t.untitled('ada', -1)).toEqual([])
+    expect(t.untitled('ada', 1.5)).toEqual([])
+  })
+})

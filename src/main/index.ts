@@ -26,6 +26,7 @@ import { migrateBubbleSide as runBubbleSideMigration } from './migrations/bubble
 import { shutDown as shutDown_ } from './shutdown'
 import { running } from '../capabilities/ask-workspace/capability'
 import { runSchema } from '../capabilities/ask-workspace/ask'
+import { SUBJECT_SCHEMA, subjectFrom, subjectPrompt } from './memory/subject'
 import { spawnCodex } from '../capabilities/ask-workspace/spawn'
 import { summarise } from './memory/summarise'
 import { fittingNewestFirst } from './memory/presence'
@@ -518,6 +519,16 @@ function endPresence(): void {
     the disk work happens on.
   */
   setImmediate(() => void rewriteNote(personaId))
+  /*
+    AFTER the note, and on its own turn.
+
+    Sequenced rather than raced: both spawn Codex with a deadline, and running
+    them together would put two subprocesses on the machine at the moment
+    somebody just asked her to go quiet. `rewriteNote` holds `rewritingNote`
+    for its whole run, so `titleConversations` waits behind that flag rather
+    than behind a promise nobody keeps.
+  */
+  setImmediate(() => void titleConversations(personaId))
 }
 
 /**
@@ -923,6 +934,171 @@ async function rewriteNote(personaId: string): Promise<void> {
         // throw here becomes an unhandled rejection out of the sleep path. A
         // temporary directory that outlives us is a smaller problem than that.
         console.warn('[summary] the scratch directory could not be removed:', error)
+      }
+    }
+  }
+}
+
+/**
+ * How many conversations may be titled in one sleep.
+ *
+ * A LIVENESS bound, not a thrift one — the decision about cost was made
+ * deliberately and the answer was that it does not matter. What does matter is
+ * that each title is a subprocess with a deadline: an archive of three hundred
+ * untitled conversations would hold this path for over an hour on the first
+ * sleep after it shipped, and `rewritingNote` is shared, so the note rewrite
+ * would wait behind it.
+ *
+ * Newest first, so the conversations somebody is most likely to be looking at
+ * are titled first, and every sleep makes progress until there are none left.
+ */
+const TITLES_PER_SLEEP = 8
+
+/**
+ * Give her recent conversations a subject line.
+ *
+ * ## Why this is not the note rewriter
+ *
+ * `plan-v2.md` W5 is explicit that they are different jobs: the summariser
+ * *"rewrites her NOTE rather than titling a conversation."* A note is
+ * cumulative and about a person; a subject is about one afternoon, is never
+ * merged with anything, and is drawn under a row in the archive — which has
+ * drawn one in the artifact since it was designed and had nothing to put there.
+ *
+ * ## Every failure leaves the conversation untitled
+ *
+ * Which is the state it was in, and the state every conversation in this
+ * archive was in until now. There is no half-title: `subjectFrom` answers null
+ * for a malformed answer, an empty one, a multi-line one and an over-long one
+ * alike, and null means nothing is written. A row without a subject is
+ * ordinary; a row with a wrong one is a claim about a conversation somebody
+ * would have to open it to disprove.
+ */
+function answerOf(run: { readonly ok: boolean; readonly text?: string }): unknown {
+  // `null` is what `subjectFrom` reads as "nothing usable", so a failed run and
+  // unparseable JSON take the same path — the caller has one rule either way.
+  if (!run.ok || run.text === undefined) return null
+  try {
+    return JSON.parse(run.text)
+  } catch {
+    return null
+  }
+}
+
+async function titleConversations(personaId: string): Promise<void> {
+  const codexPath = codexPathNow()
+  if (codexPath === null) {
+    // `LOOKING`'s dot already says the CLI is missing, and this is the third
+    // thing that stops working when it is. Not worth a second strip entry.
+    console.warn('[subject] no codex on this machine; conversations stay untitled')
+    return
+  }
+  if (rewritingNote) {
+    console.warn('[subject] a note is being rewritten; leaving these to the next sleep')
+    return
+  }
+  /*
+    ANNOTATED, and that is load-bearing rather than decorative.
+
+    `wiring.test.ts` attributes a method call to the surface its RECEIVER is
+    typed as, because matching by name alone once let `peer.close()` certify
+    `Transcripts.close` — the guard passing the exact defect it was written to
+    catch. An inferred local is not a receiver it can see, so the two calls
+    below would read as surfaces with no caller at all.
+
+    It also throws rather than answering null once the shutdown coordinator has
+    run, so there is nothing to check for here — a null test would be a branch
+    that cannot be reached and cannot be removed by anybody who did not go and
+    read that function.
+  */
+  const store: Transcripts = transcripts()
+
+  let waiting: readonly string[]
+  try {
+    waiting = store.untitled(personaId, TITLES_PER_SLEEP)
+  } catch (error: unknown) {
+    console.error('[subject] the untitled conversations could not be read:', error)
+    return
+  }
+  if (waiting.length === 0) return
+
+  rewritingNote = true
+  let scratch: string | null = null
+  try {
+    const workspace = mkdtempSync(join(tmpdir(), 'mochi-subject-'))
+    scratch = workspace
+    summaryScratch.add(workspace)
+    const instruction = promptsNow()('subject.instruction')
+    for (const token of waiting) {
+      const turns = store.turns(personaId, token)
+      // Empty is unreachable through `untitled`, which requires a turn — and
+      // checked anyway, because a transcript can be deleted between the two
+      // reads and asking a model about nothing is a subprocess spent to be
+      // told so.
+      if (turns.length === 0) continue
+      const run = await runSchema(subjectPrompt(turns, instruction), SUBJECT_SCHEMA, {
+        codexPath,
+        workspace,
+        settings: {
+          // Nothing here needs the web. A conversation is titled from what is
+          // in it, and offering the search is offering a route to content the
+          // title is not allowed to be about.
+          webSearch: 'disabled',
+          // The instruction IS the prompt, as it is for the note rewriter. A
+          // lookup's framing is about reading somebody's files.
+          framing: '',
+          model: null,
+          // The user's lookup profile configures LOOKUPS. Layering it over
+          // titling would apply a choice made about one job to another they
+          // were never asked about — `rewriteNote` states this and it is the
+          // same reasoning.
+          profile: null,
+          // It runs by itself every time she sleeps and needs no tools at all.
+          // `rewriteNote` says the same about its own run.
+          ignoreUserConfig: true,
+        },
+        /*
+          HELD, so quitting kills it.
+
+          `running.ts` exists because `will-quit` closed the archive and left
+          every Codex child alive. This path spawns the same binary through the
+          same door the note rewriter does, and `hold` rather than `begin` for
+          its reason: the slot count bounds LOOKUPS against each other, and
+          titling must neither refuse somebody's question nor be refused by one.
+        */
+        run: (path, args, input) => {
+          const handle = spawnCodex(path, args, input)
+          const release = running.hold(handle)
+          void handle.finished.finally(release)
+          return handle
+        },
+        timeoutMs: SUMMARY_TIMEOUT_MS,
+      })
+      const subject = subjectFrom(answerOf(run))
+      if (subject === null) {
+        console.warn(`[subject] nothing usable came back for one conversation; left untitled`)
+        continue
+      }
+      // FALSE when the conversation is not hers, is gone, or has not ended —
+      // all three decided by the statement rather than by a read that happened
+      // a moment ago. Somebody can delete a conversation while this runs.
+      if (!store.retitle(personaId, token, subject)) {
+        console.warn('[subject] a conversation could not be titled; it may have been deleted')
+      }
+    }
+    console.log(`[subject] titled up to ${String(waiting.length)} of ${personaId}'s conversations`)
+  } catch (error: unknown) {
+    // Caught rather than propagated: started with `void` from the sleep path,
+    // where an unhandled rejection is an unhandled rejection in going to sleep.
+    console.error('[subject] conversations could not be titled:', error)
+  } finally {
+    rewritingNote = false
+    if (scratch !== null) {
+      summaryScratch.delete(scratch)
+      try {
+        rmSync(scratch, { recursive: true, force: true })
+      } catch (error: unknown) {
+        console.warn('[subject] the scratch directory could not be removed:', error)
       }
     }
   }
@@ -2234,6 +2410,7 @@ ipcMain.handle('history:list', () => {
         endedAt: one.endedAt,
         turns: one.turns,
         tools: one.tools,
+        subject: one.subject,
       })),
   }
 })

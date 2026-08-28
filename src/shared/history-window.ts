@@ -47,6 +47,16 @@ export interface HistoryConversation {
    * W5 is where that was written down; `session_tool` is what closed it.
    */
   readonly tools: readonly ToolUse[]
+  /**
+   * What it was about, in a few words, or null.
+   *
+   * NULL is ordinary, and was the only state until this existed: a conversation
+   * is titled after it ends by a model call that may not have run yet, may have
+   * failed, or may have answered nothing usable. Null and empty are not two
+   * states — `subjectFrom` answers null for both — so a row never holds a
+   * string that means nothing.
+   */
+  readonly subject: string | null
 }
 
 /** One capability, and how many times it was called in one conversation. */

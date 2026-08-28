@@ -69,6 +69,16 @@ export interface Session {
    * is the thing they were waiting for.
    */
   readonly tools: readonly ToolUse[]
+  /**
+   * What it was about, in a few words, or null.
+   *
+   * NULL is ordinary. A conversation is titled after it ends by a model call
+   * that may not have run yet, may have failed, or may have answered nothing
+   * usable — and the archive drew rows without one for its whole life before
+   * this existed. Null and empty are not two states: `subjectFrom` answers null
+   * for both, so the column never holds a string that means nothing.
+   */
+  readonly subject: string | null
 }
 
 /** One capability, and how many times it was called in one conversation. */

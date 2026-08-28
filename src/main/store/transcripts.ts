@@ -68,6 +68,7 @@ import { toTurn } from './turn-row'
 import { problems } from '../problems'
 import { readableInstant } from './instant'
 import { applySchema } from './schema'
+import { MAX_SUBJECT_CHARS } from '../memory/subject'
 import { prepareAll } from './statements'
 
 export const TRANSCRIPTS_FILE = 'transcripts.db'
@@ -154,6 +155,29 @@ export interface Transcripts {
    * is working as designed.
    */
   tooled(session: LiveSession, name: string, at?: number): void
+  /**
+   * Give one FINISHED conversation of hers a subject, or take it away.
+   *
+   * `null` clears it, which is what makes a re-title idempotent rather than
+   * additive — and it is the only way back for a title somebody disagrees with.
+   *
+   * Answers whether a row was written. FALSE for a conversation that is not
+   * hers, is not there, or has not ended: the statement decides all three, so
+   * ownership is settled by the write that actually ran rather than by a read
+   * that happened a moment earlier — the rule every scoped delete here follows.
+   */
+  retitle(personaId: string, token: SessionToken, subject: string | null): boolean
+  /**
+   * Her finished conversations with no subject yet, newest first.
+   *
+   * BOUNDED by the caller, and the bound is liveness rather than thrift: each
+   * title is a subprocess with a deadline, and an archive of three hundred
+   * would hold the summariser's flag for over an hour on the first sleep after
+   * this shipped — blocking the note rewrite that shares it. Newest first so
+   * the ones somebody is most likely to be looking at are titled first, and
+   * every sleep makes progress until there are none left.
+   */
+  untitled(personaId: string, most: number): readonly SessionToken[]
   sessions(personaId: string): readonly Session[]
   /**
    * What was said in one conversation of HERS, named by its opaque token.
@@ -586,6 +610,10 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         startedAt: Number(row['started_at']),
         endedAt: row['ended_at'] === null ? null : Number(row['ended_at']),
         turns: Number(row['turns']),
+        // A column that predates this build's writes reads as `undefined`
+        // rather than `null` on some drivers, so both become null — the one
+        // answer the rest of the app is written against.
+        subject: typeof row['subject'] === 'string' ? row['subject'] : null,
         // EMPTY, never absent. Most conversations call nothing, and a caller
         // that had to tell "none" from "not loaded" would get it wrong once.
         tools: byToken.get(token) ?? [],
@@ -811,6 +839,24 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       atomically(() => {
         stmt.tooled.run(row.id, name, at)
       })
+    },
+    retitle(personaId, token, subject) {
+      // The bound is applied here too, not only where the answer is parsed.
+      // `subjectFrom` is the check on what a model said; this is the check on
+      // what any caller passes, and the store is the last thing before disk.
+      if (subject !== null && (subject.trim() === '' || subject.length > MAX_SUBJECT_CHARS)) {
+        console.error('[transcripts] refusing a subject that is empty or too long')
+        return false
+      }
+      const written = stmt.retitle.run(subject, token, personaId)
+      return Number(written.changes) > 0
+    },
+    untitled(personaId, most) {
+      // A non-positive bound is "none", not "all". `LIMIT -1` in SQLite means
+      // no limit, so passing one through would turn a caller's mistake into
+      // every conversation she has.
+      if (!Number.isInteger(most) || most <= 0) return []
+      return stmt.untitled.all(personaId, most).map((row) => String(row['token']))
     },
     sessions: sessionsOf,
     turns: turnsOf,
