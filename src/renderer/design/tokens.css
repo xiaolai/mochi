@@ -339,6 +339,54 @@
   --t-nano: 10px;
   --track: 0.14em;
   --track-2: 0.1em;
+  /*
+   * Two more positive steps, named by ROLE rather than extended as a number.
+   *
+   * `--track` and `--track-2` keep the handoff's names and values, and six and
+   * eight sites respectively already read them. `--track-wide` is wider than
+   * `--track`, so calling it `--track-3` would put the widest step at the
+   * bottom of a sequence that reads downwards — and renumbering to fix that
+   * would silently move fourteen sites the handoff pins.
+   */
+  --track-wide: 0.16em;
+  --track-narrow: 0.12em;
+  /*
+   * ONE negative step, where there were three literals.
+   *
+   * -0.005em, -0.015em and -0.02em sat on the three pieces of large text in the
+   * shelf — a card name, the name editor, a conversation's date. They are the
+   * same job, optical tightening at display sizes, and three values within
+   * 0.015em of each other is drift rather than a scale: at 26px the widest gap
+   * between them is a third of a pixel. Collapsed to the middle one, which is
+   * the only rendered change in this file.
+   */
+  --track-tight: -0.015em;
+
+  /* ---- weight: the four the shelf actually uses --------------------------- */
+  /*
+   * Named, because `font-weight: 600` twenty-six times is the same defect as a
+   * hardcoded colour and reads as more legitimate only out of habit.
+   *
+   * Bounded by what the FONTS carry, which is the part a number hides:
+   * `Archivo` is declared `400 700` and `Archivo Narrow` `500 600`, so these
+   * four are real weights in the family rather than a browser's synthesis. IBM
+   * Plex Mono ships 400 and 500 only — `--mono` at `--w-semibold` would be a
+   * faux bold, and having the steps named is what makes that reviewable.
+   */
+  --w-regular: 400;
+  --w-medium: 500;
+  --w-semibold: 600;
+  --w-bold: 700;
+
+  /* ---- leading: two, for two lengths of text ------------------------------ */
+  /*
+   * The shelf had 1.5 on three notes, 1.55 on a fourth and 1.6 in the textarea.
+   * The fourth is drift — it is the same kind of block as the other three — and
+   * it is folded in. The textarea is different in kind: text somebody writes
+   * and re-reads at length, rather than a sentence under a control.
+   */
+  --leading: 1.5;
+  --leading-long: 1.6;
 
   /* ---- rhythm. UNCHANGED, and that is a decision -------------------------- */
   /*
@@ -416,7 +464,7 @@ button.btn {
      finding, and it is solved by a width floor rather than by removing the box. */
   min-width: calc(9ch + 28px);
   padding: var(--s1) var(--s4);
-  border: 1px solid var(--rule);
+  border: var(--s-px) solid var(--rule);
   border-radius: var(--r2);
   background: var(--paper);
   color: var(--ink);
@@ -456,14 +504,14 @@ button.btn.primary {
   background: var(--her-wash);
   border-color: var(--her);
   color: var(--ink-brand);
-  font-weight: 600;
+  font-weight: var(--w-semibold);
 }
 /* Armed to destroy. The second press is the one that does it. */
 button.btn.arming {
   background: var(--red-bg);
   border-color: var(--red);
   color: var(--red);
-  font-weight: 600;
+  font-weight: var(--w-semibold);
 }
 
 /*
@@ -508,7 +556,7 @@ input[type='text'],
 input[type='search'],
 select {
   padding: var(--s1) var(--s3);
-  border: 1px solid transparent;
+  border: var(--s-px) solid transparent;
   border-radius: var(--r2);
   /*
    * `background-color`, NEVER the `background` shorthand.
@@ -596,8 +644,19 @@ select:focus {
 }
 
 /*
- * Honoured, not ignored -- the same rule the handoff states for duration. The
- * shelf has little motion of its own; when it gets some, it belongs here.
+ * Honoured, not ignored -- the same rule the handoff states for duration.
+ *
+ * AND THIS BLOCK IS NOT WHERE IT IS HONOURED, which the previous version of
+ * this comment let a reader believe. There are zero `transition` and zero
+ * `@keyframes` declarations in either window, so the two tokens it zeroes are
+ * read by nothing and this rule protects nothing. It is a placeholder, kept
+ * because the vocabulary is where a future transition should reach.
+ *
+ * The motion in this app is HERS, and it is a canvas: the breath, the drift,
+ * the blink schedule and the ambient loops. `rig/mochi.ts` gates all of it on
+ * `setReducedMotion`, which `companion/face.ts` drives from a `matchMedia`
+ * listener so the preference is honoured when it changes rather than only at
+ * launch. That is the code this comment used to imply was here.
  */
 @media (prefers-reduced-motion: reduce) {
   :root {

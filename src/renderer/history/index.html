@@ -39,8 +39,23 @@
       }
 
       /* ---- the strip that is always first ---------------------------------- */
+      /*
+        SHRINKABLE, where it used to be `flex: none`.
+
+        The topbar is the one strip in this window with no fluid column, and it
+        shipped 126px too wide at the window's OWN minimum size. `window.ts`
+        enforces `minWidth: 900`; the bar's contents need 1026px and could not
+        give any of it back, so from 900px to 1025px the microphone's state mark
+        sat off the right edge entirely and the turn count was clipped. The only
+        way to see them was to scroll the whole shell sideways, which pushes the
+        wordmark and the tabs off the other edge — measured across the range, and
+        it comes right at exactly 1026px.
+
+        The search field is the largest fixed item on the strip at 340px and the
+        one thing in a title bar that is naturally elastic, so it is what gives.
+      */
       .topbar-context {
-        flex: none;
+        flex: 0 1 auto;
         display: flex;
         align-items: center;
         min-width: 0;
@@ -54,9 +69,34 @@
         without a rule here saying so.
       */
       .topbar-context input[type='search'] {
+        /*
+          340px is the WANTED width, not a floor. `max-width: 100%` is what lets
+          the shrink above actually reach the input rather than stopping at its
+          box, and the floor keeps it a search field rather than letting it
+          collapse toward nothing at some width nobody tested.
+
+          At the enforced 900px minimum this settles around 280px, with the
+          wordmark rule below giving back the rest.
+        */
         width: 340px;
+        min-width: 180px;
+        max-width: 100%;
         padding: var(--s1) var(--s4);
         border-radius: var(--r-pill);
+      }
+      /*
+        The wordmark steps aside before anything is clipped.
+
+        1030px is measured rather than picked: it is the first width at which
+        the strip fits with every item at its natural size. Her mark stays — it
+        is 26px and it is the thing that says which character this window is
+        showing — and the window's own title bar carries the name.
+      */
+      @media (max-width: 1030px) {
+        .topbar .wordmark,
+        .topbar .divider {
+          display: none;
+        }
       }
       .topbar {
         flex: none;
@@ -66,7 +106,7 @@
         gap: var(--s4);
         padding: 0 var(--s6);
         background: var(--paper-2);
-        border-bottom: 1px solid var(--rule);
+        border-bottom: var(--s-px) solid var(--rule);
       }
       .topbar .divider {
         margin-inline: var(--s2);
@@ -83,13 +123,13 @@
       }
       .wordmark {
         font-family: var(--narrow);
-        font-weight: 700;
+        font-weight: var(--w-bold);
         font-size: var(--t-body);
-        letter-spacing: 0.16em;
+        letter-spacing: var(--track-wide);
         text-transform: uppercase;
       }
       .divider {
-        width: 1px;
+        width: var(--s-px);
         height: 22px;
         background: var(--rule);
       }
@@ -101,8 +141,8 @@
       .state .what {
         font-family: var(--narrow);
         font-size: var(--t-data);
-        font-weight: 600;
-        letter-spacing: 0.12em;
+        font-weight: var(--w-semibold);
+        letter-spacing: var(--track-narrow);
         text-transform: uppercase;
       }
       .state .how {
@@ -176,8 +216,8 @@
       */
       .ghost {
         position: absolute;
-        width: 1px;
-        height: 1px;
+        width: var(--s-px);
+        height: var(--s-px);
         margin: -1px;
         padding: 0;
         overflow: hidden;
@@ -209,12 +249,12 @@
       .shell-tab {
         padding: var(--s1) var(--s4);
         border: 0;
-        border-bottom: 2px solid transparent;
+        border-bottom: var(--s0) solid transparent;
         border-radius: var(--r-pill);
         background: transparent;
         font-family: var(--narrow);
         font-size: var(--t-label);
-        font-weight: 700;
+        font-weight: var(--w-bold);
         letter-spacing: var(--track);
         text-transform: uppercase;
         color: var(--ink-3);
@@ -270,7 +310,7 @@
         display: flex;
         flex-direction: column;
         background: var(--paper-2);
-        border-right: 1px solid var(--rule);
+        border-right: var(--s-px) solid var(--rule);
       }
       .archive-side > .list {
         flex: 1;
@@ -282,7 +322,7 @@
       .cal {
         flex: none;
         padding: var(--s5) var(--s5) var(--s4);
-        border-bottom: 1px solid var(--rule);
+        border-bottom: var(--s-px) solid var(--rule);
       }
       .cal .head {
         display: flex;
@@ -295,7 +335,7 @@
         min-width: 0;
         font-family: var(--narrow);
         font-size: var(--t-label);
-        font-weight: 700;
+        font-weight: var(--w-bold);
         letter-spacing: var(--track);
         text-transform: uppercase;
       }
@@ -327,15 +367,15 @@
       .cal .grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
-        gap: 1px;
+        gap: var(--s-px);
       }
       .cal .initial {
         display: grid;
         place-items: center;
-        height: 20px;
+        height: var(--s6);
         font-family: var(--narrow);
         font-size: var(--t-nano);
-        font-weight: 700;
+        font-weight: var(--w-bold);
         letter-spacing: var(--track-2);
         color: var(--ink-3);
       }
@@ -361,7 +401,7 @@
       }
       .cal .day.has {
         color: var(--ink);
-        font-weight: 600;
+        font-weight: var(--w-semibold);
       }
       .cal .day.has:hover {
         background: var(--paper-hover);
@@ -410,7 +450,7 @@
       .archive-side .picked .what {
         font-family: var(--narrow);
         font-size: var(--t-label);
-        font-weight: 700;
+        font-weight: var(--w-bold);
         letter-spacing: var(--track);
         text-transform: uppercase;
       }
@@ -438,7 +478,7 @@
         background: var(--paper-2);
         font-family: var(--narrow);
         font-size: var(--t-label);
-        font-weight: 700;
+        font-weight: var(--w-bold);
         letter-spacing: var(--track);
         text-transform: uppercase;
         color: var(--ink-3);
@@ -477,7 +517,7 @@
       #sure {
         max-width: 42ch;
         padding: var(--s6);
-        border: 1px solid var(--rule);
+        border: var(--s-px) solid var(--rule);
         border-radius: var(--r3);
         background: var(--paper);
         color: var(--ink);
@@ -487,13 +527,13 @@
       }
       #sure h2 {
         margin: 0 0 var(--s3);
-        font-size: var(--t-md);
+        font-size: var(--t-h3);
       }
       #sure p {
         margin: 0 0 var(--s6);
         color: var(--ink-2);
         font-size: var(--t-sm);
-        line-height: 1.5;
+        line-height: var(--leading);
       }
       .sure-do {
         display: flex;
@@ -512,7 +552,7 @@
         margin: auto 0 0;
         padding: var(--s6) var(--s5) 0;
         font-size: var(--t-cap);
-        line-height: 1.5;
+        line-height: var(--leading);
         color: var(--ink-3);
       }
 
@@ -542,7 +582,7 @@
       */
       .machine-tools > .tool-card {
         background: var(--paper-2);
-        border: 1px solid var(--rule);
+        border: var(--s-px) solid var(--rule);
         border-radius: var(--r3);
         padding: var(--s5);
       }
@@ -550,7 +590,7 @@
         display: flex;
         flex-direction: column;
         padding: var(--s5) var(--s3);
-        border-right: 1px solid var(--rule);
+        border-right: var(--s-px) solid var(--rule);
         overflow-y: auto;
       }
       /*
@@ -593,7 +633,7 @@
       .tab[aria-current='true'] {
         background: var(--chrome-wash);
         color: var(--ink);
-        font-weight: 600;
+        font-weight: var(--w-semibold);
       }
       /* A dot means somebody should look, not that something is off. */
       .tab .dot {
@@ -623,7 +663,7 @@
         gap: var(--s2);
         margin-bottom: var(--s5);
         padding: var(--s4) var(--s5);
-        border: 1px solid var(--rule);
+        border: var(--s-px) solid var(--rule);
         border-radius: var(--r3);
         background: var(--paper-2);
       }
@@ -652,7 +692,7 @@
       }
       .codex.bad .codex-said {
         color: var(--warn-ink);
-        font-weight: 600;
+        font-weight: var(--w-semibold);
       }
       .codex-head .btn {
         flex: none;
@@ -671,8 +711,8 @@
         when there is something to be pleased about.
       */
       .light {
-        width: 8px;
-        height: 8px;
+        width: var(--s3);
+        height: var(--s3);
         flex: none;
         border-radius: 50%;
         background: var(--warn-line);
@@ -722,11 +762,11 @@
         justify-content: space-between;
         gap: var(--s5);
         padding: var(--s4) 0;
-        border-bottom: 1px solid var(--rule);
+        border-bottom: var(--s-px) solid var(--rule);
       }
       .grant .name,
       .cap .name {
-        font-weight: 600;
+        font-weight: var(--w-semibold);
       }
       .grant .desc,
       .cap .desc {
@@ -751,7 +791,7 @@
       }
       .cap {
         padding: var(--s4) 0;
-        border-bottom: 1px solid var(--rule);
+        border-bottom: var(--s-px) solid var(--rule);
       }
       .cap .name {
         font-family: var(--mono);
@@ -764,7 +804,7 @@
         justify-content: space-between;
         gap: var(--s5);
         padding: var(--s3) 0;
-        border-bottom: 1px solid var(--rule);
+        border-bottom: var(--s-px) solid var(--rule);
       }
       /*
         A field and the button that fills it, on one line.
@@ -839,7 +879,7 @@
         margin: 0;
         font-family: var(--narrow);
         font-size: var(--t-data);
-        font-weight: 700;
+        font-weight: var(--w-bold);
         letter-spacing: var(--track);
         text-transform: uppercase;
         color: var(--ink-3);
@@ -877,7 +917,7 @@
       .cast-foot {
         flex: none;
         padding: var(--s4) var(--s5) var(--s5);
-        border-top: 1px solid var(--rule);
+        border-top: var(--s-px) solid var(--rule);
       }
       .cast-foot .row {
         gap: var(--s2);
@@ -917,7 +957,7 @@
       .card.faceless .tile {
         width: 44px;
         height: 44px;
-        border: 1px dashed var(--warn-line);
+        border: var(--s-px) dashed var(--warn-line);
         border-radius: var(--r2);
       }
       .card .titles {
@@ -925,7 +965,7 @@
         display: flex;
         flex-direction: column;
         align-items: flex-start;
-        gap: 1px;
+        gap: var(--s-px);
       }
       /*
         NOT gold. In the artifact gold is what "STAGED · NOT GRANTED" is written
@@ -956,14 +996,14 @@
       }
       .card .name {
         font-size: var(--t-ui);
-        font-weight: 600;
-        letter-spacing: -0.005em;
+        font-weight: var(--w-semibold);
+        letter-spacing: var(--track-tight);
         overflow-wrap: anywhere;
       }
       .card .worn {
         font-family: var(--narrow);
         font-size: var(--t-nano);
-        font-weight: 600;
+        font-weight: var(--w-semibold);
         letter-spacing: var(--track-2);
         text-transform: uppercase;
         color: var(--ink-3);
@@ -993,7 +1033,7 @@
         display: flex;
         flex-direction: column;
         background: var(--paper-2);
-        border-right: 1px solid var(--rule);
+        border-right: var(--s-px) solid var(--rule);
       }
       /*
         A COLUMN, like the cast list opposite it — not a card inside one.
@@ -1019,7 +1059,7 @@
         flex-direction: column;
         padding: var(--s6);
         background: var(--paper-2);
-        border-left: 1px solid var(--rule);
+        border-left: var(--s-px) solid var(--rule);
       }
 
       /*
@@ -1049,9 +1089,9 @@
       */
       .switchers {
         display: inline-flex;
-        gap: 2px;
-        padding: 2px;
-        border: 1px solid var(--rule);
+        gap: var(--s0);
+        padding: var(--s0);
+        border: var(--s-px) solid var(--rule);
         border-radius: var(--r-pill);
       }
       .switchers button {
@@ -1061,7 +1101,7 @@
         padding: var(--s1) var(--s4);
         font-family: var(--narrow);
         font-size: var(--t-label);
-        font-weight: 700;
+        font-weight: var(--w-bold);
         letter-spacing: var(--track-2);
         text-transform: uppercase;
         color: var(--ink-3);
@@ -1145,8 +1185,8 @@
       */
       .pills .dot,
       .note .dot {
-        width: 6px;
-        height: 6px;
+        width: var(--s2);
+        height: var(--s2);
         border-radius: 50%;
         background: var(--her-deep);
         flex: none;
@@ -1163,7 +1203,7 @@
         background: var(--her-wash);
         box-shadow: inset 0 0 0 1px var(--her);
         color: var(--ink-brand);
-        font-weight: 600;
+        font-weight: var(--w-semibold);
       }
       /* The moods grid: eight tiles, each with the switch that decides it. */
       .moods {
@@ -1177,7 +1217,7 @@
         align-items: center;
         gap: var(--s1);
         padding: var(--s4) var(--s3);
-        border: 1px solid var(--rule);
+        border: var(--s-px) solid var(--rule);
         border-radius: var(--r3);
         background: var(--paper-2);
         text-align: center;
@@ -1223,7 +1263,7 @@
       .mood .name {
         font-family: var(--narrow);
         font-size: var(--t-label);
-        font-weight: 700;
+        font-weight: var(--w-bold);
         letter-spacing: var(--track-2);
         text-transform: uppercase;
       }
@@ -1276,7 +1316,7 @@
       #panel-wake .note {
         margin: 0 0 var(--s2);
         font-size: var(--t-cap);
-        line-height: 1.5;
+        line-height: var(--leading);
         color: var(--ink-3);
       }
       #panel-wake .meta {
@@ -1308,7 +1348,7 @@
         min-height: var(--wake-floor);
         overflow-y: auto;
         margin: 0 calc(var(--s6) * -1) 0;
-        border-top: 1px solid var(--rule);
+        border-top: var(--s-px) solid var(--rule);
       }
       .wake-box > pre {
         border: 0;
@@ -1360,7 +1400,7 @@
           where the words begin.
         */
         padding: var(--s4) var(--s6);
-        border-width: 1px 0 0;
+        border-width: var(--s-px) 0 0;
         border-radius: 0;
         resize: none;
       }
@@ -1415,7 +1455,7 @@
         because it shares a line with an h3 rather than standing under one.
       */
       .wake-tabs button {
-        padding: 2px var(--s3);
+        padding: var(--s0) var(--s3);
         font-size: var(--t-nano);
       }
       /*
@@ -1480,7 +1520,7 @@
         flex-direction: column;
         gap: var(--s4);
         padding: var(--s6) var(--s7);
-        border-bottom: 1px solid var(--rule);
+        border-bottom: var(--s-px) solid var(--rule);
       }
       /* Nothing below the last one to divide it from. */
       .section:last-child {
@@ -1501,7 +1541,7 @@
         margin: 0;
         max-width: 68ch;
         font-size: var(--t-ui-2);
-        line-height: 1.55;
+        line-height: var(--leading);
         color: var(--ink-2);
       }
       .section .note.bad {
@@ -1526,7 +1566,7 @@
       .who-facts .label {
         font-family: var(--narrow);
         font-size: var(--t-label);
-        font-weight: 700;
+        font-weight: var(--w-bold);
         letter-spacing: var(--track-2);
         text-transform: uppercase;
         color: var(--ink-3);
@@ -1560,7 +1600,7 @@
         align-items: flex-end;
         gap: var(--s6);
         padding: var(--s7) var(--s7) var(--s6);
-        border-bottom: 1px solid var(--rule);
+        border-bottom: var(--s-px) solid var(--rule);
       }
       .who-band .tile {
         flex: none;
@@ -1593,14 +1633,14 @@
         width: 100%;
         padding: var(--s0) 0;
         border: 0;
-        border-bottom: 1px solid transparent;
+        border-bottom: var(--s-px) solid transparent;
         border-radius: 0;
         background: transparent;
         color: inherit;
         font: inherit;
         font-size: var(--t-h1);
-        font-weight: 700;
-        letter-spacing: -0.02em;
+        font-weight: var(--w-bold);
+        letter-spacing: var(--track-tight);
       }
       /*
         The two shared states are UNDONE here, not merely added to.
@@ -1649,7 +1689,7 @@
         overflow-wrap: anywhere;
         margin: 0;
         padding: var(--s4);
-        border: 1px solid var(--rule);
+        border: var(--s-px) solid var(--rule);
         border-radius: var(--r2);
         background: var(--paper);
         color: inherit;
@@ -1664,7 +1704,7 @@
           between glancing at a word and reading a paragraph.
         */
         font-size: var(--t-data);
-        line-height: 1.6;
+        line-height: var(--leading-long);
         user-select: text;
       }
       /*
@@ -1700,7 +1740,7 @@
         text-align: left;
         padding: var(--s3) var(--s5);
         border: 0;
-        border-top: 1px solid var(--rule);
+        border-top: var(--s-px) solid var(--rule);
         background: transparent;
         color: inherit;
         font: inherit;
@@ -1719,7 +1759,7 @@
         align-items: center;
         gap: var(--s3);
         font-size: var(--t-ui-2);
-        font-weight: 600;
+        font-weight: var(--w-semibold);
       }
       .entry .snippet {
         font-size: var(--t-data);
@@ -1746,7 +1786,7 @@
       .entry .subject {
         font-size: var(--t-sm);
         color: var(--ink);
-        font-weight: 500;
+        font-weight: var(--w-medium);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1800,12 +1840,12 @@
         flex-direction: column;
         gap: var(--s3);
         padding-bottom: var(--s5);
-        border-bottom: 1px solid var(--rule);
+        border-bottom: var(--s-px) solid var(--rule);
       }
       .talk-when {
         font-size: var(--t-h2);
-        font-weight: 700;
-        letter-spacing: -0.015em;
+        font-weight: var(--w-bold);
+        letter-spacing: var(--track-tight);
       }
       .talk-facts {
         display: flex;
@@ -1840,15 +1880,15 @@
         display: inline-flex;
         align-items: baseline;
         gap: var(--s1);
-        padding: 2px var(--s3);
-        border-radius: 999px;
+        padding: var(--s0) var(--s3);
+        border-radius: var(--r-pill);
         background: var(--her-wash);
         font-family: var(--mono);
         font-size: var(--t-data);
         color: var(--ink-2);
       }
       .tool-name {
-        font-weight: 500;
+        font-weight: var(--w-medium);
       }
       /* Drawn only above one, and quieter than the name it qualifies. */
       .tool-uses {
@@ -1873,7 +1913,7 @@
         flex: none;
         font-family: var(--mono);
         font-size: var(--t-data);
-        font-weight: 400;
+        font-weight: var(--w-regular);
         color: var(--ink-3);
       }
       .fact svg {
@@ -1896,12 +1936,12 @@
       .run .tile {
         flex: none;
         display: block;
-        margin-bottom: 2px;
+        margin-bottom: var(--s0);
       }
       .run.faceless .tile {
         width: 28px;
         height: 28px;
-        border: 1px dashed var(--warn-line);
+        border: var(--s-px) dashed var(--warn-line);
         border-radius: var(--r-pill);
       }
       .said {
@@ -1924,7 +1964,7 @@
       .who {
         font-family: var(--narrow);
         font-size: var(--t-label);
-        font-weight: 600;
+        font-weight: var(--w-semibold);
         letter-spacing: var(--track);
         text-transform: uppercase;
         color: var(--ink-3);
@@ -1943,7 +1983,7 @@
       .bubble {
         position: relative;
         padding: var(--s3) var(--s4);
-        border: 1px solid var(--rule);
+        border: var(--s-px) solid var(--rule);
         border-radius: var(--r4);
         background: var(--paper-2);
         font-size: var(--t-body);
@@ -2036,7 +2076,7 @@
       /* ---- the problem list, which is a report rather than a conversation --- */
       .report {
         background: var(--paper-2);
-        border: 1px solid var(--rule);
+        border: var(--s-px) solid var(--rule);
         border-radius: var(--r3);
         padding: var(--s6);
       }
@@ -2050,7 +2090,7 @@
       .problem .where {
         font-family: var(--narrow);
         font-size: var(--t-label);
-        font-weight: 600;
+        font-weight: var(--w-semibold);
         letter-spacing: var(--track);
         text-transform: uppercase;
         color: var(--red);
@@ -2092,7 +2132,7 @@
         gap: var(--s5);
         padding: 0 var(--s6);
         background: var(--paper-2);
-        border-top: 1px solid var(--rule);
+        border-top: var(--s-px) solid var(--rule);
       }
       .warn {
         display: flex;
@@ -2143,7 +2183,7 @@
         here, against a bar of 3:1.
       */
       :focus-visible {
-        outline: 2px solid var(--ink-brand);
+        outline: var(--s0) solid var(--ink-brand);
         outline-offset: 1px;
       }
       /*
