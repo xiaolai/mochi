@@ -165,7 +165,28 @@ function quote(tail: readonly Turn[]): string {
     // line inside system-level context. The repository already has one helper
     // for exactly this hazard; a second copy of it is how the weaker one ends
     // up being the one that matters.
-    const text = oneLine(turn.text)
+    /*
+      AN EMPTY CUT TURN IS NOT AN EMPTY TURN.
+
+      `Turn.cut` says it: "An empty `text` with `cut` true is not a blank row:
+      it is a turn she began and was interrupted in, whose surviving text could
+      not be recovered. It is kept because losing it silently is worse than
+      recording that it happened." The archive keeps it for that reason and the
+      history window draws a line for it; this dropped it.
+
+      The case that bites is a reconnect straight after an interruption with
+      nothing recoverable. That turn is the only one in the tail, `quote`
+      answers '', and `resumeFor` returns '' — so she opens with a greeting as
+      though the conversation had not been happening, immediately after being
+      cut off. The one moment continuity matters most is the one where it was
+      thrown away.
+
+      Bracketed rather than left to look like words: this is a note ABOUT the
+      turn, and the fence plus the instruction above it already tell her the
+      block is a record rather than instructions.
+    */
+    const said = oneLine(turn.text)
+    const text = said === '' && turn.cut ? '[interrupted before anything was said]' : said
     if (text === '') continue
     const prefix = `${turn.who === 'her' ? 'You' : 'They'}: `
     // The separator `join` will add is CHARGED FOR. Counting only line lengths

@@ -1,4 +1,5 @@
 import { PERSONA_LIMITS } from '@shared/persona'
+import { turnPrefix } from './summarise'
 import type { Turn } from '../store/turn-row'
 
 /**
@@ -55,9 +56,31 @@ import type { Turn } from '../store/turn-row'
  */
 export const MOST_TRANSCRIPT_CHARS = PERSONA_LIMITS.memory * 3
 
-/** What one turn costs the prompt, close enough to bound it. See `transcriptOf`. */
+/**
+ * What one turn costs the prompt. See `transcriptOf`, which does the rendering.
+ *
+ * ## It used to undercount, and the shortfall was per turn
+ *
+ * `turn.who.length + 2` charges five for the prefix. `transcriptOf` writes
+ * `Her: ` — which is five — or `Them: `, which is six. And the `\n` that `join`
+ * puts between every pair was charged for at all.
+ *
+ * So every turn of the user's was short by two and every turn of hers by one.
+ * The bound exists because this is "the one input to `codex exec` that grows
+ * with use rather than with configuration", and a day of short exchanges is
+ * thousands of turns — which is thousands of characters past a ceiling the
+ * comment above states as a number.
+ *
+ * The prefix comes from `turnPrefix`, the same function that renders it, so the
+ * two cannot drift again.
+ *
+ * `turn.text.length` rather than `oneLine(turn.text).length` is deliberate and
+ * is the one approximation left: `oneLine` collapses whitespace runs, so the
+ * rendered text is never LONGER than the raw. Charging the raw length
+ * over-estimates, and over-estimating a ceiling is the safe direction.
+ */
 function costOf(turn: Turn): number {
-  return turn.text.length + turn.who.length + 2
+  return turnPrefix(turn.who).length + turn.text.length + 1
 }
 
 /** Whether the person said anything in this segment. See the header. */
@@ -113,5 +136,19 @@ export function fittingNewestFirst(
     // this would read and then throw away.
     if (full) break
   }
+  /*
+    REVERSED BEFORE SORTING, so turns sharing an instant keep their real order.
+
+    `kept` is filled newest-first — segments arrive newest-first and each is
+    walked backwards — and `sort` is stable, so two turns at the same
+    millisecond came out of a sort by `at` in the order they were PUSHED, which
+    is backwards. Her answer appeared before the question it answered.
+
+    Same-millisecond turns are not exotic: a short reply recorded in the same
+    tick as the line it follows is ordinary, and `Turn` carries no id to break
+    the tie with. Reversing first makes the array oldest-first with ties already
+    right, and a stable sort then leaves them alone.
+  */
+  kept.reverse()
   return kept.sort((a, b) => a.at - b.at)
 }

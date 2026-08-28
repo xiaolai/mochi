@@ -465,8 +465,18 @@ export async function summarise(
 }
 
 /** The conversation as text the model can read. */
+/**
+ * How one turn is labelled in a transcript.
+ *
+ * Its own function because `presence.ts` has to charge for it and was charging
+ * `turn.who.length + 2` — five, which is `Her: ` exactly and `Them: ` one
+ * short. Two places computing one string is how that happens; one place is how
+ * it stops.
+ */
+export function turnPrefix(who: Turn['who']): string {
+  return who === 'her' ? 'Her: ' : 'Them: '
+}
+
 export function transcriptOf(turns: readonly Turn[]): string {
-  return turns
-    .map((turn) => `${turn.who === 'her' ? 'Her' : 'Them'}: ${oneLine(turn.text)}`)
-    .join('\n')
+  return turns.map((turn) => `${turnPrefix(turn.who)}${oneLine(turn.text)}`).join('\n')
 }

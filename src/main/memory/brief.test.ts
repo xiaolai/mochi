@@ -219,3 +219,46 @@ describe('a turn cut at an emoji', () => {
     expect(quoted.length).toBeLessThanOrEqual(MAX_BRIEF_CHARS)
   })
 })
+
+/**
+ * A turn she began and was cut off in, with nothing recoverable.
+ *
+ * `Turn.cut` states the rule: "An empty `text` with `cut` true is not a blank
+ * row: it is a turn she began and was interrupted in, whose surviving text
+ * could not be recovered. It is kept because losing it silently is worse than
+ * recording that it happened." The archive keeps it for that reason and the
+ * history window draws a line for it. `quote` dropped it.
+ *
+ * The case that bites is a reconnect straight after an interruption. That turn
+ * is the only one in the tail, `quote` answers nothing, and `resumeFor` returns
+ * '' — so she opens with a greeting as though the conversation had not been
+ * happening, immediately after being cut off. The one moment continuity matters
+ * most was the one where it was thrown away.
+ */
+describe('an interruption with nothing left of it', () => {
+  function interrupted(at = NOW): Turn {
+    return { at, who: 'her', text: '', cut: true }
+  }
+
+  it('still produces a resume, where it used to produce nothing', () => {
+    const resumed = resumeFor([interrupted()])
+    expect(resumed).not.toBe('')
+    expect(resumed).toContain('interrupted')
+  })
+
+  it('keeps it in place among the turns around it', () => {
+    const resumed = resumeFor([
+      said('you', 'so what do you think', NOW - 2),
+      interrupted(NOW - 1),
+      said('you', 'sorry, go on', NOW),
+    ])
+    expect(resumed.indexOf('so what do you think')).toBeLessThan(resumed.indexOf('interrupted'))
+    expect(resumed.indexOf('interrupted')).toBeLessThan(resumed.indexOf('sorry, go on'))
+  })
+
+  it('still drops a turn that is empty and was NOT cut', () => {
+    // The distinction is the whole point. A blank row with nothing to record is
+    // still nothing, and rendering a marker for it would invent an event.
+    expect(resumeFor([{ at: NOW, who: 'her', text: '   ', cut: false }])).toBe('')
+  })
+})
