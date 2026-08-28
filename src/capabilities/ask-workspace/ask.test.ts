@@ -340,6 +340,41 @@ describe('a child that will not die', () => {
     }
   }
 
+  it('stops waiting on a child that does not reap even after SIGKILL', async () => {
+    /*
+      SIGKILL is a request to the KERNEL, not a guarantee about when. A process
+      wedged in an uninterruptible wait — a stalled network mount, a device read
+      — does not reap until that syscall returns, whatever signal is pending.
+
+      The escalation fixed the ignore-SIGTERM case and left this one step
+      further out: the await had nothing behind it, so it could outlive every
+      deadline in the function and hold the tool call, the ledger entry and the
+      slot open exactly as the un-escalated version did.
+    */
+    const signals: NodeJS.Signals[] = []
+    const result = await ask('q', {
+      codexPath: '/bin/codex',
+      workspace: '/work',
+      settings: SETTINGS,
+      // Never settles, whatever it is sent. This is the wedged case.
+      run: () => ({
+        finished: new Promise<{ code: number; stderr: string }>(() => undefined),
+        kill: (signal?: NodeJS.Signals) => {
+          signals.push(signal ?? 'SIGTERM')
+          return true
+        },
+      }),
+      timeoutMs: 5,
+      graceMs: 5,
+    })
+    expect(signals).toEqual(['SIGTERM', 'SIGKILL'])
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('unreachable')
+    // A different fact from "it failed": it points at the machine rather than
+    // at the lookup, and says the child is still out there.
+    expect(result.why).toContain('did not stop')
+  })
+
   it('escalates to SIGKILL when SIGTERM is ignored', async () => {
     const child = stubborn()
     const result = await ask('q', {

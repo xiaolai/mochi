@@ -1656,6 +1656,8 @@ listenTo('companion:fit', (_event, value: unknown) => {
   const origin = originHolding(herOnScreen, pad)
   const fit = herPlace.fitTo({ body, origin, size, herOnScreen })
   companion.setBounds({ x: origin.x, y: origin.y, width: size.width, height: size.height })
+  // Told, because it cannot be read. See `__mochi_origin__` and `sidesFor`.
+  companion.webContents.send('voice:send', { type: '__mochi_origin__', x: origin.x, y: origin.y })
   showHerOnce('the first fit')
   /*
     A fit must never MOVE her, and this says so out loud rather than trusting it.
@@ -1692,7 +1694,11 @@ listenTo('companion:grab', (_event, value: unknown) => {
     grip,
     () => companion,
     () => herPlace.body(),
-    (feet) => {
+    (feet, origin) => {
+      // The origin every tick, before the stance guard: she has MOVED whether
+      // or not her stance changed, and everything screen-relative in the
+      // renderer is computed from it.
+      companion?.webContents.send('voice:send', { type: '__mochi_origin__', ...origin })
       if (!herPlace.standAt(feet)) return
       // Straight through on the frame it changes. She is being dragged, so a
       // stance that arrived a frame late would show as her jumping.

@@ -94,6 +94,16 @@ export interface Face {
   /** Which side of her the bubble should sit on, or `auto`. */
   prefersBubble(side: SidePreference): void
   /**
+   * Where main just put this window, in screen coordinates.
+   *
+   * Told rather than read. `window.screenX` is a cached rect Chromium refreshes
+   * on notifications it does not reliably get for a frameless transparent
+   * window moved by `setPosition` — measured twice in this file's history, most
+   * recently on 2026-08-28 when a fit moved her 27px and the renderer reported
+   * the pre-fit value for as long as the window stayed open.
+   */
+  movedTo(origin: { x: number; y: number }): void
+  /**
    * Eyes shut and not listening.
    *
    * Only what is drawn and what is clickable. Closing the microphone belongs to
@@ -357,8 +367,19 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   }
   /** The sides a bubble would fit on, for the tray menu. See `sidesFor`. */
   function sidesForTheMenu(): ReturnType<typeof sidesFor> {
-    return sidesFor(herBox(), bubbleSide)
+    return sidesFor(herBox(), bubbleSide, windowOrigin)
   }
+
+  /**
+   * Where main last put this window, or null before it has said.
+   *
+   * The renderer cannot read it: `window.screenX` is a cached rect Chromium
+   * refreshes on notifications it does not reliably get for this window type —
+   * the same measurement recorded above, confirmed again on 2026-08-28 when a
+   * fit moved her 27px and the renderer went on reporting the old value for as
+   * long as the window was open.
+   */
+  let windowOrigin: { x: number; y: number } | null = null
 
   /**
    * Which side of her somebody asked the bubble to sit on.
@@ -778,7 +799,8 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       return
     }
     if (chip <= 0) return
-    if (!chipHits(event.clientX, event.clientY, herBox(), roomOnScreen(canvas))) return
+    if (!chipHits(event.clientX, event.clientY, herBox(), roomOnScreen(canvas, windowOrigin)))
+      return
     window.mochi.history()
   })
 
@@ -923,7 +945,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         utterance.text(),
         utterance.at(),
         herBox(),
-        roomOnScreen(canvas),
+        roomOnScreen(canvas, windowOrigin),
         bubbleSide,
         overBubble,
         troubles,
@@ -988,7 +1010,11 @@ export function showFace(canvas: HTMLCanvasElement): Face {
      */
     const inBubble = bubble.controls() !== null
     const wanted =
-      shoulderChip && !inBubble && chipVisible(at, onHer, herBox(), roomOnScreen(canvas)) ? 1 : 0
+      shoulderChip &&
+      !inBubble &&
+      chipVisible(at, onHer, herBox(), roomOnScreen(canvas, windowOrigin))
+        ? 1
+        : 0
     chip =
       wanted > chip
         ? Math.min(1, chip + seconds / CHIP_FADE_S)
@@ -1042,7 +1068,7 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       )
     }
 
-    drawChip(ctx, herBox(), palette, chip, troubles, roomOnScreen(canvas))
+    drawChip(ctx, herBox(), palette, chip, troubles, roomOnScreen(canvas, windowOrigin))
 
     // Only when it CHANGES. Asking main to toggle the window flag sixty times a
     // second would be sixty IPC messages a second for an answer that changes
@@ -1052,7 +1078,8 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     // one deliberate exception to "only painted pixels take the mouse" — a
     // control nobody can click is not a control. It is exactly the size of the
     // control and disappears with it.
-    const onChip = chip > 0 && at !== null && chipHits(at.x, at.y, herBox(), roomOnScreen(canvas))
+    const onChip =
+      chip > 0 && at !== null && chipHits(at.x, at.y, herBox(), roomOnScreen(canvas, windowOrigin))
     // Only the bubble's CONTROLS, never its text. The design's rule is that
     // only painted pixels of HERS take the mouse; two small buttons are the
     // same deliberate exception the chip already makes, and the paragraph
@@ -1144,6 +1171,9 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     }),
     prefersBubble: (side: SidePreference) => {
       bubbleSide = side
+    },
+    movedTo: (origin: { x: number; y: number }) => {
+      windowOrigin = origin
     },
     hears: (on: boolean) => {
       if (hearing === on) return

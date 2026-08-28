@@ -60,15 +60,41 @@ import { WINDOW_H, WINDOW_W, fullPad } from '@shared/avatar-layout'
  * window she will have when she has some: `fullPad`, which is what
  * `padNeeded` returns the instant there is text.
  *
- * `screenX` is sound here, and that is worth stating because it was not
- * always: an unshown window reports 0, which is why she used to be placed at
- * the pad's own offsets from an origin nobody had seen. She is only shown once
- * she has been fitted now, so by the time this runs the window is on screen
- * and reporting its real position.
+ * ## The window origin is TOLD, not read
+ *
+ * This used to read `window.screenX`/`screenY` and said they were "sound here,
+ * because she is only shown once she has been fitted, so by the time this runs
+ * the window is on screen and reporting its real position." `face.ts` says the
+ * opposite about the same API and backs it with a measurement — "a cached rect
+ * Chromium refreshes on notifications it does not reliably get for a frameless
+ * transparent window moved by `setPosition`... it reported `0` for a window main
+ * had placed at 1957,1058 — including after the window was shown."
+ *
+ * Two comments, one API, and only one of them measured. Measured again on
+ * 2026-08-28: main placed her at 2384,1299 and fitted to 2384,1326, and the
+ * renderer reported 1299 — minutes later, still 1299. It does not catch up.
+ *
+ * 27px is what a fit costs. A DRAG is unbounded: main moves her with
+ * `setPosition` on every tick, so after crossing the screen this computed the
+ * room from wherever she was at launch — advertising sides that do not fit and
+ * sizing the room against the wrong edge.
+ *
+ * So the origin is passed IN. `face.ts` already reached this answer for the
+ * same problem — "the renderer sends the half it genuinely knows" and main
+ * pairs it with `getBounds()` — and this is the other direction of it: main
+ * knows where the window is, so main says.
  */
 export function sidesFor(
   box: { left: number; top: number; width: number; height: number },
   bubbleSide: SidePreference,
+  /**
+   * Where main last put the window, in screen coordinates.
+   *
+   * NULL before main has said, which is the one case `window.screenX` is
+   * actually good for: nothing has moved the window yet, so the value it
+   * cached at load is still true.
+   */
+  windowOrigin: { x: number; y: number } | null,
 ): {
   available: readonly Side[]
   using: Side
@@ -77,9 +103,10 @@ export function sidesFor(
 } | null {
   const full = fullPad({ width: box.width, height: box.height })
   // Where the big window would sit to leave her exactly where she is.
+  const at = windowOrigin ?? { x: window.screenX, y: window.screenY }
   const origin = {
-    x: window.screenX + box.left - full.left,
-    y: window.screenY + box.top - full.top,
+    x: at.x + box.left - full.left,
+    y: at.y + box.top - full.top,
   }
   const room = roomFor(
     { width: WINDOW_W, height: WINDOW_H },
@@ -130,10 +157,21 @@ export function availableScreen(): { x: number; y: number; width: number; height
   }
 }
 
-export function roomOnScreen(canvas: HTMLCanvasElement): Room {
+/**
+ * The room around the window the bubble is actually drawn into.
+ *
+ * Takes the origin for `sidesFor`'s reason, and this is the half that shows: it
+ * places the bubble, the shoulder chip and their hit regions, so a stale origin
+ * puts the chip somewhere a click does not land and can flip the bubble to a
+ * side with no room on it.
+ */
+export function roomOnScreen(
+  canvas: HTMLCanvasElement,
+  windowOrigin: { x: number; y: number } | null,
+): Room {
   return roomFor(
     { width: canvas.clientWidth, height: canvas.clientHeight },
-    { x: window.screenX, y: window.screenY },
+    windowOrigin ?? { x: window.screenX, y: window.screenY },
     availableScreen(),
     SCREEN_INSET,
   )

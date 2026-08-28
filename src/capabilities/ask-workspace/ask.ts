@@ -314,9 +314,41 @@ export async function runSchema(prompt: string, schema: object, deps: AskDeps): 
         handle.kill('SIGKILL')
       }, grace)
     }, deps.timeoutMs ?? 180_000)
-    const finished = await handle.finished
+
+    /*
+      A LAST BOUND, because SIGKILL is a request to the KERNEL, not a guarantee
+      about when.
+
+      The escalation above is the fix for a child that ignores SIGTERM, and it
+      left the failure it was reaching for one step further out: after the kill
+      this still awaited `finished` with nothing left to time it out. A process
+      wedged in an uninterruptible wait — a stalled network mount, a device read
+      — does not reap until that syscall returns, whatever signal is pending. So
+      the await could outlive every deadline in this function, holding the tool
+      call, the ledger entry and the slot open exactly as the un-escalated
+      version did.
+
+      One more grace period after the kill, and then this stops waiting. The
+      child is NOT abandoned quietly: it is still held by `running`, so quitting
+      kills it, and the answer says plainly that it would not go — which is a
+      different fact from "it failed" and points at the machine rather than at
+      the lookup.
+    */
+    const abandoned = Symbol('did not exit')
+    const finished = await Promise.race([
+      handle.finished,
+      new Promise<typeof abandoned>((resolve) =>
+        setTimeout(() => resolve(abandoned), (deps.timeoutMs ?? 180_000) + grace * 2).unref?.(),
+      ),
+    ])
     clearTimeout(deadline)
     if (escalation !== null) clearTimeout(escalation)
+    if (finished === abandoned) {
+      return {
+        ok: false,
+        why: 'the lookup did not stop when it was asked to, and was left running',
+      }
+    }
 
     if (finished.code !== 0) {
       // Its stderr, trimmed. A non-zero exit with nothing to say is still worth

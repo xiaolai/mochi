@@ -497,6 +497,24 @@ window.mochi.onSend((frame) => {
   if (type === '__mochi_stance__') {
     face.stands(Number((frame as { feetFromTop?: unknown }).feetFromTop))
   }
+  /*
+    Where main just put this window.
+
+    Told rather than read: `window.screenX` is a cached rect Chromium refreshes
+    on notifications it does not reliably get for a frameless transparent
+    window moved by `setPosition`. Measured on 2026-08-28 — a fit moved her 27px
+    and the renderer reported the pre-fit value for as long as the window stayed
+    open — and a drag makes that error unbounded.
+
+    Checked before it is used, like every other number crossing this bridge: a
+    `NaN` origin would put the bubble and the chip somewhere no click lands, and
+    it would do it silently.
+  */
+  if (type === '__mochi_origin__') {
+    const x = Number((frame as { x?: unknown }).x)
+    const y = Number((frame as { y?: unknown }).y)
+    if (Number.isFinite(x) && Number.isFinite(y)) face.movedTo({ x, y })
+  }
   /**
    * Asleep, or awake. BOTH halves happen here, and they belong together: the
    * microphone is what makes it true, and her eyes are what makes it legible.

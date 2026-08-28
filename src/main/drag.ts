@@ -203,7 +203,7 @@ export function startDrag(
   grip: Grip,
   liveWindow: () => BrowserWindow | null,
   body: () => { left: number; top: number; width: number; height: number },
-  onStance: (feetFromTop: number) => void,
+  onStance: (feetFromTop: number, origin: { x: number; y: number }) => void,
   defaultFeet: number,
 ): void {
   stopDrag()
@@ -229,7 +229,12 @@ export function startDrag(
       held.height + FLOOR_CLEARANCE,
     )
     target.setPosition(to.x, to.y)
-    onStance(to.feetFromTop)
+    // WHERE IT NOW IS, on the tick that moved it. The renderer cannot read this
+    // for itself — `window.screenX` is a cached rect Chromium does not refresh
+    // reliably for a frameless transparent window moved by `setPosition` — so
+    // a drag left every screen-relative decision in the renderer computed
+    // against wherever she was at launch.
+    onStance(to.feetFromTop, { x: to.x, y: to.y })
   }, TICK_MS)
 }
 

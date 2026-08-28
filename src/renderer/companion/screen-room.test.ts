@@ -71,7 +71,7 @@ describe('reading the usable screen', () => {
 describe('which sides a bubble would fit on', () => {
   it('offers both sides when she is in the middle of a wide display', () => {
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 1200, screenY: 600 })
-    const sides = sidesFor(BOX, 'auto')
+    const sides = sidesFor(BOX, 'auto', null)
     expect(sides).not.toBeNull()
     expect(sides?.available).toContain('left')
     expect(sides?.available).toContain('right')
@@ -79,12 +79,12 @@ describe('which sides a bubble would fit on', () => {
 
   it('drops the left when she is against the left edge', () => {
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 0, screenY: 600 })
-    expect(sidesFor(BOX, 'auto')?.available).not.toContain('left')
+    expect(sidesFor(BOX, 'auto', null)?.available).not.toContain('left')
   })
 
   it('drops the right when she is against the right edge', () => {
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 2900, screenY: 600 })
-    expect(sidesFor(BOX, 'auto')?.available).not.toContain('right')
+    expect(sidesFor(BOX, 'auto', null)?.available).not.toContain('right')
   })
 
   it('answers null when nothing fits anywhere', () => {
@@ -92,7 +92,7 @@ describe('which sides a bubble would fit on', () => {
     // an empty list, because the caller draws a menu and "no sides" is a
     // different thing from "these sides".
     screen({ x: 0, y: 0, width: 200, height: 200 }, { screenX: 0, screenY: 0 })
-    expect(sidesFor(BOX, 'auto')).toBeNull()
+    expect(sidesFor(BOX, 'auto', null)).toBeNull()
   })
 
   it('gives the same answer for the same position whatever she last said', () => {
@@ -105,8 +105,8 @@ describe('which sides a bubble would fit on', () => {
       what was asked for.
     */
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 1200, screenY: 600 })
-    const first = sidesFor(BOX, 'auto')
-    const second = sidesFor(BOX, 'auto')
+    const first = sidesFor(BOX, 'auto', null)
+    const second = sidesFor(BOX, 'auto', null)
     expect(second?.available).toEqual(first?.available)
   })
 
@@ -120,9 +120,9 @@ describe('which sides a bubble would fit on', () => {
       the display.
     */
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 0, screenY: 600 })
-    const atLeft = sidesFor(BOX, 'auto')?.available
+    const atLeft = sidesFor(BOX, 'auto', null)?.available
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 2900, screenY: 600 })
-    const atRight = sidesFor(BOX, 'auto')?.available
+    const atRight = sidesFor(BOX, 'auto', null)?.available
     expect(atRight).not.toEqual(atLeft)
   })
 
@@ -130,20 +130,20 @@ describe('which sides a bubble would fit on', () => {
     // The menu marks what was asked for and the bubble goes where it fits.
     // Asking one function keeps the two from ever disagreeing.
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 1200, screenY: 600 })
-    const sides = sidesFor(BOX, 'auto')
+    const sides = sidesFor(BOX, 'auto', null)
     expect(sides?.available).toContain(sides?.using)
   })
 
   it('honours a preference when that side fits', () => {
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 1200, screenY: 600 })
-    expect(sidesFor(BOX, 'left')?.using).toBe('left')
-    expect(sidesFor(BOX, 'right')?.using).toBe('right')
+    expect(sidesFor(BOX, 'left', null)?.using).toBe('left')
+    expect(sidesFor(BOX, 'right', null)?.using).toBe('right')
   })
 
   it('uses a side that fits when the preferred one does not', () => {
     // A chosen side that stopped fitting must not put the bubble off-screen.
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 0, screenY: 600 })
-    const sides = sidesFor(BOX, 'left')
+    const sides = sidesFor(BOX, 'left', null)
     expect(sides?.using).not.toBe('left')
     expect(sides?.available).toContain(sides?.using)
   })
@@ -152,7 +152,7 @@ describe('which sides a bubble would fit on', () => {
     // `from` exists so a surprising answer can be checked at a glance rather
     // than reproduced.
     screen({ x: 0, y: 0, width: 3000, height: 1600 }, { screenX: 1200, screenY: 600 })
-    const from = sidesFor(BOX, 'auto')?.from
+    const from = sidesFor(BOX, 'auto', null)?.from
     expect(from?.body).toMatch(/^\d+(\.\d+)?,\d+(\.\d+)?\s\d+x\d+$/)
     expect(from?.room).toContain('to')
   })
@@ -162,7 +162,7 @@ describe('the room a drawing gets', () => {
   it('is inset from the edge of the display', () => {
     // A bubble flush against the screen edge reads as clipped.
     screen({ x: 0, y: 0, width: 1000, height: 800 }, { screenX: 0, screenY: 0 })
-    const room = roomOnScreen({ clientWidth: 400, clientHeight: 300 } as HTMLCanvasElement)
+    const room = roomOnScreen({ clientWidth: 400, clientHeight: 300 } as HTMLCanvasElement, null)
     expect(room.left).toBeGreaterThan(0)
     expect(room.right).toBeLessThan(1000)
   })
@@ -180,13 +180,62 @@ describe('the room a drawing gets', () => {
       around 1448 — a bubble drawn a monitor away from her.
     */
     screen({ x: -1440, y: 0, width: 1440, height: 900 }, { screenX: -1440, screenY: 0 })
-    const room = roomOnScreen({ clientWidth: 400, clientHeight: 300 } as HTMLCanvasElement)
+    const room = roomOnScreen({ clientWidth: 400, clientHeight: 300 } as HTMLCanvasElement, null)
     expect(room.left).toBeLessThan(100)
 
     // And the same window on a display whose origin IS zero agrees, which is
     // what says the origin is being read rather than ignored.
     screen({ x: 0, y: 0, width: 1440, height: 900 }, { screenX: 0, screenY: 0 })
-    const primary = roomOnScreen({ clientWidth: 400, clientHeight: 300 } as HTMLCanvasElement)
+    const primary = roomOnScreen({ clientWidth: 400, clientHeight: 300 } as HTMLCanvasElement, null)
     expect(room.left).toBe(primary.left)
+  })
+})
+
+/**
+ * The origin is told, not read — and the told one wins.
+ *
+ * This module used to read `window.screenX`/`screenY` and justified it:
+ * "`screenX` is sound here... she is only shown once she has been fitted now,
+ * so by the time this runs the window is on screen and reporting its real
+ * position." `face.ts` said the opposite about the same API and backed it with
+ * a measurement.
+ *
+ * Measured again on 2026-08-28 to settle it: main placed her at 2384,1299 and
+ * fitted to 2384,1326, and the renderer reported 1299 — minutes later, still
+ * 1299. It does not catch up. A fit costs 27px; a drag is unbounded, because
+ * main moves her with `setPosition` on every tick.
+ */
+describe('where the window actually is', () => {
+  it('prefers what main said over what the renderer cached', () => {
+    // The stale value and the true one put her on opposite halves of the
+    // screen, so the room — and therefore the sides — must differ.
+    screen({ x: 0, y: 0, width: 2000, height: 1200 }, { screenX: 0, screenY: 0 })
+    const stale = sidesFor(BOX, 'auto', null)
+    const told = sidesFor(BOX, 'auto', { x: 1800, y: 1000 })
+    expect(stale).not.toBeNull()
+    expect(told).not.toBeNull()
+    expect(told?.from.room).not.toBe(stale?.from.room)
+  })
+
+  it('falls back to the cached value only before main has said', () => {
+    // The one case `window.screenX` is good for: nothing has moved the window
+    // yet, so the value it cached at load is still true.
+    screen({ x: 0, y: 0, width: 2000, height: 1200 }, { screenX: 300, screenY: 400 })
+    const before = sidesFor(BOX, 'auto', null)
+    const same = sidesFor(BOX, 'auto', { x: 300, y: 400 })
+    expect(before?.from.room).toBe(same?.from.room)
+  })
+
+  it('gives the drawn room the same treatment as the menu room', () => {
+    /*
+      `roomOnScreen` is the half that shows: it places the bubble, the shoulder
+      chip and their hit regions. A stale origin there puts the chip where a
+      click does not land.
+    */
+    screen({ x: 0, y: 0, width: 2000, height: 1200 }, { screenX: 0, screenY: 0 })
+    const canvas = { clientWidth: 400, clientHeight: 300 } as HTMLCanvasElement
+    const stale = roomOnScreen(canvas, null)
+    const told = roomOnScreen(canvas, { x: 1500, y: 900 })
+    expect(told).not.toEqual(stale)
   })
 })
