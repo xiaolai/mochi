@@ -235,6 +235,40 @@ describe('what may never be sent', () => {
     }
   })
 
+  it('REFUSES an answer holding a number JSON cannot carry', () => {
+    /*
+      `JSON.stringify` does not throw for `NaN` or an infinity — it writes
+      `null`. So a handler with an arithmetic bug (a division by a count that
+      was zero, an average of an empty list) produced a well-formed frame in
+      which a field the model was promised as a number is `null`, and the model
+      branched on it. Nothing threw, nothing logged, and the call was booked as
+      answered.
+
+      Refused outright rather than nulled, because every capability in this
+      build is compiled in: a non-finite number here is this project's own bug,
+      and the answer should say so rather than look like data.
+    */
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const { ledger, frames } = ledgerWithSpy()
+      ledger.arrived(CALL)
+      ledger.answer('call_1', { status: 'ok', howMany: bad })
+      const output = String(frames[0]?.item.output)
+      expect(output, String(bad)).toContain('not finite')
+      // And emphatically NOT a frame that reads as a real answer with a null in
+      // it, which is what the model used to be handed.
+      expect(output).not.toContain('"howMany":null')
+    }
+  })
+
+  it('CONTROL: an ordinary number goes through untouched', () => {
+    // Without this the assertion above passes for a `payload` that refuses
+    // every object with a number in it.
+    const { ledger, frames } = ledgerWithSpy()
+    ledger.arrived(CALL)
+    ledger.answer('call_1', { status: 'ok', howMany: 3 })
+    expect(String(frames[0]?.item.output)).toContain('"howMany":3')
+  })
+
   it('still emits a frame when the result cannot be serialised', () => {
     // A call that cannot be answered because of a formatting fault would hang
     // the conversation for the rest of the session. Loud in the payload, not

@@ -487,8 +487,27 @@ window.mochi.onSend((frame) => {
   // a snapshot taken at the door; this is how it stays true afterwards.
   if (type === '__mochi_problems__') {
     arrived.problems += 1
-    problems = Number((frame as { count?: unknown }).count)
-    face.troubled(problems)
+    /*
+      A COUNT OR NOTHING, where this was a bare `Number(...)`.
+
+      `Number(undefined)` is `NaN`, as is `Number({})`. `troubled` then does
+      `Math.max(0, NaN)`, which is `NaN`, and every later `troubles > 0` is
+      false — so the dot that says something went wrong never comes on again for
+      the life of the window. In the one subsystem whose entire purpose is that
+      a packaged app has no console.
+
+      IGNORED rather than defaulted, which is the difference from the
+      `outstanding` frame thirty lines above. That one fails to zero and says
+      why: a spinner that never stops is worse than one that never starts. This
+      is the opposite trade — failing to zero HIDES a problem — and there is a
+      better answer than either default: a frame we cannot read carries no
+      information, so it does not get to overwrite what we already know.
+    */
+    const count = (frame as { count?: unknown }).count
+    if (typeof count === 'number' && Number.isFinite(count)) {
+      problems = Math.max(0, count)
+      face.troubled(problems)
+    }
   }
   // Somebody picked a side in the menu bar. Straight through, because they are
   // looking at her while they pick it.

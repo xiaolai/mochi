@@ -182,11 +182,37 @@ export interface LedgerCall {
 /** What goes in `output`, which must be a string on every path. */
 const UNSERIALISABLE = JSON.stringify({ error: 'the result could not be serialised' })
 
+/**
+ * A number JSON cannot carry, refused rather than quietly turned into `null`.
+ *
+ * `CapabilityValue` says `number`, and TypeScript has no way to say "a finite
+ * one" — so `NaN` and both infinities typecheck. `JSON.stringify` does not
+ * throw for them: it writes `null`. So a handler with an arithmetic bug —
+ * a division by a count that was zero, an average of an empty list — produced a
+ * well-formed frame in which a field the model was promised as a number is
+ * `null`, and the model branched on it.
+ *
+ * Refusing the whole answer is the right severity because every capability in
+ * this build is COMPILED IN. `problems.ts` records that the user-installed
+ * folder is gone, so a non-finite number here is this project's own bug rather
+ * than somebody's plugin misbehaving, and a bug is worth an answer that says so.
+ */
+const NOT_FINITE = JSON.stringify({
+  error: 'the result held a number that is not finite, which JSON cannot carry',
+})
+
 function payload(output: unknown): string {
   if (typeof output === 'string') return output
   let written: string | undefined
+  /** Where the first non-finite number was, for the log. `''` is the root. */
+  let notFinite: string | null = null
   try {
-    written = JSON.stringify(output)
+    written = JSON.stringify(output, (key: string, value: unknown) => {
+      if (typeof value === 'number' && !Number.isFinite(value)) {
+        notFinite ??= key === '' ? '(the whole result)' : key
+      }
+      return value
+    })
   } catch {
     // Never throw out of an answer path. A result that cannot be serialised must
     // still produce a frame, or the conversation hangs over a formatting fault.
@@ -198,6 +224,10 @@ function payload(output: unknown): string {
   // was then recorded as settled: a frame the service cannot read, booked as an
   // answer. The type says this cannot happen; the type does not survive the
   // boundary, because `answer` takes `unknown` by contract.
+  if (notFinite !== null) {
+    console.error(`[capability] refusing an answer whose ${notFinite} is not a finite number`)
+    return NOT_FINITE
+  }
   return written ?? UNSERIALISABLE
 }
 

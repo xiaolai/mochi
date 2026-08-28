@@ -1311,7 +1311,11 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       window.mochi.body(herBox())
     },
     troubled: (count: number) => {
-      troubles = Math.max(0, count)
+      // `Math.max(0, NaN)` is `NaN`, so a non-count arriving here would sit in
+      // `troubles` for the life of the window and compare false against every
+      // threshold. The caller checks too; this is the end that holds the state,
+      // and a guard at one door is not a guard.
+      troubles = Number.isFinite(count) ? Math.max(0, count) : troubles
     },
     working: (count: number) => {
       // Checked rather than trusted: it crosses the bridge, and a NaN would

@@ -140,6 +140,15 @@ export interface CapabilityDeps {
  */
 export type CapabilityValue =
   | string
+  /**
+   * A FINITE one, which this type cannot say and `ledger.ts` enforces.
+   *
+   * `JSON.stringify` does not throw for `NaN` or an infinity — it writes
+   * `null`. So a value the model was promised as a number arrives as `null`
+   * and nothing anywhere reports it. TypeScript has no finite-number type, so
+   * the check lives at the single serialisation point instead, where it refuses
+   * the answer and says which key it was.
+   */
   | number
   | boolean
   | null
