@@ -220,10 +220,31 @@ async function open(): Promise<void> {
   session?.close()
   session = null
 
+  /*
+    EVERY callback from this session, or none of them.
+
+    The `catch` below already states the rule — "Only the current one gets to
+    say so. A stale failure would overwrite the state of the session that
+    replaced it." — and applied it in one place out of eight. `onState` called
+    `show()` before its own guard, so a dying session repainted the status of
+    the one that replaced it; `onRemote` reassigned `speaker.srcObject` and
+    re-tapped the mouth analyser, so a reconnect could end up playing the OLD
+    stream. The rest are the same shape and were simply not reached yet.
+
+    Wrapped once rather than guarded seven times. A rule applied at each site is
+    a rule that holds at the sites somebody remembered.
+  */
+  const current = <A extends unknown[]>(run: (...args: A) => void): ((...args: A) => void) => {
+    return (...args: A) => {
+      if (mine !== opening) return
+      run(...args)
+    }
+  }
+
   let next: Session
   try {
     next = await openSession({
-      onState: (state) => {
+      onState: current((state) => {
         show(describe(state))
         /*
           A DEAD SESSION IS RELEASED HERE, not only in the `catch` below.
@@ -240,26 +261,32 @@ async function open(): Promise<void> {
           a session that has already been replaced must not release the one
           that replaced it.
         */
+        // `mine === opening` is the wrapper's job now, so this is only about
+        // whether the state means the session is gone.
         const dead = state === 'closed' || (typeof state === 'object' && 'failed' in state)
-        if (dead && mine === opening) {
+        if (dead) {
           session = null
           applyMicrophone()
         }
-      },
-      onRemote: (stream) => {
+      }),
+      onRemote: current((stream) => {
         speaker.srcObject = stream
         // The same stream, tapped twice: played, and measured for the mouth.
         // §19 is why the mouth cannot come from her text instead — the words
         // arrive 2.1–7.9s before the audio finishes draining.
         face.hear(stream)
-      },
+      }),
       onExpiry: () => {
         /* main schedules the reconnect; nothing to do here */
       },
-      onSaying: (delta, responseId) => face.saying(delta, responseId),
-      onMicrophone: (stream) => face.listen(stream),
-      onSpeaks: (responseId) => face.speaks(responseId),
-      onFinished: (id, interrupted) => face.finished(id, interrupted),
+      onSaying: current((delta, responseId) => face.saying(delta, responseId)),
+      onMicrophone: current((stream) => face.listen(stream)),
+      onSpeaks: current((responseId) => face.speaks(responseId)),
+      onFinished: current((id, interrupted) => face.finished(id, interrupted)),
+      // NOT guarded, and it is the one that should not be. The others are
+      // notifications — a stale one writes over the live session's state. This
+      // is a QUESTION the session asks the face, and it has to be answered:
+      // guarding it would return nothing to a caller expecting a turn.
       heard: () => face.heard(),
     })
   } catch (error: unknown) {

@@ -197,3 +197,66 @@ describe('what the user is told', () => {
     expect(describeProblem({ kind: 'no-token' })).toContain('sign in')
   })
 })
+
+/**
+ * A body that never finished arriving.
+ *
+ * `fetch` resolving means the HEADERS arrived. `text()` and `json()` each start
+ * a fresh read of a stream that can still abort — a dropped connection
+ * mid-body, a truncated chunk, malformed JSON — and those reads were outside
+ * the `try` that wraps the request.
+ *
+ * The consequence was not a wrong answer, it was NO answer. This module exists
+ * to say WHICH of four things went wrong so somebody can be told; a rejection
+ * escaping bypasses all four and reaches the IPC handler as a rejected invoke.
+ */
+describe('a response whose body cannot be read', () => {
+  const bearer = { token: 't', lastRefresh: '2026-07-31T13:27:59.572850Z' }
+
+  /** Headers fine, body rejects — what an aborted stream looks like here. */
+  function bodyDiesAt(status: number): typeof globalThis.fetch {
+    return async () =>
+      ({
+        ok: status >= 200 && status < 300,
+        status,
+        text: () => Promise.reject(new Error('connection reset mid-body')),
+        json: () => Promise.reject(new Error('connection reset mid-body')),
+      }) as unknown as Response
+  }
+
+  it('answers `unreadable` rather than rejecting, when minting succeeds and the body dies', async () => {
+    const read = await mintEphemeralKey({ bearer, fetch: bodyDiesAt(200) })
+    expect(read.ok).toBe(false)
+    if (read.ok) throw new Error('unreachable')
+    expect(read.problem.kind).toBe('unreadable')
+  })
+
+  it('still reports a refusal by STATUS when the body of the refusal dies', async () => {
+    // The status is the substance. An unreadable body must not turn a clean
+    // refusal into a rejected invoke carrying nothing.
+    const read = await mintEphemeralKey({ bearer, fetch: bodyDiesAt(500) })
+    expect(read.ok).toBe(false)
+    if (read.ok) throw new Error('unreachable')
+    expect(read.problem).toMatchObject({ kind: 'refused', status: 500 })
+  })
+
+  it('answers `unreadable` for a body that arrives and is not JSON', async () => {
+    const read = await mintEphemeralKey({ bearer, fetch: answering(200, 'not json at all') })
+    expect(read.ok).toBe(false)
+    if (read.ok) throw new Error('unreachable')
+    expect(read.problem.kind).toBe('unreadable')
+  })
+
+  it('answers `unreachable` when an SDP answer does not finish arriving', async () => {
+    // The service said nothing wrong; the connection went. That is the same
+    // class as the `fetch` failure, not a refusal.
+    const got = await exchangeSdp({
+      minted: { key: 'k', model: 'gpt-realtime-2' },
+      offer: 'v=0',
+      fetch: bodyDiesAt(201),
+    })
+    expect(got.ok).toBe(false)
+    if (got.ok) throw new Error('unreachable')
+    expect(got.problem.kind).toBe('unreachable')
+  })
+})

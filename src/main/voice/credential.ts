@@ -253,17 +253,62 @@ export async function mintEphemeralKey(input: {
     return { ok: false, problem: { kind: 'stale-token', lastRefresh: input.bearer.lastRefresh } }
   }
   if (!response.ok) {
+    // The status is the substance here; an unreadable body should not turn a
+    // clean refusal into a rejected invoke with nothing in it.
     return {
       ok: false,
-      problem: { kind: 'refused', status: response.status, body: await response.text() },
+      problem: {
+        kind: 'refused',
+        status: response.status,
+        body: (await bodyOf(response)) ?? '(the response body could not be read)',
+      },
     }
   }
 
-  const body = (await response.json()) as { value?: unknown }
+  /*
+    PARSED from text rather than `response.json()`, so a body that never
+    finished arriving and a body that is not JSON take the same path — and it is
+    this function's own `unreadable`, not a rejection out of the IPC handler.
+  */
+  const raw = await bodyOf(response)
+  if (raw === null) {
+    return {
+      ok: false,
+      problem: { kind: 'unreadable', why: 'the response body could not be read' },
+    }
+  }
+  let body: { value?: unknown }
+  try {
+    body = JSON.parse(raw) as { value?: unknown }
+  } catch {
+    return { ok: false, problem: { kind: 'unreadable', why: 'the mint did not answer with JSON' } }
+  }
   if (typeof body.value !== 'string' || body.value.length === 0) {
     return { ok: false, problem: { kind: 'unreadable', why: 'the mint returned no key' } }
   }
   return { ok: true, value: { key: body.value, model } }
+}
+
+/**
+ * A response body, or null when reading it failed.
+ *
+ * `fetch` resolving means the HEADERS arrived, not the body. `text()` and
+ * `json()` each start a fresh read of a stream that can still abort — a dropped
+ * connection mid-body, a truncated chunk, malformed JSON — and those rejections
+ * were outside the `try` that wraps the request.
+ *
+ * The consequence was not a wrong answer, it was NO answer: this whole module
+ * is built to return a structured problem (`unreachable`, `stale-token`,
+ * `refused`, `unreadable`) so a person can be told which of them happened. A
+ * rejection escaping bypasses all four and reaches the IPC handler as a
+ * rejected invoke, where the renderer has nothing to say but the raw string.
+ */
+async function bodyOf(response: Response): Promise<string | null> {
+  try {
+    return await response.text()
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -293,7 +338,16 @@ export async function exchangeSdp(input: {
     return { ok: false, problem: { kind: 'unreachable', why: String(error) } }
   }
 
-  const answer = await response.text()
+  const answer = await bodyOf(response)
+  if (answer === null) {
+    // An SDP answer that did not finish arriving is not an answer. Reported as
+    // unreachable rather than refused: the service said nothing wrong, the
+    // connection went — which is the same class as the `fetch` failure above.
+    return {
+      ok: false,
+      problem: { kind: 'unreachable', why: 'the SDP answer could not be read' },
+    }
+  }
   // 201 is what the service actually returns; 200 accepted because a status
   // change of that shape should not take the app down.
   if (response.status !== 201 && response.status !== 200) {

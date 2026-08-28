@@ -495,6 +495,22 @@ export function showFace(canvas: HTMLCanvasElement): Face {
   // wants a view over a plain ArrayBuffer, and the default parameter is
   // `ArrayBufferLike`, which also admits a SharedArrayBuffer it cannot take.
   let samples: Float32Array<ArrayBuffer> | null = null
+  /*
+    The source nodes, held so the NEXT session can disconnect them.
+
+    `hear` already reasons about not making a second `AudioContext` per
+    reconnect — "they are not garbage collected while running, and this happens
+    every hour (§53)" — and then connected a fresh `MediaStreamAudioSourceNode`
+    into that one context on exactly that schedule, without letting go of the
+    previous one. Same leak, one level down, in the function whose comment
+    describes it.
+
+    It is not only memory. A source left connected keeps feeding the analyser,
+    so the mouth and the level meter read the sum of every stream she has ever
+    had — a dead one from an hour ago mixed into the live one.
+  */
+  let micSource: MediaStreamAudioSourceNode | null = null
+  let remoteSource: MediaStreamAudioSourceNode | null = null
   let frame = 0
   let lastAt: number | null = null
   /** What main was last told, so the IPC is not a per-frame message. */
@@ -1324,7 +1340,11 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       mic ??= audio.createAnalyser()
       mic.fftSize = 1024
       micSamples ??= new Float32Array(new ArrayBuffer(mic.fftSize * 4))
-      audio.createMediaStreamSource(stream).connect(mic)
+      // The previous one first. A reconnect replaces the stream, and leaving
+      // the old node connected leaves it feeding the same analyser.
+      micSource?.disconnect()
+      micSource = audio.createMediaStreamSource(stream)
+      micSource.connect(mic)
     },
     hear(stream: MediaStream) {
       // One context, reused. A second `AudioContext` per reconnect is a real
@@ -1334,11 +1354,19 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       analyser ??= audio.createAnalyser()
       analyser.fftSize = 1024
       samples ??= new Float32Array(new ArrayBuffer(analyser.fftSize * 4))
-      audio.createMediaStreamSource(stream).connect(analyser)
+      remoteSource?.disconnect()
+      remoteSource = audio.createMediaStreamSource(stream)
+      remoteSource.connect(analyser)
     },
     dispose() {
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', fit)
+      // Let go of both before the context goes, so a teardown that fails to
+      // close the context still leaves nothing feeding an analyser.
+      micSource?.disconnect()
+      micSource = null
+      remoteSource?.disconnect()
+      remoteSource = null
       // `close()` returns a promise and CAN reject -- a context already closed,
       // or one the browser tore down first. `void` discarded that, so a
       // rejection surfaced as an unhandled one with no route back to here.
