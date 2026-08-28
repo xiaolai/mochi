@@ -78,6 +78,39 @@ function sourceOf(paths: readonly string[]): string {
   return paths.map((path) => readFileSync(path, 'utf8')).join('\n')
 }
 
+/**
+ * Two catalogue entries under one key, which the catalogue cannot express.
+ *
+ * `toolDescriptionKey(name)` is `tool.<name>.description` and
+ * `toolArgumentKey(name, argument)` is `tool.<name>.<argument>`, so a tool with
+ * an argument called `description` builds the same string twice. The pane would
+ * draw two rows that are one setting, with different titles and different
+ * length limits, and one override would govern both.
+ *
+ * `parseManifest` refuses that argument name, which makes the specific case
+ * unrepresentable. This is the general one: keys are BUILT from manifest data,
+ * so any future shape — a second tool prefix, a nested argument — can collide
+ * the same way, and a `Map` keyed on them would quietly keep the last.
+ */
+describe('no two catalogue entries share a key', () => {
+  const specs = promptsFor(CAPABILITIES.manifests)
+
+  it('has a catalogue to check', () => {
+    expect(specs.length).toBeGreaterThan(20)
+  })
+
+  it('keys them all distinctly', () => {
+    const seen = new Map<string, string>()
+    const clashes: string[] = []
+    for (const spec of specs) {
+      const first = seen.get(spec.key)
+      if (first === undefined) seen.set(spec.key, spec.title)
+      else clashes.push(`${spec.key} — "${first}" and "${spec.title}"`)
+    }
+    expect(clashes, 'two prompts under one key; one override would govern both').toEqual([])
+  })
+})
+
 describe('every catalogued prompt is asked for', () => {
   const specs = promptsFor(CAPABILITIES.manifests)
   /*

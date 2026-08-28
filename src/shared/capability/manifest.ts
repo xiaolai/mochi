@@ -99,6 +99,21 @@ export type ManifestProblem =
   | { readonly kind: 'no-properties' }
   | { readonly kind: 'too-many-properties'; readonly count: number }
   | { readonly kind: 'bad-property-name'; readonly property: string }
+  /**
+   * An argument called `description`, which the prompt catalogue cannot key.
+   *
+   * `toolDescriptionKey(name)` is `tool.<name>.description` and
+   * `toolArgumentKey(name, argument)` is `tool.<name>.<argument>`, so an
+   * argument with that name generates the identical key. Two catalogue entries
+   * would share it — with different titles, different limits, and one override
+   * silently governing both.
+   *
+   * Refused here rather than worked around there, because it makes the
+   * collision unrepresentable and costs nothing: no manifest in this build uses
+   * the name, and changing the key shape instead would strand every override
+   * anybody had already stored under the old one.
+   */
+  | { readonly kind: 'reserved-property-name'; readonly property: string }
   | {
       readonly kind: 'unsupported-property-type'
       readonly property: string
@@ -151,6 +166,15 @@ export function isCapabilityName(value: unknown): value is string {
 export const MAX_DESCRIPTION = 4096
 export const MAX_PROPERTY_DESCRIPTION = 1024
 const MAX_PROPERTIES = 8
+
+/**
+ * The one argument name a tool may not have.
+ *
+ * `tool.<name>.description` is the tool's OWN description in the prompt
+ * catalogue, and an argument by that name builds the same string. See
+ * `reserved-property-name`.
+ */
+const RESERVED_PROPERTY = 'description'
 /**
  * How large a closed set may be, and how long one of its values.
  *
@@ -206,6 +230,12 @@ export function parseManifest(value: unknown): ManifestResult {
   for (const property of names) {
     if (!NAME.test(property)) {
       return { ok: false, problem: { kind: 'bad-property-name', property } }
+    }
+    // See `reserved-property-name`: this one collides with the tool's own
+    // description in the prompt catalogue, and the catalogue has no way to tell
+    // the two apart once they have the same key.
+    if (property === RESERVED_PROPERTY) {
+      return { ok: false, problem: { kind: 'reserved-property-name', property } }
     }
     const declared = rawProperties[property]
     if (!isRecord(declared)) {

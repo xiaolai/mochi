@@ -101,6 +101,39 @@ describe('parseManifest', () => {
     expect(problemOf({ ...valid(), parameters })).toBe('too-many-properties')
   })
 
+  it('refuses an argument called `description`, which the catalogue cannot key', () => {
+    /*
+      `toolDescriptionKey(name)` is `tool.<name>.description` and
+      `toolArgumentKey(name, argument)` is `tool.<name>.<argument>`, so an
+      argument with that name builds the IDENTICAL key. The prompt catalogue
+      would then hold two entries under one key — different titles, different
+      length limits — and one override would silently govern both, with the
+      pane showing two rows that are the same setting.
+
+      Refused here rather than worked around in the catalogue, because it makes
+      the collision unrepresentable and costs nothing: no manifest in this build
+      uses the name. Changing the key shape instead would have stranded every
+      override anybody had already stored under the old one.
+    */
+    const parameters = {
+      type: 'object',
+      properties: { description: { type: 'string', description: 'what it is' } },
+      required: ['description'],
+    }
+    expect(problemOf({ ...valid(), parameters })).toBe('reserved-property-name')
+  })
+
+  it('CONTROL: any other argument name is still fine', () => {
+    // Without this the assertion above passes for a parser that refuses every
+    // argument.
+    const parameters = {
+      type: 'object',
+      properties: { question: { type: 'string', description: 'what to ask' } },
+      required: ['question'],
+    }
+    expect(problemOf({ ...valid(), parameters })).toBe('ACCEPTED')
+  })
+
   it('does not let an inherited key masquerade as a declared property', () => {
     // `'constructor' in properties` is true for a plain object literal, so the
     // `required` check has to be about DECLARED keys rather than reachable ones.
