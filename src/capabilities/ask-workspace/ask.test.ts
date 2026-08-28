@@ -203,13 +203,44 @@ describe('reading what came back', () => {
     expect(readAnswer('{"spoken":"   "}')).toBeNull()
   })
 
-  it('fills in what is missing around a usable spoken answer', () => {
-    // `spoken` is the only field she needs. Refusing the whole answer because
-    // `sources` came back as a string would throw away a good answer over its
-    // packaging.
-    const answer = readAnswer('{"spoken":"Yes.","sources":"a.ts"}')
+  it('fills in an absent DETAIL, which carries no claim', () => {
+    // "Anything worth keeping that did not fit in the spoken answer" — so an
+    // absent one is faithfully nothing. There is nothing in it to get wrong.
+    const answer = readAnswer('{"spoken":"Yes.","sources":[]}')
     expect(answer?.spoken).toBe('Yes.')
     expect(answer?.detail).toBe('')
+  })
+
+  it('REFUSES a malformed sources field rather than reporting none', () => {
+    /*
+      This asserted the opposite: "`spoken` is the only field she needs.
+      Refusing the whole answer because `sources` came back as a string would
+      throw away a good answer over its packaging."
+
+      Half right, and the half it misses is the expensive one. `sources: "a.ts"`
+      is a model that NAMED a source in the wrong shape, and coercing it to `[]`
+      throws that away and then presents the result as an answer with no sources
+      — which is indistinguishable from a lookup that genuinely found none.
+
+      That distinction is the feature. `askWorkspace.framing` carries the
+      sourcing contract and `prompts.test.ts` asserts it survives an override.
+      An unsourced answer arriving as a sourced one is what the framing exists
+      to prevent, and "cannot tell" becoming an answer is the rule this project
+      applies to every other reader it has.
+    */
+    expect(readAnswer('{"spoken":"Yes.","sources":"a.ts"}')).toBeNull()
+    expect(readAnswer('{"spoken":"Yes."}')).toBeNull()
+    expect(readAnswer('{"spoken":"Yes.","sources":["a.ts", 7]}')).toBeNull()
+  })
+
+  it('accepts an EMPTY sources list, which is a real answer', () => {
+    /*
+      The framing's own note: it "does NOT forbid everything but the files. v1
+      tried that first, and it made 'what is the current version of X'
+      unanswerable while looking like a refusal to help." So none is a legitimate
+      answer; what is refused above is the field not being one.
+    */
+    const answer = readAnswer('{"spoken":"Yes.","detail":"","sources":[]}')
     expect(answer?.sources).toEqual([])
   })
 })

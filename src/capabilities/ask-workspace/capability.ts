@@ -72,47 +72,60 @@ export const capability: Capability = {
     }
 
     const workspace = deps.workspace()
-    /**
-     * Guarded BEFORE the process starts, every time.
-     *
-     * Not cached: the workspace is a directory somebody drops files into, and
-     * the whole hazard is a file appearing in it. A verdict from startup would
-     * be a verdict about a directory that no longer exists in that shape.
-     */
-    const verdict = await guardWorkspace({
-      workspace,
-      stopAt: deps.guardStopAt(),
-      list: (directory) => readdir(directory),
-    })
-    if (!verdict.ok) {
-      if (verdict.why === 'unreadable') {
-        return cannot(fill(deps.prompt('askWorkspace.unreadable'), { path: verdict.path }))
-      }
-      const files = verdict.hazards.map((one) => one.path).join(', ')
-      return cannot(fill(deps.prompt('askWorkspace.hazards'), { files }))
-    }
-
     /*
-      BOUNDED, and held so it can be stopped.
+      THE SLOT FIRST, before the scan and not after it.
 
-      Each of these spawns a Codex process that may run three minutes, and the
-      model can call a tool in a loop -- nothing said no, so a loop spawned one
-      process per call until the machine decided which to stop. And nothing
-      held them, so quitting left them reading somebody's workspace with the
-      app gone from the Dock. See `running.ts`; both came from the same
-      absence.
+      `running.begin()` sat below the guard, so the bound it applies covered the
+      Codex processes and not the work in front of them. The guard walks the
+      workspace and every ancestor up to `stopAt`, listing each directory — and
+      the model can call a tool in a loop, which is the reason this bound exists
+      at all. Calls arriving together ran that many recursive scans, on the main
+      process, before any of them was told there was no room.
 
-      Refused rather than queued: a queue is a three-minute silence the model
-      cannot see, and `dispatch` guarantees every call an answer, so a refusal
-      is a shape the rest of the system already understands.
+      `MOST_AT_ONCE` is meant to answer "how much of this can happen at once".
+      It was answering a later part of the same question.
     */
     const slot = running.begin()
     if (!slot.ok) {
       return cannot(fill(deps.prompt('askWorkspace.busy'), { most: String(MOST_AT_ONCE) }))
     }
-    let result
     try {
-      result = await ask(question, {
+      /**
+       * Guarded BEFORE the process starts, every time.
+       *
+       * Not cached: the workspace is a directory somebody drops files into, and
+       * the whole hazard is a file appearing in it. A verdict from startup would
+       * be a verdict about a directory that no longer exists in that shape.
+       */
+      const verdict = await guardWorkspace({
+        workspace,
+        stopAt: deps.guardStopAt(),
+        list: (directory) => readdir(directory),
+      })
+      if (!verdict.ok) {
+        if (verdict.why === 'unreadable') {
+          return cannot(fill(deps.prompt('askWorkspace.unreadable'), { path: verdict.path }))
+        }
+        const files = verdict.hazards.map((one) => one.path).join(', ')
+        return cannot(fill(deps.prompt('askWorkspace.hazards'), { files }))
+      }
+
+      /*
+        BOUNDED, and held so it can be stopped. The slot is taken above, before
+        the guard; see the note there.
+
+        Each of these spawns a Codex process that may run three minutes, and the
+        model can call a tool in a loop -- nothing said no, so a loop spawned one
+        process per call until the machine decided which to stop. And nothing
+        held them, so quitting left them reading somebody's workspace with the
+        app gone from the Dock. See `running.ts`; both came from the same
+        absence.
+
+        Refused rather than queued: a queue is a three-minute silence the model
+        cannot see, and `dispatch` guarantees every call an answer, so a refusal
+        is a shape the rest of the system already understands.
+      */
+      const result = await ask(question, {
         codexPath,
         workspace,
         settings: {
@@ -131,20 +144,20 @@ export const capability: Capability = {
           return handle
         },
       })
+      if (!result.ok) {
+        return cannot(fill(deps.prompt('askWorkspace.didNotFinish'), { why: result.why }))
+      }
+      return {
+        status: 'ok',
+        answer: result.answer.spoken,
+        detail: result.answer.detail,
+        sources: result.answer.sources,
+        guidance: deps.prompt('askWorkspace.report'),
+      }
     } finally {
       // In a `finally`, not on the success path: a handler that throws with the
       // slot still taken refuses every later lookup for the life of the process.
       slot.done()
-    }
-    if (!result.ok) {
-      return cannot(fill(deps.prompt('askWorkspace.didNotFinish'), { why: result.why }))
-    }
-    return {
-      status: 'ok',
-      answer: result.answer.spoken,
-      detail: result.answer.detail,
-      sources: result.answer.sources,
-      guidance: deps.prompt('askWorkspace.report'),
     }
   },
 }

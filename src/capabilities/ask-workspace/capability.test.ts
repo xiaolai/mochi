@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { stubDeps } from '../../test/capability-deps'
 import { ask } from './ask'
 import { capability } from './capability'
+import { MOST_AT_ONCE } from './running'
 
 /**
  * `ask` is mocked so the gates can be checked WITHOUT a subprocess, and so the
@@ -14,6 +15,25 @@ import { capability } from './capability'
  * each of its two outcomes.
  */
 vi.mock('./ask', () => ({ ask: vi.fn() }))
+
+/**
+ * How many directories the workspace guard has listed.
+ *
+ * `readdir` is what the walk costs, and it is not injectable here — the
+ * capability closes over it. Counted through the module so the test can ask
+ * whether a refused call paid for it.
+ */
+const scans = vi.hoisted(() => ({ n: 0 }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const real = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...real,
+    readdir: async (...args: Parameters<typeof real.readdir>) => {
+      scans.n += 1
+      return real.readdir(...args)
+    },
+  }
+})
 const asked = vi.mocked(ask)
 
 /**
@@ -34,6 +54,7 @@ let root = ''
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'mochi-ask-'))
   asked.mockReset()
+  scans.n = 0
 })
 afterEach(() => {
   rmSync(root, { recursive: true, force: true })
@@ -167,5 +188,63 @@ describe('ask_workspace', () => {
     expect(answered.status).toBe('unavailable')
     expect(answered.guidance).toContain('the CLI exited 1')
     expect(answered.guidance).toContain('rather than')
+  })
+})
+
+/**
+ * How much of this can happen at once, and where the bound is applied.
+ *
+ * `MOST_AT_ONCE` existed to stop the model calling this in a loop and spawning
+ * a Codex per call. The slot was taken AFTER the workspace guard, so the bound
+ * covered the processes and not the work in front of them: the guard walks the
+ * workspace and every ancestor up to `stopAt`, listing each directory, on the
+ * main process. Calls arriving together each ran that scan before any of them
+ * was told there was no room.
+ */
+describe('the bound covers the scan, not only the spawn', () => {
+  it('refuses an over-limit call WITHOUT scanning the workspace', async () => {
+    /*
+      Counted, because the two orderings cannot be told apart by the answer:
+      once the guard passes, both return the busy message. What differs is
+      whether the walk happened at all — and the walk is the cost, on the main
+      process, once per call.
+
+      An earlier version of this test tried to tell them apart by making the
+      workspace unreadable. That does not work: with the slot taken first the
+      guard still runs, refuses, and releases the slot in its `finally` — so the
+      filling calls never held one and there was nothing to be over the limit
+      of. Worth recording, because it looks like it should work.
+    */
+    const held: (() => void)[] = []
+    asked.mockImplementation(
+      async () =>
+        new Promise((resolve) => {
+          held.push(() => {
+            resolve({ ok: true, answer: { spoken: 'x', detail: '', sources: [] } })
+          })
+        }),
+    )
+    const deps = {
+      codexPath: () => join(root, 'codex'),
+      workspace: () => root,
+      guardStopAt: () => root,
+    }
+
+    // Fill every slot. These pass the guard and park inside `ask`.
+    const running: Promise<unknown>[] = []
+    for (let i = 0; i < MOST_AT_ONCE; i += 1) running.push(call({ question: 'q' }, deps))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const before = scans.n
+    expect(before, 'the filling calls never scanned, so nothing is being measured').toBeGreaterThan(
+      0,
+    )
+
+    const over = await call({ question: 'q' }, deps)
+    expect(over.status).toBe('unavailable')
+    expect(over.guidance).toContain('lookups are already running')
+    expect(scans.n, 'the refused call walked the workspace anyway').toBe(before)
+
+    for (const release of held) release()
+    await Promise.all(running)
   })
 })

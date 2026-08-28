@@ -220,12 +220,43 @@ export function readAnswer(text: string): Answer | null {
   const detail = said['detail']
   const sources = said['sources']
   if (typeof spoken !== 'string' || spoken.trim() === '') return null
+  /*
+    THE SHAPE, all three fields — which is what the docblock above already
+    promises and what `ANSWER_SCHEMA` already requires.
+
+    Only `spoken` was checked. A missing `detail` became `''` and a missing or
+    malformed `sources` became `[]`, so an answer that ignored the schema was
+    presented as one that honoured it: she said the spoken half aloud and
+    reported no sources, which is indistinguishable from a lookup that found
+    none.
+
+    That distinction is the feature. `askWorkspace.framing` carries the sourcing
+    contract and `prompts.test.ts` asserts it survives an override; an answer
+    the model never sourced arriving as an unsourced answer is the one failure
+    the framing exists to prevent.
+
+    EMPTY IS STILL FINE. The framing's own note says it "does NOT forbid
+    everything but the files" — "what is the current version of X" legitimately
+    has none — so `sources: []` is a real answer. What is refused is the field
+    being absent or the wrong type, which is a different fact: the model did not
+    answer the question it was asked.
+
+    An invalid ENTRY is refused rather than filtered out, for the same reason:
+    dropping it would report fewer sources than the model gave, silently.
+
+    `detail` stays lenient. It is "anything worth keeping that did not fit in
+    the spoken answer" — an absent one is faithfully nothing, and there is no
+    claim in it to get wrong.
+  */
+  if (!Array.isArray(sources) || sources.some((one) => typeof one !== 'string')) return null
+  // `detail` is the lenient one, and the asymmetry is the point. It is
+  // "anything worth keeping that did not fit in the spoken answer", so an
+  // absent one is faithfully rendered as nothing — there is no claim to get
+  // wrong. `sources` is a claim.
   return {
     spoken,
     detail: typeof detail === 'string' ? detail : '',
-    sources: Array.isArray(sources)
-      ? sources.filter((one): one is string => typeof one === 'string')
-      : [],
+    sources: sources as readonly string[],
   }
 }
 
