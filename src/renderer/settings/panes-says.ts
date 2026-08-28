@@ -1,16 +1,9 @@
 import type { ByPronoun } from '@shared/pronoun'
 
 /**
- * What the settings panes say about her, kept apart from what they draw.
- *
- * Group NAMES are deliberately mixed in rather than kept apart: "Looking
- * things up" and "Keys" are the same words whoever is worn, and writing each
- * three times would put one word in three slots and invite somebody to change
- * one of them. `Pane.label` is therefore `string | ByPronoun`, and `label()`
- * is what reads either kind.
- */
-/**
  * Every sentence in this window that is ABOUT her, one phrasing per pronoun.
+ *
+ * What the panes SAY, kept apart from what they draw.
  *
  * Group NAMES are deliberately mixed in with them rather than kept apart:
  * "Looking things up" and "Keys" are the same words whoever is worn, and

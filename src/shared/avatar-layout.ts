@@ -23,7 +23,7 @@
  * testable without opening one.
  */
 
-import type { FaceSpec } from './avatar-spec'
+import { FACE_BOUNDS, type FaceSpec } from './avatar-spec'
 
 /**
  * The furthest the squash channel may travel, in either direction.
@@ -251,8 +251,21 @@ export function feetY(cssHeight: number, clearance: number, feetFromTop = FEET_F
   return Math.min(feetFromTop, cssHeight - clearance)
 }
 
-/** What the size setting accepts, as a percentage of `BASE_UNIT_SCALE`. */
-export const SIZE_PERCENT = { min: 50, max: 200, step: 5, fallback: 100 } as const
+/**
+ * What the size setting accepts, as a percentage of `BASE_UNIT_SCALE`.
+ *
+ * DERIVED from `FACE_BOUNDS.size`, which is where a user-supplied value is
+ * refused. That table's own comment states the rule — "One table, read by BOTH
+ * the validator and the tuner's sliders. Two copies would let the editor offer
+ * a value the loader rejects" — and there had come to be four copies of these
+ * three numbers: here, in `persona-change.ts` as `SIZE_BAND`, and in the
+ * shelf's size control as `BAND`.
+ *
+ * The `fallback` is genuinely this module's own: `FACE_BOUNDS` says what is
+ * PERMITTED, and what to do with a value that is not a number at all is a
+ * question only `clampSizePercent` asks.
+ */
+export const SIZE_PERCENT = { ...FACE_BOUNDS.size, fallback: 100 } as const
 
 export interface AvatarLayout {
   /** Pixels per design unit. */

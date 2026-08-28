@@ -1,24 +1,24 @@
 import type { ByPronoun } from '@shared/pronoun'
 
 /**
- * What the history window says about her, kept apart from what it draws.
- *
- * Read against `shelf.pronoun`, which is re-read on every draw, so a character
- * switch rewords these on the same pass that redraws the sheet.
- */
-/**
- * Clicking a card WEARS her — the handoff's own interaction (1a) — so the
- * plates, the assembled prompt and the conversations list all follow from one
- * click. A wake opens a new session, so nothing is torn down; the sheet says
- * as much rather than leaving somebody to wonder whether it took.
- */
-/**
  * Every message this window writes that is ABOUT her, one phrasing per pronoun.
  *
- * Read against `shelf.pronoun`, which is re-read on every draw, so a character
- * switch rewords these on the same pass that redraws the sheet.
+ * What the window SAYS, kept apart from what it draws. Read against
+ * `shelf.pronoun`, which is re-read on every draw, so a character switch
+ * rewords these on the same pass that redraws the sheet.
+ *
+ * Three blocks were stacked here, two of them saying this twice and the third
+ * describing the `worn` message rather than the module. A rationale that sits
+ * above the wrong declaration is read as being about that declaration, which is
+ * worse than no rationale — it is now on the entry it is about.
  */
 export const SAYS = {
+  /**
+   * Clicking a card WEARS her — the handoff's own interaction (1a) — so the
+   * plates, the assembled prompt and the conversations list all follow from one
+   * click. A wake opens a new session, so nothing is torn down; the sheet says
+   * as much rather than leaving somebody to wonder whether it took.
+   */
   worn: {
     she: 'Worn. She will be this character from her next wake.',
     he: 'Worn. He will be this character from his next wake.',

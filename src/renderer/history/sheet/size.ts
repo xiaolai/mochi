@@ -3,6 +3,7 @@ import { type ShelfHandlers, section } from './row'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../shelf-says'
 import type { ShelfCharacter, ShelfView } from '@shared/history-window'
+import { FACE_BOUNDS } from '@shared/avatar-spec'
 
 /**
  * How big she is drawn, and the way back to her own answer.
@@ -21,7 +22,32 @@ import type { ShelfCharacter, ShelfView } from '@shared/history-window'
  * fight whichever face it did not suit. A tiny sprite and a large figure want
  * different answers, and "her size" is a sentence about her.
  */
-const BAND = { min: 50, max: 200, step: 5 } as const
+/**
+ * The band, from the one table that owns it.
+ *
+ * This held its own copy of the three numbers. `FACE_BOUNDS.size` is where a
+ * user-supplied size is refused, and that table says in as many words why a
+ * second copy is wrong: "Two copies would let the editor offer a value the
+ * loader rejects, which presents to a user as 'I designed this and the app
+ * ignored it'." There had come to be four.
+ */
+const BAND = FACE_BOUNDS.size
+
+/**
+ * What a range input's `step` should be to hold this value.
+ *
+ * Extracted and exported so it can be ASSERTED. The suite runs in node with no
+ * DOM emulator — deliberately, and the config says why: "Decisions worth
+ * testing are written as pure functions with their dependencies injected." The
+ * decision here is arithmetic; the element around it is not.
+ *
+ * `'any'` is a real value for the attribute and means "no grid", which is the
+ * honest answer when the number in force is not on one.
+ */
+export function stepFor(value: number, band: { min: number; step: number } = BAND): string {
+  const onGrid = Number.isInteger((value - band.min) / band.step)
+  return onGrid ? String(band.step) : 'any'
+}
 
 export function sizeSection(
   view: ShelfView,
@@ -35,10 +61,28 @@ export function sizeSection(
   slider.type = 'range'
   slider.min = String(BAND.min)
   slider.max = String(BAND.max)
-  slider.step = String(BAND.step)
+  /*
+    THE STEP WIDENS when the value in force is not on the grid.
+
+    `step` is documented in `FACE_BOUNDS` as "Granularity a slider should offer.
+    Not enforced -- a spec may be finer" — so a face is entitled to declare 52,
+    and one does not have to be hand-written for this to happen. Assigning that
+    to a `step: 5` range input does not fail: the browser SANITISES it to the
+    nearest valid step and the control silently holds 50.
+
+    The reading was built from `shown` rather than from the control, so the pane
+    then said "52%" over a slider sitting at 50 — and the first drag would save
+    a number nobody chose. Two wrongs pointing the same way: the control
+    misrepresents the setting, and the label misrepresents the control.
+
+    So the grid is offered when it can be, and stood down when it cannot.
+  */
+  slider.step = stepFor(shown)
   slider.value = String(shown)
 
-  const reading = element('span', 'size-reading', `${String(shown)}%`)
+  // From the CONTROL, not from `shown`. Whatever the browser did with the
+  // assignment above, these two now cannot disagree.
+  const reading = element('span', 'size-reading', `${slider.value}%`)
 
   // While DRAGGING, only the reading moves. A save per pointer event would be
   // a manifest write per pixel, and the window resize behind it.

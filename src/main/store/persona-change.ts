@@ -16,6 +16,7 @@ import {
   VOICE_NAMES,
   type VoiceName,
 } from '@shared/persona'
+import { FACE_BOUNDS } from '@shared/avatar-spec'
 import { tooLong } from '@shared/parse-persona'
 import { isPronoun } from '@shared/pronoun'
 import { isThemeId } from '@shared/theme'
@@ -34,7 +35,15 @@ function isVoice(value: unknown): value is VoiceName {
  * orphaned history.
  */
 /** The band a person may choose from, matching what the face format refuses. */
-const SIZE_BAND = { min: 50, max: 200 } as const
+/**
+ * The band, from the one table that owns it.
+ *
+ * This held its own `{ min: 50, max: 200 }`. `FACE_BOUNDS.size` is where a
+ * user-supplied size is refused and says in as many words that a second copy
+ * would let an editor offer a value the loader rejects — which is exactly what
+ * this file is, an editor.
+ */
+const SIZE_BAND = FACE_BOUNDS.size
 
 export function applyChange(
   persona: Persona,
