@@ -107,6 +107,70 @@ export function fenced(tag: string, text: string): string {
  * now it could forge a heading, which is the same class of thing the fence
  * already only mitigates.
  */
+/**
+ * The five pieces a prompt is assembled from, before anything is placed.
+ *
+ * Its own function because it is seventy-four lines of CONTENT decisions — what
+ * her style is, how the person is addressed, whether a note is worth a section,
+ * what a face list means — inside a function whose other job is placement. The
+ * two do not read each other: this answers "what is there to say", and
+ * `instructionsFor` answers "where does it go".
+ *
+ * Pure, and every piece may be empty. An empty one is dropped by the assembly
+ * rather than rendered as a heading with nothing under it.
+ */
+function piecesFor(
+  persona: Persona,
+  memory: string,
+  prompts: Prompts,
+  brief: string,
+): Readonly<Record<PromptSlot, string>> {
+  return {
+    style: wearName(persona.style, persona),
+    address: addressLine(persona),
+    // Only when there is something to say. An empty "here is what you remember"
+    // section invites the model to invent one -- and `looksEmpty` rather than
+    // `trim`, because a note of nothing but zero-width joiners renders as
+    // nothing and would open that section with an invisible body.
+    notes: looksEmpty(memory.trim())
+      ? ''
+      : [prompts('notes.heading'), prompts('notes.fence'), fenced('notes', memory.trim())]
+          .filter((line) => line !== '')
+          .join('\n'),
+    brief: brief.trim(),
+    /*
+      Which faces she has, and only when it is not all of them.
+
+      Silent in the ordinary case, for the same reason the memory section is: an
+      "everything is available" heading is a line that costs tokens and says
+      nothing.
+
+      **What this section is for has narrowed twice, and this is the current
+      truth.** It used to say the set was narrowed "because `set_expression`'s
+      enum is narrowed to match"; that tool went on 2026-08-26, unused in 275
+      sessions. A later correction said her expression was time-driven instead
+      — also wrong: `repose.ts` drives MOTION, and contains no expression code
+      at all.
+
+      What actually changes her face today is two built-in reactions in
+      `renderer/companion/face.ts` (neutral when she sleeps, a perk when she
+      wakes) and the shelf's preview. None of them consults `persona.faces`.
+
+      So this section no longer constrains anything she can do — it tells her
+      what she has. Kept because a character describing an expression nobody
+      will ever see her wear is worse than one that says nothing, and because
+      the honest alternative is removing `persona.faces` entirely, which is a
+      product decision recorded in `dev-docs/plan-0.1.md` W2.
+    */
+    faces:
+      persona.faces.length === EMOTIONS.length
+        ? ''
+        : persona.faces.length === 0
+          ? '# Your face\nYou wear one face and cannot change it. Say what you mean in words.'
+          : `# Faces you may use\n${persona.faces.join(' · ')}`,
+  }
+}
+
 export function instructionsFor(
   persona: Persona,
   memory: string,
@@ -165,50 +229,7 @@ export function instructionsFor(
     position if not. `PROMPT_SLOTS` explains why omitting a slot cannot lose a
     piece, which is the property that makes this safe to hand over.
   */
-  const pieces: Readonly<Record<PromptSlot, string>> = {
-    style: wearName(persona.style, persona),
-    address: addressLine(persona),
-    // Only when there is something to say. An empty "here is what you remember"
-    // section invites the model to invent one -- and `looksEmpty` rather than
-    // `trim`, because a note of nothing but zero-width joiners renders as
-    // nothing and would open that section with an invisible body.
-    notes: looksEmpty(memory.trim())
-      ? ''
-      : [prompts('notes.heading'), prompts('notes.fence'), fenced('notes', memory.trim())]
-          .filter((line) => line !== '')
-          .join('\n'),
-    brief: brief.trim(),
-    /*
-      Which faces she has, and only when it is not all of them.
-
-      Silent in the ordinary case, for the same reason the memory section is: an
-      "everything is available" heading is a line that costs tokens and says
-      nothing.
-
-      **What this section is for has narrowed twice, and this is the current
-      truth.** It used to say the set was narrowed "because `set_expression`'s
-      enum is narrowed to match"; that tool went on 2026-08-26, unused in 275
-      sessions. A later correction said her expression was time-driven instead
-      — also wrong: `repose.ts` drives MOTION, and contains no expression code
-      at all.
-
-      What actually changes her face today is two built-in reactions in
-      `renderer/companion/face.ts` (neutral when she sleeps, a perk when she
-      wakes) and the shelf's preview. None of them consults `persona.faces`.
-
-      So this section no longer constrains anything she can do — it tells her
-      what she has. Kept because a character describing an expression nobody
-      will ever see her wear is worse than one that says nothing, and because
-      the honest alternative is removing `persona.faces` entirely, which is a
-      product decision recorded in `dev-docs/plan-0.1.md` W2.
-    */
-    faces:
-      persona.faces.length === EMOTIONS.length
-        ? ''
-        : persona.faces.length === 0
-          ? '# Your face\nYou wear one face and cannot change it. Say what you mean in words.'
-          : `# Faces you may use\n${persona.faces.join(' · ')}`,
-  }
+  const pieces = piecesFor(persona, memory, prompts, brief)
 
   /*
     ONE PASS over the document, where this was `{name}` and then the slots.

@@ -452,59 +452,21 @@ export function deriveId(name: string, taken: ReadonlySet<string>): string {
  * Reports EVERY problem, like `parseFaceSpec`, and for the same reason: the
  * window shows them all at once instead of one per save.
  */
-export function parsePersona(value: unknown): PersonaParse {
-  const problems: SaveProblem[] = []
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return { ok: false, problems: [{ kind: 'field', field: 'persona', reason: 'not-object' }] }
-  }
-  const source = value as Record<string, unknown>
-
-  // The VERSION first, because everything below reads the file on its terms.
-  //
-  // Absent is the ordinary upgrade case -- every persona written before this
-  // field existed -- and means the first format. A value that is not a whole
-  // number is a file nobody wrote on purpose.
-  const rawVersion = source['version']
-  const version = rawVersion === undefined ? 1 : rawVersion
-  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1) {
-    problems.push({ kind: 'field', field: 'version', reason: 'not-a-version' })
-    // RETURNED, not collected. Everything below reads the file on the version's
-    // terms -- which legacy fields may be carried, which keys count as unknown
-    // -- and there is no honest answer to any of that for a version this build
-    // does not have.
-    return { ok: false, problems }
-  }
-  if (version > PERSONA_FORMAT) {
-    // REFUSED, not read, and refused HERE rather than reported and read
-    // anyway. Reading it would drop whatever the newer build added and then
-    // write the loss back on the next save -- and, worse, every field the
-    // newer format introduced comes back as `unknown-field` and every field it
-    // reshaped as malformed, so the window buries the one problem that matters
-    // ("update mochi") under a list of complaints about a file that is
-    // perfectly well formed.
-    return { ok: false, problems: [{ kind: 'from-the-future', field: 'version', found: version }] }
-  }
-
-  const id = readId(problems, source)
-  const name = readText(problems, source, 'name', false)
-  const addressUser = readText(problems, source, 'addressUser', true)
-  // ALLOWED EMPTY since 2026-08-17. It was required because it was the only
-  // thing telling the model who it was; `CORE_PROMPT` does that now, so an
-  // empty box is somebody asking for the floor and nothing else -- which is a
-  // real thing to want, and the closest this app comes to an unshaped session.
-  const style = readText(problems, source, 'style', true)
-  const avatarId = readAvatarId(problems, source)
-  const bubbleSide = readBubbleSide(problems, source)
-  const size = readSize(problems, source)
-  const pronoun = readPronoun(problems, source)
-  const theme = readTheme(problems, source)
-  const voice = readVoice(problems, source)
-  const bubble = readBubble(problems, source)
-  const faces = readFaces(problems, source)
-
-  const greeting = readMoment(problems, source, 'greeting')
-  const farewell = readMoment(problems, source, 'farewell')
-
+/**
+ * What an older manifest said about retention, and whether it said anything.
+ *
+ * Its own function because it is fifty lines about a field this parser NO
+ * LONGER OWNS, sitting in the middle of one that parses the fields it does. It
+ * reads nothing the rest of `parsePersona` produces and nothing there reads it
+ * except to hand both values back.
+ *
+ * The two answers are deliberately separate — see the note on
+ * `declaresRetention` below.
+ */
+function legacyRetention(
+  source: Record<string, unknown>,
+  version: number,
+): { readonly legacy: Policy | null; readonly declaresRetention: boolean } {
   // Retention as it was written in older manifests. Carried out rather than
   // validated: this parser no longer OWNS these fields, and refusing a file
   // because a setting that has since moved is malformed would strand a
@@ -567,6 +529,63 @@ export function parsePersona(value: unknown): PersonaParse {
   */
   const declaresRetention =
     (rawKeeps !== undefined && rawKeeps !== DEFAULT_POLICY.keeps) || rawKeepDays !== undefined
+  return { legacy, declaresRetention }
+}
+
+export function parsePersona(value: unknown): PersonaParse {
+  const problems: SaveProblem[] = []
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { ok: false, problems: [{ kind: 'field', field: 'persona', reason: 'not-object' }] }
+  }
+  const source = value as Record<string, unknown>
+
+  // The VERSION first, because everything below reads the file on its terms.
+  //
+  // Absent is the ordinary upgrade case -- every persona written before this
+  // field existed -- and means the first format. A value that is not a whole
+  // number is a file nobody wrote on purpose.
+  const rawVersion = source['version']
+  const version = rawVersion === undefined ? 1 : rawVersion
+  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1) {
+    problems.push({ kind: 'field', field: 'version', reason: 'not-a-version' })
+    // RETURNED, not collected. Everything below reads the file on the version's
+    // terms -- which legacy fields may be carried, which keys count as unknown
+    // -- and there is no honest answer to any of that for a version this build
+    // does not have.
+    return { ok: false, problems }
+  }
+  if (version > PERSONA_FORMAT) {
+    // REFUSED, not read, and refused HERE rather than reported and read
+    // anyway. Reading it would drop whatever the newer build added and then
+    // write the loss back on the next save -- and, worse, every field the
+    // newer format introduced comes back as `unknown-field` and every field it
+    // reshaped as malformed, so the window buries the one problem that matters
+    // ("update mochi") under a list of complaints about a file that is
+    // perfectly well formed.
+    return { ok: false, problems: [{ kind: 'from-the-future', field: 'version', found: version }] }
+  }
+
+  const id = readId(problems, source)
+  const name = readText(problems, source, 'name', false)
+  const addressUser = readText(problems, source, 'addressUser', true)
+  // ALLOWED EMPTY since 2026-08-17. It was required because it was the only
+  // thing telling the model who it was; `CORE_PROMPT` does that now, so an
+  // empty box is somebody asking for the floor and nothing else -- which is a
+  // real thing to want, and the closest this app comes to an unshaped session.
+  const style = readText(problems, source, 'style', true)
+  const avatarId = readAvatarId(problems, source)
+  const bubbleSide = readBubbleSide(problems, source)
+  const size = readSize(problems, source)
+  const pronoun = readPronoun(problems, source)
+  const theme = readTheme(problems, source)
+  const voice = readVoice(problems, source)
+  const bubble = readBubble(problems, source)
+  const faces = readFaces(problems, source)
+
+  const greeting = readMoment(problems, source, 'greeting')
+  const farewell = readMoment(problems, source, 'farewell')
+
+  const { legacy, declaresRetention } = legacyRetention(source, version)
 
   // Unknown keys are REPORTED, not dropped. Same rule as `parseFaceSpec`, and
   // the same reason: a persona file is hand-editable, and `styel` silently
