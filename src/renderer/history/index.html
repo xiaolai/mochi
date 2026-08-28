@@ -1764,8 +1764,13 @@
       .entry .snippet {
         font-size: var(--t-data);
         color: var(--ink-2);
-      }
-      .entry .snippet {
+        /*
+          The clamp lived in a SECOND `.entry .snippet` block directly below
+          this one. Two consecutive rules for one component read as two
+          components until you check the selectors, and the next person to
+          change the colour changes it in the first and leaves the clamp
+          somewhere they never scrolled to.
+        */
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;

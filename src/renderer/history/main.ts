@@ -24,6 +24,8 @@ import {
   startOfDay,
   stepMonth,
   weekdayInitials,
+  countByDay,
+  openingDay,
 } from './month'
 import { assembledPanel, characterCards, characterSheet } from './shelf'
 import { castActions } from './sheet/cast'
@@ -77,7 +79,6 @@ import {
 } from './elements'
 import { say } from './status'
 import { empty, facts, iconButton, marked, toolChips } from './bits'
-import { countByDay, openingDay } from './month'
 import { sureExportEl } from './elements'
 import { offerACopyFirst } from './keep-a-copy'
 

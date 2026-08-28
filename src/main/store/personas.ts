@@ -259,10 +259,6 @@ export function loadPersonas(userData: string, edits: PersonaEdits): PersonaCata
  * the pending-policy settlement and the marker lifecycle that used to sit
  * beside them went with the v1 migration layer.
  *
- * `retry` is what separates "this file is broken" from "this file could not be
- * opened". Only the second defers the one-time retention gate: a parse failure
- * reads the same way on every future launch, so deferring for it would mean
- * never closing.
  */
 function readCandidate(
   root: string,
