@@ -13,6 +13,7 @@ import { bubbleSection, savingSection } from './sheet/saving'
 import { voiceSection } from './sheet/voice'
 import { whoBand } from './sheet/who'
 import { sizeSection } from './sheet/size'
+import { wakeCount } from './wake-count'
 
 /**
  * The characters half of the shelf.
@@ -173,6 +174,57 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
  * Tabbing out of a half-written paragraph would commit it, and there would be
  * nothing to go back to.
  */
+/** Which of the three wake panes is up. Three now, so no longer a boolean. */
+type WakePane = 'sent' | 'tools' | 'write'
+
+/**
+ * The three-way switcher over the wake panes, and what it shows.
+ *
+ * Its own function because it was thirty lines in the middle of a panel that is
+ * otherwise about a text box: a loop building buttons, four `hidden`
+ * assignments and a counter, between the editor's construction and the editor's
+ * wiring. Nothing in it reads the prompt and nothing in the prompt reads it.
+ *
+ * The panes are passed as elements rather than looked up, so this knows nothing
+ * about the shelf — and `sizes` is a THUNK because the draft's length changes
+ * under it while somebody types.
+ */
+function wakeTabs(parts: {
+  readonly panes: Readonly<Record<WakePane, HTMLElement>>
+  readonly actions: HTMLElement
+  readonly count: HTMLElement
+  readonly sizes: () => { readonly sent: number; readonly tools: number; readonly draft: number }
+}): { readonly element: HTMLElement; readonly draw: () => void } {
+  const strip = element('div', 'switchers wake-tabs')
+  let showing: WakePane = 'sent'
+
+  const draw = (): void => {
+    strip.replaceChildren()
+    for (const [id, label] of [
+      ['sent', 'Sent'],
+      ['tools', 'Tools'],
+      ['write', 'Write'],
+    ] as const) {
+      const button = element('button', undefined, label)
+      button.type = 'button'
+      button.setAttribute('aria-current', String(id === showing))
+      button.addEventListener('click', () => {
+        if (id === showing) return
+        showing = id
+        // The draft survives the switch. Looking at what it produces and coming
+        // back is exactly what somebody does while writing one.
+        draw()
+      })
+      strip.append(button)
+    }
+    for (const [id, pane] of Object.entries(parts.panes)) pane.hidden = id !== showing
+    parts.actions.hidden = showing !== 'write'
+    parts.count.textContent = wakeCount(showing, parts.sizes())
+  }
+
+  return { element: strip, draw }
+}
+
 export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readonly HTMLElement[] {
   const head = element('div', 'row')
   const count = element('span', 'meta')
@@ -220,39 +272,16 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
   const actions = element('div', 'row wake-actions')
   actions.append(save, cancel)
 
-  const tabs = element('div', 'switchers wake-tabs')
-  /** Which pane is up. Three now, so no longer a boolean. */
-  let showing: 'sent' | 'tools' | 'write' = 'sent'
-
-  const draw = (): void => {
-    tabs.replaceChildren()
-    for (const [id, label] of [
-      ['sent', 'Sent'],
-      ['tools', 'Tools'],
-      ['write', 'Write'],
-    ] as const) {
-      const button = element('button', undefined, label)
-      button.type = 'button'
-      button.setAttribute('aria-current', String(id === showing))
-      button.addEventListener('click', () => {
-        if (id === showing) return
-        showing = id
-        // The draft survives the switch. Looking at what it produces and coming
-        // back is exactly what somebody does while writing one.
-        draw()
-      })
-      tabs.append(button)
-    }
-    sent.hidden = showing !== 'sent'
-    toolsBox.hidden = showing !== 'tools'
-    editor.hidden = showing !== 'write'
-    actions.hidden = showing !== 'write'
-    // The count names the pane's own quantity rather than one number for all
-    // three — "sent" beside a tool list would be counting the wrong thing.
-    if (showing === 'write') count.textContent = `${String(editor.value.length)} chars`
-    else if (showing === 'tools') count.textContent = `${String(view.toolsSent.length)} chars`
-    else count.textContent = `${String(view.assembled.length)} sent`
-  }
+  const { element: tabs, draw } = wakeTabs({
+    panes: { sent, tools: toolsBox, write: editor },
+    actions,
+    count,
+    sizes: () => ({
+      sent: view.assembled.length,
+      tools: view.toolsSent.length,
+      draft: editor.value.length,
+    }),
+  })
 
   editor.addEventListener('input', () => {
     // The Save is enabled by there being a difference, not by having typed —
@@ -260,7 +289,11 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
     const changed = editor.value !== view.prompt.text
     save.disabled = !changed
     cancel.disabled = !changed
-    count.textContent = `${String(editor.value.length)} chars`
+    count.textContent = wakeCount('write', {
+      sent: view.assembled.length,
+      tools: view.toolsSent.length,
+      draft: editor.value.length,
+    })
   })
   save.disabled = true
   cancel.disabled = true
@@ -291,7 +324,11 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
     editor.value = view.prompt.text
     save.disabled = true
     cancel.disabled = true
-    count.textContent = `${String(editor.value.length)} chars`
+    count.textContent = wakeCount('write', {
+      sent: view.assembled.length,
+      tools: view.toolsSent.length,
+      draft: editor.value.length,
+    })
   })
 
   head.append(tabs)

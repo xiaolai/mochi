@@ -87,6 +87,92 @@ export const MOOD_WHEN: Readonly<Record<Emotion, ByPronoun>> = {
  * beside the thing it decides. Turning one off is not a rule she is asked to
  * follow — it is not in her tool list at all.
  */
+/**
+ * One face: what it looks like, when she wears it, and whether she may.
+ *
+ * Its own function because `moodSection` was one loop whose body was the entire
+ * function — eight tiles built inline, with the rationale for the button, the
+ * checkbox and the mutation rule stacked in the middle of a grid assembly.
+ *
+ * `on` is passed in and MUTATED rather than copied, which is load-bearing and
+ * documented below: two toggles before the reload lands must see each other.
+ */
+function moodTile(
+  emotion: Emotion,
+  on: Set<Emotion>,
+  view: ShelfView,
+  worn: ShelfCharacter,
+  handlers: ShelfHandlers,
+): HTMLElement {
+  const allowed = on.has(emotion)
+  const tile = element('div', allowed ? 'mood' : 'mood off')
+  /*
+    The DRAWING is the button, not the tile around it.
+
+    Clicking it puts that expression on her at the size she appears on the
+    desktop, and it is the ONLY way to see six of the eight. Two are reached
+    without asking — neutral when she sleeps, a perk when she wakes — and
+    nothing else changes her face at all.
+
+    Two earlier versions of this note were wrong about why, which is worth
+    recording because both sounded right. The first said `set_expression`'s
+    manifest told her not to change face every reply; that tool is gone. The
+    second said her face was driven by how long she had been left alone;
+    `repose.ts` drives MOTION and contains no expression code.
+
+    Wrapping the whole tile was the first version and it is invalid HTML — the
+    `allowed` checkbox lives inside it, and interactive content nested in a
+    `<button>` is not reliably clickable in Chromium. So the target is the one
+    thing somebody is actually looking at, and the switch beside it keeps its
+    own job with nothing to disambiguate.
+  */
+  const tryIt = element('button', 'mood-try')
+  tryIt.type = 'button'
+  // What it DOES. The name under it is what the expression is called; a
+  // tooltip repeating that would tell nobody anything they cannot see.
+  tryIt.title = `See ${emotion}${forPronoun(SAYS.seeMoodOn, view.pronoun)}`
+  tryIt.append(faceTile(worn.face, 56, emotion))
+  tryIt.addEventListener('click', () => {
+    handlers.tryFace(emotion)
+  })
+  tile.append(
+    tryIt,
+    element('span', 'name', emotion),
+    element('span', 'when', forPronoun(MOOD_WHEN[emotion], view.pronoun)),
+  )
+
+  const box = element('input')
+  box.type = 'checkbox'
+  box.checked = allowed
+  box.id = `mood-${emotion}`
+  box.addEventListener('change', () => {
+    /*
+      `on` is MUTATED, not copied.
+
+      Each toggle sent the whole list, rebuilt from the set as it was at
+      RENDER time. Two toggles before the reload lands therefore both start
+      from the same snapshot, and the second one's payload has no idea the
+      first happened — turning `happy` on and then `sad` on wrote a list with
+      `sad` and without `happy`, silently undoing a change the tile still
+      showed as made.
+
+      Mutating the live set makes the second payload include the first, which
+      is what somebody clicking two tiles in a row asked for.
+    */
+    if (box.checked) on.add(emotion)
+    else on.delete(emotion)
+    // The whole list, every time. `applyChange` sorts it back into `EMOTIONS`
+    // order, so what is stored does not depend on the order they were clicked.
+    handlers.save({ id: worn.id, faces: EMOTIONS.filter((one) => on.has(one)) })
+  })
+  const label = element('label', undefined, 'allowed')
+  label.htmlFor = box.id
+  const allow = element('span', 'allow')
+  allow.append(box, label)
+  tile.append(allow)
+  return tile
+}
+
 export function moodSection(
   view: ShelfView,
   worn: ShelfCharacter,
@@ -95,73 +181,7 @@ export function moodSection(
   const on = new Set(worn.faces)
   const grid = element('div', 'moods')
   for (const emotion of EMOTIONS) {
-    const allowed = on.has(emotion)
-    const tile = element('div', allowed ? 'mood' : 'mood off')
-    /*
-      The DRAWING is the button, not the tile around it.
-
-      Clicking it puts that expression on her at the size she appears on the
-      desktop, and it is the ONLY way to see six of the eight. Two are reached
-      without asking — neutral when she sleeps, a perk when she wakes — and
-      nothing else changes her face at all.
-
-      Two earlier versions of this note were wrong about why, which is worth
-      recording because both sounded right. The first said `set_expression`'s
-      manifest told her not to change face every reply; that tool is gone. The
-      second said her face was driven by how long she had been left alone;
-      `repose.ts` drives MOTION and contains no expression code.
-
-      Wrapping the whole tile was the first version and it is invalid HTML — the
-      `allowed` checkbox lives inside it, and interactive content nested in a
-      `<button>` is not reliably clickable in Chromium. So the target is the one
-      thing somebody is actually looking at, and the switch beside it keeps its
-      own job with nothing to disambiguate.
-    */
-    const tryIt = element('button', 'mood-try')
-    tryIt.type = 'button'
-    // What it DOES. The name under it is what the expression is called; a
-    // tooltip repeating that would tell nobody anything they cannot see.
-    tryIt.title = `See ${emotion}${forPronoun(SAYS.seeMoodOn, view.pronoun)}`
-    tryIt.append(faceTile(worn.face, 56, emotion))
-    tryIt.addEventListener('click', () => {
-      handlers.tryFace(emotion)
-    })
-    tile.append(
-      tryIt,
-      element('span', 'name', emotion),
-      element('span', 'when', forPronoun(MOOD_WHEN[emotion], view.pronoun)),
-    )
-
-    const box = element('input')
-    box.type = 'checkbox'
-    box.checked = allowed
-    box.id = `mood-${emotion}`
-    box.addEventListener('change', () => {
-      /*
-        `on` is MUTATED, not copied.
-
-        Each toggle sent the whole list, rebuilt from the set as it was at
-        RENDER time. Two toggles before the reload lands therefore both start
-        from the same snapshot, and the second one's payload has no idea the
-        first happened — turning `happy` on and then `sad` on wrote a list with
-        `sad` and without `happy`, silently undoing a change the tile still
-        showed as made.
-
-        Mutating the live set makes the second payload include the first, which
-        is what somebody clicking two tiles in a row asked for.
-      */
-      if (box.checked) on.add(emotion)
-      else on.delete(emotion)
-      // The whole list, every time. `applyChange` sorts it back into `EMOTIONS`
-      // order, so what is stored does not depend on the order they were clicked.
-      handlers.save({ id: worn.id, faces: EMOTIONS.filter((one) => on.has(one)) })
-    })
-    const label = element('label', undefined, 'allowed')
-    label.htmlFor = box.id
-    const allow = element('span', 'allow')
-    allow.append(box, label)
-    tile.append(allow)
-    grid.append(tile)
+    grid.append(moodTile(emotion, on, view, worn, handlers))
   }
 
   const how = element('p', 'note', forPronoun(SAYS.moodsHow, view.pronoun))
