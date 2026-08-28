@@ -1374,7 +1374,16 @@ function renderProblems(problems: readonly HistoryProblem[]): void {
     block.className = 'problem'
     const where = document.createElement('div')
     where.className = 'where'
-    where.textContent = `${problem.area} · ${clockLabel(problem.at)}`
+    /*
+      "12 times" rather than twelve blocks saying the same thing.
+
+      `problems.ts` collapses a repeated fact into one entry with a count, so
+      the number has to be drawn or it is a thing main computes and sends on
+      every read that nobody sees. The time is the LAST occurrence, which is
+      why the count belongs beside it rather than instead of it.
+    */
+    const times = problem.seen > 1 ? ` · ${String(problem.seen)} times` : ''
+    where.textContent = `${problem.area} · ${clockLabel(problem.at)}${times}`
     const detail = document.createElement('p')
     detail.textContent = problem.detail
     block.append(where, detail)

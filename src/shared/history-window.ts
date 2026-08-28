@@ -94,7 +94,10 @@ export interface HistoryProblem {
   readonly area: string
   readonly subject: string | null
   readonly detail: string
+  /** When it last happened. A recurring problem is one entry, not many. */
   readonly at: number
+  /** How many times, at least 1. Drawn only when it is more than that. */
+  readonly seen: number
 }
 
 /**

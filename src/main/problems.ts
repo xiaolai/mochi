@@ -32,7 +32,15 @@ export interface Problem {
   readonly subject: string | null
   /** What is wrong, in the words somebody could act on. */
   readonly detail: string
+  /** When it last happened, not when it first did. See `note`. */
   readonly at: number
+  /**
+   * How many times this exact fact has been noted, at least 1.
+   *
+   * Drawn as a count beside the entry rather than as repeated entries. See
+   * `note` for why the repetition is collapsed at all.
+   */
+  readonly seen: number
 }
 
 /**
@@ -41,6 +49,10 @@ export interface Problem {
  * A session that reconnects hourly can generate the same voice problem all day.
  * Keeping the newest is what makes the list answer "what is wrong now" rather
  * than "what was wrong when this started".
+ *
+ * That reasoning is right about which end to drop and was NOT enough on its
+ * own: see `note`, where the repeat that motivates it is the very thing that
+ * used to fill all fifty slots.
  */
 const KEEP = 50
 
@@ -69,8 +81,36 @@ export function createProblems(now: () => number = Date.now): Problems {
   const watchers: ((count: number) => void)[] = []
 
   return {
+    /*
+      THE SAME FACT TWICE IS ONE ENTRY WITH A COUNT, not two entries.
+
+      Measured on 2026-08-28, running the app against a `.deleting` mark naming
+      an unusable folder: the mark is deliberately LEFT in place so nothing acts
+      on a record it cannot read, `unfinishedDeletions` runs on every catalogue
+      load, and one bad file produced TWELVE identical entries in a session
+      barely a minute long. Fifty is not far away, and the eviction rule above
+      means the repeater is what survives: the voice failure, the refused key
+      and the unparsed avatar are pushed out by one fact restating itself.
+
+      So the bound alone was the wrong shape of answer. It decides WHICH to drop
+      when the list is full, and the list filling with one thing is the problem.
+
+      Collapsed here rather than at the call sites, because it is not that
+      caller's defect — the header already names an hourly voice reconnect as
+      the same shape, and `sweepDeletions` reports on every launch by design.
+      Any fact that recurs crowds the list out, so the fix belongs where every
+      fact arrives.
+
+      `at` is the LATEST occurrence and the entry moves to the front, so the
+      list still answers "what is wrong now" rather than filing a recurring
+      failure under the first time anyone saw it.
+    */
     note(area: string, subject: string | null, detail: string) {
-      kept.push({ area, subject, detail, at: now() })
+      const already = kept.findIndex(
+        (one) => one.area === area && one.subject === subject && one.detail === detail,
+      )
+      const seen = already === -1 ? 1 : (kept.splice(already, 1)[0]?.seen ?? 1) + 1
+      kept.push({ area, subject, detail, at: now(), seen })
       // Oldest out, so the list is what is wrong now.
       if (kept.length > KEEP) kept.splice(0, kept.length - KEEP)
       for (const watcher of watchers) watcher(kept.length)
