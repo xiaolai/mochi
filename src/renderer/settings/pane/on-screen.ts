@@ -68,9 +68,28 @@ export const ON_SCREEN: Pane = {
       one of the two is checked on the way back.
     */
     const rest = document.createElement('select')
+    /*
+      THE STORED VALUE IS ALWAYS ONE OF THE CHOICES, even when it is not one of
+      ours.
+
+      `sleepAfterMinutes` is any whole number of minutes — `isSleepAfterMinutes`
+      says so, and `preferences.json` is hand-editable — while this offers a
+      short list. A stored 47 matched no option, so nothing was marked selected
+      and the browser showed the FIRST one, which is "never".
+
+      That is the worst possible default to show wrongly: the pane claimed she
+      never rests while she rested every 47 minutes, and the next touch of any
+      other control on this pane would have saved the lie.
+
+      Unioned and sorted rather than appended, so an unusual value sits where it
+      belongs in the list instead of announcing itself at the end.
+    */
+    const offered = [
+      ...new Set([...view.screen.sleepAfterChoices, view.screen.sleepAfterMinutes]),
+    ].sort((a, b) => a - b)
     options(
       rest,
-      view.screen.sleepAfterChoices.map((minutes) => ({
+      offered.map((minutes) => ({
         value: String(minutes),
         label:
           minutes === 0

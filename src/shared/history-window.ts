@@ -254,7 +254,15 @@ export interface MochiHistoryApi {
   /** Save everything to a file. Answers what happened, for a status line. */
   exportAll(): Promise<HistoryExport>
   /** Main asking for a place to be shown. See `shell:show`. */
-  onShow(run: (place: string) => void): void
+  /**
+   * Be told which place to show. Answers the way back OFF.
+   *
+   * `ipcRenderer.on` has no lifetime of its own, so a subscription taken inside
+   * anything that redraws accumulates for the life of the window. The companion
+   * bridge's `onSend` has always answered with an unsubscribe for that reason
+   * and this said `void`, which is the same hazard with the answer withheld.
+   */
+  onShow(run: (place: string) => void): () => void
   /** Whoever is worn. The window never gets to name a persona. */
   list(): Promise<{
     readonly persona: string

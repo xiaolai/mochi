@@ -86,6 +86,18 @@ export function field(label: string, control: HTMLElement): HTMLElement {
   return row
 }
 
+/**
+ * Fill a select, marking one entry as the current answer.
+ *
+ * IT CANNOT SHOW A VALUE IT WAS NOT GIVEN, and a caller has to know that: when
+ * `chosen` matches no entry, nothing is marked and the browser falls back to
+ * the FIRST option — so the control silently reports a setting that is not in
+ * force. `on-screen.ts` shipped that way, claiming she never rests while she
+ * rested every 47 minutes.
+ *
+ * The fix belongs with the caller, which is the only place that knows how to
+ * label the extra entry. Stated here so the next one does not have to find out.
+ */
 export function options(
   select: HTMLSelectElement,
   entries: readonly { value: string; label: string }[],

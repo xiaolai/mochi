@@ -3829,9 +3829,13 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
     Counted here rather than on the success path because a PARTIAL deletion is
     still a deletion: `forgetSessions` can remove some rows and fail on the
     rest, and the summary must be dropped either way.
-  */
-  historyForgotten += 1
 
+    AFTER the checks that reject without deleting, though, which is a different
+    line from "after it succeeds". A request naming no character, or naming one
+    who is no longer worn, removes nothing at all — and bumping the counter for
+    it threw away an in-flight summary as the price of a typo. "Before anything
+    goes" is the rule; validation is not anything going.
+  */
   const worn = wornId()
   if (kind !== 'everything') {
     const shown = (action as { id?: unknown }).id
@@ -3840,6 +3844,7 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
       return no(forPronoun(SAYS.characterChanged, wornPronoun(app.getPath('userData'))))
     }
   }
+  historyForgotten += 1
 
   const archive = transcripts()
   const live = conversation().liveToken()

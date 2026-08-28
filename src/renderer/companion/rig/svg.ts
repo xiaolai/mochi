@@ -184,8 +184,23 @@ export function outlineFor(
  */
 function plateRect(px: number, background: Treatment['background']): string {
   if (background === null) return ''
-  const size = Math.round(px * (background.size ?? 1))
-  const at = Math.round((px - size) / 2)
+  /*
+    THE SIZE TAKES THE PARITY OF THE TILE, so the margins are equal.
+
+    Coordinates in the emitted SVG are integers. `at = round((px - size) / 2)`
+    with an odd remainder puts the plate half a pixel off centre and leaves
+    margins that differ by one — `px = 16` with `size = 13` gives 2 above and 1
+    below. The docblock above says "Centred", and at the sizes a tray icon is
+    drawn at, one pixel of the sixteen is a visible lean.
+
+    Losing a pixel of SIZE is the cheaper correction than gaining a pixel of
+    offset: the plate is a proportion of the tile and one pixel narrower is
+    within the rounding that already happened, while an off-centre plate is a
+    different shape from the one asked for.
+  */
+  const wanted = Math.round(px * (background.size ?? 1))
+  const size = Math.max(0, (px - wanted) % 2 === 0 ? wanted : wanted - 1)
+  const at = (px - size) / 2
   const radius = Math.round(size * (background.radius ?? 0))
   return (
     `<rect x="${String(at)}" y="${String(at)}" ` +

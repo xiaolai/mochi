@@ -364,8 +364,22 @@ describe('a child that will not die', () => {
           return true
         },
       }),
-      timeoutMs: 5,
-      graceMs: 5,
+      /*
+        TWENTY-FIVE, not five, and the margin is the reason.
+
+        `ask` abandons at `timeoutMs + grace * 2` and escalates to SIGKILL at
+        `timeoutMs + grace`, so the two are exactly one `grace` apart. At 5ms
+        that is five milliseconds of slack on an event loop running the whole
+        suite in parallel — and it is not enough: this test failed once in a
+        full run and passed three times on its own, which is the signature of a
+        margin rather than a defect.
+
+        A flaky test is worse than a missing one. It teaches the reader to
+        re-run rather than to look, and the next real failure here is the one
+        that gets re-run away.
+      */
+      timeoutMs: 25,
+      graceMs: 25,
     })
     expect(signals).toEqual(['SIGTERM', 'SIGKILL'])
     expect(result.ok).toBe(false)
@@ -382,8 +396,10 @@ describe('a child that will not die', () => {
       workspace: '/work',
       settings: SETTINGS,
       run: child.run,
-      timeoutMs: 5,
-      graceMs: 5,
+      // Twenty-five for the reason the test above gives: five leaves five
+      // milliseconds between the escalation and the abandon.
+      timeoutMs: 25,
+      graceMs: 25,
     })
     expect(child.signals).toEqual(['SIGTERM', 'SIGKILL'])
     expect(result.ok).toBe(false)
