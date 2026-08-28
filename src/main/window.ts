@@ -4,6 +4,7 @@ import { app, BrowserWindow, nativeImage, nativeTheme, screen } from 'electron'
 import { FEET_FROM_TOP, WINDOW_H, WINDOW_W, fullPad, originHolding } from '@shared/avatar-layout'
 import { containToWorkArea, KEEP_ON_SCREEN } from './drag'
 import { letDevToolsInspect } from './inspect'
+import { problems } from './problems'
 import { readHerPlace, readShelfPlace, writeShelfPlace, type Place } from './store/worn'
 
 /**
@@ -133,7 +134,27 @@ function loadRenderer(window: BrowserWindow, page: 'companion' | 'history'): voi
       : `${devServerUrl}/${page}/index.html`
   const load = devServerUrl === undefined ? window.loadFile(where) : window.loadURL(where)
   load.catch((error: unknown) => {
+    /*
+      REPORTED, not only logged — a packaged app has no console.
+
+      A renderer that fails to load leaves a live `BrowserWindow` with no
+      document in it. For the companion that is worse than it sounds: she is a
+      transparent frameless window, so the failure is INVISIBLE, and the show
+      backstop then presents an empty transparent rectangle a few hundred
+      milliseconds later as though she had started. Nothing on screen, nothing
+      in the tray menu, and the only record on a console nobody has.
+
+      This is the one failure in this file that cannot be recovered from here —
+      there is no second document to try — so what is owed is that somebody can
+      find out. `problems.ts` exists for exactly this: eleven `console.error`
+      sites in main, and "a packaged app has no console" as its first sentence.
+    */
     console.error(`[window] ${page} could not load ${where}:`, error)
+    problems.note(
+      'window',
+      page,
+      `the ${page} window could not load its page (${String(error)}), so it is empty`,
+    )
   })
 }
 
@@ -518,7 +539,29 @@ export function showHistoryWindow(): BrowserWindow {
    * works around — which would silently produce a size nobody chose. Asking for
    * what fits is the honest version of the same outcome.
    */
-  const work = screen.getPrimaryDisplay().workArea
+  const stored = readShelfPlace(app.getPath('userData'))
+  /*
+    THE DISPLAY IT WAS LEFT ON, not the primary one.
+
+    This read `screen.getPrimaryDisplay().workArea` and clamped the stored size
+    against it before `containToWorkArea` had chosen a display at all. So a
+    shelf left on a larger secondary monitor was shrunk to the laptop's work
+    area on every relaunch — while that monitor was still connected and about
+    to be the one it opened on.
+
+    The clamp is right and its reason is right: macOS answers a too-large window
+    by SHRINKING it at creation, so asking for what fits is the honest version
+    of the same outcome. It was simply asking the wrong display what fits.
+
+    `getDisplayNearestPoint` is the same question `containToWorkArea` answers a
+    few lines down, asked once and early so both halves agree. With nothing
+    stored there is no position to ask about, and the primary is the right
+    default for a first launch.
+  */
+  const work =
+    stored === null
+      ? screen.getPrimaryDisplay().workArea
+      : screen.getDisplayNearestPoint({ x: stored.x, y: stored.y }).workArea
   /**
    * Where it was left, or the handoff's size clamped to this display.
    *
@@ -528,7 +571,6 @@ export function showHistoryWindow(): BrowserWindow {
    * for an ordinary window is exactly "keep it on a display that exists" — the
    * overhang argument that makes hers different does not apply here.
    */
-  const stored = readShelfPlace(app.getPath('userData'))
   const size =
     stored === null
       ? { width: Math.min(1440, work.width), height: Math.min(900, work.height) }

@@ -48,6 +48,26 @@ function code(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 }
 
+/**
+ * The `did-finish-load` handler, sliced out of `openCompanion`.
+ *
+ * ANCHORED ON THE FUNCTION, not on an indentation. These three tests matched
+ * `/did-finish-load'[\s\S]*?\n {4}\}\)/` — the handler's closing brace at
+ * exactly four spaces — which was true only while the block sat inline inside
+ * the `whenReady` callback. Extracting it into `openCompanion` moved it two
+ * columns and all three failed, describing code that had not changed.
+ *
+ * A source-scanning test that fails on re-indentation accuses the wrong thing.
+ * The function has a name; the name is the anchor.
+ */
+function firstLoadHook(): string {
+  const index = code(source('../../main/index.ts'))
+  const fn = index.slice(index.indexOf('function openCompanion('))
+  const body = fn.slice(0, fn.indexOf('\n}\n'))
+  const hook = /did-finish-load'[\s\S]*$/.exec(body)?.[0]
+  return hook ?? ''
+}
+
 describe('who opens a session', () => {
   it('is not the renderer, on its own, at module scope', () => {
     const companion = code(source('./main.ts'))
@@ -69,9 +89,8 @@ describe('who opens a session', () => {
   })
 
   it('is main, once the window has loaded and only while she is awake', () => {
-    const index = code(source('../../main/index.ts'))
-    const hook = /did-finish-load'[\s\S]*?\n {4}\}\)/.exec(index)?.[0]
-    expect(hook, 'main hangs the first open on did-finish-load').toBeDefined()
+    const hook = firstLoadHook()
+    expect(hook, 'main hangs the first open on did-finish-load').not.toBe('')
     expect(hook).toContain('resting.asleep')
     expect(hook).toContain('__mochi_reconnect__')
   })
@@ -91,8 +110,7 @@ describe('who opens a session', () => {
       `if (resting.asleep) return` is a send that never happens in exactly the
       case it exists for.
     */
-    const index = code(source('../../main/index.ts'))
-    const hook = /did-finish-load'[\s\S]*?\n {4}\}\)/.exec(index)?.[0] ?? ''
+    const hook = firstLoadHook()
     const told = hook.indexOf('__mochi_asleep__')
     const branch = hook.indexOf('if (resting.asleep)')
     expect(told, 'main tells her window whether she is asleep').toBeGreaterThan(-1)
@@ -101,12 +119,35 @@ describe('who opens a session', () => {
   })
 
   it('says so either way, because a session that never opens looks like one that failed', () => {
-    const index = code(source('../../main/index.ts'))
-    const hook = /did-finish-load'[\s\S]*?\n {4}\}\)/.exec(index)?.[0] ?? ''
+    const hook = firstLoadHook()
     // Two lines, one per branch. `window.ts` makes the same argument about
     // where a window landed: "nothing happened" has two readings and they need
     // completely different fixes.
     expect(hook.match(/console\.log/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+  })
+
+  it('gives a window made by `activate` everything a window needs', () => {
+    /*
+      `app.on('activate')` did `companion = createCompanionWindow()` and nothing
+      else, while startup also armed the show backstop, restored whether she was
+      left hidden, and installed the `did-finish-load` handler that opens her
+      first session.
+
+      So a window made that way was a shell: no session, nothing told to it, and
+      the backstop — the one thing that guarantees she becomes visible — never
+      armed. `shown` is already true by then, so `showHerOnce` is spent and the
+      replacement could stay hidden for the rest of the run.
+
+      Rare on macOS, where this is a tray application and the window is hidden
+      rather than closed. Rare is why it survived, not a reason to leave it: the
+      path exists, it is the RECOVERY path, and it produced a companion that
+      cannot speak.
+    */
+    const index = code(source('../../main/index.ts'))
+    const activate = index.slice(index.indexOf("app.on('activate'"))
+    const body = activate.slice(0, activate.indexOf('\n    })'))
+    expect(body, 'activate makes a window without wiring it').toContain('openCompanion()')
+    expect(body).not.toContain('createCompanionWindow()')
   })
 
   it('has a close frame, and the renderer acts on it', () => {

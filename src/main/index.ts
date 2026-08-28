@@ -3993,104 +3993,7 @@ const startup = app.whenReady().then(
     */
     seedPrompt(app.getPath('userData'))
 
-    companion = createCompanionWindow()
-    /*
-      The backstop. See `SHOW_ANYWAY_MS`.
-
-      Armed at creation rather than after the load, so a renderer that never
-      reaches its first frame is covered by the same timer as one that never
-      sends a fit. `showHerOnce` is idempotent, so the ordinary path — the first
-      fit, a few hundred milliseconds from now — simply gets there first and
-      this fires into a no-op.
-    */
-    setTimeout(() => {
-      showHerOnce('the backstop, so a renderer that never fitted cannot hide her')
-    }, SHOW_ANYWAY_MS)
-
-    /**
-     * The menu bar item, created AFTER her window, because it is the way out of
-     * a running application rather than a prerequisite for starting one.
-     *
-     * Its model is read fresh on every rebuild rather than held: the persona
-     * shelf is files on disk, and somebody may add one while this is running.
-     */
-    /**
-     * How she was left. Restored before the tray is built, so the menu's first
-     * labels are true rather than corrected a tick later.
-     */
-    resting = readResting(app.getPath('userData'))
-    if (resting.hidden) companion.hide()
-
-    /**
-     * The first session is opened by MAIN, not by the renderer.
-     *
-     * `companion/main.ts` ended in a bare `void open()`, so a session was
-     * negotiated on every launch before anything had asked for one — including
-     * a launch into a stored `asleep: true`, where the whole point of the state
-     * is that she is not participating. Whether to open one is a decision about
-     * what this machine does on somebody's behalf, and `session.ts`'s own header
-     * says where those live: *"all of it is main's"*. The renderer holds the
-     * peer and the microphone and should have the least authority over when
-     * they exist.
-     *
-     * `did-finish-load` rather than `dom-ready`, and the difference matters:
-     * this fires on the window's `load` event, which is after the module script
-     * has executed, so the listener that receives this frame is already
-     * registered. It also fires again on a reload, which is what makes a
-     * development refresh reconnect instead of sitting there mute.
-     *
-     * Said out loud in both directions. A companion that never opens a session
-     * looks exactly like one whose session failed, and only one of those has
-     * anything to fix.
-     */
-    companion.webContents.on('did-finish-load', () => {
-      // Before anything else here: it is the one frame that says she will not
-      // work at all, and the startup check may have run before this listener
-      // existed. See `cannotSpeak`.
-      tellHerWhyNot()
-      /*
-        WHETHER SHE IS ASLEEP, first, and this was missing.
-
-        The branch below returns early when she was left resting, so on that
-        launch the renderer was told the halo preference and the shoulder
-        control and never told the one fact both of them are read against. It
-        starts `asleep = false` and the rig starts `hearing = true`, so
-        `haloFor` answered `open` — a filled ring, in her colour, meaning THE
-        MICROPHONE IS LIVE — over a companion holding no session at all.
-
-        That is the failure `halo.ts` exists to prevent, running backwards: not
-        an open microphone with nothing on screen saying so, but a claim of one
-        where there was none. It is also why the halo switch looked dead. The
-        switch governs the RESTING hairline and nothing else, by design; on a
-        launch where she had been left resting the ring being drawn was `open`,
-        which the switch does not touch and must not — so it did nothing in
-        either position, on exactly the launch somebody would go looking.
-
-        One frame, before the two preferences, because they decide how a state
-        is drawn and this decides which state it is.
-      */
-      tellCompanion({ type: '__mochi_asleep__', asleep: resting.asleep })
-      // The halo preference, before she is drawn doing anything: it decides
-      // whether the resting ring is painted at all, and arriving a tick late
-      // means one frame of a ring somebody switched off.
-      tellCompanion({
-        type: '__mochi_halo__',
-        when: readHaloWhen(app.getPath('userData')),
-      })
-      // And the shoulder control, for the same reason and at the same moment:
-      // arriving a tick late is one frame of a button somebody switched off.
-      tellCompanion({
-        type: '__mochi_chip__',
-        shown: readShoulderChip(app.getPath('userData')),
-      })
-      if (resting.asleep) {
-        console.log('[voice] she was left resting; no session opened')
-        return
-      }
-      console.log('[voice] opening the first session')
-      tellCompanion({ type: '__mochi_reconnect__' })
-      idleSleep.arm()
-    })
+    openCompanion()
 
     /**
      * The two global keys.
@@ -4238,7 +4141,8 @@ const startup = app.whenReady().then(
     tray = createTray(menuModel, menuHandlers)
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) companion = createCompanionWindow()
+      // Everything a companion needs, not just the window. See `openCompanion`.
+      if (BrowserWindow.getAllWindows().length === 0) openCompanion()
     })
   },
   (error: unknown) => {
@@ -4322,6 +4226,127 @@ app.on('window-all-closed', () => {
  * the conversation throws, skipping the close would leave that text on disk --
  * the failure ordering that matters most, and the one nobody would see.
  */
+/**
+ * Make her window and wire everything that has to travel with it.
+ *
+ * ## Why this is a function and not a line at each call site
+ *
+ * `app.on('activate')` did `companion = createCompanionWindow()` and nothing
+ * else. Startup did that AND armed the show backstop, AND restored whether she
+ * was left hidden, AND installed the `did-finish-load` handler that opens her
+ * first session and tells the renderer what it needs.
+ *
+ * So a window made by `activate` was a shell: no session, nothing told to it,
+ * and the backstop — the one thing that guarantees she becomes visible — never
+ * armed. `shown` is already true by then, so `showHerOnce` is spent, and the
+ * replacement could stay hidden for the rest of the run with nothing to say why.
+ *
+ * Rare on macOS, where this is a tray application and the window is hidden
+ * rather than closed. Rare is the reason it survived, not a reason to leave it:
+ * the path exists, it is the recovery path, and it produced a companion that
+ * cannot speak.
+ */
+function openCompanion(): void {
+  companion = createCompanionWindow()
+  /*
+    The backstop. See `SHOW_ANYWAY_MS`.
+
+    Armed at creation rather than after the load, so a renderer that never
+    reaches its first frame is covered by the same timer as one that never
+    sends a fit. `showHerOnce` is idempotent, so the ordinary path — the first
+    fit, a few hundred milliseconds from now — simply gets there first and
+    this fires into a no-op.
+  */
+  setTimeout(() => {
+    showHerOnce('the backstop, so a renderer that never fitted cannot hide her')
+  }, SHOW_ANYWAY_MS)
+
+  /**
+   * The menu bar item, created AFTER her window, because it is the way out of
+   * a running application rather than a prerequisite for starting one.
+   *
+   * Its model is read fresh on every rebuild rather than held: the persona
+   * shelf is files on disk, and somebody may add one while this is running.
+   */
+  /**
+   * How she was left. Restored before the tray is built, so the menu's first
+   * labels are true rather than corrected a tick later.
+   */
+  resting = readResting(app.getPath('userData'))
+  if (resting.hidden) companion.hide()
+
+  /**
+   * The first session is opened by MAIN, not by the renderer.
+   *
+   * `companion/main.ts` ended in a bare `void open()`, so a session was
+   * negotiated on every launch before anything had asked for one — including
+   * a launch into a stored `asleep: true`, where the whole point of the state
+   * is that she is not participating. Whether to open one is a decision about
+   * what this machine does on somebody's behalf, and `session.ts`'s own header
+   * says where those live: *"all of it is main's"*. The renderer holds the
+   * peer and the microphone and should have the least authority over when
+   * they exist.
+   *
+   * `did-finish-load` rather than `dom-ready`, and the difference matters:
+   * this fires on the window's `load` event, which is after the module script
+   * has executed, so the listener that receives this frame is already
+   * registered. It also fires again on a reload, which is what makes a
+   * development refresh reconnect instead of sitting there mute.
+   *
+   * Said out loud in both directions. A companion that never opens a session
+   * looks exactly like one whose session failed, and only one of those has
+   * anything to fix.
+   */
+  companion.webContents.on('did-finish-load', () => {
+    // Before anything else here: it is the one frame that says she will not
+    // work at all, and the startup check may have run before this listener
+    // existed. See `cannotSpeak`.
+    tellHerWhyNot()
+    /*
+      WHETHER SHE IS ASLEEP, first, and this was missing.
+
+      The branch below returns early when she was left resting, so on that
+      launch the renderer was told the halo preference and the shoulder
+      control and never told the one fact both of them are read against. It
+      starts `asleep = false` and the rig starts `hearing = true`, so
+      `haloFor` answered `open` — a filled ring, in her colour, meaning THE
+      MICROPHONE IS LIVE — over a companion holding no session at all.
+
+      That is the failure `halo.ts` exists to prevent, running backwards: not
+      an open microphone with nothing on screen saying so, but a claim of one
+      where there was none. It is also why the halo switch looked dead. The
+      switch governs the RESTING hairline and nothing else, by design; on a
+      launch where she had been left resting the ring being drawn was `open`,
+      which the switch does not touch and must not — so it did nothing in
+      either position, on exactly the launch somebody would go looking.
+
+      One frame, before the two preferences, because they decide how a state
+      is drawn and this decides which state it is.
+    */
+    tellCompanion({ type: '__mochi_asleep__', asleep: resting.asleep })
+    // The halo preference, before she is drawn doing anything: it decides
+    // whether the resting ring is painted at all, and arriving a tick late
+    // means one frame of a ring somebody switched off.
+    tellCompanion({
+      type: '__mochi_halo__',
+      when: readHaloWhen(app.getPath('userData')),
+    })
+    // And the shoulder control, for the same reason and at the same moment:
+    // arriving a tick late is one frame of a button somebody switched off.
+    tellCompanion({
+      type: '__mochi_chip__',
+      shown: readShoulderChip(app.getPath('userData')),
+    })
+    if (resting.asleep) {
+      console.log('[voice] she was left resting; no session opened')
+      return
+    }
+    console.log('[voice] opening the first session')
+    tellCompanion({ type: '__mochi_reconnect__' })
+    idleSleep.arm()
+  })
+}
+
 function shutDownCleanly(why: string): void {
   if (shutDown) return
   shutDown = true
