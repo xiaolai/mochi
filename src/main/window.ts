@@ -4,6 +4,15 @@ import { app, BrowserWindow, nativeImage, nativeTheme, screen } from 'electron'
 import { FEET_FROM_TOP, WINDOW_H, WINDOW_W, fullPad, originHolding } from '@shared/avatar-layout'
 import { containToWorkArea, KEEP_ON_SCREEN } from './drag'
 import { letDevToolsInspect } from './inspect'
+
+/**
+ * How long after the last move or resize the window's place is written.
+ *
+ * Long enough that a drag is one write and short enough that nobody notices it
+ * is deferred. `close` flushes, so the only way to lose a placement is to kill
+ * the process mid-drag.
+ */
+const SETTLE_MS = 250
 import { problems } from './problems'
 import { readHerPlace, readShelfPlace, writeShelfPlace, type Place } from './store/worn'
 
@@ -646,7 +655,31 @@ export function showHistoryWindow(): BrowserWindow {
     temporary state rather than about where somebody put the window, and
     restoring into either is the failure this is meant to avoid.
   */
+  /*
+    SETTLED FIRST, because `moved` and `resized` fire continuously.
+
+    macOS sends these on every frame of a drag, and each one did a read, a
+    merge, a temp file, an `fsync` and a rename of `preferences.json` — on the
+    MAIN process, which is also the one drawing her. A drag across the screen
+    was a few hundred synchronous round trips to the disk, and the visible half
+    is her window stuttering while the shelf is moved.
+
+    A quarter of a second after the last event, so a drag writes once. The timer
+    is `unref`'d — a pending save is not a reason to hold the process open — and
+    the `closed` handler flushes, because quitting mid-drag is exactly when
+    somebody has just put the window somewhere.
+  */
+  let settling: NodeJS.Timeout | null = null
   const remember = (): void => {
+    if (settling !== null) clearTimeout(settling)
+    settling = setTimeout(rememberNow, SETTLE_MS)
+    settling.unref()
+  }
+  const rememberNow = (): void => {
+    if (settling !== null) {
+      clearTimeout(settling)
+      settling = null
+    }
     if (window.isDestroyed() || window.isMinimized() || window.isFullScreen()) return
     const bounds = window.getBounds()
     try {
@@ -667,6 +700,11 @@ export function showHistoryWindow(): BrowserWindow {
   }
   window.on('moved', remember)
   window.on('resized', remember)
+  // Written straight away rather than left to settle: `moved` fires up to the
+  // moment a window goes, and a place somebody chose in the last quarter second
+  // of the session is still a place they chose. `rememberNow` refuses a
+  // destroyed window, so this is safe on every path into it.
+  window.on('close', rememberNow)
   window.on('closed', () => {
     history = null
   })

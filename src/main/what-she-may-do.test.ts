@@ -38,15 +38,13 @@ const NOTE = 'They take their tea without milk.'
 
 describe('what goes on the wire', () => {
   it('offers everything while she may do everything', () => {
-    const { tools } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      DEFAULT_GRANTS,
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const { tools } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: DEFAULT_GRANTS,
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(tools.map((one) => one.name)).toEqual([
       'ask_workspace',
       'remember_this',
@@ -57,60 +55,52 @@ describe('what goes on the wire', () => {
   it('does not OFFER a capability whose grant is off', () => {
     // Not offered rather than offered and refused: a description she cannot act
     // on is worse than one she never had.
-    const { tools } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      { ...DEFAULT_GRANTS, ask_workspace: false },
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const { tools } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: { ...DEFAULT_GRANTS, ask_workspace: false },
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(tools.map((one) => one.name)).toEqual(['remember_this', 'recall_conversations'])
   })
 
   it('leaves alone a capability that has no grant', () => {
     // `recall_conversations` reads her own archive and is not one of the four.
     // Withholding everything must not withdraw something nothing governs.
-    const { tools } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      WITHHELD_GRANTS,
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const { tools } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: WITHHELD_GRANTS,
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(tools.map((one) => one.name)).toEqual(['recall_conversations'])
   })
 
   it('hands the tool through unchanged, not a copy of its name', () => {
     // It goes straight into `session.update`, so the description and the
     // parameters have to survive the filter.
-    const { tools } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      DEFAULT_GRANTS,
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const { tools } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: DEFAULT_GRANTS,
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(tools[0]).toEqual(TOOLS[0])
   })
 })
 
 describe('what she is told', () => {
   it('carries her prompt and the note, as `instructionsFor` assembles them', () => {
-    const { instructions } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      DEFAULT_GRANTS,
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const { instructions } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: DEFAULT_GRANTS,
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(instructions).toContain(NOTE)
     // Her STYLE, not her name. Nothing is compiled in that names her since the
     // system prompt became a document, so a name only appears where a `{name}`
@@ -123,49 +113,49 @@ describe('what she is told', () => {
     // parameter could be dropped from every call site and every test would
     // still pass, which is the shape of an argument that quietly stops being
     // passed.
-    const { instructions } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      DEFAULT_GRANTS,
-      TOOLS,
-      'You are a lighthouse keeper.',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const { instructions } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: DEFAULT_GRANTS,
+      tools: TOOLS,
+      template: 'You are a lighthouse keeper.',
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(instructions).toContain('You are a lighthouse keeper.')
     expect(
-      whatSheMayDo(DEFAULT_PERSONA, NOTE, DEFAULT_GRANTS, TOOLS, '', '', SHIPPED_PROMPTS)
-        .instructions,
+      whatSheMayDo({
+        persona: DEFAULT_PERSONA,
+        note: NOTE,
+        grants: DEFAULT_GRANTS,
+        tools: TOOLS,
+        prompts: SHIPPED_PROMPTS,
+      }).instructions,
     ).not.toContain('lighthouse')
   })
 
   it('adds nothing at all while she may do everything', () => {
     // The ordinary session carries no extra prompt, so this costs nothing on
     // every wake for everybody who never opened the panel.
-    const plain = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      DEFAULT_GRANTS,
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const plain = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: DEFAULT_GRANTS,
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(plain.instructions).not.toContain('may not do')
   })
 
   it('TELLS HER when something has been taken away', () => {
     // The failure `notBuilt` was deleted from this repository for: a capability
     // she cannot perform that presents as her declining to help.
-    const { instructions } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      { ...DEFAULT_GRANTS, ask_workspace: false },
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const { instructions } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: { ...DEFAULT_GRANTS, ask_workspace: false },
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(instructions).toContain('look anything up')
     expect(instructions).toContain('say plainly')
   })
@@ -173,29 +163,25 @@ describe('what she is told', () => {
   it('puts the notice LAST, after everything the persona assembles', () => {
     // The strongest instructional position, and downstream of the note — which
     // is the half a model wrote. Safe only because every word of it is ours.
-    const { instructions } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      { ...DEFAULT_GRANTS, ask_workspace: false },
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const { instructions } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: { ...DEFAULT_GRANTS, ask_workspace: false },
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(instructions.indexOf(NOTE)).toBeLessThan(instructions.indexOf('# What you may not do'))
     expect(instructions.trimEnd().endsWith('workspace.')).toBe(true)
   })
 
   it('names every grant that is off, and none that is on', () => {
-    const { instructions } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      { ...DEFAULT_GRANTS, remember_this: false },
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const { instructions } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: { ...DEFAULT_GRANTS, remember_this: false },
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(instructions).toContain('long-term notes')
     expect(instructions).not.toContain('look anything up')
   })
@@ -209,16 +195,20 @@ describe('whose prompt it builds', () => {
     // from the worn one installed the new character's private note into the old
     // character's session.
     const other = { ...DEFAULT_PERSONA, id: 'loki', name: 'Loki', style: 'Terse.' }
-    const hers = whatSheMayDo(
-      DEFAULT_PERSONA,
-      'her note',
-      DEFAULT_GRANTS,
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
-    const theirs = whatSheMayDo(other, 'their note', DEFAULT_GRANTS, TOOLS, '', '', SHIPPED_PROMPTS)
+    const hers = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: 'her note',
+      grants: DEFAULT_GRANTS,
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
+    const theirs = whatSheMayDo({
+      persona: other,
+      note: 'their note',
+      grants: DEFAULT_GRANTS,
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
 
     expect(hers.instructions).toContain('her note')
     expect(hers.instructions).not.toContain('their note')
@@ -245,15 +235,13 @@ describe('a rewritten prompt reaches what she is told', () => {
   const written = (key: string): string => `REWRITTEN(${key})`
 
   it('carries the rewritten notes heading and fence', () => {
-    const { instructions } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      'They are learning Rust.',
-      DEFAULT_GRANTS,
-      TOOLS,
-      '',
-      '',
-      written,
-    )
+    const { instructions } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: 'They are learning Rust.',
+      grants: DEFAULT_GRANTS,
+      tools: TOOLS,
+      prompts: written,
+    })
     expect(instructions).toContain('REWRITTEN(notes.heading)')
     expect(instructions).toContain('REWRITTEN(notes.fence)')
     // And the shipped wording is gone, rather than both being present.
@@ -261,15 +249,13 @@ describe('a rewritten prompt reaches what she is told', () => {
   })
 
   it('carries the rewritten withheld-capability notice', () => {
-    const { instructions } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      NOTE,
-      { ...DEFAULT_GRANTS, ask_workspace: false },
-      TOOLS,
-      '',
-      '',
-      written,
-    )
+    const { instructions } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: NOTE,
+      grants: { ...DEFAULT_GRANTS, ask_workspace: false },
+      tools: TOOLS,
+      prompts: written,
+    })
     expect(instructions).toContain('REWRITTEN(grants.heading)')
     expect(instructions).toContain('REWRITTEN(grants.notice)')
     expect(instructions).not.toContain('What you may not do')
@@ -278,15 +264,13 @@ describe('a rewritten prompt reaches what she is told', () => {
   it('ships the catalogue wording when that is what it is handed', () => {
     // The other direction, so the test above cannot pass by the resolver being
     // ignored in a different way.
-    const { instructions } = whatSheMayDo(
-      DEFAULT_PERSONA,
-      'They are learning Rust.',
-      { ...DEFAULT_GRANTS, ask_workspace: false },
-      TOOLS,
-      '',
-      '',
-      SHIPPED_PROMPTS,
-    )
+    const { instructions } = whatSheMayDo({
+      persona: DEFAULT_PERSONA,
+      note: 'They are learning Rust.',
+      grants: { ...DEFAULT_GRANTS, ask_workspace: false },
+      tools: TOOLS,
+      prompts: SHIPPED_PROMPTS,
+    })
     expect(instructions).toContain('Notes you have kept')
     expect(instructions).toContain('What you may not do')
   })

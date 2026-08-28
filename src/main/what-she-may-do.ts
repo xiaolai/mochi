@@ -33,49 +33,53 @@ export interface WhatSheMayDo {
   readonly tools: readonly WireTool[]
 }
 
-export function whatSheMayDo(
-  persona: Persona,
-  note: string,
-  grants: Grants,
-  tools: readonly WireTool[],
+/**
+ * Everything this needs, NAMED.
+ *
+ * ## Why an object and not seven positions
+ *
+ * Three of the seven were `string` — `note`, `template` and `brief` — and two
+ * of those were optional and adjacent. Any pair of them could be swapped and
+ * the call would still typecheck.
+ *
+ * That is not hypothetical here, because `instructionsFor` takes the same three
+ * IN A DIFFERENT ORDER: `(persona, memory, prompts, brief, template)` against
+ * `(persona, note, grants, tools, template, brief, prompts)`. Somebody reading
+ * one signature and writing the other swaps the system-prompt document with the
+ * wake brief — and both are prose that reaches a model, so the result is a
+ * plausible prompt built out of the wrong pieces, with nothing to fail.
+ *
+ * Named arguments cannot be transposed. That is the whole of the change.
+ */
+export interface MayDoInput {
+  readonly persona: Persona
+  /** What she remembers about the person. See `store/memory.ts`. */
+  readonly note: string
+  readonly grants: Grants
+  readonly tools: readonly WireTool[]
+  /** What each catalogued prompt currently says. See `@shared/prompts`. */
+  readonly prompts: Prompts
   /**
    * The system prompt document, as the user wrote it. See `store/prompt.ts`.
    *
-   * DEFAULTED, so the tests here — which are about tools and grants — say
+   * OPTIONAL, so the tests here — which are about tools and grants — say
    * nothing about it. The two callers that matter read it from disk; the third
    * is the shelf, which draws the same string back.
    */
-  template: string = '',
+  readonly template?: string
   /**
    * What happened last time, or what is still happening. See `memory/brief.ts`.
    *
-   * DEFAULTED, so the tests here — which are about tools and grants — say
-   * nothing about it. `session-config` is the caller that builds one, and it
-   * chooses between the two kinds: a wake gets `briefFor` and a reconnect gets
-   * `resumeFor`, which carry opposite instructions about whether to pick the
-   * conversation back up.
+   * OPTIONAL, for the reason `template` is. `session-config` is the caller that
+   * builds one, and it chooses between the two kinds: a wake gets `briefFor`
+   * and a reconnect gets `resumeFor`, which carry opposite instructions about
+   * whether to pick the conversation back up.
    */
-  brief: string = '',
-  /**
-   * What each catalogued prompt currently says. See `@shared/prompts`.
-   *
-   * REQUIRED, and the reason it is required is this function. It called
-   * `grantsNotice(grants)` with no resolver and `instructionsFor(..., undefined)`
-   * for a parameter that defaulted to the shipped catalogue — so `notes.heading`,
-   * `notes.fence`, `grants.heading` and `grants.notice` were displayed in the
-   * pane, warned about, written to `prompts.json`, reported saved, and thrown
-   * away here.
-   *
-   * That is `describedTools`' defect in the other half of the same return
-   * value, arriving through default parameters instead of through a missing
-   * read. This is the one place both halves are assembled — its own header
-   * says a second derivation would be a second answer to what she may do — so
-   * making it impossible to omit HERE is what closes it for every caller.
-   *
-   * Defaulted to nothing, deliberately. A default would be the trap again.
-   */
-  prompts: Prompts,
-): WhatSheMayDo {
+  readonly brief?: string
+}
+
+export function whatSheMayDo(input: MayDoInput): WhatSheMayDo {
+  const { persona, note, grants, tools, prompts, template = '', brief = '' } = input
   const notice = grantsNotice(grants, prompts)
   const instructions = instructionsFor(persona, note, prompts, brief, template)
   return {

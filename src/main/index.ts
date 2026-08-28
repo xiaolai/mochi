@@ -2841,19 +2841,18 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     `assembled`'s own comment warns about, one level along: the two renderings
     would drift the first time anything between them changed.
   */
-  const mayDo = whatSheMayDo(
-    worn,
+  const mayDo = whatSheMayDo({
+    persona: worn,
     note,
-    readGrants(userData, worn.id, legacyGrants(userData)),
-    toolsNow(),
-    prompt,
-    '',
+    grants: readGrants(userData, worn.id, legacyGrants(userData)),
+    tools: toolsNow(),
+    template: prompt,
     // The SAME resolver the wire uses. This card's whole claim is that it shows
     // what she will be told, and reading the shipped wording here while the
     // session read the edited wording is precisely the disagreement it exists
     // to rule out.
-    promptsNow(),
-  )
+    prompts: promptsNow(),
+  })
   return {
     face: resolveFaceFor(
       avatarsRoot(userData),
@@ -3556,18 +3555,18 @@ function tellTheSession(): boolean {
   // and the next wake resolves somebody who exists.
   if (persona === undefined) return false
   const grants = readGrants(userData, persona.id, legacyGrants(userData))
-  const mayDo = whatSheMayDo(
+  const mayDo = whatSheMayDo({
     persona,
-    recall(userData, live),
+    note: recall(userData, live),
     grants,
-    toolsNow(),
-    readPrompt(userData),
-    sessionBriefing,
+    tools: toolsNow(),
+    template: readPrompt(userData),
+    brief: sessionBriefing,
     // Read at CALL time, like every other reader in this file: a rewritten
     // grants notice reaches the live session on the next grant change rather
     // than on the next relaunch.
-    promptsNow(),
-  )
+    prompts: promptsNow(),
+  })
   companion.webContents.send('voice:send', {
     type: '__mochi_grants__',
     instructions: mayDo.instructions,

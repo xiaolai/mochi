@@ -299,15 +299,15 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
   }
   const brief = briefing(deps, resolved.persona.id, liveBefore)
   deps.briefedWith(brief)
-  const mayDo = whatSheMayDo(
-    resolved.persona,
-    note,
-    grants,
-    deps.tools(),
-    readPrompt(userData),
-    brief,
-    deps.prompts(),
-  )
+  const mayDo = whatSheMayDo({
+    persona: resolved.persona,
+    note: note,
+    grants: grants,
+    tools: deps.tools(),
+    template: readPrompt(userData),
+    brief: brief,
+    prompts: deps.prompts(),
+  })
   deps.log(
     `[persona] ${resolved.persona.name} (${resolved.persona.id}), voice ${resolved.persona.voice}, note ${note.length} chars, bubble ${resolved.persona.bubble ? 'on' : 'off'}`,
   )
