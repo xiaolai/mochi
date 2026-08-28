@@ -210,17 +210,46 @@ export function instructionsFor(
           : `# Faces you may use\n${persona.faces.join(' · ')}`,
   }
 
-  let head = wearName(template.trim(), persona)
+  /*
+    ONE PASS over the document, where this was `{name}` and then the slots.
+
+    ## Why the order mattered
+
+    `wearName` ran first, so whatever it inserted was still there when the slot
+    loop went looking. A persona NAMED `{notes}` — a legal name, sixty
+    characters of anything — therefore had her note spliced in wherever the
+    document said `{name}`, and `notes` was then marked placed, so the section
+    it belongs in was omitted. The user chose a name and moved a whole section
+    of the prompt.
+
+    A single scan cannot do that: a replacement is written into the output and
+    never looked at again, so a name of `{notes}` renders as the literal text
+    `{notes}`, which is what they typed.
+
+    ## Why each token expands ONCE
+
+    The header two paragraphs up states the invariant: "Each piece once: at its
+    slot if the document names one, at its default position if not."
+    `split`/`join` replaced EVERY occurrence, so a document naming `{notes}`
+    twice emitted her whole memory twice — and a long note doubled inside a
+    system prompt is paid for on every wake. Later mentions of a slot already
+    placed collapse to nothing; the piece is already in the document, above.
+
+    A replacer FUNCTION rather than a replacement string, which keeps
+    `wearName`'s property: its return value is used literally, so `$&` in
+    somebody's own text is not a substitution nobody wrote.
+  */
   const placed = new Set<PromptSlot>()
-  for (const slot of PROMPT_SLOTS) {
-    const token = slotToken(slot)
-    if (!head.includes(token)) continue
+  const tokens = new RegExp(`\\{(name|${PROMPT_SLOTS.join('|')})\\}`, 'g')
+  const head = template.trim().replace(tokens, (_whole: string, key: string) => {
+    // FLATTENED, as `wearName` does: `name` comes from a text box and a newline
+    // in it would end the sentence it was meant to be part of.
+    if (key === 'name') return oneLine(persona.name)
+    const slot = key as PromptSlot
+    if (placed.has(slot)) return ''
     placed.add(slot)
-    // `split`/`join` rather than a regular expression, for `wearName`'s reason:
-    // the replacement is somebody's own text and `$&` in it would be a
-    // substitution nobody wrote.
-    head = head.split(token).join(pieces[slot])
-  }
+    return pieces[slot]
+  })
 
   /*
     The document sits where the shipped two sentences used to, under the app's

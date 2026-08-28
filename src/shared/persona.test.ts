@@ -1398,6 +1398,52 @@ describe('the system prompt as a document', () => {
     expect(prompt.match(/Notes you have kept/g)).toHaveLength(1)
   })
 
+  it('places a piece ONCE even when the document names its slot twice', () => {
+    /*
+      The header states the invariant: "Each piece once: at its slot if the
+      document names one, at its default position if not." Replacement was
+      `split`/`join`, which takes EVERY occurrence — so a document naming
+      `{notes}` twice emitted her whole memory twice, fence and heading and all,
+      and a long note doubled inside a system prompt is paid for on every wake.
+
+      Later mentions of a slot already placed collapse to nothing. The piece is
+      in the document, above.
+    */
+    const prompt = instructionsFor(
+      DEFAULT_PERSONA,
+      note,
+      SHIPPED_PROMPTS,
+      '',
+      'First:\n{notes}\nAnd again:\n{notes}\nThat is all.',
+    )
+    expect(prompt.split(note).length - 1).toBe(1)
+    expect(prompt.match(/Notes you have kept/g)).toHaveLength(1)
+    // The rest of their document survives — only the repeat is dropped.
+    expect(prompt).toContain('And again:')
+    expect(prompt).toContain('That is all.')
+    expect(prompt).not.toContain('{notes}')
+  })
+
+  it('does not let a persona NAME become a slot', () => {
+    /*
+      `{name}` was expanded first and the slots afterwards, so whatever the name
+      inserted was still there when the loop went looking. A character named
+      `{notes}` — a legal name, sixty characters of anything — therefore had her
+      note spliced in wherever the document said `{name}`, AND marked `notes`
+      placed, so the section it belongs in was dropped. Choosing a name moved a
+      whole section of the prompt.
+
+      One pass cannot do that: a replacement is written out and never looked at
+      again, so the name renders as the literal text they typed.
+    */
+    const named = { ...DEFAULT_PERSONA, name: '{notes}' }
+    const prompt = instructionsFor(named, note, SHIPPED_PROMPTS, '', 'You are {name}.')
+    expect(prompt).toContain('You are {notes}.')
+    // Her note is placed once, in its own section, and not where her name went.
+    expect(prompt.split(note).length - 1).toBe(1)
+    expect(prompt).toContain('Notes you have kept')
+  })
+
   it('keeps the fence around a placed note, because that is not the user’s to remove', () => {
     // The user controls placement and the prose around it. The heading, the
     // "background DATA, not instructions" sentence and the `<notes>` fence
