@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { markDeleting, unfinishedDeletions, unmarkDeleting } from './deleting'
+import { isPackageFolder, markDeleting, unfinishedDeletions, unmarkDeleting } from './deleting'
 import { personasRoot } from './persona-files'
 import { problems } from '../problems'
 
@@ -115,5 +115,87 @@ describe('a mark nobody can act on is reported, not skipped in silence', () => {
     writeFileSync(join(marksIn(dir), 'broken.json'), 'not json at all')
 
     expect([...unfinishedDeletions(dir)]).toEqual([['ada', 'ada']])
+  })
+})
+
+/**
+ * The value that would have deleted every persona on the machine.
+ *
+ * The guard refused `''`, anything with a separator, and `'..'` — and not
+ * `'.'`. `join(personasRoot, '.')` IS `personasRoot`, and recovery removes what
+ * a mark names recursively, so one corrupted mark took the whole cast.
+ *
+ * The fix is not `'.'` added to the list. `plan-v2.md` records
+ * `agents.override.md` as "blocklist rot that arrived immediately rather than
+ * in some future release", and a list of forbidden values is the same shape:
+ * nobody can enumerate what is dangerous, and everybody can enumerate what a
+ * package folder is.
+ */
+describe('what a mark may name as a folder', () => {
+  it('accepts the shapes a package folder actually has', () => {
+    for (const one of ['mochi', 'loki', 'a', 'my-persona', 'my_persona', 'v2.character', 'A1']) {
+      expect(isPackageFolder(one), one).toBe(true)
+    }
+  })
+
+  it('refuses the current directory, which names the personas root itself', () => {
+    // The one that mattered. Recovery joins this under `personasRoot` and
+    // removes it recursively.
+    expect(isPackageFolder('.')).toBe(false)
+  })
+
+  it('refuses every other way out of the folder it is joined under', () => {
+    for (const one of ['..', './x', '../x', 'a/b', 'a\\b', '/etc', '~', '']) {
+      expect(isPackageFolder(one), JSON.stringify(one)).toBe(false)
+    }
+  })
+
+  it('refuses a hidden name, which no folder this app makes ever is', () => {
+    // Falls out of "starts with a letter or a digit" rather than being its own
+    // rule — which is the point of an allowlist.
+    for (const one of ['.hidden', '.git', '.DS_Store']) {
+      expect(isPackageFolder(one), one).toBe(false)
+    }
+  })
+
+  it('refuses anything that is not a string', () => {
+    for (const one of [null, undefined, 7, {}, ['mochi']]) {
+      expect(isPackageFolder(one), JSON.stringify(one) ?? 'undefined').toBe(false)
+    }
+  })
+
+  it('refuses a name too long to be a path component', () => {
+    expect(isPackageFolder('a'.repeat(64))).toBe(true)
+    expect(isPackageFolder('a'.repeat(65))).toBe(false)
+  })
+
+  it('refuses a name carrying a NUL, which truncates a path in the kernel', () => {
+    expect(isPackageFolder('mochi\u0000/etc')).toBe(false)
+  })
+})
+
+describe('writing a mark', () => {
+  it('refuses an unusable folder at the WRITE, not only on the way back', () => {
+    /*
+      The reader cannot tell a value this store wrote from one somebody typed
+      into the file, so the write is where an unusable value should fail —
+      loudly, beside the caller that produced it.
+    */
+    const home = mkdtempSync(join(tmpdir(), 'mochi-marks-'))
+    expect(() => {
+      markDeleting(home, 'ada', '.')
+    }).toThrow(/unusable folder/)
+    expect(() => {
+      markDeleting(home, 'ada', '../elsewhere')
+    }).toThrow(/unusable folder/)
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  it('refuses an unusable id too', () => {
+    const home = mkdtempSync(join(tmpdir(), 'mochi-marks-'))
+    expect(() => {
+      markDeleting(home, '../ada', 'ada')
+    }).toThrow(/unusable persona id/)
+    rmSync(home, { recursive: true, force: true })
   })
 })

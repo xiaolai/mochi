@@ -1,3 +1,4 @@
+import { looksEmpty } from '@shared/text'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -1146,10 +1147,36 @@ function catalogue(userData: string): PersonaCatalog {
   return loaded
 }
 
+/**
+ * Remember how she was left, and never let failing to do so stop her.
+ *
+ * `writeMerged` now REFUSES to overwrite a preferences file it could not read,
+ * and throws — which is right for a settings write, where a silent no-op would
+ * leave a switch claiming it saved. It is wrong here.
+ *
+ * `asleep` and `hidden` are not settings, they are STATE: the in-memory value is
+ * what this run acts on and the file is only "as you left her" for the next
+ * launch. An unguarded throw would have made a permission error on that one
+ * file stop her closing her eyes, cancel nothing, and leave the window on
+ * screen — a display action failing because a note about it could not be
+ * filed.
+ *
+ * Nothing is swallowed: `writeMerged` files a `problems` entry before it
+ * throws, so the failure is on the strip either way. What this drops is only
+ * the propagation.
+ */
+function rememberResting(changes: Partial<Resting>): void {
+  try {
+    writeResting(app.getPath('userData'), changes)
+  } catch (error: unknown) {
+    console.error('[resting] how she was left could not be remembered:', error)
+  }
+}
+
 function setAsleep(asleep: boolean): void {
   if (asleep === resting.asleep) return
   resting = { ...resting, asleep }
-  writeResting(app.getPath('userData'), { asleep })
+  rememberResting({ asleep })
   // Her eyes, first and unconditionally. The session frame below is about the
   // connection; this is about what is on screen, and it must not wait on one.
   tellCompanion({ type: '__mochi_asleep__', asleep })
@@ -1244,7 +1271,7 @@ function stirred(): void {
 function setHidden(hidden: boolean): void {
   if (hidden === resting.hidden) return
   resting = { ...resting, hidden }
-  writeResting(app.getPath('userData'), { hidden })
+  rememberResting({ hidden })
   if (companion === null) return
   if (hidden) companion.hide()
   // `showInactive`, not `show`: bringing her back should not take focus from
@@ -3262,7 +3289,10 @@ ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
   if (asked.kind !== 'create' && asked.kind !== 'duplicate') {
     return refuse('That is not something to do.')
   }
-  if (typeof asked.name !== 'string' || asked.name.trim() === '') {
+  // `looksEmpty`, the parser's rule. A name of characters that draw as nothing
+  // would be accepted here, derive an id, create a package, and then fail to
+  // load — see `applyChange`, which carries the same check for the same reason.
+  if (typeof asked.name !== 'string' || looksEmpty(asked.name.trim())) {
     return refuse('A new persona needs a name.')
   }
   // `create` starts from the built-in, `duplicate` from whoever is worn. Both

@@ -5,6 +5,7 @@
  * whether a change is allowed is a different question from assembling the panes
  * that show it, and only one of the two is reached by a model-adjacent path.
  */
+import { looksEmpty } from '@shared/text'
 import { EMOTIONS, type Emotion } from '@shared/avatar'
 import { type PersonaChange } from '@shared/ipc'
 import {
@@ -47,9 +48,23 @@ export function applyChange(
     // handler instead of answering.
     if (typeof change.name !== 'string') return { ok: false, why: 'That is not a name.' }
     const name = change.name.trim()
-    // A blank name is not a name, and it would leave the shelf with an entry
-    // nobody can point at.
-    if (name.length === 0) return { ok: false, why: 'A name cannot be empty.' }
+    /*
+      `looksEmpty`, not `length === 0`, and it is the SAME class as the limit
+      below it.
+
+      That comment records a name of 61–64 characters saving and then failing to
+      load, because this control said 64 while the parser said 60 — "the
+      character was accepted, written, and gone on the next launch". The length
+      was aligned to the parser and the emptiness rule was not, so the identical
+      failure survived one line up.
+
+      `parsePersona` refuses a name `looksEmpty` calls blank, and that function
+      covers three character classes rather than two: U+3164 HANGUL FILLER is a
+      LETTER and U+2800 BRAILLE PATTERN BLANK is a SYMBOL, so both survive
+      `trim()` and both draw as nothing. A name made of them was accepted here,
+      written to the manifest, and rejected on the next launch.
+    */
+    if (looksEmpty(name)) return { ok: false, why: 'A name cannot be empty.' }
     // `PERSONA_LIMITS.name`, not a literal. This said 64 while the parser says
     // 60, so a name of 61 to 64 characters SAVED and then failed to load — the
     // character was accepted, written, and gone on the next launch. One number,
@@ -150,10 +165,12 @@ export function applyChange(
     if (said === undefined) continue
     if (typeof said !== 'string') return { ok: false, why: 'That is not an instruction.' }
     const line = said.trim()
-    // NOT empty: `parsePersona` refuses an empty instruction, so saving one here
-    // would write a manifest this build cannot load — the failure that presents
-    // as "the app ate my character" one launch later.
-    if (line.length === 0) return { ok: false, why: 'That cannot be empty.' }
+    // NOT empty, by the PARSER's rule rather than a second one. `parsePersona`
+    // refuses what `looksEmpty` calls blank, so saving anything looser here
+    // writes a manifest this build cannot load — the failure that presents as
+    // "the app ate my character" one launch later, which this comment already
+    // named while checking for it a different way.
+    if (looksEmpty(line)) return { ok: false, why: 'That cannot be empty.' }
     /*
       `instruction`, not `name * 4`.
 

@@ -40,8 +40,53 @@ function markPath(userData: string, id: string): string {
   return join(personasRoot(userData), MARKS, `${id}.json`)
 }
 
-/** Record that a persona is being deleted, before anything is removed. */
+/**
+ * Whether a string may be joined under `personasRoot` as a package folder.
+ *
+ * ## An allowlist, because the blocklist it replaces missed the worst value
+ *
+ * The reader used to refuse `''`, anything containing a separator, and `'..'`.
+ * It did not refuse `'.'` — and `join(personasRoot, '.')` IS `personasRoot`, so
+ * recovery's recursive remove would have taken every persona on the machine. One
+ * corrupted mark, the whole cast.
+ *
+ * That is not an oversight to patch by adding `'.'` to the list. It is what a
+ * blocklist does: `plan-v2.md` records `agents.override.md` as "blocklist rot
+ * that arrived immediately rather than in some future release", and this is the
+ * same shape. The question a guard here can actually answer is not "which values
+ * are dangerous" — nobody can enumerate that — but "which values are a package
+ * folder", and there are few of those.
+ *
+ * So: it starts with a letter or a digit, which alone refuses `.`, `..`, every
+ * hidden name and every absolute path; it holds only characters a folder created
+ * by this app can hold; and it is bounded, because a name is a path component
+ * and every filesystem has a limit that produces a different error much further
+ * away.
+ *
+ * `readCandidate` joins it as `join(root, source, MANIFEST)`, so a legitimate
+ * value is always a plain directory name — `isPersonaId`'s shape plus the dots
+ * and cases a folder somebody made by hand may carry.
+ */
+const PACKAGE_FOLDER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+
+export function isPackageFolder(value: unknown): value is string {
+  return typeof value === 'string' && value !== '..' && PACKAGE_FOLDER.test(value)
+}
+
+/**
+ * Record that a persona is being deleted, before anything is removed.
+ *
+ * Both fields are checked HERE as well as on the way back out. A mark is the
+ * one durable instruction this store gives itself, and the reader cannot tell a
+ * value this function wrote from one somebody typed into the file — so the
+ * write is where an unusable value should fail, loudly, next to the caller that
+ * produced it.
+ */
 export function markDeleting(userData: string, id: string, source: string): void {
+  if (!isPersonaId(id)) throw new Error(`refusing to mark an unusable persona id: ${id}`)
+  if (!isPackageFolder(source)) {
+    throw new Error(`refusing to mark a deletion against an unusable folder: ${source}`)
+  }
   mkdirSync(join(personasRoot(userData), MARKS), { recursive: true })
   writeJsonAtomically(markPath(userData, id), { id, source })
 }
@@ -106,8 +151,15 @@ export function unfinishedDeletions(userData: string): ReadonlyMap<string, strin
       const source = parsed['source']
       // Both are PATH SEGMENTS downstream, so they are checked here rather than
       // joined on trust.
-      if (typeof id !== 'string' || !isPersonaId(id)) continue
-      if (typeof source !== 'string' || source === '' || /[/\\]/.test(source) || source === '..') {
+      // Both are PATH SEGMENTS downstream, so both go through the allowlist
+      // rather than a list of values somebody thought to forbid.
+      if (!isPersonaId(id)) continue
+      if (!isPackageFolder(source)) {
+        problems.note(
+          'personas',
+          null,
+          `an unfinished deletion names an unusable folder and was left (${file})`,
+        )
         continue
       }
       found.set(id, source)

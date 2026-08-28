@@ -909,3 +909,48 @@ describe('her size, which had no control at all', () => {
     expect(done.ok && done.persona.size).toBe(120)
   })
 })
+
+/**
+ * Text that survives `trim()` and draws as nothing.
+ *
+ * `persona-change.ts` already carries this class, about the LENGTH bound: a
+ * name of 61–64 characters saved and then failed to load because the control
+ * said 64 and the parser said 60 — "the character was accepted, written, and
+ * gone on the next launch". The length was aligned to the parser. The emptiness
+ * rule was not, one line above it.
+ *
+ * `looksEmpty` covers three character classes for a measured reason of its own:
+ * U+3164 HANGUL FILLER is a LETTER and U+2800 BRAILLE PATTERN BLANK is a
+ * SYMBOL, so both survive `trim()` and both draw as blank everywhere.
+ */
+describe('a name that draws as nothing', () => {
+  const AVATARS = ['mine', 'other']
+  const INVISIBLE = ['\u3164', '\u2800', '\u200b', '\u2060', '\u3164\u2800']
+
+  it('is refused, as the parser will refuse it on the next launch', () => {
+    for (const blank of INVISIBLE) {
+      expect(
+        applyChange(DEFAULT_PERSONA, { id: 'mochi', name: blank }, AVATARS).ok,
+        JSON.stringify(blank),
+      ).toBe(false)
+    }
+  })
+
+  it('is refused as a greeting or a farewell too', () => {
+    for (const blank of INVISIBLE) {
+      expect(
+        applyChange(DEFAULT_PERSONA, { id: 'mochi', greeting: blank }, AVATARS).ok,
+        JSON.stringify(blank),
+      ).toBe(false)
+      expect(
+        applyChange(DEFAULT_PERSONA, { id: 'mochi', farewell: blank }, AVATARS).ok,
+        JSON.stringify(blank),
+      ).toBe(false)
+    }
+  })
+
+  it('does not refuse text, which is the other half', () => {
+    expect(applyChange(DEFAULT_PERSONA, { id: 'mochi', name: 'Ada' }, AVATARS).ok).toBe(true)
+    expect(applyChange(DEFAULT_PERSONA, { id: 'mochi', name: '洛基' }, AVATARS).ok).toBe(true)
+  })
+})

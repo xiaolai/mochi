@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -538,5 +538,56 @@ describe('how far up the workspace guard walks', () => {
       const stop = guardStopAt(userData, workspace, home)
       expect(workspace === stop || workspace.startsWith(stop + '/')).toBe(true)
     }
+  })
+})
+
+/**
+ * A preferences file that is there and cannot be read is not an empty one.
+ *
+ * `store/prompts.ts` states the rule and credited this module with following
+ * it: *"absent means 'nothing yet', anything else means 'cannot tell', and
+ * cannot-tell must not become an overwrite."* `writeMerged` did not follow it —
+ * it warned to a console a packaged app does not have and replaced the file, so
+ * one transient permission error took the worn character, the window positions,
+ * the sleep timer, every standing grant and the key bindings with it.
+ */
+describe('writing over a preferences file that cannot be read', () => {
+  it('refuses, and leaves the bytes exactly as they are', () => {
+    const home = mkdtempSync(join(tmpdir(), 'mochi-unreadable-'))
+    const file = join(home, 'preferences.json')
+    writeFileSync(file, JSON.stringify({ activePersonaId: 'loki', asleep: true }))
+    const before = readFileSync(file, 'utf8')
+    chmodSync(file, 0o000)
+    try {
+      expect(() => {
+        writeWornPersonaId(home, 'ada')
+      }).toThrow(/could not be read/)
+      chmodSync(file, 0o600)
+      // The whole point: every unrelated preference is still there.
+      expect(readFileSync(file, 'utf8')).toBe(before)
+    } finally {
+      chmodSync(file, 0o600)
+      rmSync(home, { recursive: true, force: true })
+    }
+  })
+
+  it('still writes when the file is simply absent, which is nothing yet', () => {
+    // The other half of the distinction. Refusing here would make a fresh
+    // install unable to remember anything at all.
+    const home = mkdtempSync(join(tmpdir(), 'mochi-absent-'))
+    writeWornPersonaId(home, 'ada')
+    expect(readWornPersonaId(home)).toBe('ada')
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  it('keeps every other key when it CAN read the file', () => {
+    const home = mkdtempSync(join(tmpdir(), 'mochi-merge-'))
+    writeFileSync(join(home, 'preferences.json'), JSON.stringify({ asleep: true, sound: 'kept' }))
+    writeWornPersonaId(home, 'ada')
+    const after = JSON.parse(readFileSync(join(home, 'preferences.json'), 'utf8'))
+    expect(after.activePersonaId).toBe('ada')
+    expect(after.asleep).toBe(true)
+    expect(after.sound).toBe('kept')
+    rmSync(home, { recursive: true, force: true })
   })
 })

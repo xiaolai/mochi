@@ -166,7 +166,35 @@ export function writeMerged(userData: string, changes: Record<string, unknown>):
       )
     }
   } else if (read.reason.kind !== 'absent') {
-    console.warn(`[worn] ${logBoundedRead(read.reason)}; replacing it`)
+    /*
+      PRESENT AND UNREADABLE IS NOT EMPTY, and this used to overwrite it.
+
+      `store/prompts.ts` states the rule and credits this file with following
+      it: *"absent means 'nothing yet', anything else means 'cannot tell', and
+      cannot-tell must not become an overwrite."* It named `worn.ts` as
+      corrected on 2026-08-19. This function was not — it warned to a console a
+      packaged app does not have and then replaced the file, so one transient
+      permission error took the worn character, the window positions, the sleep
+      timer, every standing grant and the key bindings with it.
+
+      The distinction is the whole of it. `absent` is nothing yet, and merging
+      into `{}` is right. Everything else — a permission error, a file over the
+      bound, a symlink, a socket — means the bytes are there and somebody else
+      can read them. Replacing those is destroying a file we were merely unable
+      to open this time.
+
+      THROWN rather than skipped, because a silent no-op is the other way to
+      lose the write: the switch would move on screen and mean nothing. Every
+      caller reaching this is a settings write with somewhere to report, and
+      `writePromptOverride` throws on the same condition for the same reason.
+    */
+    problems.note(
+      'settings',
+      null,
+      `preferences could not be read (${logBoundedRead(read.reason)}), so nothing was saved — ` +
+        `the file was left exactly as it is`,
+    )
+    throw new Error(`the preferences file could not be read: ${logBoundedRead(read.reason)}`)
   }
 
   writeJsonAtomically(join(userData, PREFERENCES), { ...existing, ...changes })
