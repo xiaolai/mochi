@@ -30,6 +30,27 @@ describe('resolving what a prompt currently says', () => {
     // in the text she is sent, not a crash in the middle of a session.
     expect(resolvePrompts(SPECS, {})('gone')).toBe('')
   })
+
+  it('answers empty for an unknown key EVEN WHEN the file holds one', () => {
+    /*
+      The case the assertion above passes over. It uses an empty override map,
+      so it is true whether the catalogue is consulted first or last — and the
+      resolver read the file first, which meant a key the catalogue no longer
+      has still resolved to whatever `prompts.json` held for it.
+
+      Reachable rather than theoretical: the file is hand-editable, and a prompt
+      renamed or removed between releases leaves its old entry behind on every
+      machine that had edited it. The symptom is a model being sent wording
+      nobody can find in the settings pane, because the pane draws the catalogue.
+    */
+    expect(resolvePrompts(SPECS, { gone: 'wording from an older build' })('gone')).toBe('')
+  })
+
+  it('still prefers an override for a key the catalogue DOES have', () => {
+    // The control. A resolver that consulted only the catalogue would pass the
+    // assertion above and make every override in the file inert.
+    expect(resolvePrompts(SPECS, { a: 'mine' })('a')).toBe('mine')
+  })
 })
 
 describe('the file', () => {
@@ -43,6 +64,21 @@ describe('the file', () => {
 
   it('treats an absent file as nothing overridden', () => {
     // The ordinary state on a fresh install, and it is not a failure.
+    expect(readPromptOverrides(userData)).toEqual({ ok: true, overrides: {} })
+  })
+
+  it('refuses to store an override for a key this build does not have', () => {
+    /*
+      The same rule as the resolver, on the way in. A writer that accepts an
+      unknown key and a resolver that ignores one means the file collects
+      entries nothing will ever read — and the merge preserves what it does not
+      recognise, so they persist through every later save.
+
+      The IPC handler checks this, which is why it has not happened. A check
+      that lives in the handler rather than the store is a check every future
+      caller has to remember.
+    */
+    expect(() => writePromptOverride(userData, SPECS, 'gone', 'mine')).toThrow(/not a prompt/)
     expect(readPromptOverrides(userData)).toEqual({ ok: true, overrides: {} })
   })
 

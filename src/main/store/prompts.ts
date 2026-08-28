@@ -85,7 +85,27 @@ export function resolvePrompts(
   overrides: Readonly<Record<string, string>>,
 ): Prompts {
   const defaults = new Map(specs.map((spec) => [spec.key, spec.text]))
-  return (key: string) => overrides[key] ?? defaults.get(key) ?? ''
+  return (key: string) => {
+    /*
+      THE CATALOGUE DECIDES WHAT A KEY IS, and the override only decides what it
+      says.
+
+      This was `overrides[key] ?? defaults.get(key) ?? ''`, which reads the
+      stored file FIRST — so a key the catalogue no longer has still resolved,
+      to whatever a `prompts.json` happened to hold for it. That contradicts
+      this function's own docblock two lines up, and it is reachable: the file
+      is hand-editable, and a prompt renamed or removed between releases leaves
+      its old entry behind on every machine that had edited it.
+
+      The failure it produces is the quiet kind. A resolver answering a stale
+      string looks exactly like one answering a current string, and the only
+      symptom is a model being sent wording nobody can find in the settings
+      pane — because the pane draws the catalogue, which no longer has the key.
+    */
+    const shipped = defaults.get(key)
+    if (shipped === undefined) return ''
+    return overrides[key] ?? shipped
+  }
 }
 
 /** What the pane draws: the default, the override, and anything worrying. */
@@ -156,8 +176,24 @@ export function writePromptOverride(
     tell", and cannot-tell must not become an overwrite.
   */
   if (!read.ok) throw new Error(`the prompts file could not be read: ${read.why}`)
+  /*
+    THE SAME RULE ON THE WAY IN, because a resolver that ignores unknown keys
+    and a writer that accepts them means the file collects entries nothing will
+    ever read again.
+
+    The IPC handler checks this, which is why it has not happened; the check
+    belonging to the handler rather than the store is what makes it a matter of
+    every future caller remembering. `resolvePrompts` above now refuses to
+    resolve an unknown key, so writing one is writing a line that is dead the
+    moment it lands — and it would persist through every later save, because the
+    merge preserves what it does not recognise.
+  */
+  const spec = specs.find((one) => one.key === key)
+  if (spec === undefined) {
+    throw new Error(`${key} is not a prompt this build has; refusing to store an override for it`)
+  }
   const next = { ...read.overrides }
-  const fallback = specs.find((spec) => spec.key === key)?.text
+  const fallback = spec.text
   if (text === null || text === fallback) delete next[key]
   else next[key] = text
   writeJsonAtomically(promptsPath(userData), next)
