@@ -843,50 +843,19 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     window.mochi.history()
   })
 
-  function tick(now: number): void {
-    fitToContent()
-    frame = requestAnimationFrame(tick)
-
-    const seconds = lastAt === null ? 1 / 60 : Math.min(0.1, (now - lastAt) / 1000)
-    /*
-      Her RAW level this frame, kept rather than passed straight through.
-
-      `EnvelopeState` carries `mouthOpen`, which is normalised against her own
-      running peak — the right thing for a mouth and the wrong thing for a
-      comparison, because it has had the very amplitude removed that the
-      loopback measurement is about. The microphone side is `rms` too, so the
-      two are in one unit.
-    */
-    let herLevel = 0
-    if (analyser !== null && samples !== null) {
-      analyser.getFloatTimeDomainData(samples)
-      herLevel = rms(samples)
-      envelope = advanceEnvelope(herLevel, envelope, seconds, DEFAULT_ENVELOPE)
-      avatar.setMouthOpen(envelope.mouthOpen)
-      // Her eyes, from the same measurement as her mouth. The rig holds a
-      // blink shut for the whole of `asleep`, and a mouth moving under closed
-      // lids is a picture no path may produce — see `setSpeaking`.
-      avatar.setSpeaking(envelope.speaking)
-    }
-    // Unconditionally, including before the analyser exists — `SILENT.quietFor`
-    // is `Infinity` and `step` handles it. This used to be guarded here with
-    // `analyser !== null`, which fixed one call site of a rule that has two:
-    // "quietFor means nothing until there has been sound" is also violated in
-    // the window between an utterance's first delta and its first audio, where
-    // the analyser very much exists. The rule belongs to the fade, so it lives
-    // in `step`.
-    /**
-     * What the microphone knows, a second before the service says it.
-     *
-     * NOT WHILE SHE IS ASLEEP, and that guard is load-bearing rather than
-     * tidy. A disabled `MediaStreamTrack` still produces frames — zeros — so
-     * without it a nap taken mid-sentence read as the user going quiet: the
-     * silence accumulated past `QUIET_S`, `attending` reported `considering`,
-     * and the beat opened behind her closed eyes and went overdue three
-     * seconds later, asking somebody to repeat themselves to a companion who
-     * had stopped listening. `sleeps()` resets both, and this is what stops
-     * them coming back.
-     */
+  /**
+   * What the microphone heard this frame, and what it means for her attention.
+   *
+   * A named step in `tick` rather than thirty lines in the middle of it. The
+   * loop reads every input, advances every subsystem and draws — three jobs
+   * whose only relationship is the order they happen in, and the order is the
+   * one thing a reader needs to see.
+   *
+   * A closure, deliberately: it reads and writes `attention`, `attending`,
+   * `beat` and `loopback`, and threading those through a parameter list would
+   * make the seam wider than the thing it separates.
+   */
+  function listened(herLevel: number, seconds: number): void {
     if (mic !== null && micSamples !== null && !resting && hearing) {
       mic.getFloatTimeDomainData(micSamples)
       const heardLevel = levelOf(micSamples)
@@ -923,6 +892,41 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         if (now === 'hearing') beat.reset()
       }
     }
+  }
+
+  function tick(now: number): void {
+    fitToContent()
+    frame = requestAnimationFrame(tick)
+
+    const seconds = lastAt === null ? 1 / 60 : Math.min(0.1, (now - lastAt) / 1000)
+    /*
+      Her RAW level this frame, kept rather than passed straight through.
+
+      `EnvelopeState` carries `mouthOpen`, which is normalised against her own
+      running peak — the right thing for a mouth and the wrong thing for a
+      comparison, because it has had the very amplitude removed that the
+      loopback measurement is about. The microphone side is `rms` too, so the
+      two are in one unit.
+    */
+    let herLevel = 0
+    if (analyser !== null && samples !== null) {
+      analyser.getFloatTimeDomainData(samples)
+      herLevel = rms(samples)
+      envelope = advanceEnvelope(herLevel, envelope, seconds, DEFAULT_ENVELOPE)
+      avatar.setMouthOpen(envelope.mouthOpen)
+      // Her eyes, from the same measurement as her mouth. The rig holds a
+      // blink shut for the whole of `asleep`, and a mouth moving under closed
+      // lids is a picture no path may produce — see `setSpeaking`.
+      avatar.setSpeaking(envelope.speaking)
+    }
+    // Unconditionally, including before the analyser exists — `SILENT.quietFor`
+    // is `Infinity` and `step` handles it. This used to be guarded here with
+    // `analyser !== null`, which fixed one call site of a rule that has two:
+    // "quietFor means nothing until there has been sound" is also violated in
+    // the window between an utterance's first delta and its first audio, where
+    // the analyser very much exists. The rule belongs to the fade, so it lives
+    // in `step`.
+    listened(herLevel, seconds)
 
     /**
      * The beat, stepped whether or not there is a microphone yet.

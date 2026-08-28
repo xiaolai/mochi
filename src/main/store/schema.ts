@@ -23,6 +23,88 @@ export interface SchemaApplied {
   readonly secureDelete: boolean
 }
 
+/**
+ * The three columns added since this schema was first written.
+ *
+ * ## Why they are here rather than in the CREATE above
+ *
+ * `CREATE TABLE IF NOT EXISTS` does NOT add a column to a table that already
+ * exists, which is the whole reason this section exists: a database made before
+ * a column was invented keeps its old shape for ever, and the create statement
+ * is silent about it.
+ *
+ * Every one is additive — `ADD COLUMN` rewrites no rows and needs no table
+ * rebuild, so none of them can drop `session` with foreign keys on and take
+ * every turn with it.
+ *
+ * ## Why they are their own function
+ *
+ * `applySchema` was two hundred and fifty lines doing four different jobs:
+ * pragmas, the schema, these migrations, and a destructive cleanup of a store
+ * that no longer exists. They run in that order for reasons, and they are read
+ * at completely different times — nobody debugging a pragma is looking for a
+ * column added last month.
+ */
+function addLaterColumns(db: DatabaseSync): void {
+  // An opaque, never-reused name for each conversation, added to the table
+  // rather than replacing the rowid.
+  //
+  // The rowid cannot be the identity that crosses IPC: SQLite hands it out
+  // again once the row holding it is gone (probed -- `INTEGER PRIMARY KEY`
+  // goes 1 -> delete -> 1), so a settings window holding one would eventually
+  // name whatever took its place, and the dangerous version of that is a
+  // delete removing a conversation nobody asked to remove.
+  //
+  // `started_at` cannot be it either, which is the less obvious half. Two
+  // conversations can legitimately want the same instant, an import can
+  // introduce one at a timestamp already used, and advancing the stored time
+  // to dodge that produces a session that began after the things said in it.
+  // A random token is beholden to none of those.
+  //
+  // ADD COLUMN and a UNIQUE INDEX are both additive: no table rebuild, so no
+  // dropping `session` with foreign keys on and taking every turn with it.
+  const columns = db.prepare('PRAGMA table_info(session)').all()
+  if (!columns.some((column) => String(column['name']) === 'token')) {
+    db.exec('ALTER TABLE session ADD COLUMN token TEXT')
+  }
+  // Backfilled before the index exists, because NULLs are distinct in a SQLite
+  // unique index but a half-migrated table is still a table where two rows
+  // answer to nothing.
+  const unnamed = db.prepare('SELECT id FROM session WHERE token IS NULL').all()
+  const name = db.prepare('UPDATE session SET token = ? WHERE id = ?')
+  for (const row of unnamed) name.run(randomUUID(), Number(row['id']))
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS session_by_token ON session (token)')
+
+  // `CREATE TABLE IF NOT EXISTS` above does NOT add a column to a table that
+  // already exists, so a database written before this column existed keeps its
+  // old shape and every read of `cut` returns undefined. Additive, like the
+  // token migration above it: ADD COLUMN with a default rewrites no rows and
+  // rebuilds no table, so the foreign key from `turn` to `session` is never in
+  // play. Existing turns are correct at the default -- nothing recorded before
+  // this column existed knew it had been interrupted.
+  const turnColumns = db.prepare('PRAGMA table_info(turn)').all()
+  if (!turnColumns.some((column) => String(column['name']) === 'cut')) {
+    db.exec('ALTER TABLE turn ADD COLUMN cut INTEGER NOT NULL DEFAULT 0')
+  }
+
+  /*
+    What one conversation was about, in a few words.
+
+    NULLABLE with no default, and null is the ordinary state rather than a gap
+    to be filled: a conversation is titled after it ends, by a model call that
+    may not have happened yet, may have failed, or may have answered nothing
+    usable. Every one of those is "no subject", and the archive drew rows
+    without one for its whole life before this column existed.
+
+    Additive, like `token` and `cut` above it: ADD COLUMN rewrites no rows and
+    rebuilds no table, so the foreign key from `turn` to `session` is never in
+    play — which is the trap this file names twice already.
+  */
+  if (!columns.some((column) => String(column['name']) === 'subject')) {
+    db.exec('ALTER TABLE session ADD COLUMN subject TEXT')
+  }
+}
+
 export function applySchema(db: DatabaseSync): SchemaApplied {
   // WAL so a long read cannot block a write mid-conversation. Foreign keys are
   // OFF by default in SQLite, which makes `ON DELETE CASCADE` silently do
@@ -148,63 +230,7 @@ export function applySchema(db: DatabaseSync): SchemaApplied {
   // measured and is not true of anything tested since.
   db.exec("INSERT INTO turn_fts (turn_fts, rank) VALUES ('secure-delete', 1)")
 
-  // An opaque, never-reused name for each conversation, added to the table
-  // rather than replacing the rowid.
-  //
-  // The rowid cannot be the identity that crosses IPC: SQLite hands it out
-  // again once the row holding it is gone (probed -- `INTEGER PRIMARY KEY`
-  // goes 1 -> delete -> 1), so a settings window holding one would eventually
-  // name whatever took its place, and the dangerous version of that is a
-  // delete removing a conversation nobody asked to remove.
-  //
-  // `started_at` cannot be it either, which is the less obvious half. Two
-  // conversations can legitimately want the same instant, an import can
-  // introduce one at a timestamp already used, and advancing the stored time
-  // to dodge that produces a session that began after the things said in it.
-  // A random token is beholden to none of those.
-  //
-  // ADD COLUMN and a UNIQUE INDEX are both additive: no table rebuild, so no
-  // dropping `session` with foreign keys on and taking every turn with it.
-  const columns = db.prepare('PRAGMA table_info(session)').all()
-  if (!columns.some((column) => String(column['name']) === 'token')) {
-    db.exec('ALTER TABLE session ADD COLUMN token TEXT')
-  }
-  // Backfilled before the index exists, because NULLs are distinct in a SQLite
-  // unique index but a half-migrated table is still a table where two rows
-  // answer to nothing.
-  const unnamed = db.prepare('SELECT id FROM session WHERE token IS NULL').all()
-  const name = db.prepare('UPDATE session SET token = ? WHERE id = ?')
-  for (const row of unnamed) name.run(randomUUID(), Number(row['id']))
-  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS session_by_token ON session (token)')
-
-  // `CREATE TABLE IF NOT EXISTS` above does NOT add a column to a table that
-  // already exists, so a database written before this column existed keeps its
-  // old shape and every read of `cut` returns undefined. Additive, like the
-  // token migration above it: ADD COLUMN with a default rewrites no rows and
-  // rebuilds no table, so the foreign key from `turn` to `session` is never in
-  // play. Existing turns are correct at the default -- nothing recorded before
-  // this column existed knew it had been interrupted.
-  const turnColumns = db.prepare('PRAGMA table_info(turn)').all()
-  if (!turnColumns.some((column) => String(column['name']) === 'cut')) {
-    db.exec('ALTER TABLE turn ADD COLUMN cut INTEGER NOT NULL DEFAULT 0')
-  }
-
-  /*
-    What one conversation was about, in a few words.
-
-    NULLABLE with no default, and null is the ordinary state rather than a gap
-    to be filled: a conversation is titled after it ends, by a model call that
-    may not have happened yet, may have failed, or may have answered nothing
-    usable. Every one of those is "no subject", and the archive drew rows
-    without one for its whole life before this column existed.
-
-    Additive, like `token` and `cut` above it: ADD COLUMN rewrites no rows and
-    rebuilds no table, so the foreign key from `turn` to `session` is never in
-    play — which is the trap this file names twice already.
-  */
-  if (!columns.some((column) => String(column['name']) === 'subject')) {
-    db.exec('ALTER TABLE session ADD COLUMN subject TEXT')
-  }
+  addLaterColumns(db)
 
   /*
     HER OLD STORE, removed rather than left unreadable.

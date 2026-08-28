@@ -140,58 +140,74 @@ export function spawnCodex(path: string, args: readonly string[], input?: string
       child.on('error', () => resolve({ code: null, stderr }))
       child.on('close', (code) => resolve({ code, stderr }))
     }),
-    // The SIGNAL is forwarded. Dropping it made the deadline's escalation inert
-    // in production while the test -- which supplied its own adapter -- went on
-    // passing.
-    /*
-      THE GROUP, falling back to the process.
+    kill: stopping(child),
+  }
+}
 
-      `process.kill(-pid, …)` signals every member of the group this leads.
-      It throws `ESRCH` once the group is gone, which is the ordinary race
-      between a deadline firing and a child exiting on its own — caught, and
-      answered the way `child.kill` answers it.
-    */
-    kill: (signal?: NodeJS.Signals) => {
-      const pid = child.pid
-      if (pid === undefined) return false
-      if (process.platform === 'win32') return killTree(pid) || child.kill(signal)
-      try {
-        process.kill(-pid, signal)
-        return true
-      } catch (error: unknown) {
-        /*
-          ESRCH IS THE ORDINARY RACE. `ESRCH` means the group is gone: the child
-          exited between the deadline firing and this line, which happens and
-          costs nothing. A group persists while any member is in it, so this
-          cannot be ESRCH while a descendant is still running.
+/**
+ * Stop a child, and everything it started.
+ *
+ * ## The signal is FORWARDED
+ *
+ * Dropping it made the deadline's SIGKILL escalation inert in production while
+ * the test — which supplied its own adapter — went on passing.
+ *
+ * ## The GROUP, falling back to the process
+ *
+ * `process.kill(-pid, …)` signals every member of the group this child leads.
+ * It throws `ESRCH` once the group is gone, which is the ordinary race between
+ * a deadline firing and a child exiting on its own — caught, and answered the
+ * way `child.kill` answers it.
+ *
+ * ## Why it is out of `spawnCodex`
+ *
+ * `spawnCodex` is fifty-five lines of code under eighty of rationale, and about
+ * half of both were this: two platforms, three failure modes and a measurement
+ * from a Windows box, inside a function whose other job is wiring stdio. They
+ * are read at different times — one when somebody is changing how a process
+ * starts, the other when one will not stop.
+ */
+function stopping(child: ReturnType<typeof spawn>): (signal?: NodeJS.Signals) => boolean {
+  return (signal?: NodeJS.Signals) => {
+    const pid = child.pid
+    if (pid === undefined) return false
+    if (process.platform === 'win32') return killTree(pid) || child.kill(signal)
+    try {
+      process.kill(-pid, signal)
+      return true
+    } catch (error: unknown) {
+      /*
+        ESRCH IS THE ORDINARY RACE. `ESRCH` means the group is gone: the child
+        exited between the deadline firing and this line, which happens and
+        costs nothing. A group persists while any member is in it, so this
+        cannot be ESRCH while a descendant is still running.
 
-          That sentence is true where process groups exist and MEASURABLY FALSE
-          on Windows, which has no such concept — measured on a real Windows 11
-          box on 2026-08-28, where `process.kill(-19556)` gave `ESRCH` and
-          `process.kill(19556)` succeeded a line later, proving the process was
-          alive. Because this warning was gated on the errno, the one platform
-          where the group kill can NEVER work was the one platform where the
-          warning never fired: the leak was routed into the silence.
+        That sentence is true where process groups exist and MEASURABLY FALSE
+        on Windows, which has no such concept — measured on a real Windows 11
+        box on 2026-08-28, where `process.kill(-19556)` gave `ESRCH` and
+        `process.kill(19556)` succeeded a line later, proving the process was
+        alive. Because this warning was gated on the errno, the one platform
+        where the group kill can NEVER work was the one platform where the
+        warning never fired: the leak was routed into the silence.
 
-          Windows no longer reaches this line at all. `killTree` above is the
-          answer there, which is better than warning about it.
+        Windows no longer reaches this line at all. `killTree` above is the
+        answer there, which is better than warning about it.
 
-          Every other errno is different in kind: the group is THERE and could
-          not be signalled, and the fallback below reaches only the leader. That
-          is precisely the leak `running.ts` exists to prevent, so it is
-          reported rather than absorbed — a fallback that quietly does less than
-          the thing it replaced is how the first version of this went unnoticed.
-        */
-        const code = (error as NodeJS.ErrnoException).code
-        if (code !== 'ESRCH') {
-          console.warn(
-            `[codex] could not signal the process group (${code ?? 'unknown'}); ` +
-              'falling back to the leader alone, and any children it started may survive',
-          )
-        }
-        return child.kill(signal)
+        Every other errno is different in kind: the group is THERE and could
+        not be signalled, and the fallback below reaches only the leader. That
+        is precisely the leak `running.ts` exists to prevent, so it is
+        reported rather than absorbed — a fallback that quietly does less than
+        the thing it replaced is how the first version of this went unnoticed.
+      */
+      const code = (error as NodeJS.ErrnoException).code
+      if (code !== 'ESRCH') {
+        console.warn(
+          `[codex] could not signal the process group (${code ?? 'unknown'}); ` +
+            'falling back to the leader alone, and any children it started may survive',
+        )
       }
-    },
+      return child.kill(signal)
+    }
   }
 }
 
