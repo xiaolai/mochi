@@ -383,3 +383,54 @@ describe('a class the stylesheet styles is a class something creates', () => {
     expect(dead).toEqual([])
   })
 })
+
+/**
+ * A control put into a MODE the shared rule was not written for.
+ *
+ * `select` is styled here as a dropdown: `appearance: none` strips the native
+ * frame, a chevron is drawn in `background-image` at `top 50%`, and the border
+ * and fill are transparent at rest because a collapsed select always shows its
+ * value. Every one of those is right for a dropdown.
+ *
+ * `Hearing you` sets `multiple` and `size = 8`, and the same rules left an
+ * eight-row list box with NO frame at all — the native one removed, nothing
+ * drawn in its place — and a chevron floating in the middle of the rows
+ * pointing at nothing that opens. It rendered as unstyled text on the pane.
+ *
+ * Nothing failed. This is the case the mirror checks above cannot see and say
+ * so: real CSS, on a real element, with a real rule — made wrong by the
+ * element's MODE rather than by its name or its nesting.
+ *
+ * So the check is narrow and mechanical: if a renderer puts a `select` into
+ * `multiple`, the sheet has to say something about `select[multiple]`. It
+ * cannot judge whether what it says is right. It can refuse to let the rule be
+ * deleted while the control that needs it still exists, which is the half that
+ * failed here.
+ */
+describe('a select in `multiple` has a rule written for a list box', () => {
+  function makesAMultipleSelect(window: string): boolean {
+    const dir = fileURLToPath(new URL(`./${window}/`, import.meta.url))
+    const paths = sourcesUnder(dir)
+    if (window === 'history') {
+      paths.push(...sourcesUnder(fileURLToPath(new URL('./settings/', import.meta.url))))
+    }
+    return paths.some((path) => /\.multiple\s*=\s*true/.test(readFileSync(path, 'utf8')))
+  }
+
+  it('has something to check', () => {
+    // The guard on the guard: if the detector stops matching, every assertion
+    // below passes vacuously and reads exactly like a green test.
+    expect(WINDOWS.some((one) => makesAMultipleSelect(one))).toBe(true)
+  })
+
+  it.each(WINDOWS)('%s', (window) => {
+    if (!makesAMultipleSelect(window)) return
+    const written = selectorsOf(stylesheetOf(window)).some((one) =>
+      one.includes('select[multiple]'),
+    )
+    expect(
+      written,
+      'this window builds a `select` with `multiple`, which does not open and has no native frame once `appearance: none` lands on it — style it as a list box or it draws as unstyled text',
+    ).toBe(true)
+  })
+})

@@ -2223,6 +2223,42 @@
           5px 5px;
         background-repeat: no-repeat;
       }
+      /*
+        A LIST BOX is not a dropdown, and everything above is written for a
+        dropdown.
+
+        `Hearing you` asks which languages are spoken, and the answer is
+        genuinely plural — so that control is `multiple` with `size = 8`. Three
+        of the rules it inherits are wrong for that, and together they left it
+        with no visible box at all:
+
+        - `appearance: none` strips the native list frame. On a collapsed
+          select that frame is replaced by the border and fill below; on a list
+          box nothing replaced it.
+        - The border and background are TRANSPARENT at rest. That is the quiet
+          treatment, and `tokens.css` explains what it rests on — "the quiet
+          rule rests on there being something to read". A collapsed select
+          always shows its value. Eight rows with no frame are not a control.
+        - The chevron is drawn at `top 50%`, so on a tall list it floats in the
+          middle of the rows pointing at nothing that opens.
+
+        So: no chevron, no room reserved for one, and the box drawn at rest.
+      */
+      select[multiple] {
+        background-image: none;
+        padding-right: var(--s2);
+        border-color: var(--rule);
+        background-color: var(--paper);
+      }
+      /*
+        FOCUS is left exactly as it is for every other field: the fill without
+        the border, so the gold `:focus-visible` outline is not doubled by a
+        hairline a pixel inside it. Restated here only because the rule above
+        is later in the cascade at equal specificity and would otherwise win.
+      */
+      select[multiple]:focus {
+        border-color: transparent;
+      }
       .row {
         display: flex;
         flex-wrap: wrap;
