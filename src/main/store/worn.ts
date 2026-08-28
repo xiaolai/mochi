@@ -45,25 +45,13 @@ import { problems } from '../problems'
 const PREFERENCES = 'preferences.json'
 
 export function readWornPersonaId(userData: string): string | null {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) {
-    // Absent is the ordinary answer on a fresh install — nobody has chosen, so
-    // the caller falls back to the built-in. Anything else is worth a line.
-    if (read.reason.kind !== 'absent') {
-      console.warn(`[worn] ${logBoundedRead(read.reason)}`)
-    }
-    return null
-  }
-
-  let value: unknown
-  try {
-    value = JSON.parse(read.text)
-  } catch (error: unknown) {
-    console.warn('[worn] preferences.json is not valid JSON:', error)
-    return null
-  }
-
-  const found = (value as { activePersonaId?: unknown } | null)?.activePersonaId
+  // The ONE reader here that speaks. Absent is the ordinary answer on a fresh
+  // install — nobody has chosen, so the caller falls back to the built-in — and
+  // anything else is worth a line, because this decides which character the app
+  // is being.
+  const found = preferences(userData, (why) => {
+    console.warn(`[worn] ${why}`)
+  })?.['activePersonaId']
   // Validated rather than trusted. It becomes a lookup key and, downstream, a
   // path segment — the same reasoning `personas.ts` applies to a loose file's
   // stem, at the one line where a name turns into a location.
@@ -72,6 +60,50 @@ export function readWornPersonaId(userData: string): string | null {
     return null
   }
   return found
+}
+
+/**
+ * Everything in `preferences.json`, or null when there is nothing to read.
+ *
+ * ## Why one reader and not fourteen
+ *
+ * Every reader in this file did the same three things — a bounded read, a
+ * `JSON.parse` in a `try`, and one property off the result — and they had
+ * drifted apart in the fourth: what to do when the file is there and cannot be
+ * read. Most were silent, one warned, and nothing decided which was right; the
+ * divergence was an accident of who wrote which reader when.
+ *
+ * The mechanical part is here. The POLICY stays with each reader, because it
+ * genuinely differs: an unreadable halo preference fails toward the indicator
+ * existing, an unreadable language list falls back to detection, and an
+ * unreadable worn id is worth a line because it decides which character the app
+ * is. `say` is how a reader that wants to speak does, and the rest say nothing
+ * on purpose rather than by omission.
+ *
+ * ABSENT IS SILENT for everyone. A fresh install has no file, and a warning on
+ * every read of it would be noise about the ordinary state.
+ */
+function preferences(
+  userData: string,
+  say?: (why: string) => void,
+): Record<string, unknown> | null {
+  const read = readBounded(join(userData, PREFERENCES))
+  if (!read.ok) {
+    if (read.reason.kind !== 'absent') say?.(logBoundedRead(read.reason))
+    return null
+  }
+  try {
+    const value: unknown = JSON.parse(read.text)
+    // An array is an object to `typeof` and is not a settings file.
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      say?.('preferences.json does not hold a set of settings')
+      return null
+    }
+    return value as Record<string, unknown>
+  } catch (error: unknown) {
+    say?.(`preferences.json is not valid JSON: ${String(error)}`)
+    return null
+  }
 }
 
 /**
@@ -219,21 +251,14 @@ export interface Resting {
 }
 
 export function readResting(userData: string): Resting {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return { asleep: false, hidden: false }
-  try {
-    const value: unknown = JSON.parse(read.text)
-    const found = value as { asleep?: unknown; hidden?: unknown } | null
-    return {
-      // Anything that is not literally `true` means awake and visible. That is
-      // the direction a wrong guess should fail in: a companion that is present
-      // and listening can be told to stop, and one that is neither cannot be
-      // told anything.
-      asleep: found?.asleep === true,
-      hidden: found?.hidden === true,
-    }
-  } catch {
-    return { asleep: false, hidden: false }
+  const found = preferences(userData)
+  return {
+    // Anything that is not literally `true` means awake and visible. That is
+    // the direction a wrong guess should fail in: a companion that is present
+    // and listening can be told to stop, and one that is neither cannot be
+    // told anything.
+    asleep: found?.['asleep'] === true,
+    hidden: found?.['hidden'] === true,
   }
 }
 
@@ -351,18 +376,11 @@ export const WORKSPACE_DIR = 'workspace'
 
 export function readWorkspace(userData: string): string {
   const fallback = join(userData, WORKSPACE_DIR)
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return fallback
-  try {
-    const value: unknown = JSON.parse(read.text)
-    const found = (value as { workspace?: unknown } | null)?.workspace
-    // Absolute only. A relative path would be resolved against whatever the
-    // process happens to consider its working directory, which for a packaged
-    // app is `/`.
-    return typeof found === 'string' && found.startsWith('/') ? found : fallback
-  } catch {
-    return fallback
-  }
+  const found = preferences(userData)?.['workspace']
+  // Absolute only. A relative path would be resolved against whatever the
+  // process happens to consider its working directory, which for a packaged
+  // app is `/`.
+  return typeof found === 'string' && found.startsWith('/') ? found : fallback
 }
 
 /** What a lookup setting may be changed to. Absent means unchanged. */
@@ -500,15 +518,8 @@ export function guardStopAt(userData: string, workspace: string, home = homedir(
  * a decision made out of not having looked.
  */
 export function readWebSearch(userData: string): WebSearchMode {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return 'follow'
-  try {
-    const value: unknown = JSON.parse(read.text)
-    const found = (value as { webSearch?: unknown } | null)?.webSearch
-    return isWebSearchMode(found) ? found : 'follow'
-  } catch {
-    return 'follow'
-  }
+  const found = preferences(userData)?.['webSearch']
+  return isWebSearchMode(found) ? found : 'follow'
 }
 
 /**
@@ -534,17 +545,10 @@ export function isProfileName(value: unknown): value is string {
 }
 
 export function readProfile(userData: string): string | null {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return null
-  try {
-    const value: unknown = JSON.parse(read.text)
-    const found = (value as { codexProfile?: unknown } | null)?.codexProfile
-    // Checked on the way OUT as well as in. This file is hand-editable, and a
-    // name that failed the grammar would otherwise become an argument.
-    return isProfileName(found) ? found : null
-  } catch {
-    return null
-  }
+  const found = preferences(userData)?.['codexProfile']
+  // Checked on the way OUT as well as in. This file is hand-editable, and a
+  // name that failed the grammar would otherwise become an argument.
+  return isProfileName(found) ? found : null
 }
 
 /**
@@ -578,15 +582,8 @@ export function isSleepAfterMinutes(value: unknown): value is number {
 }
 
 export function readSleepAfterMinutes(userData: string): number {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return DEFAULT_SLEEP_AFTER_MINUTES
-  try {
-    const value: unknown = JSON.parse(read.text)
-    const found = (value as { sleepAfterMinutes?: unknown } | null)?.sleepAfterMinutes
-    return isSleepAfterMinutes(found) ? found : DEFAULT_SLEEP_AFTER_MINUTES
-  } catch {
-    return DEFAULT_SLEEP_AFTER_MINUTES
-  }
+  const found = preferences(userData)?.['sleepAfterMinutes']
+  return isSleepAfterMinutes(found) ? found : DEFAULT_SLEEP_AFTER_MINUTES
 }
 
 /**
@@ -627,13 +624,11 @@ export function readSleepAfterMinutes(userData: string): number {
  * moved to `Persona.bubbleSide`.
  */
 export function readHaloWhen(userData: string): HaloWhen {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return 'always'
-  try {
-    const value: unknown = JSON.parse(read.text)
-    const found = (value as { haloWhen?: unknown } | null)?.haloWhen
-    if (isHaloWhen(found)) return found
-    /*
+  // A file that cannot be read fails toward the indicator existing.
+  const held = preferences(userData)
+  const found = held?.['haloWhen']
+  if (isHaloWhen(found)) return found
+  /*
       The OLD key, honoured rather than ignored.
 
       This was `haloAtRest: boolean`, and `false` meant exactly what
@@ -646,13 +641,9 @@ export function readHaloWhen(userData: string): HaloWhen {
       migrated on the next write of the new one and the file converges without a
       migration step that has to run exactly once.
     */
-    const old = (value as { haloAtRest?: unknown } | null)?.haloAtRest
-    if (old === false) return 'listening'
-    return 'always'
-  } catch {
-    // A file that cannot be read fails toward the indicator existing.
-    return 'always'
-  }
+  const old = held?.['haloAtRest']
+  if (old === false) return 'listening'
+  return 'always'
 }
 
 /**
@@ -664,17 +655,10 @@ export function readHaloWhen(userData: string): HaloWhen {
  * carried onto their characters rather than silently reset.
  */
 export function readLegacyBubbleSide(userData: string): BubbleSide {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return 'auto'
-  try {
-    const value: unknown = JSON.parse(read.text)
-    const found = (value as { bubbleSide?: unknown } | null)?.bubbleSide
-    return typeof found === 'string' && (BUBBLE_SIDES as readonly string[]).includes(found)
-      ? (found as BubbleSide)
-      : 'auto'
-  } catch {
-    return 'auto'
-  }
+  const found = preferences(userData)?.['bubbleSide']
+  return typeof found === 'string' && (BUBBLE_SIDES as readonly string[]).includes(found)
+    ? (found as BubbleSide)
+    : 'auto'
 }
 
 /**
@@ -743,18 +727,11 @@ export function markBubbleSideMigrated(userData: string): void {
  * is a fact about this screen and this desk, not about who is being worn.
  */
 export function readShoulderChip(userData: string): boolean {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return true
-  try {
-    const value: unknown = JSON.parse(read.text)
-    const found = (value as { shoulderChip?: unknown } | null)?.shoulderChip
-    // Shown unless somebody has said otherwise, and a file that cannot be read
-    // fails toward the control existing — the same direction as the halo, and
-    // for the plainer reason that a missing button looks like a broken app.
-    return found !== false
-  } catch {
-    return true
-  }
+  const found = preferences(userData)?.['shoulderChip']
+  // Shown unless somebody has said otherwise, and a file that cannot be read
+  // fails toward the control existing — the same direction as the halo, and for
+  // the plainer reason that a missing button looks like a broken app.
+  return found !== false
 }
 
 /** What a screen setting may be changed to. Absent means unchanged. */
@@ -822,19 +799,10 @@ export function writeScreen(userData: string, change: ScreenWrite): void {
  * make the control mean something different the first time somebody switched.
  */
 export function readTranscriptionLanguages(userData: string): readonly string[] {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return []
-  try {
-    const value: unknown = JSON.parse(read.text)
-    return readLanguages(
-      (value as { transcriptionLanguages?: unknown } | null)?.transcriptionLanguages,
-    )
-  } catch {
-    // Unreadable falls back to detection rather than to a guess, which is the
-    // same direction every other reader here fails in: when the answer cannot
-    // be established, nothing is claimed.
-    return []
-  }
+  // Unreadable falls back to detection rather than to a guess, which is the
+  // same direction every other reader here fails in: when the answer cannot be
+  // established, nothing is claimed.
+  return readLanguages(preferences(userData)?.['transcriptionLanguages'])
 }
 
 export function writeTranscriptionLanguages(userData: string, codes: readonly string[]): void {
@@ -890,28 +858,21 @@ export interface Place {
 }
 
 function readPlaceKey(userData: string, key: 'herPlace' | 'shelfPlace'): Place | null {
-  const read = readBounded(join(userData, PREFERENCES))
-  if (!read.ok) return null
-  try {
-    const value: unknown = JSON.parse(read.text)
-    const found = (value as Record<string, unknown> | null)?.[key]
-    if (typeof found !== 'object' || found === null) return null
-    const { x, y, width, height } = found as Record<string, unknown>
-    // Finite integers only. `setPosition` throws on a fractional value, and a
-    // NaN out of a hand-edited file would put her at an origin no display has.
-    if (!Number.isInteger(x) || !Number.isInteger(y)) return null
-    // A zero or negative size is not a small window, it is an unusable one —
-    // and as a BODY it would make the pad arithmetic above her meaningless.
-    if (!Number.isInteger(width) || !Number.isInteger(height)) return null
-    if ((width as number) < 1 || (height as number) < 1) return null
-    return {
-      x: x as number,
-      y: y as number,
-      width: width as number,
-      height: height as number,
-    }
-  } catch {
-    return null
+  const found = preferences(userData)?.[key]
+  if (typeof found !== 'object' || found === null) return null
+  const { x, y, width, height } = found as Record<string, unknown>
+  // Finite integers only. `setPosition` throws on a fractional value, and a
+  // NaN out of a hand-edited file would put her at an origin no display has.
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return null
+  // A zero or negative size is not a small window, it is an unusable one — and
+  // as a BODY it would make the pad arithmetic above her meaningless.
+  if (!Number.isInteger(width) || !Number.isInteger(height)) return null
+  if ((width as number) < 1 || (height as number) < 1) return null
+  return {
+    x: x as number,
+    y: y as number,
+    width: width as number,
+    height: height as number,
   }
 }
 
