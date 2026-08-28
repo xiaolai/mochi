@@ -1,34 +1,32 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { HALO_WHEN } from '@shared/ipc'
 import {
-  readResting,
-  readWornPersonaId,
-  writeResting,
-  writeWornPersonaId,
-  isProfileName,
-  readProfile,
-  writeProfile,
-  readSleepAfterMinutes,
-  writeSleepAfterMinutes,
   DEFAULT_SLEEP_AFTER_MINUTES,
+  V1_KEYS,
   bubbleSideMigrated,
+  guardStopAt,
+  isProfileName,
   markBubbleSideMigrated,
   readHaloWhen,
-  readLegacyBubbleSide,
-  writeHaloWhen,
-  readShoulderChip,
-  writeShoulderChip,
-  readTranscriptionLanguages,
-  writeTranscriptionLanguages,
   readHerPlace,
-  writeHerPlace,
+  readLegacyBubbleSide,
+  readProfile,
+  readResting,
   readShelfPlace,
+  readShoulderChip,
+  readSleepAfterMinutes,
+  readTranscriptionLanguages,
+  readWornPersonaId,
+  writeHerPlace,
+  writeLookup,
+  writeResting,
+  writeScreen,
   writeShelfPlace,
-  V1_KEYS,
-  guardStopAt,
+  writeTranscriptionLanguages,
+  writeWornPersonaId,
 } from './worn'
 
 let userData = ''
@@ -154,7 +152,7 @@ describe('how she was left', () => {
     // Two writers into one file. A second that wrote only its own key would
     // silently drop the first one's — which is somebody's persona.
     writeWornPersonaId(userData, 'loki')
-    writeShoulderChip(userData, false)
+    writeScreen(userData, { shoulderChip: false })
     writeResting(userData, { asleep: true })
     expect(readWornPersonaId(userData)).toBe('loki')
     expect(readShoulderChip(userData)).toBe(false)
@@ -169,9 +167,9 @@ describe('the Codex profile', () => {
   })
 
   it('round-trips a name, and clears it again', () => {
-    writeProfile(userData, 'mochi')
+    writeLookup(userData, { profile: 'mochi' })
     expect(readProfile(userData)).toBe('mochi')
-    writeProfile(userData, null)
+    writeLookup(userData, { profile: null })
     expect(readProfile(userData)).toBeNull()
   })
 
@@ -181,7 +179,7 @@ describe('the Codex profile', () => {
     // `memoryPath` refuses an id that has not passed the persona grammar.
     for (const bad of ['../escape', 'a/b', '/absolute', '.', '..', 'Mochi', 'has space', '']) {
       expect(isProfileName(bad), bad).toBe(false)
-      expect(() => writeProfile(userData, bad), bad).toThrow()
+      expect(() => writeLookup(userData, { profile: bad }), bad).toThrow()
     }
   })
 
@@ -202,7 +200,7 @@ describe('when she rests on her own', () => {
   })
 
   it('keeps zero, which is the one value that is not a duration', () => {
-    writeSleepAfterMinutes(userData, 0)
+    writeScreen(userData, { sleepAfterMinutes: 0 })
     expect(readSleepAfterMinutes(userData)).toBe(0)
   })
 
@@ -210,10 +208,10 @@ describe('when she rests on her own', () => {
     // Clamping would store a number nobody chose and show it back as though
     // they had. The caller sees the throw; the file keeps what it had.
     expect(() => {
-      writeSleepAfterMinutes(userData, 90)
+      writeScreen(userData, { sleepAfterMinutes: 90 })
     }).toThrow()
     expect(() => {
-      writeSleepAfterMinutes(userData, 2.5)
+      writeScreen(userData, { sleepAfterMinutes: 2.5 })
     }).toThrow()
   })
 
@@ -237,13 +235,13 @@ describe('when the halo is drawn', () => {
   })
 
   it.each([...HALO_WHEN])('round-trips %s', (when) => {
-    writeHaloWhen(userData, when)
+    writeScreen(userData, { halo: when })
     expect(readHaloWhen(userData)).toBe(when)
   })
 
   it('refuses to store an answer nothing can honour', () => {
     expect(() => {
-      writeHaloWhen(userData, 'sometimes' as never)
+      writeScreen(userData, { halo: 'sometimes' as never })
     }).toThrow()
   })
 
@@ -284,9 +282,9 @@ describe('whether the control at her shoulder is offered', () => {
   })
 
   it('round-trips a deliberate no', () => {
-    writeShoulderChip(userData, false)
+    writeScreen(userData, { shoulderChip: false })
     expect(readShoulderChip(userData)).toBe(false)
-    writeShoulderChip(userData, true)
+    writeScreen(userData, { shoulderChip: true })
     expect(readShoulderChip(userData)).toBe(true)
   })
 
@@ -294,8 +292,8 @@ describe('whether the control at her shoulder is offered', () => {
     // One file holds all of them and `writeMerged` is what keeps that true.
     // A write that replaced the object would turn the halo back on for anybody
     // who had switched it off, which is a preference silently reverting.
-    writeHaloWhen(userData, 'never')
-    writeShoulderChip(userData, false)
+    writeScreen(userData, { halo: 'never' })
+    writeScreen(userData, { shoulderChip: false })
     expect(readHaloWhen(userData)).toBe('never')
     expect(readShoulderChip(userData)).toBe(false)
   })
@@ -345,7 +343,7 @@ describe('which languages she should expect to hear', () => {
   })
 
   it('does not disturb the other preferences in the same file', () => {
-    writeHaloWhen(userData, 'never')
+    writeScreen(userData, { halo: 'never' })
     writeTranscriptionLanguages(userData, ['ja'])
     expect(readHaloWhen(userData)).toBe('never')
     expect(readTranscriptionLanguages(userData)).toEqual(['ja'])
@@ -454,7 +452,7 @@ describe('carrying the old bubble side over', () => {
     // the pass run again — the failure it exists to prevent.
     markBubbleSideMigrated(userData)
     writeWornPersonaId(userData, 'loki')
-    writeShoulderChip(userData, false)
+    writeScreen(userData, { shoulderChip: false })
     expect(bubbleSideMigrated(userData)).toBe(true)
     expect(readWornPersonaId(userData)).toBe('loki')
   })
@@ -589,5 +587,61 @@ describe('writing over a preferences file that cannot be read', () => {
     expect(after.asleep).toBe(true)
     expect(after.sound).toBe('kept')
     rmSync(home, { recursive: true, force: true })
+  })
+})
+
+/**
+ * Several settings changed at once, and one of them refused.
+ *
+ * The pane can move all three lookup settings — or all three screen settings —
+ * in one save, and the handlers wrote them ONE AT A TIME. They all land in
+ * `preferences.json`, so a failure on the second or third left the earlier ones
+ * on disk while the handler answered that nothing was saved.
+ *
+ * The screen case was worse: each write was followed by a `tellCompanion`, so
+ * the halo was redrawn to a value the pane was about to report as not applied.
+ *
+ * One file, one write. Everything is checked first and the merge happens once,
+ * so the whole change lands or none of it does.
+ */
+describe('a change that carries several settings', () => {
+  function stored(): Record<string, unknown> {
+    const path = join(userData, 'preferences.json')
+    return existsSync(path)
+      ? (JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>)
+      : {}
+  }
+
+  it('writes NOTHING when a later lookup value is refused', () => {
+    expect(() =>
+      writeLookup(userData, { workspace: '/somewhere', profile: 'not a name' }),
+    ).toThrow()
+    expect(stored()['workspace'], 'the earlier value landed anyway').toBeUndefined()
+  })
+
+  it('writes NOTHING when a later screen value is refused', () => {
+    expect(() => writeScreen(userData, { shoulderChip: false, sleepAfterMinutes: 2.5 })).toThrow()
+    expect(stored()['shoulderChip'], 'the earlier value landed anyway').toBeUndefined()
+  })
+
+  it('CONTROL: writes all of them when every value is good', () => {
+    // Without this, the two above pass for a writer that never writes.
+    writeLookup(userData, { workspace: '/somewhere', webSearch: 'live', profile: 'mochi' })
+    writeScreen(userData, { halo: 'always', shoulderChip: false, sleepAfterMinutes: 5 })
+    expect(stored()).toMatchObject({
+      workspace: '/somewhere',
+      webSearch: 'live',
+      codexProfile: 'mochi',
+      haloWhen: 'always',
+      shoulderChip: false,
+      sleepAfterMinutes: 5,
+    })
+  })
+
+  it('does not rewrite the file for a change that asks for nothing', () => {
+    // An empty merge is a write with nothing to gain and a chance to fail.
+    writeLookup(userData, {})
+    writeScreen(userData, {})
+    expect(existsSync(join(userData, 'preferences.json'))).toBe(false)
   })
 })

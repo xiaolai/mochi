@@ -70,9 +70,8 @@ import {
   readWebSearch,
   readWorkspace,
   readProfile,
-  writeWorkspace,
-  writeWebSearch,
-  writeProfile,
+  writeLookup,
+  writeScreen,
   isProfileName,
   WORKSPACE_DIR,
   guardStopAt,
@@ -80,11 +79,8 @@ import {
   writeResting,
   writeWornPersonaId,
   readSleepAfterMinutes,
-  writeSleepAfterMinutes,
   readHaloWhen,
-  writeHaloWhen,
   readShoulderChip,
-  writeShoulderChip,
   readTranscriptionLanguages,
   writeTranscriptionLanguages,
   writeHerPlace,
@@ -2941,6 +2937,27 @@ ipcMain.handle('shelf:save', (_event, change: unknown): SettingsWrite => {
     reverse order fails the safer way round only for a change that carries
     both, and this one usually carries only the switch.
   */
+  /*
+    CHECKED BEFORE ANYTHING IS WRITTEN.
+
+    `applyChange` is pure — it validates and returns, touching no file — and it
+    ran AFTER the policy write. So a change carrying both a retention switch and
+    an edit this refuses (a name too long, a voice that does not exist) changed
+    the retention setting and then answered that nothing was saved. Somebody
+    would have gone back to the pane, seen the switch where they left it because
+    the pane redraws from a stale view, and never learned it had moved.
+
+    Moving it up costs nothing and removes the case. The policy still goes
+    before the manifest, which is the ordering the comment below argues for and
+    a different question: that one is about a WRITE failing, and this is about a
+    change that was never valid.
+  */
+  const avatars = listAvatars(avatarsRoot(userData))
+    .map((one) => one.id)
+    .filter((one): one is string => one !== null)
+  const changed = applyChange(persona, asked, avatars)
+  if (!changed.ok) return refuse(changed.why)
+
   if (typeof asked.keeps === 'boolean') {
     try {
       writePolicy(userData, asked.id, { keeps: asked.keeps })
@@ -2954,12 +2971,6 @@ ipcMain.handle('shelf:save', (_event, change: unknown): SettingsWrite => {
       return refuse(String(error))
     }
   }
-
-  const avatars = listAvatars(avatarsRoot(userData))
-    .map((one) => one.id)
-    .filter((one): one is string => one !== null)
-  const changed = applyChange(persona, asked, avatars)
-  if (!changed.ok) return refuse(changed.why)
 
   try {
     const written = savePersonaTo(userData, catalog, changed.persona)
@@ -3007,11 +3018,16 @@ function saveLookup(change: unknown): SettingsWrite {
 
   const userData = app.getPath('userData')
   try {
-    if (asked.change.workspace !== undefined) writeWorkspace(userData, asked.change.workspace)
-    if (asked.change.webSearch !== undefined) {
-      writeWebSearch(userData, asked.change.webSearch)
-    }
-    if (asked.change.profile !== undefined) writeProfile(userData, asked.change.profile)
+    /*
+      ONE WRITE, where this was three in a row.
+
+      All three land in `preferences.json`, so a failure on the third left the
+      first two ON DISK while this answered that nothing was saved — and the
+      pane redrew from a stale view, showing the old values over a file that
+      held the new ones. `writeLookup` checks everything first and merges once,
+      so the whole change lands or none of it does.
+    */
+    writeLookup(userData, asked.change)
   } catch (error: unknown) {
     // Loud, and reported where somebody will see it. A setting that silently
     // did not land is the failure this window exists to remove.
@@ -3650,13 +3666,24 @@ ipcMain.handle('settings:screen', (_event, change: unknown): SettingsWrite => {
   const asked = applyScreen(change)
   if (!asked.ok) return refuse(asked.why)
 
+  /*
+    ONE WRITE, then the side effects — where this was three writes with a
+    `tellCompanion` between them.
+
+    All three land in `preferences.json`, so a failure on the second left the
+    first ON DISK and already SENT to her window while this answered that
+    nothing was saved: the halo redrawn to a value the pane was about to report
+    as not applied. The side effects now happen only once the whole change is
+    stored, so what is on screen and what is on disk cannot disagree.
+  */
+  try {
+    writeScreen(app.getPath('userData'), asked.change)
+  } catch (error: unknown) {
+    return refuse(`That could not be saved: ${String(error)}`)
+  }
+
   if (asked.change.halo !== undefined) {
     const when = asked.change.halo
-    try {
-      writeHaloWhen(app.getPath('userData'), when)
-    } catch (error: unknown) {
-      return refuse(`That could not be saved: ${String(error)}`)
-    }
     // Straight through to her window, because she is on screen while somebody
     // operates this control — the same argument the bubble's side makes.
     tellCompanion({ type: '__mochi_halo__', when })
@@ -3665,11 +3692,6 @@ ipcMain.handle('settings:screen', (_event, change: unknown): SettingsWrite => {
 
   if (asked.change.shoulderChip !== undefined) {
     const shown = asked.change.shoulderChip
-    try {
-      writeShoulderChip(app.getPath('userData'), shown)
-    } catch (error: unknown) {
-      return refuse(`That could not be saved: ${String(error)}`)
-    }
     // Straight through to her window, like the halo: somebody operating this
     // switch is looking at her, and a control that waits for a relaunch to
     // disappear reads as a switch that did nothing.
@@ -3679,11 +3701,6 @@ ipcMain.handle('settings:screen', (_event, change: unknown): SettingsWrite => {
 
   if (asked.change.sleepAfterMinutes !== undefined) {
     const minutes = asked.change.sleepAfterMinutes
-    try {
-      writeSleepAfterMinutes(app.getPath('userData'), minutes)
-    } catch (error: unknown) {
-      return refuse(`That could not be saved: ${String(error)}`)
-    }
     // Re-armed against the NEW value rather than left to expire on the old one.
     // Without this, shortening the timeout takes effect one timeout later,
     // which is the one moment somebody is watching for it to work.

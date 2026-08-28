@@ -365,9 +365,56 @@ export function readWorkspace(userData: string): string {
   }
 }
 
-export function writeWorkspace(userData: string, path: string): void {
-  if (!path.startsWith('/')) throw new Error(`a workspace must be an absolute path: ${path}`)
-  writeMerged(userData, { workspace: path })
+/** What a lookup setting may be changed to. Absent means unchanged. */
+export interface LookupWrite {
+  readonly workspace?: string
+  readonly webSearch?: WebSearchMode
+  readonly profile?: string | null
+}
+
+/**
+ * Every lookup setting somebody changed, in ONE write.
+ *
+ * ## Why one, and not three calls in a row
+ *
+ * The pane can change all three at once, and `saveLookup` wrote them one after
+ * another. They all land in `preferences.json` through `writeMerged`, so a
+ * failure on the third left the first two ON DISK while the handler answered
+ * that nothing was saved — and the pane redrew from a stale view, showing the
+ * old values over a file that held the new ones.
+ *
+ * That is not a case for compensating writes. It is one file and one write:
+ * every value is checked first, and then the merge happens once, so the whole
+ * change lands or none of it does. `writeJsonAtomically` gives the rest.
+ *
+ * The three single-setting writers delegate here so the rules stay in one
+ * place — a second copy of "a workspace must be absolute" is how the pane and
+ * the store come to disagree about what is allowed.
+ */
+export function writeLookup(userData: string, change: LookupWrite): void {
+  const next: Record<string, unknown> = {}
+  if (change.workspace !== undefined) {
+    if (!change.workspace.startsWith('/')) {
+      throw new Error(`a workspace must be an absolute path: ${change.workspace}`)
+    }
+    next['workspace'] = change.workspace
+  }
+  if (change.webSearch !== undefined) {
+    if (!isWebSearchMode(change.webSearch)) {
+      throw new Error(`not a web search mode: ${String(change.webSearch)}`)
+    }
+    next['webSearch'] = change.webSearch
+  }
+  if (change.profile !== undefined) {
+    if (change.profile !== null && !isProfileName(change.profile)) {
+      throw new Error(`not a usable profile name: ${JSON.stringify(change.profile)}`)
+    }
+    next['codexProfile'] = change.profile
+  }
+  // Nothing asked for is not a write. Merging an empty object would rewrite the
+  // file for no reason, which is a chance to fail with nothing to gain.
+  if (Object.keys(next).length === 0) return
+  writeMerged(userData, next)
 }
 
 /**
@@ -441,11 +488,6 @@ export function readWebSearch(userData: string): WebSearchMode {
   }
 }
 
-export function writeWebSearch(userData: string, mode: WebSearchMode): void {
-  if (!isWebSearchMode(mode)) throw new Error(`not a web search mode: ${String(mode)}`)
-  writeMerged(userData, { webSearch: mode })
-}
-
 /**
  * The Codex profile a lookup runs under, or null for none.
  *
@@ -480,13 +522,6 @@ export function readProfile(userData: string): string | null {
   } catch {
     return null
   }
-}
-
-export function writeProfile(userData: string, name: string | null): void {
-  if (name !== null && !isProfileName(name)) {
-    throw new Error(`not a usable profile name: ${JSON.stringify(name)}`)
-  }
-  writeMerged(userData, { codexProfile: name })
 }
 
 /**
@@ -529,13 +564,6 @@ export function readSleepAfterMinutes(userData: string): number {
   } catch {
     return DEFAULT_SLEEP_AFTER_MINUTES
   }
-}
-
-export function writeSleepAfterMinutes(userData: string, minutes: number): void {
-  if (!isSleepAfterMinutes(minutes)) {
-    throw new Error(`not a usable idle timeout: ${JSON.stringify(minutes)}`)
-  }
-  writeMerged(userData, { sleepAfterMinutes: minutes })
 }
 
 /**
@@ -602,11 +630,6 @@ export function readHaloWhen(userData: string): HaloWhen {
     // A file that cannot be read fails toward the indicator existing.
     return 'always'
   }
-}
-
-export function writeHaloWhen(userData: string, when: HaloWhen): void {
-  if (!isHaloWhen(when)) throw new Error(`not a time the halo can be drawn: ${when}`)
-  writeMerged(userData, { haloWhen: when })
 }
 
 /**
@@ -711,8 +734,43 @@ export function readShoulderChip(userData: string): boolean {
   }
 }
 
-export function writeShoulderChip(userData: string, shown: boolean): void {
-  writeMerged(userData, { shoulderChip: shown })
+/** What a screen setting may be changed to. Absent means unchanged. */
+export interface ScreenWrite {
+  readonly halo?: HaloWhen
+  readonly shoulderChip?: boolean
+  readonly sleepAfterMinutes?: number
+}
+
+/**
+ * Every screen setting somebody changed, in ONE write. See `writeLookup`.
+ *
+ * The pane can change all three at once and `settings:screen` wrote them one at
+ * a time, each with its own refusal — so a failure on the second left the first
+ * ON DISK and, worse, already SENT to her window, while the handler answered
+ * that nothing was saved. The halo would be redrawn to a value the pane was
+ * about to tell somebody had not been applied.
+ *
+ * They all land in `preferences.json`, so this is one file and one write: every
+ * value is checked first, the merge happens once, and the caller does its side
+ * effects afterwards knowing the whole change is on disk.
+ */
+export function writeScreen(userData: string, change: ScreenWrite): void {
+  const next: Record<string, unknown> = {}
+  if (change.halo !== undefined) {
+    if (!isHaloWhen(change.halo)) {
+      throw new Error(`not a time the halo can be drawn: ${change.halo}`)
+    }
+    next['haloWhen'] = change.halo
+  }
+  if (change.shoulderChip !== undefined) next['shoulderChip'] = change.shoulderChip
+  if (change.sleepAfterMinutes !== undefined) {
+    if (!isSleepAfterMinutes(change.sleepAfterMinutes)) {
+      throw new Error(`not a usable idle timeout: ${JSON.stringify(change.sleepAfterMinutes)}`)
+    }
+    next['sleepAfterMinutes'] = change.sleepAfterMinutes
+  }
+  if (Object.keys(next).length === 0) return
+  writeMerged(userData, next)
 }
 
 /**

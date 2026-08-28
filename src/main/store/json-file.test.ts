@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { writeJsonAtomically } from './json-file'
-import { readWebSearch, readWorkspace, writeWebSearch, writeWorkspace } from './worn'
+import { readWebSearch, readWorkspace, writeLookup } from './worn'
 
 // Real files, not a mocked filesystem. Everything this module exists for is a
 // property of an actual write — that a rename replaces atomically, that a
@@ -79,9 +79,9 @@ describe('the store that shares this, with both ends real', () => {
   })
 
   it('round-trips a preference through the real writer and the real reader', () => {
-    // Neither end is a stub: `writeWorkspace` writes through
+    // Neither end is a stub: `writeLookup` writes through
     // `writeJsonAtomically` and `readWorkspace` reads through `readBounded`.
-    writeWorkspace(userData, '/somewhere/a person picked')
+    writeLookup(userData, { workspace: '/somewhere/a person picked' })
     expect(readWorkspace(userData)).toBe('/somewhere/a person picked')
   })
 
@@ -89,8 +89,8 @@ describe('the store that shares this, with both ends real', () => {
     // The merge is the part an isolated helper test cannot see: each writer
     // read-modify-writes the same file, so a helper that replaced rather than
     // merged would pass every case above and silently drop a setting here.
-    writeWorkspace(userData, '/first')
-    writeWebSearch(userData, 'live')
+    writeLookup(userData, { workspace: '/first' })
+    writeLookup(userData, { webSearch: 'live' })
     expect(readWorkspace(userData)).toBe('/first')
     expect(readWebSearch(userData)).toBe('live')
   })
@@ -103,14 +103,14 @@ describe('the store that shares this, with both ends real', () => {
       come back as themselves through JSON and the atomic rename.
     */
     const awkward = '/tmp/a "quoted"\\path\nwith a newline and \u{1F642}'
-    writeWorkspace(userData, awkward)
+    writeLookup(userData, { workspace: awkward })
     expect(readWorkspace(userData)).toBe(awkward)
   })
 
   it('writes a file that is valid JSON on disk, not merely readable back', () => {
     // Round-tripping through one implementation would pass even if it wrote
     // something only it could read. The file is parsed independently here.
-    writeWorkspace(userData, '/checked')
+    writeLookup(userData, { workspace: '/checked' })
     const raw = readFileSync(join(userData, 'preferences.json'), 'utf8')
     expect(JSON.parse(raw)).toMatchObject({ workspace: '/checked' })
   })
