@@ -237,6 +237,40 @@ export function isPersonaId(value: unknown): value is string {
 const PERSONA_FIELDS: ReadonlySet<string> = new Set(Object.keys(DEFAULT_PERSONA))
 
 /**
+ * When each field STARTED being ours.
+ *
+ * The mirror of `RETIRED_AT`, and it was missing. `PERSONA_FIELDS` is one flat
+ * set of every key this build knows, so a manifest declaring `version: 3` and
+ * carrying `faces` was accepted — while `readFaces`'s own docblock says the
+ * opposite in as many words: *"A new key cannot be carried by an older file at
+ * all: `faces` in a v3 manifest is an unknown field and is refused, which is
+ * the correct answer."* A comment describing a guard that does not exist.
+ *
+ * It matters for the reason `RETIRED_AT` gives about `keeps`, in the other
+ * direction: a field the claimed build never wrote, arriving in a package,
+ * is a package author reaching into a part of the format their file says it
+ * predates. `faces` decides what her prompt tells her she can do.
+ *
+ * ONE NUMBER PER FIELD, for the reason stated there too. A shared
+ * `version < PERSONA_FORMAT` gate would refuse every current field in every
+ * older file, which is the opposite mistake.
+ *
+ * A field added later needs a line here, and the format doc already requires
+ * the bump that goes with it: "Bumped for any change an OLDER build would
+ * misread, and adding a field is one of them."
+ */
+const ARRIVED_AT = {
+  /** The declared expression allowlist. See `readFaces`. */
+  faces: 4,
+} as const satisfies Record<string, number>
+
+/** Whether this field had not been invented yet when the file claims to be from. */
+function notYet(key: string, version: number): boolean {
+  const at = (ARRIVED_AT as Record<string, number | undefined>)[key]
+  return at !== undefined && version < at
+}
+
+/**
  * Was this field still ours when the file was written?
  *
  * Fields that USED to live in a manifest are tolerated so old files still load.
@@ -540,7 +574,11 @@ export function parsePersona(value: unknown): PersonaParse {
   // are exempt because they were ours until recently -- see `retired`, which
   // exempts each one only in a file written before IT was retired.
   for (const key of Object.keys(source)) {
-    if (!PERSONA_FIELDS.has(key) && !retired(key, version)) {
+    // Known means "this build has it AND the file is new enough to". See
+    // `ARRIVED_AT`: a v3 manifest carrying `faces` is claiming a field its own
+    // declared format predates.
+    const known = PERSONA_FIELDS.has(key) && !notYet(key, version)
+    if (!known && !retired(key, version)) {
       problems.push({ kind: 'unknown-field', field: key })
     }
   }

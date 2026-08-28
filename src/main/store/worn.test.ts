@@ -495,6 +495,40 @@ describe('how far up the workspace guard walks', () => {
     )
   })
 
+  it('does not take a SIBLING of the app workspace for the app workspace', () => {
+    // `startsWith` on the raw string matched `<userData>/workspace-copy`, which
+    // is beside the app's own folder and not inside it. Survivable — `userData`
+    // is still an ancestor — and still the app-owned rule applied to a folder
+    // that is not.
+    const beside = join(userData, 'workspace-copy')
+    expect(guardStopAt(userData, beside, home)).not.toBe(userData)
+  })
+
+  it('does not take a path that LEAVES the app workspace for one inside it', () => {
+    /*
+      The one that is not survivable. `<userData>/workspace/../../tmp` passed
+      the raw prefix test and resolves outside the data directory entirely, so
+      `userData` was handed to `chain` as the stop point — and `chain` walks to
+      `/` looking for an ancestor that is not there and throws. A lookup pointed
+      at a path spelled that way failed with a message about ancestry instead of
+      being guarded.
+    */
+    // Built by CONCATENATION, not `join`. `join` normalises, so a path written
+    // with `join(userData, 'workspace', '..', '..', 'tmp')` never had the
+    // prefix in the first place and the test would pass against the defect —
+    // mutation testing caught that. The string has to arrive un-normalised,
+    // which is exactly how it arrives from a settings file somebody edited.
+    const away = `${join(userData, 'workspace')}/../../tmp`
+    expect(guardStopAt(userData, away, home)).not.toBe(userData)
+  })
+
+  it('CONTROL: a path really inside the app workspace still stops at userData', () => {
+    // Without this the two above pass for a check that never matches at all,
+    // which would take the app's own scratch workspace out of the rule.
+    expect(guardStopAt(userData, join(userData, 'workspace'), home)).toBe(userData)
+    expect(guardStopAt(userData, join(userData, 'workspace', 'deep'), home)).toBe(userData)
+  })
+
   it('stops below home however deep the workspace is', () => {
     expect(guardStopAt(userData, '/Users/somebody/a/b/c/d', home)).toBe('/Users/somebody/a')
   })

@@ -1034,9 +1034,11 @@ describe('the format version, which unknown-field rejection made necessary', () 
     // Every persona written before this field existed. The two rules only
     // work together: refusing unknown fields without a version would make the
     // first field ever added render every stored persona unreadable.
-    const { version: _dropped, ...older } = DEFAULT_PERSONA
+    // `faces` goes with it: absent version means v1, and `faces` arrived at 4.
+    // A file carrying both is not one any build ever wrote.
+    const { version: _dropped, faces: _later, ...older } = DEFAULT_PERSONA
     const result = parsePersona(older)
-    expect(result.ok).toBe(true)
+    expect(result.ok, result.ok ? '' : JSON.stringify(result.problems)).toBe(true)
     if (result.ok) expect(result.persona.version).toBe(1)
   })
 
@@ -1088,12 +1090,20 @@ describe('the format version, which unknown-field rejection made necessary', () 
  * tolerated WHICH field.
  */
 describe('each retired field carries the format it stopped being ours at', () => {
-  /** A manifest of a given format, with a field that build never wrote. */
-  const at = (version: number, extra: Record<string, unknown>): unknown => ({
-    ...DEFAULT_PERSONA,
-    version,
-    ...extra,
-  })
+  /**
+   * A manifest of a given format, with a field that build never wrote.
+   *
+   * `faces` is DROPPED below v4, and that is the point rather than a
+   * convenience. It arrived at 4 — `ARRIVED_AT` says so and `readFaces`'s
+   * docblock always claimed it — so a v1 or v2 file carrying one is a file
+   * claiming a field its own declared format predates. Spreading the current
+   * default into an "old" manifest built exactly that, which is not a shape any
+   * older build could have written.
+   */
+  const at = (version: number, extra: Record<string, unknown>): unknown => {
+    const { faces: _later, ...before } = DEFAULT_PERSONA
+    return { ...(version < 4 ? before : DEFAULT_PERSONA), version, ...extra }
+  }
 
   it('migrates retention out of a v1 manifest, which predates the move', () => {
     const result = parsePersona(at(1, { keeps: false, keepDays: 7 }))
@@ -1295,6 +1305,34 @@ describe('which faces a character uses', () => {
     expect(read.ok).toBe(true)
     if (!read.ok) return
     expect(read.persona.faces).toEqual(EMOTIONS)
+  })
+
+  it('is REFUSED in a file whose format predates it', () => {
+    /*
+      `readFaces`'s docblock has always claimed this: "A new key cannot be
+      carried by an older file at all: `faces` in a v3 manifest is an unknown
+      field and is refused, which is the correct answer."
+
+      It was not. `PERSONA_FIELDS` is one flat set of every key this build
+      knows, so a manifest declaring an older format and carrying `faces` was
+      accepted — a comment describing a guard that did not exist.
+
+      It matters for the reason `RETIRED_AT` gives about `keeps`, pointing the
+      other way: a field the claimed build never wrote, arriving in a package,
+      is an author reaching into a part of the format their own file says it
+      predates. `faces` decides what her prompt tells her she can do.
+    */
+    const read = parsePersona(manifest({ version: 3, faces: ['happy'] }))
+    expect(read.ok).toBe(false)
+    if (read.ok) return
+    expect(read.problems).toContainEqual({ kind: 'unknown-field', field: 'faces' })
+  })
+
+  it('CONTROL: it is accepted in a file that claims the format it arrived in', () => {
+    // Without this the assertion above passes for a parser that refuses `faces`
+    // outright, which would break every character this build writes.
+    const read = parsePersona(manifest({ faces: ['happy'] }))
+    expect(read.ok, read.ok ? '' : JSON.stringify(read.problems)).toBe(true)
   })
 
   it('an explicit empty list is allowed, and is a different statement', () => {

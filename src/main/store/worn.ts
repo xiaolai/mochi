@@ -448,10 +448,33 @@ export function writeLookup(userData: string, change: LookupWrite): void {
  * `/` would scan the machine.
  */
 export function guardStopAt(userData: string, workspace: string, home = homedir()): string {
-  if (workspace.startsWith(join(userData, WORKSPACE_DIR))) return userData
+  /*
+    RESOLVED, and matched on a whole path SEGMENT.
+
+    This was `workspace.startsWith(join(userData, WORKSPACE_DIR))` on the raw
+    string, which is wrong in both directions.
+
+    A sibling matches: `<userData>/workspace-copy` starts with
+    `<userData>/workspace` and is not inside it. That one is survivable —
+    `userData` is still an ancestor — but it silently applies the app-owned rule
+    to a folder that is not.
+
+    A traversal matches and is not survivable: `<userData>/workspace/../../tmp`
+    passes the prefix test and RESOLVES outside the data directory entirely. The
+    caller then hands `userData` to `chain` as the stop point, which walks from
+    `/tmp` all the way to `/` looking for an ancestor that is not there and
+    throws — so a lookup pointed at a path spelled that way fails with a message
+    about ancestry rather than being guarded or refused.
+
+    `resolve` first, then `=== ours || startsWith(ours + sep)`, which is the
+    only comparison that means "inside this directory".
+  */
+  const ours = resolve(join(userData, WORKSPACE_DIR))
+  const asked = resolve(workspace)
+  if (asked === ours || asked.startsWith(ours + sep)) return userData
 
   const top = resolve(home)
-  let current = resolve(workspace)
+  let current = asked
   // Not under home: nothing to walk toward.
   if (current !== top && !current.startsWith(top + sep)) return current
 

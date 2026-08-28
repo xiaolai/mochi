@@ -967,6 +967,20 @@ describe('saving a persona the catalog does not hold', () => {
   })
 })
 
+/**
+ * A v1 manifest, without the fields v1 never had.
+ *
+ * `faces` arrived at format 4 — `ARRIVED_AT` in `parse-persona.ts` — so a file
+ * declaring `version: 1` and carrying one is not a shape any build ever wrote,
+ * and the parser refuses it as an unknown field. Spreading the current fixture
+ * into an "old" manifest built exactly that, and the tests below would then
+ * report the wrong problem for the right reason.
+ */
+function asV1(extra: Record<string, unknown>): Record<string, unknown> {
+  const { faces: _later, ...before } = tutor
+  return { ...before, version: 1, ...extra }
+}
+
 describe('a v1 retention choice this build cannot carry refuses the package', () => {
   /*
     The privacy regression this closes, and how it arrived.
@@ -983,7 +997,7 @@ describe('a v1 retention choice this build cannot carry refuses the package', ()
   */
   it('does not admit a persona whose stored opt-out would be discarded', () => {
     const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
+    write(dir, 'ada', asV1({ id: 'ada', name: 'Ada', keeps: false }))
 
     const catalog = loadPersonas(dir, {})
     expect(catalog.personas.has('ada'), 'she loaded and would record').toBe(false)
@@ -991,7 +1005,7 @@ describe('a v1 retention choice this build cannot carry refuses the package', ()
 
   it('says which package it was, so it is not a character that simply vanished', () => {
     const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: false })
+    write(dir, 'ada', asV1({ id: 'ada', name: 'Ada', keeps: false }))
 
     expect(loadPersonas(dir, {}).problems).toContainEqual({
       kind: 'retention-unsupported',
@@ -1008,7 +1022,7 @@ describe('a v1 retention choice this build cannot carry refuses the package', ()
       request as "asks for nothing" and kept for ever.
     */
     const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keepDays: 7 })
+    write(dir, 'ada', asV1({ id: 'ada', name: 'Ada', keepDays: 7 }))
 
     const catalog = loadPersonas(dir, {})
     expect(catalog.personas.has('ada'), 'a seven-day request loaded as indefinite').toBe(false)
@@ -1024,7 +1038,7 @@ describe('a v1 retention choice this build cannot carry refuses the package', ()
     // value read as "declared nothing at all" — so the guard was bypassed
     // entirely by the one shape nobody can interpret.
     const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: 'no' })
+    write(dir, 'ada', asV1({ id: 'ada', name: 'Ada', keeps: 'no' }))
 
     expect(loadPersonas(dir, {}).personas.has('ada')).toBe(false)
   })
@@ -1034,7 +1048,7 @@ describe('a v1 retention choice this build cannot carry refuses the package', ()
     // Refusing a character over a field that changes nothing would be a cost
     // with no privacy behind it.
     const dir = workspace()
-    write(dir, 'ada', { ...tutor, id: 'ada', name: 'Ada', version: 1, keeps: true })
+    write(dir, 'ada', asV1({ id: 'ada', name: 'Ada', keeps: true }))
 
     expect(loadPersonas(dir, {}).personas.has('ada')).toBe(true)
   })
