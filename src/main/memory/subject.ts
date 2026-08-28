@@ -1,4 +1,5 @@
 import { fenced } from '@shared/instructions'
+import { tooLong } from '@shared/parse-persona'
 import type { Turn } from '../store/turn-row'
 import { transcriptOf } from './summarise'
 
@@ -91,6 +92,19 @@ export function subjectFrom(answered: unknown): string | null {
   if (/[\n\r\u2028\u2029]/.test(said)) return null
   const trimmed = said.trim()
   if (trimmed === '') return null
-  if (trimmed.length > MAX_SUBJECT_CHARS) return null
+  /*
+    `tooLong`, not `.length`, and the schema is why.
+
+    `SUBJECT_SCHEMA` asks for `maxLength: 80` and JSON Schema measures that in
+    CHARACTERS. `.length` measures UTF-16 code units, so a title of eighty
+    emoji satisfies the schema this module sends and is refused by the check on
+    the way back — the model answered exactly what it was asked for and the
+    answer was thrown away.
+
+    `tooLong` is the codebase's own answer to that mismatch and checks both
+    ways: graphemes for the limit a person reads, code units for the one the
+    wire pays for. So the bound the comment above promises still holds.
+  */
+  if (tooLong(trimmed, MAX_SUBJECT_CHARS)) return null
   return trimmed
 }

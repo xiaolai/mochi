@@ -16,6 +16,7 @@ import {
   VOICE_NAMES,
   type VoiceName,
 } from '@shared/persona'
+import { tooLong } from '@shared/parse-persona'
 import { isPronoun } from '@shared/pronoun'
 import { isThemeId } from '@shared/theme'
 function isVoice(value: unknown): value is VoiceName {
@@ -65,11 +66,24 @@ export function applyChange(
       written to the manifest, and rejected on the next launch.
     */
     if (looksEmpty(name)) return { ok: false, why: 'A name cannot be empty.' }
+    /*
+      `tooLong`, the parser's own counter, not `.length`.
+
+      The comment below records aligning the NUMBER to the parser after a name
+      of 61-64 characters saved and then failed to load. The number was aligned
+      and the COUNTING was not, so the same mismatch survived one layer in: a
+      60-emoji name is 60 characters to `tooLong` and 120 code units to
+      `.length`, so this editor refused a name a manifest loads without
+      complaint. The direction is the safer one and the defect is the same one.
+
+      `tooLong` checks both ways deliberately — graphemes for the limit somebody
+      reads, code units for the one the wire pays for — so this stays bounded.
+    */
     // `PERSONA_LIMITS.name`, not a literal. This said 64 while the parser says
     // 60, so a name of 61 to 64 characters SAVED and then failed to load — the
     // character was accepted, written, and gone on the next launch. One number,
     // in the file that owns the format.
-    if (name.length > PERSONA_LIMITS.name) return { ok: false, why: 'That name is too long.' }
+    if (tooLong(name, PERSONA_LIMITS.name)) return { ok: false, why: 'That name is too long.' }
     next = { ...next, name }
   }
 
@@ -133,7 +147,7 @@ export function applyChange(
     // EMPTY IS ALLOWED, and is the default. "Nobody has said" is a real answer —
     // `addressLine` omits the instruction entirely rather than telling her to
     // address somebody as "you", which is a sentence that says nothing.
-    if (called.length > PERSONA_LIMITS.addressUser) {
+    if (tooLong(called, PERSONA_LIMITS.addressUser)) {
       return { ok: false, why: 'That name is too long.' }
     }
     next = { ...next, addressUser: called }
@@ -154,7 +168,7 @@ export function applyChange(
     if (typeof change.style !== 'string') return { ok: false, why: 'That is not a prompt.' }
     // Empty is allowed since 2026-08-17: `CORE_PROMPT` says who she is, so an
     // empty box is somebody asking for the floor and nothing else.
-    if (change.style.length > PERSONA_LIMITS.style) {
+    if (tooLong(change.style, PERSONA_LIMITS.style)) {
       return { ok: false, why: 'That prompt is too long.' }
     }
     next = { ...next, style: change.style }
@@ -179,7 +193,7 @@ export function applyChange(
       fine, and could not be typed here — the control was stricter than the
       thing it writes to, which is the same class of mistake as being looser.
     */
-    if (line.length > PERSONA_LIMITS.instruction) return { ok: false, why: 'That is too long.' }
+    if (tooLong(line, PERSONA_LIMITS.instruction)) return { ok: false, why: 'That is too long.' }
     // `verbatim` is left alone. It is the other half of a `SpokenMoment` and no
     // control offers it; overwriting it from a field that cannot express it
     // would silently discard something a manifest author wrote.

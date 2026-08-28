@@ -33,7 +33,7 @@
 import type { Turn } from '../store/turn-row'
 import { fenced } from '@shared/instructions'
 import { elapsedWords } from './elapsed'
-import { oneLine } from '@shared/text'
+import { boundedTail, oneLine } from '@shared/text'
 
 /**
  * How much of the last conversation is quoted back.
@@ -188,11 +188,20 @@ function quote(tail: readonly Turn[]): string {
       opening while discarding its conclusion is keeping the half that cannot
       be continued.
     */
-    const roomForText = room - prefix.length - 1
-    const line =
-      prefix.length + text.length <= room
-        ? `${prefix}${text}`
-        : `${prefix}…${text.slice(text.length - roomForText)}`
+    /*
+      `boundedTail`, not a slice written again here.
+
+      The hand-rolled version took `text.slice(text.length - roomForText)`,
+      which lands wherever the arithmetic puts it — and if that is the second
+      half of a surrogate pair, the turn she is handed to continue from opens
+      with a lone low surrogate. An emoji at the cut is enough.
+
+      `shared/text.ts` was written for exactly this and says so: it backs off a
+      broken pair and keeps the ellipsis INSIDE the limit rather than appending
+      it afterwards. It was called by nothing but its own test — a helper built
+      for this problem and never wired to the one site that had it.
+    */
+    const line = `${prefix}${boundedTail(text, room - prefix.length)}`
     rendered.push(line)
     total += line.length + (rendered.length === 1 ? 0 : 1)
   }

@@ -96,6 +96,24 @@ describe('reading an answer back', () => {
     )
   })
 
+  it('measures CHARACTERS, because that is what the schema asked for', () => {
+    /*
+      `SUBJECT_SCHEMA` says `maxLength: 80`, and JSON Schema measures that in
+      characters. `.length` measures UTF-16 code units, so a title of eighty
+      emoji satisfied the schema this module sends and was refused by the check
+      on the way back: the model answered exactly what it was asked for and the
+      answer was thrown away, silently, as `null`.
+    */
+    const eighty = '🙂'.repeat(MAX_SUBJECT_CHARS)
+    expect(eighty.length).toBe(MAX_SUBJECT_CHARS * 2)
+    expect(subjectFrom({ subject: eighty })).toBe(eighty)
+  })
+
+  it('still refuses one character over, counted the same way', () => {
+    // The bound has to bind, or the fix above is just a wider hole.
+    expect(subjectFrom({ subject: '🙂'.repeat(MAX_SUBJECT_CHARS + 1) })).toBeNull()
+  })
+
   it('measures the bound AFTER trimming, so padding cannot fail a valid title', () => {
     const padded = ` ${'x'.repeat(MAX_SUBJECT_CHARS)} `
     expect(padded.length).toBeGreaterThan(MAX_SUBJECT_CHARS)

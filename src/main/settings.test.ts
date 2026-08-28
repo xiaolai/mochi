@@ -118,6 +118,36 @@ describe('changing a persona', () => {
     expect('instructions' in changed.persona).toBe(false)
   })
 
+  it('counts a name the way the PARSER counts it, not in code units', () => {
+    /*
+      The comment on that check records aligning the NUMBER to the parser after
+      a name of 61-64 characters saved and then failed to load — "the character
+      was accepted, written, and gone on the next launch".
+
+      The number was aligned and the COUNTING was not, so the identical mismatch
+      survived one layer in. Sixty emoji is sixty characters to `tooLong`, which
+      is what `parsePersona` uses, and a hundred and twenty code units to
+      `.length`, which is what this editor used. A manifest holding that name
+      loads; typing it in was refused.
+    */
+    const sixty = '🙂'.repeat(PERSONA_LIMITS.name)
+    expect(sixty.length).toBe(PERSONA_LIMITS.name * 2)
+    const changed = applyChange(DEFAULT_PERSONA, { id: 'mochi', name: sixty }, AVATARS)
+    expect(changed.ok, changed.ok ? '' : changed.why).toBe(true)
+  })
+
+  it('still refuses one character over the limit', () => {
+    // The bound has to bind, or the alignment above is just a wider hole. And
+    // `tooLong` keeps its second half — a code-unit ceiling — so a name that is
+    // few characters and enormous on the wire is still refused.
+    const over = applyChange(
+      DEFAULT_PERSONA,
+      { id: 'mochi', name: '🙂'.repeat(PERSONA_LIMITS.name + 1) },
+      AVATARS,
+    )
+    expect(over.ok).toBe(false)
+  })
+
   it('refuses a voice that does not exist', () => {
     const changed = applyChange(DEFAULT_PERSONA, { id: 'mochi', voice: 'gandalf' }, AVATARS)
     expect(changed.ok).toBe(false)

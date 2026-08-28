@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_BRIEF_CHARS, briefFor } from './brief'
+import { MAX_BRIEF_CHARS, briefFor, resumeFor } from './brief'
 import type { Turn } from '../store/turn-row'
 
 const NOW = 1_700_000_000_000
@@ -132,5 +132,90 @@ describe('the wake brief', () => {
     expect(brief).toContain('5 times')
     // No empty fence.
     expect(brief).not.toContain('<last>')
+  })
+})
+
+/**
+ * Cutting a turn in the middle of a character.
+ *
+ * `resumeFor` truncates an oversized newest turn from the FRONT, so what
+ * survives is what was said last. The arithmetic that picks the starting index
+ * knows nothing about surrogate pairs, so an emoji sitting on the boundary was
+ * split and the text she is handed to continue from opened with half a
+ * character.
+ *
+ * `shared/text.ts` has had `boundedTail` for exactly this since it was written
+ * — it backs off a broken pair and keeps the ellipsis inside the limit — and
+ * production called it from nowhere. A helper built for this problem, never
+ * wired to the one site that had it.
+ */
+describe('a turn cut at an emoji', () => {
+  /**
+   * A lone surrogate is what a split pair leaves behind.
+   *
+   * Scanned by hand rather than with `String.prototype.isWellFormed`, which
+   * needs the ES2024 lib this project does not target — `tsc` said so, and
+   * raising the lib to satisfy one assertion in one test would be a compiler
+   * setting changed for a reason nobody reading it later could reconstruct.
+   *
+   * The same scan `shared/text.test.ts` uses on `boundedTail` directly. Two
+   * copies of nine lines is the smaller cost here: exporting it would make a
+   * test file into a module other tests import from.
+   */
+  function wellFormed(text: string): boolean {
+    for (let i = 0; i < text.length; i += 1) {
+      const unit = text.charCodeAt(i)
+      const high = unit >= 0xd800 && unit <= 0xdbff
+      const low = unit >= 0xdc00 && unit <= 0xdfff
+      if (!high && !low) continue
+      // A high surrogate must be followed by a low one; a low one must never
+      // appear except immediately after a high one.
+      if (low) return false
+      const next = text.charCodeAt(i + 1)
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false
+      i += 1
+    }
+    return true
+  }
+
+  it('has something to check: the cut really happens', () => {
+    // Counted first. If the turn were not truncated at all, every assertion
+    // below would pass while exercising nothing.
+    const long = '🙂'.repeat(MAX_BRIEF_CHARS)
+    const resumed = resumeFor([said('you', long)])
+    expect(resumed.length).toBeLessThan(long.length)
+    expect(resumed).toContain('\u2026')
+  })
+
+  it('never emits half a character, at any cut position', () => {
+    /*
+      Swept rather than sampled. Whether the boundary lands between two pairs or
+      inside one depends on the prefix length and the budget, so a single length
+      can pass while its neighbour is broken — which is how this survived.
+    */
+    for (let extra = 0; extra < 40; extra += 1) {
+      const text = 'a'.repeat(extra) + '🙂'.repeat(MAX_BRIEF_CHARS)
+      const resumed = resumeFor([said('you', text)])
+      expect(wellFormed(resumed), `extra=${String(extra)}`).toBe(true)
+    }
+  })
+
+  it('still respects the budget it was given', () => {
+    /*
+      The QUOTED BLOCK, not the whole return value.
+
+      `MAX_BRIEF_CHARS` bounds the transcript `quote()` renders; `resumeFor`
+      then wraps it in a fence and four lines of instruction, which are fixed
+      prose and not part of the budget. Asserting on the whole string measured
+      the wrong thing and failed at 1592 against a bound that was being kept.
+
+      The ellipsis lives INSIDE the limit. A version that appended it afterwards
+      would be one unit over on every truncated turn, which is the failure this
+      assertion is actually here for.
+    */
+    const resumed = resumeFor([said('you', '🙂'.repeat(MAX_BRIEF_CHARS))])
+    const quoted = /<sofar>\n([\s\S]*?)\n<\/sofar>/.exec(resumed)?.[1] ?? ''
+    expect(quoted).not.toBe('')
+    expect(quoted.length).toBeLessThanOrEqual(MAX_BRIEF_CHARS)
   })
 })
