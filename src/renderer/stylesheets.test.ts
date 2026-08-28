@@ -434,3 +434,44 @@ describe('a select in `multiple` has a rule written for a list box', () => {
     ).toBe(true)
   })
 })
+
+/**
+ * A column the renderer can leave EMPTY has to collapse.
+ *
+ * The same shape as the list box above, one level up: a rule written for one
+ * state, applied in another. `.machine` is three columns because `may do` and
+ * `prompts` put a tool list beside the grants that decide what is in it. The
+ * other five panes emit no list — `main.ts` empties the aside — and the track
+ * was a flat `320px` either way, so `Hearing you`, `On screen`, `Keys`,
+ * `Looking things up` and `About` each surrendered 320px to a column holding
+ * nothing, and their fields stopped short of the window.
+ *
+ * Nothing could fail. The grid is valid, every class has a rule, and an empty
+ * `<aside>` is not an error — it is simply 320px wide.
+ *
+ * So the check binds the two halves that have to agree: if the renderer can
+ * empty the aside, the sheet must say what the column does when it is empty.
+ * It cannot judge whether the answer is right; it can refuse to let one half
+ * be deleted while the other still exists.
+ */
+describe('the tool column collapses when there is no tool list', () => {
+  const HISTORY = fileURLToPath(new URL('./history/', import.meta.url))
+
+  it('the renderer really can leave it empty', () => {
+    // The guard on the guard. If this idiom changes, the assertion below is
+    // still green while guarding a case that no longer arises.
+    const main = readFileSync(`${HISTORY}main.ts`, 'utf8')
+    expect(main).toMatch(/toolsEl\.replaceChildren\(\)/)
+  })
+
+  it('and the sheet answers for that case', () => {
+    const rules = selectorsOf(inlineStyleOf('history'))
+    const collapses = rules.some(
+      (one) => one.startsWith('.machine') && one.includes(':has') && one.includes('tool-card'),
+    )
+    expect(
+      collapses,
+      'five of the seven panes emit no tool list, so a fixed third track leaves them 320px short — the sheet has to ask whether the card is there',
+    ).toBe(true)
+  })
+})

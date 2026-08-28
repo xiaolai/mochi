@@ -558,9 +558,41 @@
 
       /* ---- machine: the six groups, as they were ---------------------------- */
       .machine {
+        /* Named, so the rule that collapses it need not restate the other two. */
+        --tools-w: 320px;
         display: grid;
-        grid-template-columns: 196px minmax(0, 1fr) 320px;
+        grid-template-columns: 196px minmax(0, 1fr) var(--tools-w);
         min-height: 0;
+      }
+      /*
+        NO EMPTY THIRD COLUMN.
+
+        Two of the seven panes emit a tool list -- `may do` and `prompts`, the
+        ones whose `h3` `main.ts` splits the render on. The other five leave the
+        aside empty, and the track was 320px regardless: `Hearing you`,
+        `On screen`, `Keys`, `Looking things up` and `About` each gave up 320px
+        of a pane to a column with nothing in it. That is what made their fields
+        stop short of the window with dead space to the right.
+
+        `:has` rather than a class `main.ts` toggles, because the sheet can ask
+        the question the renderer has ALREADY answered by building the card or
+        not. A toggled class is a second copy of that fact, and a second copy
+        can disagree -- which is the failure this window has had three times
+        from class names alone.
+
+        The aside leaves the flow as well as the track being zeroed.
+        `.machine-tools` carries padding, and padding on a zero-width track
+        still draws: the column would be gone and a sliver of it would remain.
+
+        The cost is a reflow when moving between a pane with tools and one
+        without. That is the right way round -- five panes are full width, and
+        two shift once on arrival.
+      */
+      .machine:not(:has(> .machine-tools > .tool-card)) {
+        --tools-w: 0px;
+      }
+      .machine:not(:has(> .machine-tools > .tool-card)) > .machine-tools {
+        display: none;
       }
       .nav-head {
         padding: 0 var(--s4) var(--s3);
