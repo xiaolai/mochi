@@ -70,51 +70,15 @@ import { readableInstant } from './instant'
 import { applySchema } from './schema'
 import { MAX_SUBJECT_CHARS } from '../memory/subject'
 import { prepareAll } from './statements'
+import { forgetEverything, forgetPersona, forgetSessions, type Forgetting } from './forgetting'
 
 export const TRANSCRIPTS_FILE = 'transcripts.db'
 
-/**
- * The most conversations one confirmed deletion may carry.
- *
- * Not a performance limit -- a sanity one. The list a person can select from is
- * their own archive, so a payload larger than this did not come from somebody
- * clicking, and the transaction should not be asked to find out.
- */
-/**
- * The most conversations one `forgetSessions` call may name.
- *
- * A payload this large is not a request anybody made by hand, and the bound is
- * what stops a compromised renderer turning one message into a hundred-thousand
- * row transaction.
- *
- * **It TRIMS rather than refuses, and that is deliberate** — `transcripts.test.ts`
- * asserts it: a genuine token sitting among a flood still goes. A draft of this
- * change made it a refusal instead and was reverted, because declining the whole
- * request would discard the real deletion somebody actually asked for in order
- * to punish the noise around it.
- */
-export const MOST_AT_ONCE = 1000
-
-/**
- * The tokens a `forgetSessions` call will actually act on.
- *
- * Exported because **two** places need the same answer, and until now only one
- * of them had it. `forgetSessions` collapses duplicates and trims an absurd
- * payload — deliberate, and asserted: a flood from a compromised renderer must
- * not become a hundred-thousand-row transaction, while a real token sitting
- * among it still goes.
- *
- * The caller in `main/index.ts` then decides whether the LIVE conversation was
- * among those deleted, and it was reading the caller's own unbounded list. So a
- * request naming more than a thousand released the live token while its rows
- * were still on disk — recording restarted into a fresh conversation and the
- * old one stayed, which is the opposite of what "forget these" was asked to do.
- *
- * One function, so "what was deleted" cannot be answered two ways.
- */
-export function boundedForgetSet(tokens: readonly SessionToken[]): readonly SessionToken[] {
-  return [...new Set(tokens)].slice(0, MOST_AT_ONCE)
-}
+// The bound on one `forget these` call, and the set it acts on, now live beside
+// the deletion they govern. RE-EXPORTED because `main/index.ts` and the tests
+// ask this module for them, and where a constant is declared is not a reason to
+// make every caller move.
+export { MOST_AT_ONCE, boundedForgetSet } from './forgetting'
 
 export interface Transcripts {
   /**
@@ -747,6 +711,14 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
   */
   scrubNow()
 
+  /*
+    THE DELETION CONTEXT, built once.
+
+    Everything that removes rows needs the same five things, and `forgetting.ts`
+    holds the one rule they share -- the search index goes first, because
+    `turn_fts` has no foreign key and is not carried by the cascade.
+  */
+  const forgetting: Forgetting = { db, stmt, atomically, scrubNow }
   return {
     begin(personaId, at = now()) {
       /*
@@ -1036,54 +1008,13 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
       return { ok: true, sessions, turns, skipped, conflicts }
     },
     forgetSessions(personaId, tokens) {
-      /*
-        Collapsed and bounded BEFORE the transaction opens, through the SAME
-        function the caller uses.
-
-        The bound was always here; what was not was any way for `main/index.ts`
-        to know which tokens it covered. That caller decides whether the live
-        conversation was among the deleted, and it read its own unbounded list —
-        so a request naming more than `MOST_AT_ONCE` released the live token
-        while its rows were still on disk. The count returned here is honest
-        about how many went; it was never the count that was wrong.
-      */
-      const wanted = boundedForgetSet(tokens)
-      if (wanted.length === 0) return 0
-      const gone = atomically(() => {
-        let removed = 0
-        for (const token of wanted) {
-          // The index rows FIRST, while the turns they name still exist: the
-          // cascade takes those with the session, and after that the subquery
-          // selecting them finds nothing and the rows orphan.
-          stmt.dropIndexFor.run(token, personaId)
-          removed += Number(stmt.dropSession.run(token, personaId).changes)
-        }
-        return removed
-      })
-      scrubNow()
-      return gone
+      return forgetSessions(forgetting, personaId, tokens)
     },
     forgetEverything() {
-      atomically(() => {
-        // The index first, as everywhere else here: `turn_fts` has no foreign
-        // key, so a `DELETE FROM session` alone would leave every indexed row
-        // behind and a later turn could surface a stranger's words as a hit.
-        db.exec('DELETE FROM turn_fts')
-        db.exec('DELETE FROM session')
-      })
-      scrubNow()
+      forgetEverything(forgetting)
     },
     forget(personaId) {
-      // The INDEX first, though the transaction is what makes that safe rather
-      // than the ordering: a row in `turn_fts` whose turn is gone is a search
-      // hit that cannot be read -- which looks like her remembering something
-      // she was told to forget -- and the reverse leaves turns nothing can
-      // find. Neither half is reachable from outside the transaction.
-      atomically(() => {
-        stmt.forgetIndex.run(personaId)
-        stmt.forget.run(personaId)
-      })
-      scrubNow()
+      forgetPersona(forgetting, personaId)
     },
     scrubPending: () => pendingScrub,
     close() {
