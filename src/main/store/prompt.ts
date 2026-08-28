@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { writeTextAtomically } from './json-file'
@@ -81,9 +82,27 @@ export function seedPrompt(userData: string): void {
     return
   }
   try {
-    writeTextAtomically(path, '')
+    /*
+      `wx`, so the create IS the check.
+
+      `seedProfile` writes its own seed this way and says why: "A read followed
+      by a write would race, and an unconditional write would throw away
+      whatever somebody had put in it." This function did the read-then-write it
+      warns about — and worse, `writeTextAtomically` finishes with a rename,
+      which CLOBBERS. Anything created in the window between `readBounded`
+      reporting absent and that rename was replaced by an empty file, silently,
+      by the function whose header promises it is "NEVER overwritten".
+
+      Not atomic any more, and it does not need to be: the content is empty, so
+      there is no half-written state for a reader to observe. What matters here
+      is exclusivity, which `wx` gives and a rename cannot.
+    */
+    writeFileSync(path, '', { flag: 'wx' })
     console.log(`[prompt] seeded empty at ${path}`)
   } catch (error: unknown) {
+    // Somebody got there first, which is the outcome this function wants
+    // anyway: there is a prompt on disk and it is theirs.
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return
     // Not fatal. An empty prompt is what an unwritable file produces anyway, so
     // she still wakes — but the window that edits it would offer a Save that
     // cannot land, and this is the line that says why.

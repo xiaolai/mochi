@@ -1,4 +1,13 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -110,5 +119,75 @@ describe('the system prompt document', () => {
       chmodSync(path, 0o600)
     }
     expect(readPrompt(userData)).toBe('You are a lighthouse keeper.')
+  })
+})
+
+/**
+ * The seed never overwrites, which it did not used to guarantee.
+ *
+ * `seedPrompt`'s header promises the file is "NEVER overwritten — once it is on
+ * disk it is the user's, including when what they wrote is nothing." It kept
+ * that promise with a read followed by a write, and finished with
+ * `writeTextAtomically`, whose rename CLOBBERS. `seedProfile` writes its own
+ * seed with `wx` and says exactly why: "A read followed by a write would race,
+ * and an unconditional write would throw away whatever somebody had put in it."
+ */
+describe('seeding an empty prompt', () => {
+  it('creates one when there is none', () => {
+    const home = mkdtempSync(join(tmpdir(), 'mochi-seed-'))
+    seedPrompt(home)
+    expect(readFileSync(promptFile(home), 'utf8')).toBe('')
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  it('leaves what is already there, whatever it says', () => {
+    const home = mkdtempSync(join(tmpdir(), 'mochi-seed-'))
+    writeFileSync(promptFile(home), 'my own prompt')
+    seedPrompt(home)
+    expect(readFileSync(promptFile(home), 'utf8')).toBe('my own prompt')
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  it('is idempotent, and the second call is decided by the early return', () => {
+    /*
+      HONEST ABOUT WHAT THIS PROVES, because the first draft of it proved
+      nothing. It asserted that "a file appearing mid-seed is not replaced" and
+      passed just as well against the clobbering version — because `seedPrompt`
+      returns early when the read finds a file, so the exclusive create never
+      ran. A test that passes against the defect is worse than no test.
+
+      The race the `wx` flag closes is the window between `readBounded`
+      reporting absent and the write landing, and it has no seam here: forcing
+      it would need either a concurrent writer or an injected filesystem, and
+      the injected version would assert that a double was called rather than
+      that the create is exclusive. `seedProfile` has the same shape and the
+      same gap.
+
+      So this asserts the property that IS reachable — seeding a second time
+      does not disturb what is there — and says plainly which line decides it.
+    */
+    const home = mkdtempSync(join(tmpdir(), 'mochi-seed-'))
+    seedPrompt(home)
+    writeFileSync(promptFile(home), 'written afterwards')
+    seedPrompt(home)
+    expect(readFileSync(promptFile(home), 'utf8')).toBe('written afterwards')
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  it('leaves a path that is not a regular file entirely alone', () => {
+    /*
+      A symlink, which `readBounded` reports as not-a-regular-file rather than
+      absent because it uses `lstat`. This is the nearest reachable neighbour of
+      the race: the path exists, the reader refuses to say what is in it, and
+      the seed must not decide that means empty.
+    */
+    const home = mkdtempSync(join(tmpdir(), 'mochi-seed-'))
+    const target = join(home, 'elsewhere.md')
+    writeFileSync(target, 'somebody else content')
+    symlinkSync(target, promptFile(home))
+    seedPrompt(home)
+    expect(readFileSync(target, 'utf8')).toBe('somebody else content')
+    expect(lstatSync(promptFile(home)).isSymbolicLink()).toBe(true)
+    rmSync(home, { recursive: true, force: true })
   })
 })
