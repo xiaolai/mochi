@@ -152,6 +152,14 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   let media: MediaStream | null = null
   let micTrack: MediaStreamTrack | null = null
   let closed = false
+  /**
+   * Whether this session has already said "nothing more is coming".
+   *
+   * Separate from `closed`, because the acknowledgement is sent ABOVE that
+   * guard on purpose and must stay there — the failure paths have to send it
+   * too. This is what makes it once per SESSION rather than once per call.
+   */
+  let flushedOnce = false
   /** How to stop listening for main's frames. See `MochiApi.onSend`. */
   let stopListening: (() => void) | null = null
   /**
@@ -183,8 +191,19 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
       Sent on every teardown including the failure paths, because "nothing more
       is coming" is true of those too -- and main waiting out its grace period
       for a session that has already died is a delay with no purpose.
+
+      ONCE PER SESSION, though, which the `closed` guard below does not give it:
+      everything above that guard runs on every call, and `shutdown` is reachable
+      twice — a late `connectionState` failure on a peer that has already been
+      torn down takes the same path. The acknowledgement is not addressed to a
+      session, so a second one from a dead session lands on whatever main is
+      waiting for, which after a reconnect is a NEW conversation. It would be
+      closed early, holding none of the turns still to come.
     */
-    window.mochi.report({ kind: 'flushed' })
+    if (!flushedOnce) {
+      flushedOnce = true
+      window.mochi.report({ kind: 'flushed' })
+    }
 
     // OFF the channel, and above the guard for the same reason the tracks are:
     // this runs on every teardown including the failure paths, and a

@@ -108,3 +108,77 @@ describe('parseManifest', () => {
     expect(problemOf({ ...valid(), parameters })).toBe('required-not-declared')
   })
 })
+
+/**
+ * The closed set a property may declare, which this parser used to drop.
+ *
+ * `CapabilityProperty.enum` says what it is for — *"On the wire, so the model is
+ * CONSTRAINED rather than asked"* — and `parseManifest` read the type and the
+ * description and never looked at it. A manifest declaring one was accepted and
+ * silently widened to an unrestricted string.
+ *
+ * Latent rather than live: no manifest in this build declares one, which is why
+ * nothing failed, and why `prompts.test.ts`'s assertion that `describedTools`
+ * preserves an enum was passing over an empty set. These are the tests that
+ * stop it being latent.
+ */
+describe('a property with a closed set of values', () => {
+  const withEnum = (value: unknown): Record<string, unknown> => ({
+    ...valid(),
+    parameters: {
+      type: 'object',
+      properties: { format: { type: 'string', description: 'text or html.', enum: value } },
+      required: ['format'],
+    },
+  })
+
+  it('carries the enum through instead of dropping it', () => {
+    const result = parseManifest(withEnum(['text', 'html']))
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('unreachable')
+    expect(result.manifest.parameters.properties['format']?.enum).toEqual(['text', 'html'])
+  })
+
+  it('copies it rather than holding the caller array', () => {
+    // The parser narrows untrusted input into a value the rest of the app
+    // treats as settled. Keeping the caller's array would let whoever passed it
+    // mutate a manifest after it was accepted.
+    const values = ['text', 'html']
+    const result = parseManifest(withEnum(values))
+    if (!result.ok) throw new Error('unreachable')
+    values.push('smuggled')
+    expect(result.manifest.parameters.properties['format']?.enum).toEqual(['text', 'html'])
+  })
+
+  it('still accepts a property that declares none', () => {
+    const result = parseManifest(valid())
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('unreachable')
+    expect(result.manifest.parameters.properties['format']?.enum).toBeUndefined()
+  })
+
+  it('refuses an empty set, which no value could satisfy', () => {
+    expect(problemOf(withEnum([]))).toBe('bad-property-enum')
+  })
+
+  it('refuses anything that is not an array of strings', () => {
+    for (const bad of ['text', 7, {}, null, ['text', 7], ['text', null]]) {
+      expect(problemOf(withEnum(bad)), JSON.stringify(bad)).toBe('bad-property-enum')
+    }
+  })
+
+  it('refuses a blank or over-long value, like every other field here', () => {
+    expect(problemOf(withEnum(['text', '   ']))).toBe('bad-property-enum')
+    expect(problemOf(withEnum(['x'.repeat(65)]))).toBe('bad-property-enum')
+  })
+
+  it('refuses a set too large to be a deliberate constraint', () => {
+    expect(problemOf(withEnum(Array.from({ length: 33 }, (_, i) => `v${String(i)}`)))).toBe(
+      'bad-property-enum',
+    )
+  })
+
+  it('refuses duplicates, which are a mistake rather than a constraint', () => {
+    expect(problemOf(withEnum(['text', 'text']))).toBe('bad-property-enum')
+  })
+})

@@ -252,9 +252,25 @@ export type ShelfChannel = (typeof SHELF_CHANNELS)[number]
  * permission; this window can rewrite a permission and must never be able to
  * mint anything.
  *
- * **Nothing here takes a path.** `settings:reveal` names a folder by kind, not
- * by location — a renderer that could hand main an arbitrary path to open would
- * be a file browser with the user's authority, reachable from a page.
+ * **One channel here takes a path, and it is the only one.** `settings:lookup`
+ * carries `workspace`, which `SettingsLookup` documents as *"the one place a
+ * path crosses this bridge... a deliberate exception rather than an
+ * oversight"* — it is the value being displayed and edited, and somebody
+ * choosing a directory has to see which one. `applyLookup` checks it in main:
+ * a non-string is refused, and so is anything that is not absolute.
+ *
+ * Everything else names a location by KIND. `settings:reveal` takes a
+ * `Revealable`, `settings:show-profile` takes no argument at all, and
+ * `settings:choose-workspace` opens the panel IN MAIN and answers with what it
+ * saved — a renderer that could hand main an arbitrary path to open would be a
+ * file browser with the user's authority, reachable from a page.
+ *
+ * This paragraph read *"Nothing here takes a path"* until 2026-08-28, while
+ * `settings:lookup` took one four hundred lines below. Both comments were
+ * written deliberately and only one was true; the false one was the summary at
+ * the head of the list, which is where a reader checks. `claims.test.ts` exists
+ * for exactly this — a comment that claims a guard needs the test that proves
+ * it, or it should not be in the source.
  */
 export const SETTINGS_CHANNELS = [
   /** Everything the window draws: what she may do, lookups, folders. */
@@ -328,11 +344,19 @@ export const SETTINGS_CHANNELS = [
    * Open the system folder panel, and save whatever is chosen as the workspace.
    *
    * The path is chosen IN MAIN, which is the whole reason this is a channel of
-   * its own rather than a flag on `settings:lookup`. The list above promises
-   * that nothing here takes a path; a picker that answered with one and let the
-   * page send it back would keep the letter of that and lose the point. What
-   * crosses is a request with no argument at all, and the answer is what got
+   * its own rather than a flag on `settings:lookup`. A picker that answered
+   * with a path and let the page send it back would add a SECOND way for a
+   * renderer to name a location, and the one that already exists —
+   * `settings:lookup`'s `workspace` — is a deliberate exception argued for on
+   * `SettingsLookup`, checked by `applyLookup`, and the only one. What crosses
+   * here is a request with no argument at all, and the answer is what got
    * saved.
+   *
+   * This paragraph said "the list above promises that nothing here takes a
+   * path" until 2026-08-28. The list said that and it was not true — see the
+   * header — so this reasoned from a guarantee the file did not have. The
+   * argument survives without it, and is stronger: the point is not to keep a
+   * promise, it is not to add a second path-bearing channel.
    *
    * `history:export` sets the precedent and the reason is the same: a renderer
    * that named the destination would be a renderer able to reach anywhere with
@@ -661,11 +685,19 @@ export interface SettingsCapability {
 /**
  * How a lookup runs, as the settings window shows it.
  *
- * `workspace` is a PATH, and it is the one place a path crosses this bridge.
- * That is a deliberate exception rather than an oversight: it is the value being
- * displayed and edited, and somebody choosing a directory has to see which one.
- * It travels back through `settings:lookup`, where main checks it — the renderer
- * naming a path is not the renderer choosing what may be read.
+ * `workspace` is a PATH, and it is the one a RENDERER MAY NAME. The direction is
+ * the whole content of that claim and the wording used to omit it — "the one
+ * place a path crosses this bridge", which is false in the other direction and
+ * was flagged as such: `profilePath`, `folders`, `about.userData` and
+ * `ChosenWorkspace.workspace` are all paths main sends out, because a person
+ * cannot be shown where their files are without being told.
+ *
+ * Sent OUT is display; sent IN is authority. This is the only path a page may
+ * put on the wire, and it is a deliberate exception rather than an oversight:
+ * it is the value being displayed and edited, and somebody choosing a directory
+ * has to see which one. It travels back through `settings:lookup`, where
+ * `applyLookup` refuses a non-string and refuses anything not absolute — the
+ * renderer naming a path is not the renderer choosing what may be read.
  */
 export interface SettingsLookup {
   readonly workspace: string

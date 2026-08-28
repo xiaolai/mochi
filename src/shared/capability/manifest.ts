@@ -105,6 +105,8 @@ export type ManifestProblem =
       readonly type: unknown
     }
   | { readonly kind: 'bad-property-description'; readonly property: string }
+  /** An `enum` that is not a bounded, non-empty set of distinct strings. */
+  | { readonly kind: 'bad-property-enum'; readonly property: string }
   | { readonly kind: 'required-not-declared'; readonly property: string }
   | { readonly kind: 'required-duplicated'; readonly property: string }
 
@@ -149,6 +151,15 @@ export function isCapabilityName(value: unknown): value is string {
 export const MAX_DESCRIPTION = 4096
 export const MAX_PROPERTY_DESCRIPTION = 1024
 const MAX_PROPERTIES = 8
+/**
+ * How large a closed set may be, and how long one of its values.
+ *
+ * Bounded for the reason everything else here is: an enum goes on the wire on
+ * every session and is billed for the life of it, and a thousand-value set is a
+ * constraint nobody wrote deliberately.
+ */
+const MAX_ENUM_VALUES = 32
+const MAX_ENUM_VALUE_CHARS = 64
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -213,6 +224,49 @@ export function parseManifest(value: unknown): ManifestResult {
       propertyDescription.length > MAX_PROPERTY_DESCRIPTION
     ) {
       return { ok: false, problem: { kind: 'bad-property-description', property } }
+    }
+    /*
+      `enum` CARRIED THROUGH, and checked. It was neither.
+
+      `CapabilityProperty.enum` says what it is for: *"On the wire, so the model
+      is CONSTRAINED rather than asked. The alternative — describing the options
+      in prose and validating on the way back — makes a refusal the normal path
+      for a mistake the schema could have prevented."* This parser read the type
+      and the description and dropped it, so a manifest declaring one was
+      accepted and silently widened to an unrestricted string.
+
+      Latent rather than live: no manifest in this build declares one, which is
+      why nothing failed — and why `prompts.test.ts`'s assertion that
+      `describedTools` preserves an enum was passing over an empty set.
+
+      Bounded like every other field here, because the header's rule is that
+      type-checking alone accepts a 40 KB description or a `required` naming a
+      property that does not exist: every field declares a range and the range is
+      checked. An empty enum is refused rather than treated as absent — it would
+      put a closed set with nothing in it on the wire, which no value can satisfy.
+    */
+    const declaredEnum = declared['enum']
+    if (declaredEnum !== undefined) {
+      if (
+        !Array.isArray(declaredEnum) ||
+        declaredEnum.length === 0 ||
+        declaredEnum.length > MAX_ENUM_VALUES ||
+        declaredEnum.some(
+          (value) =>
+            typeof value !== 'string' ||
+            value.trim().length === 0 ||
+            value.length > MAX_ENUM_VALUE_CHARS,
+        ) ||
+        new Set(declaredEnum).size !== declaredEnum.length
+      ) {
+        return { ok: false, problem: { kind: 'bad-property-enum', property } }
+      }
+      properties[property] = {
+        type: 'string',
+        description: propertyDescription,
+        enum: [...(declaredEnum as string[])],
+      }
+      continue
     }
     properties[property] = { type: 'string', description: propertyDescription }
   }

@@ -112,11 +112,29 @@ export const PROMPTS: Pane = {
         save.disabled = box.value === one.text || tooLong(box.value)
         sayLength(box.value)
       })
+      /*
+        BOTH DISABLED on dispatch, not just the one that was pressed.
+
+        They were left live, so a second click — or Save followed straight by
+        Reset — started two writes whose completion order nothing guarantees.
+        The window re-reads after each, so the LAST ANSWER wins rather than the
+        last click, and the pane could settle on the state somebody had just
+        changed their mind about.
+
+        Nothing re-enables them here. `writeMachine` re-reads and this pane is
+        rebuilt from what main actually holds, which is the one path that cannot
+        show a state the store disagrees with — the rule `recheckCodex` states.
+      */
+      const dispatch = (text: string | null): void => {
+        save.disabled = true
+        reset.disabled = true
+        handlers.prompt(one.key, text)
+      }
       save.addEventListener('click', () => {
-        handlers.prompt(one.key, box.value)
+        dispatch(box.value)
       })
       reset.addEventListener('click', () => {
-        handlers.prompt(one.key, null)
+        dispatch(null)
       })
       const actions = element('div', 'row')
       actions.append(save, reset)
