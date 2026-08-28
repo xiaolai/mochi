@@ -183,8 +183,26 @@ export const ASKED_HEADING = '## They asked you to remember'
  * Returns null when there is no room, so the caller can tell her rather than
  * silently keeping nothing.
  */
+/**
+ * Whether the note already holds this exact fact, as a WHOLE LINE.
+ *
+ * `current.includes(line)` was a substring test, so "They like tea" counted as
+ * already known the moment "They like tea with sugar" was in the note — and the
+ * new fact was silently dropped AND reported back as already recorded. The two
+ * halves make it worse than either alone: somebody asked her to remember
+ * something, she said she had, and she had not.
+ *
+ * Every entry under the heading is one `- ` bullet on one line, so a line is
+ * the unit a fact is stored in and the unit "already known" has to mean.
+ */
+function alreadyHolds(current: string, line: string): boolean {
+  const wanted = line.trim()
+  if (wanted === '') return true
+  return current.split('\n').some((one) => one.replace(/^\s*-\s*/, '').trim() === wanted)
+}
+
 export function noteWith(current: string, line: string): string | null {
-  if (current.includes(line)) return current
+  if (alreadyHolds(current, line)) return current
   const next =
     current === ''
       ? `${ASKED_HEADING}\n- ${line}`

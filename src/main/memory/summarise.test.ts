@@ -268,6 +268,36 @@ describe('keeping one thing she was asked to remember', () => {
     expect(noteWith(first, 'Only once.')).toBe(first)
   })
 
+  it('does not mistake a LONGER note for the same fact', () => {
+    /*
+      `current.includes(line)` was a substring test, so a shorter fact counted
+      as already known the moment a longer one containing it was in the note.
+
+      Both halves of that are wrong and together they are worse than either:
+      the new fact is dropped, AND the caller is told it was already recorded.
+      Somebody asked her to remember something, she said she had, and she had
+      not — which is the one failure this whole append path exists to avoid.
+    */
+    const held = noteWith('', 'They like tea with sugar') ?? ''
+    // The shorter fact must genuinely be a SUBSTRING of the longer one, or this
+    // test passes against the defect. The first version of it ended both lines
+    // with a full stop, so "They like tea with sugar." never contained "They
+    // like tea." at all — mutation testing caught that, review did not.
+    expect(held).toContain('They like tea')
+    const next = noteWith(held, 'They like tea') ?? ''
+    expect(next).not.toBe(held)
+    expect(next).toContain('- They like tea\n')
+    expect(next).toContain('They like tea with sugar')
+  })
+
+  it('still recognises the same fact when it is spelled with a different bullet', () => {
+    // A line is the unit a fact is stored in, so the comparison is per line
+    // with the bullet and its spacing taken off — not a raw string equality
+    // that a stray space would defeat.
+    const held = '## Asked for\n-   Only once.'
+    expect(noteWith(held, 'Only once.')).toBe(held)
+  })
+
   it('refuses rather than cutting the existing note to fit', () => {
     // Truncating here would cut the OLD note to make room for the new line,
     // which is the one direction nobody asked for.

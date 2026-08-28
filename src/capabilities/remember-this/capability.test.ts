@@ -193,16 +193,32 @@ describe('remember_this', () => {
     expect(recall(userData, 'loki')).toBe(once)
   })
 
-  it('says ALREADY KNOWN for a line that is only part of a longer one', () => {
-    // The case nobody would think to ask about: `noteWith` deduplicates by
-    // SUBSTRING, so an existing longer sentence suppresses the new line — and
-    // the old answer claimed it had been saved under the heading it is not
-    // under. Whether that dedup rule is right belongs to `noteWith`; what
-    // belongs here is not lying about what happened.
+  it('SAVES a line that is only part of a longer one', () => {
+    /*
+      This asserted the opposite until `noteWith` was fixed, and its own comment
+      is why it now asserts this instead.
+
+      It said: "`noteWith` deduplicates by SUBSTRING, so an existing longer
+      sentence suppresses the new line… Whether that dedup rule is right belongs
+      to `noteWith`; what belongs here is not lying about what happened." The
+      question was deferred, correctly, and this test held the honest reporting
+      of a wrong answer.
+
+      The dedup rule has been answered. A line is the unit a fact is stored in,
+      so "they take their coffee black" is a different fact from "they take
+      their coffee black in the morning" and is kept. The discipline this test
+      was written for is unchanged and is what it still checks: the status has
+      to describe what actually happened to the note.
+    */
     remember(userData, 'loki', '## About them\n- they take their coffee black in the morning')
     const before = recall(userData, 'loki')
     const answered = call('they take their coffee black')
-    expect(answered.status).toBe('already-known')
-    expect(recall(userData, 'loki')).toBe(before)
+    expect(answered.status).toBe('saved')
+    const after = recall(userData, 'loki')
+    expect(after).not.toBe(before)
+    expect(after).toContain('in the morning')
+    // And it lands UNDER the asked-for heading — which is exactly what the old
+    // answer claimed while the line was being discarded. The claim is true now.
+    expect(after).toContain(`${ASKED_HEADING}\n- they take their coffee black`)
   })
 })
