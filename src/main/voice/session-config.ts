@@ -191,7 +191,17 @@ function briefing(
 export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
   // CONSUMED here, whatever else this read goes on to decide. See
   // `reconnecting`: the flag describes exactly one open.
-  const replacing = deps.replacingASession()
+  /*
+    READ FOR ITS SIDE EFFECT, and no longer for its answer.
+
+    `replacingASession` consumes the flag — its own comment says so, and says
+    why: "the flag describes exactly one open. Left set, it would also silence
+    the greeting of a character somebody wore after a reconnect." So the read
+    has to happen on every pass whatever decides the greeting.
+
+    What it no longer decides is the greeting. See there.
+  */
+  deps.replacingASession()
   const userData = deps.userData()
   const catalog = deps.catalogue(userData)
   for (const problem of catalog.problems) {
@@ -336,8 +346,26 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
       boundary: whether she speaks first is a decision, and decisions are
       main's.
     */
+    /*
+      A LIVE CONVERSATION DECIDES THIS TOO, for the reason `briefing` gives.
+
+      It was `!replacing`, and `briefing` a hundred lines up already uses
+      `liveBefore !== null` and explains why: the two agree on the paths anybody
+      thinks about and disagree on a third. "`did-finish-load` fires again when
+      the renderer RELOADS, and nothing sets `replacing` for that."
+
+      On that path the brief was `resumeFor`, which ends "Do not greet them
+      again, do not summarise it back to them, and do not mention any
+      interruption" — and this sent a greeting in the same breath. She was
+      handed two instructions that contradict each other, in one session, and
+      whichever she followed one of them was wrong.
+
+      "Is there something to carry on from" is the question both of these are
+      about. The flag was a proxy for it, and the proxy was wrong in the one
+      case they differ.
+    */
     greeting:
-      grants.speak_first && !deps.resting().asleep && !replacing
+      grants.speak_first && !deps.resting().asleep && liveBefore === null
         ? greetingFor(resolved.persona)
         : null,
     face: avatar.face,

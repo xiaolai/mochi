@@ -61,7 +61,13 @@ describe('whether she speaks first', () => {
     expect(sessionConfig(speaking({ resting: () => ({ asleep: true }) })).greeting).toBeNull()
   })
 
-  it('is null when this open is replacing a session', () => {
+  /** A live conversation, which is what a reconnect and a reload both have. */
+  const carryingOn = {
+    conversation: () => ({ wear: () => undefined, liveToken: () => 'live' }) as never,
+    transcripts: () => ({ turns: () => [], sessions: () => [] }) as never,
+  }
+
+  it('is null when there is a conversation to carry on from', () => {
     /*
       A greeting is for a WAKE, and a reconnect is not one.
 
@@ -69,8 +75,36 @@ describe('whether she speaks first', () => {
       opens a new one, so she greeted again every hour somebody she had been
       mid-conversation with all along. The renderer cannot tell the two apart:
       from inside a session an open is an open.
+
+      This asked `replacingASession` instead, which is a PROXY for the same
+      question and disagrees with it in one case — see the test below.
     */
-    expect(sessionConfig(speaking({ replacingASession: () => true })).greeting).toBeNull()
+    expect(
+      sessionConfig(speaking({ replacingASession: () => true, ...carryingOn })).greeting,
+    ).toBeNull()
+  })
+
+  it('is null on a RENDERER RELOAD, where nothing sets the replacing flag', () => {
+    /*
+      The case the proxy got wrong, and it produced a contradiction rather than
+      a wrong guess.
+
+      `did-finish-load` fires again when the renderer reloads, and nothing sets
+      `replacing` for that — `briefing` says so in as many words and uses the
+      live conversation instead. So the brief was `resumeFor`, which ends "Do
+      not greet them again, do not summarise it back to them, and do not mention
+      any interruption", and this sent a greeting in the same breath. Two
+      instructions that contradict each other, in one session, and whichever she
+      followed one of them was wrong.
+    */
+    expect(
+      sessionConfig(speaking({ replacingASession: () => false, ...carryingOn })).greeting,
+    ).toBeNull()
+  })
+
+  it('CONTROL: she still greets a wake, where there is nothing to carry on from', () => {
+    // Without this the two above pass for a build that never greets at all.
+    expect(sessionConfig(speaking({ replacingASession: () => false })).greeting).not.toBeNull()
   })
 
   it('consumes the replacing flag exactly once', () => {
