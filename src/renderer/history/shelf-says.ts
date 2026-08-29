@@ -102,6 +102,15 @@ export const SAYS = {
     he: 'His avatar file names its own five colours, so a theme would overwrite what somebody drew. Clear the file below to choose one.',
     it: 'Its avatar file names its own five colours, so a theme would overwrite what somebody drew. Clear the file below to choose one.',
   },
+  /* Said when she names an avatar file that is not there. The swatches cannot
+     be offered -- each one is HER at that colour and there is no her to draw --
+     and eight built-in mochis in her place would be the substitution the dashed
+     card next to them exists to refuse. */
+  colourMissing: {
+    she: 'Her avatar file is named but not there, so there is nothing to colour. Choose a file below, or clear it to wear the built-in.',
+    he: 'His avatar file is named but not there, so there is nothing to colour. Choose a file below, or clear it to wear the built-in.',
+    it: 'Its avatar file is named but not there, so there is nothing to colour. Choose a file below, or clear it to wear the built-in.',
+  },
   whoSheIs: { she: 'Who she is', he: 'Who he is', it: 'What it is' },
   whoSheIsHint: {
     she: 'her manner, sent as the session instructions',

@@ -2900,14 +2900,20 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     wornId: worn.id,
     characters: listPersonas(
       catalog,
-      (one) =>
-        resolveFaceFor(
+      (one) => {
+        const resolved = resolveFaceFor(
           avatarsRoot(userData),
           packageFolder(one.id, catalog.sources),
           one.avatarId,
           one.theme,
           one.size,
-        ).face,
+        )
+        // NAMED a face and did not get it: she is faceless in this list rather
+        // than quietly wearing the built-in. `source === null` alone is not the
+        // test -- that is also the honest answer for a character who names no
+        // file and legitimately wears what ships.
+        return one.avatarId !== null && resolved.source === null ? undefined : resolved.face
+      },
       (id) => keepsFor(userData, id),
     ),
     avatars: listAvatars(avatarsRoot(userData)),

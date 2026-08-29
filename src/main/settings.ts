@@ -112,7 +112,7 @@ export function listPersonas(
     avatarId: string | null
     theme: Theme
     size: number | null
-  }) => FaceSpec,
+  }) => FaceSpec | undefined,
   /**
    * Whether her conversations are being written down.
    *

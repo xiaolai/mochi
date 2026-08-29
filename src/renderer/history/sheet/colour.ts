@@ -37,6 +37,18 @@ export function colourSection(
     const said = element('p', 'note', forPronoun(SAYS.colourAuthored, view.pronoun))
     return section('Colour', view.faceSource, said)
   }
+  /*
+    Named a file and did not get it, so there is nobody to paint.
+
+    Each swatch is HER at that colour rather than a square of paint, which is
+    the whole reason this grid is faces -- and with no face the grid would be
+    eight built-in mochis standing in for her, beside a card the same view has
+    just drawn as a dashed hole for saying she has none. See `SettingsPersona.face`.
+  */
+  if (worn.face === undefined) {
+    const said = element('p', 'note bad', forPronoun(SAYS.colourMissing, view.pronoun))
+    return section('Colour', worn.avatarId ?? 'missing', said)
+  }
 
   const grid = element('div', 'themes')
   for (const id of THEME_IDS) {

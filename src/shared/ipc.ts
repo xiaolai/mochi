@@ -612,7 +612,8 @@ export interface SettingsPersona {
   /** Where she came from, or null for the built-in. Shown, never sent back. */
   readonly source: string | null
   /**
-   * Her face, RESOLVED, so the card can draw her.
+   * Her face, RESOLVED, so the card can draw her — or UNDEFINED when she named
+   * one and it was not there.
    *
    * The artifact's cards are anchored by a small coloured mochi and this build
    * shipped four lines of text where that face should be — the strongest piece
@@ -620,8 +621,18 @@ export interface SettingsPersona {
    * characters apart. Resolved here rather than in the renderer for the reason
    * `ShelfResolved` gives: where it actually landed, not where it was asked to
    * look.
+   *
+   * `| undefined` is the whole of contract C4 and it was missing for the life of
+   * this field. `ResolvedAvatar.face` is documented "always valid — the built-in
+   * when nothing else is", which is right for the companion, who must be drawn,
+   * and wrong for the one list whose job is telling characters apart: every card
+   * showed the same green mochi and the screen silently stopped working. Both
+   * renderers already handled the absence -- `card.classList.add('faceless')`
+   * and its dashed rule have existed all along -- and a non-optional type here
+   * made that branch unreachable. A rule written into the view and then made
+   * dead by a type is worse than one never written, because it reads as held.
    */
-  readonly face: FaceSpec
+  readonly face: FaceSpec | undefined
   /** Which words this character takes, for the line under her name. */
   readonly pronoun: Pronoun
   /*
