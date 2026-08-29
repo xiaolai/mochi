@@ -392,54 +392,54 @@ button.btn.arming {
 }
 
 /*
- * The second component: a field. Quiet when it has something to say.
+ * The second component: a field, and it says it is one.
  *
- * ## What it replaces, and why one rule rather than five
+ * ## Three states, and the delivery gives all three
  *
- * Every window decided this separately and they disagreed. In the shelf,
- * `select` was already transparent-until-hover with a comment arguing for it --
- * *"a column of grey dropdown chrome is the single biggest reason this window
- * read as a form where the artifact reads as a document"* -- and
- * `input[type='text']` two rules above it kept a resting `--rule` border. The
- * Machine tab's "Looking things up" group draws all three in one column:
- * Workspace (boxed), Web search (quiet), Codex profile (boxed). Nothing about
- * those three jobs differs; only which rule happened to reach them did.
+ *   with a value   border-bottom 1px --rule-2 · padding 3px 0
+ *   empty          border 1px --rule-2 · radius 3px · padding 4px 8px · --ink-3
+ *   being edited   border-bottom 1.5px --her · padding 3px 0 · background --her-wash
  *
- * So the argument the `select` rule already won is applied to all of them, once,
- * here -- and the two comments that argued the other way are rewritten rather
- * than left standing over a sheet that no longer obeys them.
+ * "A field with a value keeps only its RULE. An empty one gets a box, because
+ * there is nothing else to look at."
  *
- * ## Three states, and the third one is the one that was missed
+ * ## What was here, and why it was wrong
  *
- * Quiet with a value; BOXED while empty; filled-but-unboxed on focus. The
- * middle one was found by photographing the pane rather than by reading the
- * rule: an empty field with no edge is a placeholder floating over paper.
+ * The previous rule made a field with a value COMPLETELY transparent — no
+ * border, no fill, nothing — on the argument that "a column of grey dropdown
+ * chrome is the single biggest reason this window read as a form where the
+ * artifact reads as a document". That argument is right about boxes and it was
+ * applied to the wrong thing: the delivery's answer to the same problem is to
+ * take the box away and KEEP THE LINE, which is what says the text can be typed
+ * in. Transparent-at-rest meant nothing on this window looked editable at all —
+ * her name, what she calls you, the folder she may read, all of them plain text
+ * that happened to accept a caret.
  *
- * ## TRANSPARENT, never `border: 0`
+ * "Quiet" and "invisible" are not the same claim, and only one of them was
+ * drawn.
  *
- * The box keeps its 1px at rest and only loses its colour. Removing the border
- * outright makes every control jump by two pixels on hover, which is a layout
- * that moves under the pointer -- the same reasoning the search field's own
- * `:focus` rule already gives for going transparent instead of to zero.
+ * ## The horizontal shift is the delivery's, and it is real
  *
- * ## What is deliberately NOT here
- *
- * `textarea` is a field by this definition and keeps its box anyway, because it
- * is the one control whose EXTENT is part of what it tells you: five rows of
- * prompt with no edge is a paragraph somebody has to discover is editable.
- * Fields are one line and their extent says nothing.
+ * An empty field is 8px of padding and a border inside its box; one with a
+ * value has neither. So the first character typed into an empty field moves the
+ * text 9px left, under the caret. That is what the three specimens draw and it
+ * is followed rather than quietly corrected — but it is written down here, so
+ * whoever finds it irritating knows it was a decision and knows which number
+ * to change.
  */
 input[type='text'],
 input[type='search'],
 select {
-  padding: var(--s1) var(--s3);
-  border: var(--s-px) solid transparent;
-  border-radius: var(--r2);
+  padding: 3px 0;
+  border: 0;
+  /* A RULE, always. This is the line that says a field is a field. */
+  border-bottom: var(--s-px) solid var(--rule-2);
+  border-radius: 0;
   /*
    * `background-color`, NEVER the `background` shorthand.
    *
    * A `select` draws its chevron as two `background-image` gradients, and the
-   * shorthand resets that longhand to `none` -- so a hover rule written as
+   * shorthand resets that longhand to `none` — so a hover rule written as
    * `background:` erases the arrow for exactly as long as the pointer is over
    * the control, which is the one moment somebody is looking at it.
    */
@@ -452,17 +452,14 @@ select {
 input[type='text']:hover,
 input[type='search']:hover,
 select:hover {
-  border-color: var(--rule);
-  background-color: var(--paper);
+  border-bottom-color: var(--ink-3);
 }
 /*
- * An EMPTY field keeps its box, because there is nothing else to look at.
+ * An EMPTY field gets a box, because there is nothing else to look at.
  *
- * The quiet rule above rests on there being something to read: a field with a
- * value in it still shows the value and reads as a field. One showing only a
- * placeholder shows nothing that looks operable — the "name" box under the
- * character list became a grey word floating over paper, and the only thing
- * saying it could be typed in was that it happened to be above three buttons.
+ * The rule above rests on there being something to read: a field with a value
+ * still shows the value and its line says it is a field. One showing only a
+ * placeholder has a line under a grey word, which reads as a caption.
  *
  * `:placeholder-shown` rather than a class somebody remembers to add, which is
  * how the next empty field comes to be missing it. The cost is that a field
@@ -472,30 +469,32 @@ select:hover {
  */
 input[type='text']:placeholder-shown,
 input[type='search']:placeholder-shown {
-  /* `--rule-2`, the heavier of the two: this is the one state where a field is
-     asked to read as a BOX rather than as a line. */
-  border-color: var(--rule-2);
-  background-color: var(--paper);
+  padding: var(--s1) var(--s2);
+  border: var(--s-px) solid var(--rule-2);
+  border-radius: var(--r-control);
+  color: var(--ink-3);
 }
 /*
- * Focused: the fill, but NOT the border, so the ring is not doubled.
+ * BEING EDITED: her colour under it, and her wash behind it.
  *
- * Two rings, one inside the other: the gold `:focus-visible` outline sits a
- * pixel outside the field's own grey hairline and the pair read as a doubled
- * border rather than as a field being focused. The search field alone used to
- * handle this; every field inherits it now, which is the point of the rule
- * living here.
+ * Her colour here and `--ink` for the generic ring is not an inconsistency.
+ * The ring answers "where is the keyboard" on controls that have no other way
+ * to say it; a field being edited has a caret in it and a fill behind it, and
+ * the delivery draws that fill in her wash. `outline: none` is safe for the
+ * same reason, and the border and background in this very block are what
+ * `stylesheets.test.ts` requires beside it.
  *
- * `:focus` rather than `:focus-visible`, because a text field matches the
- * latter however focus arrived and matching the wider rule is what stops the
- * hairline surviving a case the outline does not. Last, so it beats both the
- * hover and the empty rules above at equal specificity.
+ * Last, so it beats the hover and the empty rules above at equal specificity.
  */
 input[type='text']:focus,
 input[type='search']:focus,
 select:focus {
-  border-color: transparent;
-  background-color: var(--paper);
+  outline: none;
+  padding: 3px 0;
+  border: 0;
+  border-bottom: 1.5px solid var(--her);
+  border-radius: 0;
+  background-color: var(--her-wash);
 }
 
 /*
@@ -512,21 +511,18 @@ select:focus {
  * Settings, its shape was a rounded rectangle whatever the control, and none of
  * it had been measured against anything.
  *
- * It showed on the search field: a ruled line with a rounded amber box drawn
- * around it, on the one row where the design draws no boxes at all.
- *
  * ## `--ink`, not her colour
  *
  * Focus and chosen are different questions — where the keyboard is, and what is
  * selected — and this window already spends her colour on the second. A ring in
  * the same hue makes a focused row and a chosen row the same picture. `--ink`
- * is the text colour, so it is the one value in the palette guaranteed to be
- * legible on every surface here: 12.52:1 at worst.
+ * is the text colour, so it is the one value in the palette guaranteed legible
+ * on every surface here: 12.52:1 at worst.
  *
  * `:focus-visible` rather than `:focus`, so a pointer click does not ring the
- * control it just pressed. Controls whose whole treatment is a RULE opt out of
- * the box and thicken their rule instead — see `#q` and `.wake-edit`, which
- * cannot take an outline without becoming the rectangle they exist not to be.
+ * control it just pressed. Fields do not take it — they have a caret, a rule in
+ * her colour and a wash, which is the delivery's own answer and a better one
+ * for a control you are typing into.
  */
 :focus-visible {
   outline: var(--s0) solid var(--ink);

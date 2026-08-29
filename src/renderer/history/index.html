@@ -1733,10 +1733,30 @@
         font-weight: var(--w-semibold);
         letter-spacing: -0.02em;
         line-height: 1;
-        width: 100%;
+        /*
+          As wide as her NAME, not as wide as the row.
+
+          The rule under it is what says she can be renamed, and a rule running
+          the width of the subject row would read as a divider under the whole
+          head. `field-sizing: content` is what lets an input be the size of its
+          own text; before it existed this needed a hidden span to measure
+          against, which is why the field was full-width and its rule was
+          transparent.
+        */
+        field-sizing: content;
+        min-width: 4ch;
+        max-width: 100%;
         padding: var(--s0) 0;
         border: 0;
-        border-bottom: var(--s-px) solid transparent;
+        /*
+          A RULE AT REST, like every other field in this window.
+
+          It was transparent until hover, so the largest thing on the page —
+          and the one thing on it somebody most wants to change — was the only
+          field that did not say it could be typed in. "A field with a value
+          keeps only its rule" applies at 30px too.
+        */
+        border-bottom: var(--s-px) solid var(--rule-2);
         border-radius: 0;
         background: transparent;
         color: inherit;
@@ -1746,28 +1766,22 @@
         letter-spacing: var(--track-tight);
       }
       /*
-        The two shared states are UNDONE here, not merely added to.
+        Only what differs from a field.
 
-        `tokens.css` gives every field a `--rule` border and a `--paper` fill on
-        hover and focus. Winning on specificity is not enough, because the
-        cascade runs per DECLARATION: a rule that names only
-        `border-bottom-color` leaves the shared `border-color` and
-        `background-color` in force however specific it is, and her name would
-        grow the full box this whole block exists to remove — on hover only,
-        which is exactly the kind of thing a screenshot of a resting window does
-        not show. So every property the shared rule sets is named back.
+        A block stood here naming every property of the shared rule back to
+        transparent, because `tokens.css` used to give every field a full box on
+        hover and focus and her name had to refuse it — "the cascade runs per
+        DECLARATION", it said, correctly. That shared rule is a bottom rule now,
+        which is what her name wanted all along, so the reset has nothing left
+        to reset and is gone rather than kept as a spell against a hazard that
+        was removed.
+
+        What is left is the padding, because hers is 2px where a field's is 3,
+        and it has to be named in the focus state too or the shared rule moves
+        her name by a pixel the moment it is clicked.
       */
-      input[type='text'].who-name:hover,
       input[type='text'].who-name:focus {
-        border-color: transparent;
-        background-color: transparent;
-      }
-      input[type='text'].who-name:hover {
-        border-bottom-color: var(--rule);
-      }
-      input[type='text'].who-name:focus {
-        outline: none;
-        border-bottom-color: var(--ink);
+        padding: var(--s0) 0;
       }
       .who-facts {
         display: flex;

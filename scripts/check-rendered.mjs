@@ -609,6 +609,50 @@ async function checks(page, where = '') {
         ')',
     )
 
+  /* --- an editable thing looks editable --------------------------------- */
+  const editable = await page.run(`(() => {
+    const fields = [...document.querySelectorAll('input[type=text], input[type=search], textarea, select')]
+      .filter((e) => e.getClientRects().length > 0 && !e.disabled && !e.readOnly);
+    const silent = [];
+    for (const el of fields) {
+      const s = getComputedStyle(el);
+      // Something has to say it: a rule under it, a box round it, or a fill
+      // that is not the page. Transparent on every side is plain text with a
+      // caret hiding in it.
+      const edges = [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth]
+        .map(parseFloat);
+      const colours = [s.borderTopColor, s.borderRightColor, s.borderBottomColor, s.borderLeftColor];
+      /*
+        Compared as STRINGS, because a regular expression cannot survive the
+        trip.
+
+        This was a pattern built inside a template literal, so its backslashes
+        were dropped before the page ever saw it: 'rgba\\(0, 0, 0, 0\\)' arrived
+        as 'rgba(0, 0, 0, 0)', which is a capture group matching nothing. Every
+        edge therefore counted as drawn and the check passed against a window
+        where her name had no rule at all — verified by flipping it and watching
+        this stay green.
+      */
+      const clear = (c) => c === 'transparent' || c.split(' ').join('') === 'rgba(0,0,0,0)';
+      const ruled = edges.some((w, i) => w > 0 && !clear(colours[i]));
+      const filled = !clear(s.backgroundColor);
+      if (!ruled && !filled) {
+        silent.push((el.id ? '#' + el.id : el.tagName.toLowerCase()) + '.' + (el.className || '?'));
+      }
+    }
+    return { seen: fields.length, silent: silent.slice(0, 6),
+ };
+  })()`)
+  if (editable.seen === 0) bad('editable', 'no editable control was drawn, so this proves nothing')
+  else if (editable.silent.length > 0)
+    bad(
+      'editable',
+      editable.silent.length +
+        ' editable things show no rule, box or fill: ' +
+        JSON.stringify(editable.silent),
+    )
+  else ok('editable', 'all ' + editable.seen + ' editable things say so at rest')
+
   /* --- C5: seeing a mood and permitting it are separate controls --------- */
   const moods = await page.run(`(() => {
     const tiles = [...document.querySelectorAll('#reading .mood')];
