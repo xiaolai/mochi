@@ -306,7 +306,6 @@ describe('the vocabulary that is declared and not yet spoken', () => {
     // Scale rungs between sizes nothing has needed.
     '--r5': 'a radius between --r4 and the pill',
     '--t-lead': 'a size between --t-h3 and --t-body',
-    '--t-title': 'the only fluid size in the scale, for a title screen that does not exist',
   }
 
   /*

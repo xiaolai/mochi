@@ -82,6 +82,7 @@ import {
   marginTalkEl,
 } from './elements'
 import { say } from './status'
+import { element } from '../element'
 import { empty, facts, iconButton, marked } from './bits'
 import { freshness } from './freshness'
 import { PLACES, VIEWS, alongViews, isHers, type Place } from './tabs'
@@ -178,10 +179,31 @@ function showPicking(): void {
   const here = place === 'archive'
   const on = picking.on()
   const many = picking.chosen().length
-  pickEl.hidden = !here || on
+  /*
+    NOTHING TO ACT ON IS NOTHING TO OFFER.
+
+    On a new installation there are no conversations, and the bar still offered
+    "Select…", "Delete all…" and an export of an empty archive. "Anything
+    offering a period with nothing in it must not appear actionable" is written
+    about the calendar and it is the same lie here: a control that answers with
+    nothing is a control that should not have been there.
+
+    Most people's first hour is exactly this state.
+  */
+  const any = conversations.length > 0
+  pickEl.hidden = !here || on || !any
   pickOffEl.hidden = !here || !on
   dropSomeEl.hidden = !here || !on
-  dropHersEl.hidden = !here || on
+  dropHersEl.hidden = !here || on || !any
+  /*
+    Export was `hidden` in the markup and nothing ever took it off.
+
+    It moved into this bar with the deletions and did not get a line here, so
+    §21 of the brief — export everything to a file — has been unreachable since
+    the frame was rebuilt. Nothing failed: the button is in the document, it has
+    its handler, and it has never been on screen.
+  */
+  exportEl.hidden = !here || !any
   dropSomeEl.disabled = many === 0
   dropSomeEl.textContent = many === 0 ? 'Delete' : `Delete ${String(many)}`
   listEl.classList.toggle('picking', on)
@@ -529,6 +551,13 @@ function renderHerMargin(): void {
   )
 }
 
+/** Her face and her name, at the size the view on screen calls for. */
+function renderSubject(): void {
+  if (shelf === null) return
+  const subject = characterSubject(shelf, handlers, place === 'cast' ? 104 : 52)
+  subjectEl.replaceChildren(...(subject === null ? [] : [subject]))
+}
+
 /** Draw the open character in the main column. */
 function openCharacter(): void {
   if (shelf === null) return
@@ -537,8 +566,7 @@ function openCharacter(): void {
   paneEl.replaceChildren(characterSheet(shelf, handlers))
   // The subject sits above the views, outside the scrolling column: her name is
   // what they are views OF, and it scrolled away with the rest of the sheet.
-  const subject = characterSubject(shelf, handlers)
-  subjectEl.replaceChildren(...(subject === null ? [] : [subject]))
+  renderSubject()
   renderHerMargin()
   // Only when the pane ARRIVES on the character. Every write re-reads and
   // redraws the sheet, so forgetting her notes — a button near the bottom —
@@ -570,6 +598,19 @@ function showPlace(next: Place): void {
     the token file argues for — this window has shipped a hidden panel that was
     on screen twice, both times because an author `display` outranked the UA's.
   */
+  /*
+    Her scale follows the view.
+
+    On "Who she is" the delivery draws her at 104px with a 46px name; on the
+    other two, 52 and 30. That is not decoration — the first view IS her, so she
+    is the subject at full size, and the other two are about what she said and
+    what she may do, where she is the heading over somebody else's material.
+    One class, because the sizes belong to the sheet and the view belongs here.
+  */
+  subjectEl.classList.toggle('subject-large', place === 'cast')
+  // Redrawn, not rescaled: her face is a canvas and it has to be rendered at
+  // the size it is shown.
+  renderSubject()
   pageHersEl.hidden = !isHers(place)
   pageMachineEl.hidden = isHers(place)
 
@@ -616,7 +657,20 @@ function showPlace(next: Place): void {
     transcript that failed to load, and it was the first thing on screen every
     time somebody opened what she has said.
   */
-  if (place === 'archive' && open === null && talkEl.childElementCount === 0) {
+  /*
+    Only when there IS something to pick.
+
+    With nothing kept, this stacked a second empty state under the first: the
+    list said she has not said anything yet and the column beneath it invited
+    you to pick one of them. Two answers to one question, and the invitation was
+    the wrong one.
+  */
+  if (
+    place === 'archive' &&
+    open === null &&
+    talkEl.childElementCount === 0 &&
+    conversations.length > 0
+  ) {
     empty(talkEl, forPronoun(SAYS.pickOne, saying()))
   }
   renderPlaces()
@@ -1217,6 +1271,12 @@ function renderCalendar(now: number): void {
   */
   const strip = document.createElement('div')
   strip.className = 'strip'
+  if (conversations.length === 0) {
+    strip.classList.add('strip-empty')
+    strip.textContent = forPronoun(SAYS.noDay, saying())
+    calEl.replaceChildren(head, strip)
+    return
+  }
   for (const cell of monthDays(year, month)) {
     const many = counts.get(cell.at) ?? 0
     const day = document.createElement('button')
@@ -1258,9 +1318,46 @@ function renderCalendar(now: number): void {
  */
 function renderList(now: number): void {
   calEl.hidden = false
+  countEl.hidden = false
   if (conversations.length === 0) {
-    calEl.hidden = true
+    /*
+      The month stays; the strip becomes a sentence.
+
+      Thirty-one inert numerals is a row of days that "must not appear
+      actionable" and does not appear to be anything else either. The delivery's
+      first-hour state keeps the month and its arrows — moving back through
+      months is still a real question — and says in words that no day has
+      anything in it.
+    */
+    countEl.hidden = true
+    /*
+      The month has to be decided before it can be drawn, and with nothing kept
+      there is no conversation to take it from — so it is THIS month. Without
+      this `onMonth` was still null, `renderCalendar` returned at its first
+      line, and the strip was simply absent rather than saying why.
+    */
+    const here = new Date(now)
+    onMonth ??= { year: here.getFullYear(), month: here.getMonth() }
+    renderCalendar(now)
+    /*
+      ONE empty state, and it says what is true of the machine.
+
+      There were two, stacked: the list said "nothing has been kept yet" and the
+      transcript column beneath it said "pick a conversation on the left" — an
+      instruction to pick from a list that had just said it was empty, pointing
+      at a side the list is no longer on.
+
+      The second line distinguishes NOTHING TO SHOW from FAILED TO READ, which
+      an empty page cannot do on its own: it names whether conversations are
+      being kept at all. Somebody whose retention is off learns it here rather
+      than after a week of talking to an archive that was never going to fill.
+    */
+    const keeps = shelf?.characters.find((one) => one.id === shelf?.wornId)?.keeps ?? true
     empty(listEl, forPronoun(SAYS.noTalks, saying()))
+    listEl.append(
+      element('p', 'note', `${forPronoun(SAYS.noTalksWhy, saying())} ${keeps ? 'ON' : 'OFF'}`),
+    )
+    talkEl.replaceChildren()
     return
   }
   picked ??= openingDay(conversations, now)

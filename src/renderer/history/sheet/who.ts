@@ -61,6 +61,14 @@ export function whoBand(
   view: ShelfView,
   worn: ShelfCharacter,
   handlers: ShelfHandlers,
+  /**
+   * How big her face is drawn, which the VIEW decides.
+   *
+   * Passed rather than set in the sheet because `faceTile` writes the size as
+   * an inline style — a canvas has to be rendered at the size it is shown or it
+   * is blurry, so this cannot be a class the stylesheet scales.
+   */
+  px = 52,
 ): HTMLElement {
   // `who-band`, not `who`: this window already styles `.who` as the speaker
   // label over a turn in a transcript. See the stylesheet for the four earlier
@@ -70,7 +78,7 @@ export function whoBand(
   // scrolling column of her properties. On a subject row beside her name it is
   // a face on a line of type, and 108 makes the line as tall as the views under
   // it.
-  band.append(faceTile(worn.face, 52))
+  band.append(faceTile(worn.face, px))
   /*
     The same admission the rail makes — contract C4.
 

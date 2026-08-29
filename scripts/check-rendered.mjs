@@ -335,6 +335,144 @@ function setClipboard(text) {
   }
 }
 
+/**
+ * What the window says when there is nothing in it.
+ *
+ * §2.7 of the brief: "One character and zero conversations. Everything about
+ * what has been said is empty until she has been awake and talking. This is
+ * most people's first hour."
+ *
+ * Every other check in this file runs against a seeded profile, deliberately —
+ * the last pass of this work passed twenty-two checks against an empty one
+ * while six regressions sat on screen. The cost of that correction is that the
+ * empty states are now the ones nothing looks at, so this walks them and prints
+ * what each place actually says.
+ */
+async function firstHour(page) {
+  console.log('\n  ─── the first hour: one character, nothing said ─────────────')
+  for (const place of ['cast', 'archive', 'permits', 'machine']) {
+    await page.run(
+      `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
+    )
+    await wait(700)
+    const said = await page.run(`(() => {
+      const words = (el) => (el && el.getClientRects().length > 0 ? el.textContent.replace(/\\s+/g, ' ').trim() : null);
+      const reading = [...document.querySelectorAll('#reading > *, #machine-pane')]
+        .filter((e) => e.getClientRects().length > 0)
+        .map((e) => words(e)).filter(Boolean);
+      const margin = [...document.querySelectorAll('#margin > *, #machine-tools')]
+        .filter((e) => e.getClientRects().length > 0)
+        .map((e) => words(e)).filter(Boolean);
+      return {
+        reading: reading.map((t) => t.slice(0, 150)),
+        margin: margin.map((t) => t.slice(0, 90)),
+        strip: words(document.getElementById('calendar')),
+        // VISIBLE children only. Reading the bar's textContent includes the
+        // hidden archive controls and reports them on every page.
+        status: [...document.querySelectorAll('.status > *')]
+          .filter((e) => e.getClientRects().length > 0)
+          .map((e) => words(e))
+          .filter(Boolean)
+          .join(' · '),
+      };
+    })()`)
+    console.log(`  ${place}:`)
+    if (said.reading.length === 0) console.log('      reading: (NOTHING AT ALL)')
+    else for (const t of said.reading) console.log(`      reading: ${t}`)
+    if (said.margin.length === 0) console.log('      margin:  (empty)')
+    else for (const t of said.margin) console.log(`      margin:  ${t}`)
+    if (said.strip !== null) console.log(`      strip:   ${said.strip.slice(0, 90)}`)
+    console.log(`      status:  ${said.status}`)
+  }
+  console.log('  ─────────────────────────────────────────────────────────────\n')
+}
+
+/* ---- the sweep ----------------------------------------------------------- */
+
+/**
+ * A measured sweep of the whole window, against the delivery's own vocabulary.
+ *
+ * The checks below are the ones worth failing a build over. This is the other
+ * kind: it walks every visible element on every page in both themes and reports
+ * every value that is not in the design system — a typeface that is not one of
+ * the three, a size that is not a rung of the scale, a radius that is not 0, 3
+ * or 6, a shadow at all, a colour that is not a token.
+ *
+ * It reports rather than fails, because a sweep is how you find out what to
+ * check, and a list of forty deviations is not a gate.
+ */
+async function audit(page) {
+  const SIZES = [46, 30, 21, 19, 15.5, 14, 13, 12.5, 12, 11.5, 11, 10.5, 10, 9.5]
+  const FACES = ['Literata', 'Sora', 'DM Mono']
+  const RADII = ['0px', '3px', '6px', '999px']
+  /*
+    The one shadow this window is allowed, and why.
+
+    "Hairlines, not shadows" is about structure — an edge is a rule, a surface
+    does not lift. The ring around a lit status light is neither: it is what
+    makes an 8px dot of colour read as a light rather than as a bullet, and
+    `.light` argues for it where it is drawn. Named here so it stops being
+    reported, and so the next shadow still is.
+  */
+  const ALLOWED = ['span.light']
+
+  console.log('\n  ─── the sweep ───────────────────────────────────────────────')
+  for (const theme of ['light', 'dark']) {
+    await page.send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-color-scheme', value: theme }],
+    })
+    for (const place of ['cast', 'archive', 'permits', 'machine']) {
+      await page.run(
+        `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
+      )
+      await wait(600)
+      const found = await page.run(`(() => {
+        const out = { faces: {}, sizes: {}, radii: {}, shadows: {}, colours: {} };
+        const note = (bucket, key, who) => {
+          if (!out[bucket][key]) out[bucket][key] = [];
+          if (out[bucket][key].length < 3) out[bucket][key].push(who);
+        };
+        const name = (e) => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.className && typeof e.className === 'string' ? '.' + e.className.split(' ')[0] : '');
+        for (const el of document.querySelectorAll('body *')) {
+          if (el.getClientRects().length === 0) continue;
+          const s = getComputedStyle(el);
+          const has = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim().length > 0);
+          if (has) {
+            const face = s.fontFamily.split(',')[0].replace(/["']/g, '').trim();
+            note('faces', face, name(el));
+            note('sizes', s.fontSize, name(el));
+          }
+          const r = s.borderRadius;
+          if (r !== '0px') note('radii', r, name(el));
+          if (s.boxShadow !== 'none') note('shadows', s.boxShadow.slice(0, 40), name(el));
+        }
+        return out;
+      })()`)
+
+      const oddFace = Object.keys(found.faces).filter((f) => !FACES.includes(f))
+      const oddSize = Object.keys(found.sizes).filter((v) => !SIZES.includes(parseFloat(v)))
+      const oddRadius = Object.keys(found.radii).filter((v) => !RADII.includes(v))
+      const shadows = Object.keys(found.shadows)
+      const lines = []
+      for (const f of oddFace) lines.push(`face  ${f}  ${found.faces[f].join(' ')}`)
+      for (const v of oddSize) lines.push(`size  ${v}  ${found.sizes[v].join(' ')}`)
+      for (const v of oddRadius) lines.push(`radius  ${v}  ${found.radii[v].join(' ')}`)
+      for (const v of shadows) {
+        const who = found.shadows[v]
+        if (who.every((one) => ALLOWED.includes(one))) continue
+        lines.push(`shadow  ${v}  ${who.join(' ')}`)
+      }
+      if (lines.length === 0) console.log(`  ${theme}/${place}: nothing outside the system`)
+      else {
+        console.log(`  ${theme}/${place}:`)
+        for (const line of lines) console.log(`      ${line}`)
+      }
+    }
+  }
+  await page.send('Emulation.setEmulatedMedia', { features: [] })
+  console.log('  ─────────────────────────────────────────────────────────────\n')
+}
+
 /* ---- looking at it ------------------------------------------------------ */
 
 /**
@@ -719,7 +857,12 @@ async function checks(page, where = '') {
       // exists to catch. The pair that prompted this measured 4.4926:1 and sat
       // inside a 0.05 slack for the life of the token.
       if (ratio < floor) {
-        bad.push(el.className + ' "' + el.textContent.trim().slice(0, 24) + '" ' + ratio.toFixed(2) + ':1 needs ' + floor);
+        bad.push(
+          el.tagName.toLowerCase() + '.' + (el.className || '(none)') +
+          ' "' + el.textContent.trim().slice(0, 20) + '" ' +
+          ratio.toFixed(2) + ':1 needs ' + floor +
+          ' — ' + style.color + ' on ' + behind(el)
+        );
       }
     }
     return bad.slice(0, 6);
@@ -935,9 +1078,16 @@ async function main() {
       console.log('  seeded character:', made, '| cards now:', listed)
     running = null
 
-    /* --- seed --- */
-    seedConversations(userData)
-    const face = breakAFace(userData)
+    /* --- seed, unless we are auditing the first hour --- */
+    /*
+      `--fresh` leaves the store as the app made it: one character, nothing
+      said, no avatar named. That is §2.7 of the brief — "most people's first
+      hour" — and it is the state every check here has been blind to, because
+      seeding is what made the other checks mean anything.
+    */
+    const fresh = process.argv.includes('--fresh')
+    if (!fresh) seedConversations(userData)
+    const face = fresh ? { broke: 'skipped', why: null } : breakAFace(userData)
     // Loudly, and before anything is checked. If the second character never got
     // a face to lose, C4 below is measuring a case this run never created --
     // and a check that cannot fail for the right reason is worse than none.
@@ -951,6 +1101,12 @@ async function main() {
     page = await openShell()
     await wait(1200)
 
+    if (fresh) {
+      await firstHour(page)
+      page.close()
+      return
+    }
+    if (process.argv.includes('--audit')) await audit(page)
     if (process.argv.includes('--shot')) await photograph(page)
     /*
       Checked at the WINDOW'S FLOOR as well as at its opening size.

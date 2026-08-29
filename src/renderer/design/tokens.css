@@ -172,7 +172,14 @@
   --her-deep-ink: #ffffff;
   --her-veil: light-dark(rgb(62 115 85 / 10%), rgb(127 190 155 / 14%));
   --ink-brand: light-dark(#3e7355, #7fbe9b);
-  --chrome-wash: light-dark(#f2ece6, #1e1915);
+  /*
+    `--chrome-wash` was here: a neutral fill for a chosen thing, distinct from
+    her wash. Nothing draws it any more, and that is the point — every chosen
+    state in this window is her colour now, learned once, where it used to be a
+    grey fill in the cast list, a gold fill in the archive and a wash in the
+    swatches. A token for a second way of saying chosen is a second meaning
+    waiting to be given to it.
+  */
 
   /* ---- two status families, and no more ---------------------------------- */
   --red: light-dark(#a33529, #e8a69c);
@@ -181,9 +188,16 @@
   --warn-ink: light-dark(#8a6510, #e3cd77);
   --warn-bg: light-dark(#f7efdc, #2b250d);
   --warn-line: light-dark(#c8b9ac, #4b4038);
+  /*
+    Gold is `--warn-ink` under another name, and only the ink is still drawn.
+
+    `--gold-wash` was the fill behind a CHOSEN conversation, in a second copy of
+    the list's rules that shadowed the delivered ones — a chosen row is her
+    colour everywhere in this window, and spending an attention colour on an
+    ordinary selection is how it came to mean four different things. The fill
+    and its ink went with that rule.
+  */
   --gold: light-dark(#8a6510, #e3cd77);
-  --gold-wash: light-dark(#f7efdc, #2b250d);
-  --gold-ink: light-dark(#241e1a, #16120f);
   --ok: light-dark(#1f6b41, #7fbe9b);
   --ok-wash: light-dark(#e6f0e9, #1e3128);
   /* The blue family.  went with the filled pill it was for: the

@@ -131,10 +131,35 @@ export const SAYS = {
     he: 'interrupted before he got a word out',
     it: 'interrupted before it got a word out',
   },
+  /*
+    The first hour, and it is the delivery's own words.
+
+    "She has not said anything yet. This page fills itself the first time you
+    talk to her." A sentence about what will happen, not a report that a query
+    returned nothing.
+  */
   noTalks: {
-    she: 'Nothing has been kept yet. Conversations appear here once she has been awake and her conversations are being saved.',
-    he: 'Nothing has been kept yet. Conversations appear here once he has been awake and his conversations are being saved.',
-    it: 'Nothing has been kept yet. Conversations appear here once it has been awake and its conversations are being saved.',
+    she: 'She has not said anything yet. This page fills itself the first time you talk to her.',
+    he: 'He has not said anything yet. This page fills itself the first time you talk to him.',
+    it: 'It has not said anything yet. This page fills itself the first time you talk to it.',
+  },
+  /*
+    NOTHING TO SHOW is not the same as FAILED TO READ, and an empty page cannot
+    tell you which. So the empty state says what is true of the machine: whether
+    conversations are being kept at all, and how many times she has been awake.
+    A person whose retention is off learns it here rather than after a week of
+    talking to an archive that was never going to fill.
+  */
+  /* Said where the day strip would be, when no day has anything on it. */
+  noDay: {
+    she: 'no day has anything in it',
+    he: 'no day has anything in it',
+    it: 'no day has anything in it',
+  },
+  noTalksWhy: {
+    she: 'keeping conversations is',
+    he: 'keeping conversations is',
+    it: 'keeping conversations is',
   },
   /* Said after a face is worn from the mood tiles. The face's own name comes
      first — "Done" over eight tiles that look alike at 56px says nothing
@@ -153,10 +178,16 @@ export const SAYS = {
     he: 'Who he is is on his own page. This holds only what is true whoever is worn.',
     it: 'What it is is on its own page. This holds only what is true whoever is worn.',
   },
+  /*
+    "on the left" was true of a layout that no longer exists — the list was in
+    an aside beside the transcript and is above it now. A sentence that tells
+    somebody to look in the wrong direction is worse than one that tells them
+    nothing.
+  */
   pickOne: {
-    she: 'Pick a conversation on the left, or search everything she has ever said.',
-    he: 'Pick a conversation on the left, or search everything he has ever said.',
-    it: 'Pick a conversation on the left, or search everything it has ever said.',
+    she: 'Pick a conversation above, or search everything she has ever said.',
+    he: 'Pick a conversation above, or search everything he has ever said.',
+    it: 'Pick a conversation above, or search everything it has ever said.',
   },
   noTroubles: {
     she: 'Nothing has gone wrong since she woke up.',

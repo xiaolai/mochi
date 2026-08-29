@@ -38,6 +38,34 @@
         height: 100%;
       }
 
+      /*
+        Headings and machine-shaped text, which had no rule at all.
+
+        `h3` fell back to the user agent's `1.17em` — 15.21px against a 13px
+        context, a size that is not on this scale and could not be, because
+        nothing chose it. `code` fell back to the browser's `monospace`, so
+        every path, filename and capability name outside `.folder` was set in
+        whatever the system calls mono rather than in DM Mono.
+
+        Both were rules that went missing when the sections holding them were
+        replaced. Neither shows in a screenshot as anything but "slightly
+        wrong", and both were found by measuring every drawn element against
+        the scale rather than by looking.
+      */
+      h3 {
+        margin: 0;
+        font-family: var(--sans);
+        font-size: var(--t-label);
+        font-weight: var(--w-medium);
+        letter-spacing: var(--track-wide);
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      code {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+      }
+
       /* ---- the frame: a rail, and one page at a time -----------------------
         The rail is the window's table of contents and it never goes away. A
         character list that appears on one tab only is a list you have to
@@ -268,6 +296,15 @@
       }
       .subject-of {
         min-width: 0;
+      }
+      /*
+        View I is about HER, so she is the subject at full size: a 104px face
+        and her name at `--t-title`. The other views are about what she said or
+        what she may do, and she is the heading over them at 52 and 30.
+      */
+      .subject-large .who-name {
+        font-size: var(--t-title);
+        letter-spacing: -0.025em;
       }
       /*
         A RULED LINE, not a box.
@@ -544,6 +581,14 @@
         display: grid;
         grid-template-columns: repeat(31, 1fr);
       }
+      /* No day has anything in it, said where the days would be. Compounded,
+         because it is added at runtime — see the check that says why. */
+      .strip.strip-empty {
+        display: block;
+        font-family: var(--sans);
+        font-size: var(--t-cap);
+        color: var(--ink-3);
+      }
       /*
         A day. Pale and inert unless something happened on it.
 
@@ -752,7 +797,7 @@
       .tab .dot {
         width: 7px;
         height: 7px;
-        border-radius: 50%;
+        border-radius: var(--r-pill);
         background: var(--warn-line);
         margin-left: auto;
         flex: none;
@@ -827,7 +872,7 @@
         width: var(--s3);
         height: var(--s3);
         flex: none;
-        border-radius: 50%;
+        border-radius: var(--r-pill);
         background: var(--warn-line);
       }
       .light.on {
@@ -1169,35 +1214,64 @@
         The inner pill is also the shape the voice row beside it uses for the
         same job, so the pane now says "this one" one way instead of two.
       */
+      /*
+        The pronoun, as three words rather than a segmented control.
+
+        It was a bordered capsule holding three uppercase pills, one of which
+        was filled with `--her-deep` and reversed to white. The delivery draws
+        no capsule and no fill on the two you did not pick:
+
+            gap 2px · Sora 12px · baseline
+            chosen   padding 4px 10px · background --her-wash · colour --her
+                     weight 600 · radius 3px
+            others   padding 4px 10px · colour --ink-3
+
+        A capsule is a box, and a box is reserved for a control and a warning.
+        Three words beside her name are neither — and the segmented shape said
+        "one of these three is a mode", where what is true is "she takes these
+        words".
+      */
       .switchers {
         display: inline-flex;
+        align-items: baseline;
         gap: var(--s0);
-        padding: var(--s0);
-        border: var(--s-px) solid var(--rule);
-        border-radius: var(--r-pill);
       }
       .switchers button {
+        padding: var(--s1) 10px;
         border: 0;
-        border-radius: var(--r-pill);
+        border-radius: var(--r-control);
         background: transparent;
-        padding: var(--s1) var(--s4);
-        font-family: var(--narrow);
-        font-size: var(--t-label);
-        font-weight: var(--w-bold);
-        letter-spacing: var(--track-2);
-        text-transform: uppercase;
+        font-family: var(--sans);
+        font-size: var(--t-data);
         color: var(--ink-3);
-        cursor: default;
+        cursor: pointer;
       }
       .switchers button:hover:not([aria-current='true']) {
-        background: var(--paper-hover);
         color: var(--ink);
       }
+      /*
+        `--ink-brand` for the WORD, `--her` for the edge.
+
+        The delivery writes `color: var(--her)` here and its `--her` is deep
+        enough to be a text colour. Ours is not: `accent.ts` computes `--her`
+        from the worn character's hue as a FILL, and the check for it —
+        `AA_BODY` — is applied to `--ink-brand`, which is the same hue taken
+        deep enough to carry text. A character whose colour resolves to a light
+        mint drew "ballad" at 1.72:1 against her own wash, and only
+        `verify:rendered` saw it: the built-in's green passes, so nothing was
+        wrong until a character was made.
+      */
       .switchers button[aria-current='true'] {
-        background: var(--her-deep);
-        color: var(--her-deep-ink);
+        background: var(--her-wash);
+        color: var(--ink-brand);
+        font-weight: var(--w-semibold);
       }
-      /* Eight themes, drawn as her rather than as swatches of paint. */
+      .pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s2);
+      }
+      /* The eight colour swatches, each one HER at that theme. */
       .themes {
         display: flex;
         flex-wrap: wrap;
@@ -1208,50 +1282,48 @@
         height: 52px;
         display: grid;
         place-items: center;
-        border: 0;
-        border-radius: var(--r3);
+        border: var(--s-px) solid transparent;
+        border-radius: var(--r-control);
         background: transparent;
         padding: 0;
-        cursor: default;
+        cursor: pointer;
       }
       .theme:hover {
-        background: var(--paper-hover);
+        border-color: var(--rule-2);
       }
       /*
-        A FILL, not a box — the same answer the cast rows and the Machine nav
-        give, and for the same reason: an outline is a shape and a wash is a
-        state. Eight boxed swatches in a row read as eight buttons with one of
-        them focused, rather than as one of eight colours being the one she is.
+        A FILL AND A RULE, not a fill alone.
+
+        It was `--chrome-wash` and nothing else — which on a chosen swatch is
+        barely a state, and is the same fill the surface behind it may already
+        be. The wash says which, and her own colour on the edge says it again
+        without depending on the wash being visible: "chosen must remain
+        perceivable without colour" cuts both ways, and a wash this pale is
+        close to no colour at all.
       */
       .theme[aria-current='true'] {
-        background: var(--chrome-wash);
+        background: var(--her-wash);
+        border-color: var(--her);
       }
       /*
-        Ten voices as pills rather than a closed dropdown.
+        Hairlines, not shadows — and 3px, not a capsule.
 
-        They are all one word and the whole set fits in the width the dropdown
-        would have taken shut, so a `<select>` here hid ten answers to save no
-        room. The avatar list keeps its select: that one is as long as somebody's
-        folder and has no bounded set to draw.
+        These drew their edge as `box-shadow: inset 0 0 0 1px`, which is a
+        hairline wearing a shadow's clothes: the system says "Hairlines, not
+        shadows" and "Radius 3px on anything you operate", and this was neither.
       */
-      .pills {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--s2);
-      }
       .pills button {
         display: inline-flex;
         align-items: center;
         gap: var(--s2);
-        padding: var(--s2) var(--s4);
-        border: 0;
-        border-radius: var(--r-pill);
-        background: var(--paper-2);
-        box-shadow: inset 0 0 0 1px var(--rule);
+        padding: var(--s1) 10px;
+        border: var(--s-px) solid var(--rule-2);
+        border-radius: var(--r-control);
+        background: transparent;
         color: var(--ink-2);
-        font: inherit;
-        font-size: var(--t-sm);
-        cursor: default;
+        font-family: var(--sans);
+        font-size: var(--t-data);
+        cursor: pointer;
       }
       /*
         The mark on a recommended voice, and on the sentence that explains it.
@@ -1269,7 +1341,7 @@
       .note .dot {
         width: var(--s2);
         height: var(--s2);
-        border-radius: 50%;
+        border-radius: var(--r-pill);
         background: var(--her-deep);
         flex: none;
       }
@@ -1278,12 +1350,13 @@
         vertical-align: middle;
       }
       .pills button:hover {
-        box-shadow: inset 0 0 0 1px var(--ink-3);
+        border-color: var(--ink-3);
         color: var(--ink);
       }
       .pills button[aria-current='true'] {
         background: var(--her-wash);
-        box-shadow: inset 0 0 0 1px var(--her);
+        border-color: var(--her);
+        /* The word takes `--ink-brand`; see the switchers above for why. */
         color: var(--ink-brand);
         font-weight: var(--w-semibold);
       }
@@ -1845,31 +1918,20 @@
         flex-direction: column;
         gap: var(--s4);
       }
-      .list {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        margin: 0 calc(var(--s5) * -1) calc(var(--s5) * -1);
-      }
-      .entry {
-        display: block;
-        width: 100%;
-        text-align: left;
-        padding: var(--s3) var(--s5);
-        border: 0;
-        border-top: var(--s-px) solid var(--rule);
-        background: transparent;
-        color: inherit;
-        font: inherit;
-        cursor: default;
-      }
-      .entry:hover {
-        background: var(--hair-soft);
-      }
-      .entry[aria-current='true'] {
-        background: var(--gold-wash);
-        box-shadow: inset 2px 0 0 var(--gold);
-      }
+      /*
+        A SECOND `.list` and `.entry` stood here.
+
+        They were the conversation list as it looked when it lived in an aside
+        beside the transcript, and they are later in this sheet than the list's
+        own rules — so they won. Everything written for the delivered design was
+        overridden without a word: the chosen conversation kept a GOLD fill and
+        a gold bar where the rest of this window says chosen is her colour, and
+        the rows kept the aside's padding and negative margins.
+
+        It was found by measuring the running window, not by reading. Two rules
+        for one thing is the seventh collision of this shape in this file, and
+        the reason `stylesheets.test.ts` checks class names at all.
+      */
       /* The clock and the facts, on one line — `09:41 · 14 turns · 7 min`. */
       .entry .when {
         display: flex;

@@ -161,10 +161,14 @@ export function characterCards(
  * name the parts of it: I Who she is, II What she has said, III What she may do
  * only mean anything under a subject that says who "she" is.
  */
-export function characterSubject(view: ShelfView, handlers: ShelfHandlers): HTMLElement | null {
+export function characterSubject(
+  view: ShelfView,
+  handlers: ShelfHandlers,
+  px?: number,
+): HTMLElement | null {
   const worn = view.characters.find((one) => one.id === view.wornId)
   if (worn === undefined) return null
-  return whoBand(view, worn, handlers)
+  return whoBand(view, worn, handlers, px)
 }
 
 export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLElement {
