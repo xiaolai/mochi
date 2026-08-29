@@ -623,8 +623,24 @@ export function showHistoryWindow(): BrowserWindow {
     ...size,
     ...(at === null ? {} : { x: at.x, y: at.y }),
     ...(taskbarIcon === null ? {} : { icon: taskbarIcon }),
-    minWidth: 900,
-    minHeight: 560,
+    /*
+      What the delivered layout actually needs, rather than a number inherited
+      from an arrangement that no longer exists.
+
+      The old floor was 900×560, chosen for a three-tab window whose panes each
+      had the whole width. The frame now spends a fixed 210px on the rail and a
+      fixed 236px on the margin on every page, and the machine's page spends a
+      further 232px on its group list — 678px before a single word of the
+      reading column. At 900 that column is 222px wide, which is not a column.
+
+      1100×700 leaves the machine's pane 422px and her reading column 654px, and
+      the design is drawn at 1240×840 — so this is a floor somebody can work at,
+      not the size anybody should choose. `window-brief.md` §6 already said the
+      old number "was chosen for an arrangement that no longer exists and is not
+      a fixed requirement"; this is that sentence being acted on.
+    */
+    minWidth: 1100,
+    minHeight: 700,
     // Shown from the start — see `bringForward` for why waiting for the first
     // paint never returns here. The colour is what `ready-to-show` was for.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1d1a' : '#f7f6f1',

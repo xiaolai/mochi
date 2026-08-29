@@ -4,7 +4,7 @@ import { element } from '../element'
 import { editing } from '../rules/editing'
 import { SAYS } from './shelf-says'
 import { colourSection } from './sheet/colour'
-import { PRONOUN_CAPS, faceTile, wornMark } from './sheet/face-tile'
+import { PRONOUN_CAPS, faceTile } from './sheet/face-tile'
 import { fileSection } from './sheet/file'
 import { memorySection } from './sheet/memory'
 import { moodSection } from './sheet/mood'
@@ -83,29 +83,50 @@ export function characterCards(
   onOpen: (id: string) => void,
 ): readonly HTMLElement[] {
   return view.characters.map((one) => {
-    const card = element('button', 'card')
-    card.type = 'button'
-    card.setAttribute('aria-current', String(one.id === openId))
-    card.append(faceTile(one.face, 44))
+    /*
+      A RAIL ROW, not a card.
+
+      The characters were a column of cards in the Cast tab, so the list of who
+      exists was only visible from one of three places. It is the window's table
+      of contents now and it never goes away — a list you have to navigate to in
+      order to find out what you could navigate to is not a table of contents.
+
+      The chosen row takes a 3px bar in her colour and pays it back out of its
+      own left padding, so every name starts on the same vertical line whether
+      or not it is chosen. See `.rail-row` in the sheet.
+    */
+    const row = element('button', 'rail-row')
+    row.type = 'button'
+    row.setAttribute('aria-current', String(one.id === openId))
+    row.append(faceTile(one.face, 22))
     // Said out loud rather than shown as an identical row of built-in mochis.
-    if (one.face === undefined) card.classList.add('faceless')
+    if (one.face === undefined) row.classList.add('faceless')
 
-    const titles = element('div', 'titles')
-    titles.append(element('div', 'name', one.name))
-    // Which words she takes and which voice she speaks in — the two facts that
-    // tell two characters apart at a glance once the face has. Whether she is
-    // WORN is the pill on the right, not part of this line: it changes on a
-    // click and the rest of the line does not.
+    const titles = element('div', 'rail-titles')
+    titles.append(element('div', 'rail-name', one.name))
+    /*
+      WORN, or which words she takes and which voice she speaks in.
+
+      The worn character says so in words rather than only by a mark, because
+      "worn now" is the one fact on this row somebody is looking for and a tick
+      in the corner is a mark you have to already know how to read. The others
+      get the two facts that tell two characters apart once the face has.
+    */
     titles.append(
-      element('div', 'worn', `${PRONOUN_CAPS[one.pronoun] ?? one.pronoun} · ${one.voice}`),
+      element(
+        'div',
+        'rail-worn',
+        one.id === view.wornId
+          ? 'worn now'
+          : `${PRONOUN_CAPS[one.pronoun] ?? one.pronoun} · ${one.voice}`,
+      ),
     )
-    card.append(titles, element('span', 'grow'))
-    if (one.id === view.wornId) card.append(wornMark())
+    row.append(titles)
 
-    card.addEventListener('click', () => {
+    row.addEventListener('click', () => {
       onOpen(one.id)
     })
-    return card
+    return row
   })
 }
 
@@ -128,6 +149,23 @@ export function characterCards(
  * It lives under the list now — see `castActions`, which the column draws as
  * its footer, the way the drawer is the window's.
  */
+/**
+ * Her face and her name, which are the page's SUBJECT rather than its first
+ * section.
+ *
+ * It used to be the first block of the reading column, which put the thing the
+ * page is about inside the scrolling list of its properties — so her name
+ * scrolled away and the column above it read as belonging to nobody. The
+ * delivered design gives the subject its own row above the views, and the views
+ * name the parts of it: I Who she is, II What she has said, III What she may do
+ * only mean anything under a subject that says who "she" is.
+ */
+export function characterSubject(view: ShelfView, handlers: ShelfHandlers): HTMLElement | null {
+  const worn = view.characters.find((one) => one.id === view.wornId)
+  if (worn === undefined) return null
+  return whoBand(view, worn, handlers)
+}
+
 export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLElement {
   const worn = view.characters.find((one) => one.id === view.wornId)
   const page = element('div', 'sheet')
@@ -137,7 +175,6 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
   }
 
   page.append(
-    whoBand(view, worn, handlers),
     colourSection(view, worn, handlers),
     sizeSection(view, worn, handlers),
     moodSection(view, worn, handlers),

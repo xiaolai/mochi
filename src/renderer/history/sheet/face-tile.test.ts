@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { descendants, structuralDocument, type FakeNode } from '../../../test/structural-dom'
+import { structuralDocument, type FakeNode } from '../../../test/structural-dom'
 
 /**
  * The two pieces of a shelf row that are not the row's text.
@@ -37,7 +37,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const { faceTile, wornMark } = await import('./face-tile')
+const { faceTile } = await import('./face-tile')
 
 const asNode = (value: unknown): FakeNode => value as FakeNode
 
@@ -55,56 +55,33 @@ describe('a row with no face to draw', () => {
     expect(tile.children).toHaveLength(0)
   })
 
-  it('does not size a canvas it never drew into', () => {
-    // A sized-but-blank canvas reserves the space and shows nothing, which
-    // reads as a picture that failed to load rather than as a missing face.
+  it('is the size it was asked for, though nothing is drawn in it', () => {
+    /*
+      A canvas with no width or height has an INTRINSIC 300×150, so a refusal
+      that returns a bare one is eleven times wider than the tile beside it.
+      That went unseen for as long as the cast column carried a rule that
+      happened to compensate, and it pushed the rail 115px wider than the rail
+      the moment that column was replaced.
+
+      This assertion used to be the opposite — that an unsized canvas was right,
+      because a sized blank one "reads as a picture that failed to load rather
+      than as a missing face". That held for a blank square. The delivered
+      design draws a DASHED box instead, which reads as a marked absence, so the
+      reason no longer applies and the element owns its own size.
+    */
     const tile = asNode(faceTile(undefined, 40)) as unknown as { width?: number; height?: number }
-    expect(tile.width).toBeUndefined()
-    expect(tile.height).toBeUndefined()
+    expect(tile.width).toBe(40)
+    expect(tile.height).toBe(40)
+  })
+
+  it('takes no drawing surface it would have to be given a context for', () => {
+    // Sized, and still empty: the refusal is the point, and `MochiAvatar` is
+    // never constructed. Every other tile blits a rendered face in here.
+    expect(asNode(faceTile(undefined, 40)).children).toHaveLength(0)
   })
 
   it('still carries the class the row styles against', () => {
     // The gap has to occupy the same slot, or the row reflows around it.
     expect(asNode(faceTile(undefined, 40)).className).toBe('tile')
-  })
-})
-
-describe('the mark on the character she is wearing', () => {
-  it('is announced as an image with a name', () => {
-    // "A tick is read without being read" — which only holds if the tick has a
-    // name for the readers that cannot see it.
-    const mark = asNode(wornMark())
-    expect(mark.attributes.get('role')).toBe('img')
-    expect(mark.attributes.get('aria-label')).toBe('worn')
-  })
-
-  it('hides the graphic, so it is not announced twice', () => {
-    const svg = descendants(asNode(wornMark())).find((one) => one.tag === 'svg')
-    expect(svg?.attributes.get('aria-hidden')).toBe('true')
-  })
-
-  it('names nothing below the wrapper', () => {
-    for (const one of descendants(asNode(wornMark()))) {
-      expect(one.attributes.has('aria-label'), `${one.tag} is named too`).toBe(false)
-    }
-  })
-
-  it('draws the tick with no fill, or it reads as a blob', () => {
-    const tick = descendants(asNode(wornMark())).find((one) => one.tag === 'path')
-    expect(tick?.attributes.get('fill')).toBe('none')
-    expect(tick?.attributes.get('stroke-width')).toBe('2')
-  })
-
-  it('takes its colour from the rule rather than the markup', () => {
-    // `currentColor` is what lets her theme reach the mark without a second
-    // copy of the colour living here.
-    const tick = descendants(asNode(wornMark())).find((one) => one.tag === 'path')
-    expect(tick?.attributes.get('stroke')).toBe('currentColor')
-  })
-
-  it('builds the graphic in the SVG namespace', () => {
-    // `createElement('svg')` produces an HTML element the browser draws as
-    // nothing, and nothing about the markup looks wrong.
-    expect(descendants(asNode(wornMark())).some((one) => one.tag === 'svg')).toBe(true)
   })
 })

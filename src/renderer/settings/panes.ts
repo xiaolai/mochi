@@ -3,7 +3,6 @@ import { ABOUT } from './pane/about'
 import { HEARING } from './pane/hearing'
 import { KEYS } from './pane/keys'
 import { LOOKING } from './pane/looking'
-import { MAY_DO } from './pane/may-do'
 import { ON_SCREEN } from './pane/on-screen'
 import { PROMPTS } from './pane/prompts'
 
@@ -40,4 +39,21 @@ import { PROMPTS } from './pane/prompts'
  * looking at.
  */
 
-export const PANES: readonly Pane[] = [MAY_DO, LOOKING, HEARING, PROMPTS, ON_SCREEN, KEYS, ABOUT]
+/*
+  `MAY_DO` is NOT here, and that is the delivered design's central move.
+
+  The grants are per-character: each is stored against the worn character and
+  reads differently for one worn as `he`. On this page they sat beside the
+  keyboard shortcuts, which are true whoever is worn — so the one page that
+  mixed the two was the one page that could not say which it was about. It is
+  view III of her page now. See `renderPermits` and Rule 6 of the delivery:
+  "The machine is not her."
+
+  ## Six, where the delivery's nav says seven
+
+  The seventh is "Storage", and the delivery names it in the navigation and
+  draws no content for it anywhere in the document. Rather than invent a pane
+  under cover of adopting a design, it is left out and the gap is recorded
+  here: what belongs in it is a question for whoever drew the nav.
+*/
+export const PANES: readonly Pane[] = [LOOKING, HEARING, PROMPTS, ON_SCREEN, KEYS, ABOUT]

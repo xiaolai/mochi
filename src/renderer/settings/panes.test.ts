@@ -71,8 +71,8 @@ function settled(): SettingsView {
   }
 }
 
-describe('the seven groups', () => {
-  it('is seven, in the order they are drawn', () => {
+describe('the groups this page holds', () => {
+  it('is six, in the order they are drawn, and does not include her grants', () => {
     /*
       `where` is gone, folded into `about`.
 
@@ -89,8 +89,19 @@ describe('the seven groups', () => {
     // `prompts` joins them rather than sitting with the window ones, and for
     // the same test: what she is TOLD is about her dealings with the world, not
     // about how this window looks.
+    /*
+      `may-do` is NOT here any more.
+
+      The grants are per-character and they now live as view III of her page —
+      the delivered design's central move, and the reason this page can finally
+      say what it is about. See `panes.ts`, which carries the argument, and
+      `renderPermits`, which draws them.
+
+      The delivery's own navigation says "Seven groups"; the seventh is
+      "Storage", which it names and never draws. It is left out rather than
+      invented, and that gap is recorded in `panes.ts` too.
+    */
     expect(PANES.map((one) => one.id)).toEqual([
-      'may-do',
       'looking',
       'hearing',
 

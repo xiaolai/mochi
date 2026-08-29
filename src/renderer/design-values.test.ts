@@ -100,7 +100,7 @@ describe('the token file has something to check', () => {
     // Counted first: a parser that has stopped matching would make every
     // assertion below pass while checking nothing.
     expect(declared.size).toBeGreaterThan(50)
-    expect(declared.get('--t-body')).toBe('15px')
+    expect(declared.get('--t-body')).toBe('14px')
   })
 })
 
@@ -299,9 +299,6 @@ describe('the vocabulary that is declared and not yet spoken', () => {
     '--hair-desk': 'nothing paints the desktop',
     // Families with a rung spare.
     '--paper-3': 'a third surface no layer needs yet',
-    '--live-bg': 'the blue status family, of which only --live and --live-off are drawn',
-    '--live-ink': 'the blue status family, of which only --live and --live-off are drawn',
-    '--live-line': 'the blue status family, of which only --live and --live-off are drawn',
     '--gold-ink': 'gold is on its way out; only --gold and --gold-wash are still drawn',
     '--hair': 'hairlines are drawn as a border in --rule rather than as a shadow',
     '--lift-2': 'no surface lifts this far',

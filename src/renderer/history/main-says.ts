@@ -13,6 +13,62 @@ import type { ByPronoun } from '@shared/pronoun'
  * worse than no rationale — it is now on the entry it is about.
  */
 export const SAYS = {
+  readingPermits: {
+    she: 'Reading what she may do…',
+    he: 'Reading what he may do…',
+    it: 'Reading what it may do…',
+  },
+
+  /* ---- the margin: apparatus, never the thing itself -------------------- */
+  marginIs: {
+    she: 'Everything to the right of this rule is apparatus — where a thing is stored, when it was last used, whose recommendation it is. Never the thing itself.',
+    he: 'Everything to the right of this rule is apparatus — where a thing is stored, when it was last used, whose recommendation it is. Never the thing itself.',
+    it: 'Everything to the right of this rule is apparatus — where a thing is stored, when it was last used, whose recommendation it is. Never the thing itself.',
+  },
+  marginColourHead: { she: 'Her colour', he: 'His colour', it: 'Its colour' },
+  marginColour: {
+    she: 'Retints this window as well as her. A hue that cannot reach 4.5:1 is refused and the built-in is used instead — you will be told.',
+    he: 'Retints this window as well as him. A hue that cannot reach 4.5:1 is refused and the built-in is used instead — you will be told.',
+    it: 'Retints this window as well as it. A hue that cannot reach 4.5:1 is refused and the built-in is used instead — you will be told.',
+  },
+  marginFacesHead: { she: 'Her expressions', he: 'His expressions', it: 'Its expressions' },
+  marginFaces: {
+    she: 'The set may legally be empty. Nothing changes her face on its own except waking and falling asleep.',
+    he: 'The set may legally be empty. Nothing changes his face on its own except waking and falling asleep.',
+    it: 'The set may legally be empty. Nothing changes its face on its own except waking and falling asleep.',
+  },
+  marginStored: { she: 'Stored at', he: 'Stored at', it: 'Stored at' },
+  marginBuiltIn: {
+    she: 'built-in · no file of her own',
+    he: 'built-in · no file of his own',
+    it: 'built-in · no file of its own',
+  },
+  marginTalkHead: { she: 'This conversation', he: 'This conversation', it: 'This conversation' },
+  marginAbout: { she: 'What it was about', he: 'What it was about', it: 'What it was about' },
+  marginNoSummary: {
+    she: 'No summary was made. That is normal — the summary is a separate call that often does not run.',
+    he: 'No summary was made. That is normal — the summary is a separate call that often does not run.',
+    it: 'No summary was made. That is normal — the summary is a separate call that often does not run.',
+  },
+  marginUsedHead: { she: 'Capabilities used', he: 'Capabilities used', it: 'Capabilities used' },
+  marginUsedNone: { she: 'none', he: 'none', it: 'none' },
+
+  /*
+    The three views of her page.
+
+    Sentences about her, so they take her pronoun — which is the whole reason
+    they do not live in `tabs.ts` beside the movement they belong to. The worn
+    character can change from the tray while this window is open, so
+    `renderPlaces` re-resolves them on every pass rather than writing them once.
+  */
+  viewCast: { she: 'Who she is', he: 'Who he is', it: 'What it is' },
+  viewArchive: {
+    she: 'What she has said',
+    he: 'What he has said',
+    it: 'What it has said',
+  },
+  viewPermits: { she: 'What she may do', he: 'What he may do', it: 'What it may do' },
+
   /**
    * Clicking a card WEARS her — the handoff's own interaction (1a) — so the
    * plates, the assembled prompt and the conversations list all follow from one
@@ -93,9 +149,9 @@ export const SAYS = {
     it: 'The system prompt is empty. It is still told its character.',
   },
   machineIsFor: {
-    she: 'Who she is is on the Cast tab. This holds only what is true whoever is worn.',
-    he: 'Who he is is on the Cast tab. This holds only what is true whoever is worn.',
-    it: 'What it is is on the Cast tab. This holds only what is true whoever is worn.',
+    she: 'Who she is is on her own page. This holds only what is true whoever is worn.',
+    he: 'Who he is is on his own page. This holds only what is true whoever is worn.',
+    it: 'What it is is on its own page. This holds only what is true whoever is worn.',
   },
   pickOne: {
     she: 'Pick a conversation on the left, or search everything she has ever said.',

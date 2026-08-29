@@ -94,18 +94,34 @@ const DOCUMENTS: readonly {
       'said',
       'said-what',
       'said-shut',
-      // The shell's three places. Listed explicitly because the renderer reaches
-      // for them through a template literal — `need(\`tab-${id}\`)` — which the
-      // extraction below cannot see, so without these they would be the one part
-      // of the window nothing checks.
-      'shell-tabs',
-      'tab-cast',
-      'tab-archive',
-      'tab-machine',
+      // The frame the delivered design draws: a rail that is always present, her
+      // page with three numbered views, and the machine's own page.
+      //
+      // `shell-tabs`, `tab-cast`, `tab-archive`, `tab-machine` and
+      // `topbar-context` are GONE rather than renamed. They were three sibling
+      // panels toggled by a strip in the topbar; there are two pages now, and
+      // the search field belongs to the view that searches rather than to the
+      // strip. See `dev-docs/design-system/STRUCTURE.md`.
+      //
+      // These are still listed by hand: the extraction below reads `need('x')`
+      // from source, and every one of them is reached that way, so this list is
+      // a second opinion rather than the only one.
+      'page-hers',
+      'page-machine',
+      'rail-machine',
+      'machine-check',
+      'views',
+      'subject',
+      'view-head',
+      'finding',
+      'reading',
+      'margin',
+      'permits',
+      'margin-hers',
+      'margin-talk',
       'nav-groups',
       'machine-pane',
       'machine-tools',
-      'topbar-context',
     ],
   },
 ]

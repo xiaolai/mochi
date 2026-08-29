@@ -38,13 +38,9 @@ export const wakeEl = need('panel-wake', HTMLElement)
 
 export const talkEl = need('talk', HTMLElement)
 
-export const shellTabsEl = need('shell-tabs', HTMLElement)
-
 export const navEl = need('nav-groups', HTMLElement)
 
 export const toolsEl = need('machine-tools', HTMLElement)
-
-export const contextEl = need('topbar-context', HTMLElement)
 
 export const machineEl = need('machine-pane', HTMLElement)
 
@@ -84,3 +80,39 @@ export const saidEl = need('said', HTMLElement)
 export const saidWhatEl = need('said-what', HTMLElement)
 
 export const saidShutEl = need('said-shut', HTMLButtonElement)
+
+/* ---- the frame the delivered design draws ------------------------------- */
+
+/** Her page, and the machine's. One is `hidden` at any moment. */
+export const pageHersEl = need('page-hers', HTMLElement)
+
+export const pageMachineEl = need('page-machine', HTMLElement)
+
+/** The rail's row for the machine, which is not one of her views. */
+export const railMachineEl = need('rail-machine', HTMLButtonElement)
+
+export const machineCheckEl = need('machine-check', HTMLElement)
+
+/** The three numbered views under her name. */
+export const viewsEl = need('views', HTMLElement)
+
+/** Her face and her name, above the views. */
+export const subjectEl = need('subject', HTMLElement)
+
+/** What the view on screen needs in its head: search, and the day strip. */
+export const viewHeadEl = need('view-head', HTMLElement)
+
+export const findingEl = need('finding', HTMLElement)
+
+/** The reading column, and the margin apparatus sits in. */
+export const readingEl = need('reading', HTMLElement)
+
+export const marginEl = need('margin', HTMLElement)
+
+/** View III's body: what she is permitted to do, for THIS character. */
+export const permitsEl = need('permits', HTMLElement)
+
+/** The margin's three bodies, one per view. */
+export const marginHersEl = need('margin-hers', HTMLElement)
+
+export const marginTalkEl = need('margin-talk', HTMLElement)

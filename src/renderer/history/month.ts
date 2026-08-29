@@ -45,41 +45,29 @@ export interface Cell {
 }
 
 /**
- * The weeks of a month, starting MONDAY.
+ * The days of a month, in one row.
  *
- * Monday because the calendar in the redesign is drawn `M T W T F S S`, and
- * because a week that starts on Sunday splits the weekend across two rows —
- * which is the one grouping people actually read a calendar for.
+ * A STRIP, not a grid of weeks. The delivered design draws "a whole month at a
+ * glance" as a single line of numerals with a dot under the days that have
+ * something on them, which is a different question from the one a week grid
+ * answers: this one is "when did we talk", and a week grid is for "what day of
+ * the week is the 14th". Nothing in this window ever needed the second.
  *
- * Leading blanks rather than the previous month's tail. Greyed neighbours are
- * the commoner convention and they are also clickable-looking cells that belong
- * to a month the header does not name; blanks cannot be misread.
+ * It also removes the leading blanks, and with them the argument about what to
+ * put in them — greyed neighbours from a month the header does not name, or
+ * empty cells that are not offering anything. A strip has neither.
+ *
+ * Day 0 of the NEXT month is the last day of this one, which is the platform's
+ * own answer, so February and leap years need no special case here.
  */
-export function monthGrid(year: number, month: number): readonly (readonly (Cell | null)[])[] {
-  const first = new Date(year, month, 1)
-  // `getDay()` is 0 for Sunday. Monday-first means Sunday is the seventh column.
-  const lead = (first.getDay() + 6) % 7
-  // Day 0 of the NEXT month is the last day of this one — the platform's own
-  // answer, so February and leap years need no special case here.
+export function monthDays(year: number, month: number): readonly Cell[] {
   const days = new Date(year, month + 1, 0).getDate()
-
-  const weeks: (Cell | null)[][] = []
-  let week: (Cell | null)[] = Array.from({ length: lead }, () => null)
-  for (let day = 1; day <= days; day += 1) {
-    week.push({ at: new Date(year, month, day).getTime(), day })
-    if (week.length === 7) {
-      weeks.push(week)
-      week = []
-    }
-  }
-  if (week.length > 0) {
-    while (week.length < 7) week.push(null)
-    weeks.push(week)
-  }
-  return weeks
+  return Array.from({ length: days }, (_unused, index) => ({
+    at: new Date(year, month, index + 1).getTime(),
+    day: index + 1,
+  }))
 }
 
-/** Step a month, carrying the year. */
 export function stepMonth(
   year: number,
   month: number,
@@ -101,19 +89,6 @@ export function dayHeadingLabel(at: number): string {
     day: 'numeric',
     month: 'long',
   })
-}
-
-/**
- * The initials of the seven columns, Monday first, in the platform's language.
- *
- * Derived from a known Monday rather than hard-coded, so a Chinese or German
- * interface gets its own letters instead of English ones. 2024-01-01 was a
- * Monday; any Monday would do and a constant is cheaper than searching for one.
- */
-export function weekdayInitials(): readonly string[] {
-  return Array.from({ length: 7 }, (_, i) =>
-    new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'narrow' }),
-  )
 }
 
 /** How many conversations fall on each local day. */

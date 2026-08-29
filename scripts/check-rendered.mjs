@@ -193,7 +193,10 @@ async function openShell() {
   // drawn tablist rather than on a duration, so a slow machine does not turn
   // this into a flake generator.
   for (let i = 0; i < 40; i += 1) {
-    const ready = await page.run(`document.querySelectorAll('[role=tab]').length >= 3`)
+    // Her three numbered views. They are built once, on the first render, so
+    // their presence is the signal that the window has drawn rather than that
+    // it has loaded.
+    const ready = await page.run(`document.querySelectorAll('.view[role=tab]').length >= 3`)
     if (ready) break
     await wait(250)
   }
@@ -332,6 +335,34 @@ function setClipboard(text) {
   }
 }
 
+/* ---- looking at it ------------------------------------------------------ */
+
+/**
+ * A photograph of each place, for a person to look at.
+ *
+ * The checks below MEASURE; they cannot say whether the window looks like the
+ * design it is meant to. That question needs eyes, and the eyes need a
+ * populated profile — which this run already has, and which is exactly what a
+ * screenshot taken by hand from a fresh profile did not, the time six
+ * regressions sat on screen through twenty-two green checks.
+ */
+async function photograph(page) {
+  const { writeFileSync, mkdirSync } = await import('node:fs')
+  const into = join(ROOT, 'dev-docs', 'shots')
+  mkdirSync(into, { recursive: true })
+  for (const place of ['cast', 'archive', 'permits', 'machine']) {
+    await page.run(
+      `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
+    )
+    await wait(900)
+    const shot = await page.send('Page.captureScreenshot', { format: 'png' })
+    const data = shot.result?.data
+    if (!data) continue
+    writeFileSync(join(into, `${place}.png`), Buffer.from(data, 'base64'))
+    console.log(`  shot  dev-docs/shots/${place}.png`)
+  }
+}
+
 /* ---- the checks --------------------------------------------------------- */
 
 /**
@@ -340,7 +371,8 @@ function setClipboard(text) {
  * re-tests a decision `src/renderer/rules` already holds; these are the ones
  * that need a layout to be wrong.
  */
-async function checks(page) {
+async function checks(page, where = '') {
+  at = where === '' ? '' : `  [${where}]`
   /* --- A1: a day with nothing on it is not a button --------------------- */
   const calendar = await page.run(`(() => {
     const days = [...document.querySelectorAll('button.day')];
@@ -370,7 +402,7 @@ async function checks(page) {
 
   /* --- A2: picking a day filters, it does not scroll --------------------- */
   const filtered = await page.run(`(() => {
-    const list = document.querySelector('#tab-archive .list');
+    const list = document.querySelector('#reading .list');
     const before = { rows: list.querySelectorAll('.entry').length, top: list.scrollTop };
     const days = [...document.querySelectorAll('button.day.has')];
     const other = days.find((d) => d.getAttribute('aria-current') !== 'true');
@@ -380,7 +412,7 @@ async function checks(page) {
   })()`)
   await wait(700)
   const afterPick = await page.run(`(() => {
-    const list = document.querySelector('#tab-archive .list');
+    const list = document.querySelector('#reading .list');
     return { rows: list.querySelectorAll('.entry').length, top: list.scrollTop,
              head: (list.querySelector('.picked .what') || {}).textContent || '' };
   })()`)
@@ -418,7 +450,7 @@ async function checks(page) {
       buttons,
       says: (dialog.querySelector('h2') || {}).textContent || '',
       pressed,
-      rowsBefore: document.querySelectorAll('#tab-archive .entry').length,
+      rowsBefore: document.querySelectorAll('#reading .entry').length,
     };
   })()`)
   if (opened.why) {
@@ -455,7 +487,7 @@ async function checks(page) {
     })
     await wait(500)
     const after = await page.run(`({ open: document.querySelectorAll('dialog[open]').length,
-                                     rows: document.querySelectorAll('#tab-archive .entry').length })`)
+                                     rows: document.querySelectorAll('#reading .entry').length })`)
     if (after.open !== 0) bad('D2', 'Escape did not close the confirmation')
     else if (after.rows !== opened.rowsBefore)
       bad(
@@ -471,7 +503,7 @@ async function checks(page) {
 
   /* --- D4: no single conversation is deletable in one gesture ------------ */
   const perRow = await page.run(`(() => {
-    const rows = [...document.querySelectorAll('#tab-archive .entry')];
+    const rows = [...document.querySelectorAll('#reading .entry')];
     const armed = rows.filter((r) => [...r.querySelectorAll('button, [role=button]')]
       .some((c) => /delete|forget|remove|✕|×/i.test(c.textContent + (c.getAttribute('aria-label') || ''))));
     return { rows: rows.length, armed: armed.length };
@@ -482,7 +514,7 @@ async function checks(page) {
 
   /* --- A6: copying takes the original text, not what is on screen ------- */
   const copied = await page.run(`(() => {
-    const entry = document.querySelector('#tab-archive .entry');
+    const entry = document.querySelector('#reading .entry');
     if (!entry) return { why: 'no conversation to open' };
     entry.click();
     return { opened: true };
@@ -525,11 +557,11 @@ async function checks(page) {
 
   /* --- C4: a character with no face file is not drawn as somebody else --- */
   const faces = await page.run(`(() => {
-    const cards = [...document.querySelectorAll('#tab-cast button.card')];
+    const cards = [...document.querySelectorAll('.rail-cast .rail-row')];
     if (cards.length < 2) return { why: 'only ' + cards.length + ' character(s) reached the cast list' };
     const shots = cards.map((c) => {
       const canvas = c.querySelector('canvas');
-      const name = (c.querySelector('.name') || {}).textContent || '?';
+      const name = (c.querySelector('.rail-name') || {}).textContent || '?';
       const drawn = canvas ? canvas.toDataURL() : 'no canvas';
       const style = canvas ? getComputedStyle(canvas).borderStyle : '';
       return { name, drawn, style, blank: drawn.length < 400 };
@@ -550,7 +582,7 @@ async function checks(page) {
 
   /* --- C5: seeing a mood and permitting it are separate controls --------- */
   const moods = await page.run(`(() => {
-    const tiles = [...document.querySelectorAll('#tab-cast .mood')];
+    const tiles = [...document.querySelectorAll('#reading .mood')];
     if (tiles.length === 0) return { why: 'no mood tiles were drawn' };
     const wrapped = tiles.filter((t) => [...t.querySelectorAll('label')].some((l) => l.querySelector('button, label')));
     const confusable = tiles.filter((t) => {
@@ -597,7 +629,7 @@ async function checks(page) {
       return getComputedStyle(document.documentElement).backgroundColor || 'rgb(255,255,255)';
     };
     const bad = [];
-    for (const el of document.querySelectorAll('#tab-cast *, #tab-archive *, #tab-machine *')) {
+    for (const el of document.querySelectorAll('#reading *, #reading *, #page-machine *')) {
       if (el.getClientRects().length === 0) continue;
       const text = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim().length > 0);
       if (!text) continue;
@@ -692,22 +724,68 @@ async function checks(page) {
   } else {
     ok('one-title-bar', drag.regions + ' drag region(s), every control in them opts out')
   }
+}
 
+/**
+ * The checks that are purely about WIDTH, run at more than one width.
+ *
+ * Split out because the rest have state — A6 opens a conversation and reads the
+ * clipboard, A2 picks a day — and running those twice makes each pass depend on
+ * what the previous one left behind. These touch nothing.
+ */
+async function layoutChecks(page, where = '') {
+  at = where === '' ? '' : `  [${where}]`
   /* --- a control whose own label does not fit in it ---------------------- */
   const squashed = await page.run(`(() => {
     const out = [];
     for (const el of document.querySelectorAll('button, select, input, textarea, .name, .worn, .what')) {
       if (el.getClientRects().length === 0) continue;
+      /*
+        A control's own LABEL has to fit. Its VALUE does not.
+
+        A text field holding a folder path is meant to scroll inside its box —
+        that is what a text field is — and flagging it makes this check fire on
+        user data rather than on layout. A textarea was excluded for exactly
+        this reason and the single-line fields belong with it; buttons and
+        selects keep the check, because their text is a label the layout chose.
+      */
       if (el.tagName === 'TEXTAREA') continue;
+      if (el.tagName === 'INPUT' && !['checkbox', 'radio', 'range'].includes(el.type)) continue;
       // The objective form of "no control under half the width of its own
       // cell": its own text does not fit inside it. A narrow control in a wide
       // panel is a layout choice; a control whose label is cut off is not.
       if (el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'auto') {
-        out.push(el.textContent.trim().slice(0, 24) + ' needs ' + el.scrollWidth + ' has ' + el.clientWidth);
+        // The element as well as its words: a control whose label is empty
+        // reports as ' needs 667 has 205', which names nothing.
+        out.push(
+          el.tagName.toLowerCase() + '.' + (el.className || '(none)') +
+          (el.id ? '#' + el.id : '') +
+          (el.placeholder ? ' [' + el.placeholder.slice(0, 24) + ']' : '') +
+          (el.parentElement ? ' in .' + (el.parentElement.className || '?') : '') +
+          ' "' + el.textContent.trim().slice(0, 20) + '" needs ' + el.scrollWidth + ' has ' + el.clientWidth
+        );
       }
     }
     return out.slice(0, 6);
   })()`)
+  if (squashed.length > 0 && process.argv.includes('--why')) {
+    const why = await page.run(`(() => {
+      const over = [...document.querySelectorAll('button, select, input, textarea, .name, .worn, .what')]
+        .filter((e) => e.getClientRects().length > 0 && e.tagName !== 'TEXTAREA')
+        .find((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflow !== 'auto');
+      if (!over) return ['nothing over now'];
+      const out = [];
+      let n = over;
+      while (n && n !== document.body) {
+        out.push(n.tagName.toLowerCase() + '.' + (n.className || '?') + (n.id ? '#' + n.id : '') +
+          ' w=' + Math.round(n.getBoundingClientRect().width) + ' scroll=' + n.scrollWidth + ' client=' + n.clientWidth +
+          ' hidden=' + n.hidden);
+        n = n.parentElement;
+      }
+      return out;
+    })()`)
+    console.log('  why:\n   ' + why.join('\n   '))
+  }
   if (squashed.length > 0)
     bad('fits', squashed.length + ' controls cut off their own label: ' + JSON.stringify(squashed))
   else ok('fits', 'every control and name fits the width it is given')
@@ -716,7 +794,7 @@ async function checks(page) {
   const clipped = await page.run(`(() => {
     const room = document.documentElement.clientWidth;
     const out = [];
-    for (const el of document.querySelectorAll('#tab-cast *, #tab-archive *, #tab-machine *')) {
+    for (const el of document.querySelectorAll('#reading *, #reading *, #page-machine *')) {
       if (el.getClientRects().length === 0) continue;
       // Each element's own box: asking the document for scrollWidth is answered
       // by the containing block, and a pane with layout containment answers the
@@ -726,22 +804,39 @@ async function checks(page) {
     }
     return out.slice(0, 5);
   })()`)
+  if (clipped.length > 0 && process.argv.includes('--why')) {
+    const why = await page.run(`(() => {
+      const out = [];
+      for (const g of document.querySelectorAll('.machine-spread, .spread')) {
+        if (g.getClientRects().length === 0) continue;
+        out.push(g.className + ' w=' + Math.round(g.getBoundingClientRect().width) + ' cols=' + getComputedStyle(g).gridTemplateColumns);
+        for (const kid of g.children) {
+          const b = kid.getBoundingClientRect();
+          out.push('  ' + kid.tagName.toLowerCase() + '.' + kid.className + ' x=' + Math.round(b.x) + ' w=' + Math.round(b.width) + ' right=' + Math.round(b.right));
+        }
+      }
+      return out;
+    })()`)
+    console.log('  why:\n   ' + why.join('\n   '))
+  }
   if (clipped.length > 0)
     bad('clipping', clipped.length + ' elements run past the window: ' + JSON.stringify(clipped))
   else ok('clipping', 'nothing is drawn past the right edge of the window')
+  at = ''
 }
 
 /* ---- the run ------------------------------------------------------------ */
 
 const failures = []
 const passes = []
+let at = ''
 function ok(rule, what) {
   passes.push(`${rule} — ${what}`)
-  console.log(`  ok    ${rule}  ${what}`)
+  console.log(`  ok    ${rule}  ${what}${at}`)
 }
 function bad(rule, what) {
-  failures.push(`${rule} — ${what}`)
-  console.log(`  FAIL  ${rule}  ${what}`)
+  failures.push(`${rule} — ${what}${at}`)
+  console.log(`  FAIL  ${rule}  ${what}${at}`)
 }
 
 async function main() {
@@ -759,7 +854,7 @@ async function main() {
       `window.mochiHistory.character({ kind: 'duplicate', name: 'Wisp' }).then((r) => JSON.stringify(r))`,
     )
     await wait(3000)
-    const listed = await page.run(`document.querySelectorAll('#tab-cast button.card').length`)
+    const listed = await page.run(`document.querySelectorAll('.rail .rail-row').length`)
     page.close()
     await stop(running)
     running = null
@@ -783,7 +878,26 @@ async function main() {
     page = await openShell()
     await wait(1200)
 
+    if (process.argv.includes('--shot')) await photograph(page)
+    /*
+      Checked at the WINDOW'S FLOOR as well as at its opening size.
+
+      Every layout failure this gate has caught was a width failure, and the
+      opening size on a large display is the one width at which nothing is
+      tight. `window.ts` enforces 1100×700; a check that never sees it is a
+      check that passes on the developer's monitor.
+    */
     await checks(page)
+    await layoutChecks(page)
+    await page.send('Emulation.setDeviceMetricsOverride', {
+      width: 1100,
+      height: 700,
+      deviceScaleFactor: 0,
+      mobile: false,
+    })
+    await wait(800)
+    await layoutChecks(page, 'at the 1100px floor')
+    await page.send('Emulation.clearDeviceMetricsOverride')
 
     page.close()
   } finally {

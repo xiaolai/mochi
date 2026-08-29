@@ -1,46 +1,39 @@
 /*
  * The design language of the shell.
  *
- * Ported from `dev-docs/design_handoff_mochi_shell/tokens-additive.css`, whose
- * values are kept EXACTLY — every ratio in its comments was measured with this
- * repository's own `contrast()`, so a value changed here is a measurement
- * silently invalidated. `Mochi Extended.dc.html` renders against this
- * vocabulary; if the window stops looking like the artifact, one of the two has
- * drifted and this file is the place to look.
+ * Ported from `dev-docs/design-system/Mochi Window.dc.html`, the design team's
+ * delivery against `dev-docs/window-brief.md`. `STRUCTURE.md` beside it records
+ * the document's layout, read out of its DOM rather than off the screenshots.
+ * Their values are kept exactly, with ONE deliberate exception recorded below,
+ * and the ratios in the comments here were measured with this repository's own
+ * arithmetic rather than copied from the delivery.
  *
- * ## It was "additive" to a file that does not exist
+ * ## The one change to what was delivered
  *
- * The handoff writes itself as an addition to `design/tokens.css`. There is no
- * such file in this repository and never was — it belongs to v1, alongside
- * `docs/plan.md` and `shared/i18n/messages.ts`, which
- * `CHECKED-2026-08-19.md` already lists as absent. So this is the whole sheet
- * rather than the second half of one, and the few roles the additive file
- * referenced without defining (`--duration`, `--duration-fast`) are defined
- * here.
+ * `--ink-3` is darker in light and lighter in dark than the delivery. As drawn
+ * it measured 3.89 / 3.57 / 3.18 / 3.59 against page, margin, sunken and her
+ * wash in light, and 4.72 / 4.41 / 4.03 / 3.49 in dark — below the 4.5:1 floor
+ * this app enforces, on every light surface and three of four dark. It is the
+ * apparatus colour, so that is every time, count, path and filename in the
+ * window. The delivery states ratios for `hers`, `destroy` and `attend` and
+ * none for the neutral inks, which is where it went unchecked.
  *
- * ## `light-dark()`, not two blocks
+ * ## The shape of it
  *
- * The pair lives in ONE declaration so a role cannot be defined in one scheme
- * and forgotten in the other — which is what a `@media (prefers-color-scheme)`
- * block lets happen, and what the three windows did before this file existed.
- * It needs `color-scheme` set, which `:root` does below.
+ * "The window is one document per character, not a settings surface she appears
+ * in. Its structure is a printed page: a subject, a reading column, and a margin
+ * for apparatus. The machine gets its own page, because it is not about her."
  *
- * ## Her colour is NOT in here
- *
- * `--her`, `--her-hover`, `--her-ink`, `--her-wash` and `--ink-brand` are
- * written onto the document at runtime by `accent.ts`, from the worn face's
- * `colBody`. The fallbacks below are the built-in's own green, so a window that
- * paints before a persona resolves is already the right colour rather than
- * briefly grey. `contrastFailures` is what stops a persona's hue shipping an
- * unreadable interface.
+ * Three faces, three jobs, and the job picks the face: Literata sets anything
+ * you read, Sora anything you operate, DM Mono anything machine-shaped.
  */
 
 @font-face {
-  font-family: 'Archivo';
+  font-family: 'Literata';
   font-style: normal;
-  font-weight: 400 700;
+  font-weight: 300 700;
   font-display: swap;
-  src: url('./fonts/archivo-latin-ext.woff2') format('woff2');
+  src: url('./fonts/literata-latin-ext.woff2') format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
@@ -48,22 +41,22 @@
 }
 
 @font-face {
-  font-family: 'Archivo';
+  font-family: 'Literata';
   font-style: normal;
-  font-weight: 400 700;
+  font-weight: 300 700;
   font-display: swap;
-  src: url('./fonts/archivo-latin.woff2') format('woff2');
+  src: url('./fonts/literata-latin.woff2') format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Archivo Narrow';
+  font-family: 'Sora';
   font-style: normal;
-  font-weight: 500 600;
+  font-weight: 400 600;
   font-display: swap;
-  src: url('./fonts/archivo-narrow-latin-ext.woff2') format('woff2');
+  src: url('./fonts/sora-latin-ext.woff2') format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
@@ -71,22 +64,22 @@
 }
 
 @font-face {
-  font-family: 'Archivo Narrow';
+  font-family: 'Sora';
   font-style: normal;
-  font-weight: 500 600;
+  font-weight: 400 600;
   font-display: swap;
-  src: url('./fonts/archivo-narrow-latin.woff2') format('woff2');
+  src: url('./fonts/sora-latin.woff2') format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'IBM Plex Mono';
+  font-family: 'DM Mono';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('./fonts/ibm-plex-mono-400-latin-ext.woff2') format('woff2');
+  src: url('./fonts/dm-mono-400-latin-ext.woff2') format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
@@ -94,22 +87,22 @@
 }
 
 @font-face {
-  font-family: 'IBM Plex Mono';
+  font-family: 'DM Mono';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('./fonts/ibm-plex-mono-400-latin.woff2') format('woff2');
+  src: url('./fonts/dm-mono-400-latin.woff2') format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'IBM Plex Mono';
+  font-family: 'DM Mono';
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('./fonts/ibm-plex-mono-500-latin-ext.woff2') format('woff2');
+  src: url('./fonts/dm-mono-500-latin-ext.woff2') format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
@@ -117,11 +110,11 @@
 }
 
 @font-face {
-  font-family: 'IBM Plex Mono';
+  font-family: 'DM Mono';
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('./fonts/ibm-plex-mono-500-latin.woff2') format('woff2');
+  src: url('./fonts/dm-mono-500-latin.woff2') format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -133,318 +126,187 @@
    * Without it every one of those pairs silently answers with its light half.
    */
   color-scheme: light dark;
-  /*
-   * Checkboxes, radios and progress in HER colour, not the system's and not the
-   * chrome's.
-   *
-   * This reverses `accent.ts`'s own argument, deliberately and in one place. That
-   * file says her colour is for what says WHO SHE IS and a control is something
-   * you operate — which was right while the chrome had a hue of its own to
-   * spend. It does not any more: this palette's chrome is grey, and the same
-   * argument now leaves a checked box unreadable as a state. `--her-deep` is her
-   * hue taken deep enough to carry white, so the tick is hers and still measures.
-   */
-  accent-color: var(--her-deep);
+  /* Her colour on checkboxes and radios, taken deep enough to carry white. */
+  accent-color: var(--her-line);
 
-  /* ---- surfaces. Cool rather than warm, which is the palette's one big move  */
-  --paper: light-dark(#f2f4f6, #14181c);
-  --paper-2: light-dark(#fafbfc, #1b2026);
-  --paper-3: light-dark(#e6eaee, #252c33);
-  /*
-   * A row under the pointer. There was no hover surface, so hover reached for
-   * `--paper-3` — which is also the inset colour, so a hovered row and a sunken
-   * one read alike.
+  /* ---- surfaces: warm paper, warm ink ------------------------------------
+   *
+   * The delivery's one big move, and the reverse of what this file held before:
+   * the old palette was deliberately cool. Three surfaces and no more — the
+   * page you read, the margin apparatus sits in, and a sunken well.
    */
-  --paper-hover: light-dark(#eef1f4, #20262c);
-  --rule: light-dark(#d7dde3, #39424b);
-  /*
-   * The board the windows sit on. In the app this is the user's own desktop, so
-   * it is only ever drawn by a mockup — it exists so nothing has to pretend it
-   * owns a colour it does not.
-   */
-  --desk: light-dark(#dee3e8, #0e1114);
+  --paper: light-dark(#faf6f3, #16120f);
+  --paper-2: light-dark(#f2ece6, #1e1915);
+  --paper-3: light-dark(#e8dfd7, #272119);
+  /* "One hover surface, and it is not the sunken one." */
+  --paper-hover: light-dark(#f2ece6, #1e1915);
+  --desk: light-dark(#e8dfd7, #16120f);
 
-  /* ---- ink ---------------------------------------------------------------- */
-  --ink: light-dark(#10161c, #e9edf1);
-  --ink-2: light-dark(#47525c, #aeb8c2);
-  /*
-    Measured against `--chrome-wash`, not against the page.
-
-    The old pair (#5f6a76 / #8f99a4) reads 4.43:1 light and 4.48:1 dark on
-    `--chrome-wash`, which is what a CHOSEN card is filled with -- so the line
-    under a character's name failed the app's own 4.5:1 floor in both themes,
-    and only when she was the one selected. `applyAccent` never caught it: that
-    guards a character's hue against the page, and this is built-in chrome
-    against built-in chrome. Now 4.96:1 light and 5.07:1 dark on the wash, and
-    higher on every lighter surface.
-  */
-  --ink-3: light-dark(#58626d, #99a3ae);
-  /*
-   * A label on the DESK rather than on paper, which needs its own floor: the
-   * board is darker than paper in light and darker still in dark, and `--ink-3`
-   * over it measured 4.28:1 — under the floor. This is the same role with the
-   * floor honoured.
+  /* ---- ink ---------------------------------------------------------------
+   *
+   * Worst case against any surface above:
+   *   --ink     12.52:1 light (sunken)   11.45:1 dark (her wash)
+   *   --ink-2    5.96:1 light (sunken)    6.06:1 dark (her wash)
+   *   --ink-3    4.66:1 light (sunken)    5.02:1 dark (her wash)
    */
-  --ink-desk: light-dark(#4c5661, #9aa4af);
+  --ink: light-dark(#241e1a, #f0e9e3);
+  --ink-2: light-dark(#5a5049, #b6aaa0);
+  --ink-3: light-dark(#6a6057, #a79a8f);
+  --ink-desk: light-dark(#5a5049, #b6aaa0);
 
-  /* ---- hers. FALLBACKS ONLY -- applyAccent() overwrites all seven ---------- */
-  --her: light-dark(#8ec8a8, #6fae8d);
-  --her-hover: light-dark(#7db095, #7fbe9d);
-  --her-ink: light-dark(#10161c, #10161c);
-  --her-wash: light-dark(#e6f1ec, #22342a);
-  --ink-brand: light-dark(#24463a, #a9d8bd);
-  /*
-   * Her hue deep enough to carry WHITE, at L=33% from the same source hue — so
-   * it is plainly the worn character's colour and not a second accent.
+  /* ---- her ---------------------------------------------------------------
    *
-   * White on it, across all eight built-in themes:
-   *   moss 5.64 · mint 5.45 · sand 5.55 · clay 7.41
-   *   sky 7.17 · slate 8.07 · blossom 8.98 · lilac 9.86
+   * One accent, and it is hers. `accent.ts` replaces these at runtime with the
+   * worn character's hue and refuses one that cannot reach the floor, so these
+   * are the built-in's values and the fallback in the same breath.
    *
-   * The floor is 4.50 and the worst case is moss, the built-in. A custom hue
-   * that fails is exactly what `contrastFailures` must catch, which is why it
-   * gained a fourth pairing rather than this being taken on trust.
+   * NOT used anywhere on the machine page. "The machine is not her. It gets its
+   * own page, its own mark, and none of her colour."
    */
-  --her-deep: light-dark(#357351, #357351);
-  --her-deep-ink: light-dark(#ffffff, #ffffff);
-  /* Her colour as a film — the interior of her halo, over an unknown desktop. */
-  --her-veil: rgb(142 200 168 / 22%);
+  --her: light-dark(#3e7355, #7fbe9b);
+  --her-line: light-dark(#4e7f65, #7ba890);
+  --her-hover: light-dark(#4e7f65, #7ba890);
+  --her-ink: #ffffff;
+  --her-wash: light-dark(#e6f0e9, #1e3128);
+  --her-deep: light-dark(#3e7355, #4e7f65);
+  --her-deep-ink: #ffffff;
+  --her-veil: light-dark(rgb(62 115 85 / 10%), rgb(127 190 155 / 14%));
+  --ink-brand: light-dark(#3e7355, #7fbe9b);
+  --chrome-wash: light-dark(#f2ece6, #1e1915);
 
-  /* ---- the chrome, which has no hue of its own ----------------------------- */
-  /*
-   * A selected row, an open group, a tool-call marker. Text on it is `--ink` or
-   * `--ink-desk`, never a chrome colour, because there is no longer one.
-   *
-   * `--gold` survives below and is NOT this. The gold set still dresses the two
-   * windows that have not been rebuilt yet; when they are, it goes.
-   */
-  --chrome-wash: light-dark(#e2e7ec, #2a323a);
+  /* ---- two status families, and no more ---------------------------------- */
+  --red: light-dark(#a33529, #e8a69c);
+  --red-bg: light-dark(#f6e7e4, #2e1c11);
+  --alarm: light-dark(#a33529, #e8a69c);
+  --warn-ink: light-dark(#8a6510, #e3cd77);
+  --warn-bg: light-dark(#f7efdc, #2b250d);
+  --warn-line: light-dark(#c8b9ac, #4b4038);
+  --gold: light-dark(#8a6510, #e3cd77);
+  --gold-wash: light-dark(#f7efdc, #2b250d);
+  --gold-ink: light-dark(#241e1a, #16120f);
+  --ok: light-dark(#1f6b41, #7fbe9b);
+  --ok-wash: light-dark(#e6f0e9, #1e3128);
+  /* The blue family.  went with the filled pill it was for: the
+     problem count is a word and a dot on the page, not a chip with white text. */
+  --live: light-dark(#2f6fb5, #8db8d4);
+  --live-line: light-dark(#2f6fb5, #8db8d4);
+  --live-bg: light-dark(#e6eef7, #16242d);
+  --live-off: light-dark(#6a6057, #a79a8f);
 
-  /* ---- gold: on its way out, and still load-bearing ------------------------ */
-  /*
-   * The chrome of the windows this palette has not reached yet. Kept measured
-   * rather than kept quietly: `--gold` is 5.42 on `--paper` in the warm palette
-   * it was chosen against, and this palette is cooler, so the pairing is
-   * remeasured with the rest at the foot of this file.
+  /* ---- rules do the grouping ---------------------------------------------
+   *
+   * "Rules do the grouping. Boxes are reserved for the two things that need
+   * one: a control and a warning." These carry the structure that borders and
+   * shadows used to, which is why `--lift-*` below is nearly all `none`.
    */
-  --gold: light-dark(#7f5b25, #e1ad66);
-  --gold-wash: light-dark(#eee2d1, #4f3d24);
-  --gold-ink: light-dark(#ffffff, #16170f);
+  --rule: light-dark(#e0d5cb, #352d26);
+  --rule-2: light-dark(#c8b9ac, #4b4038);
+  --hair: light-dark(#e0d5cb, #352d26);
+  --hair-soft: light-dark(#f2ece6, #1e1915);
+  --hair-desk: inset 0 0 0 1px light-dark(#e0d5cb, #352d26);
 
-  /* ---- status ------------------------------------------------------------- */
-  --red: light-dark(#c22e22, #f2a6a1);
-  --red-bg: light-dark(#fdefee, #3a201f);
-  --warn-ink: light-dark(#8a6510, #e2c078);
-  --warn-line: light-dark(#b08a2a, #a9821f);
-  --warn-bg: light-dark(#fdf6e6, #2c2517);
+  /* ---- chosen is a bar and a word ----------------------------------------
+   *
+   * "Her hue may be unreadable; the state must not depend on it." The rail's
+   * bar is 3px and the sub-nav's underline is 2px; both are paid back out of
+   * the unchosen item's padding so nothing shifts when the choice moves.
+   */
+  --chosen-bar: 3px;
+  --chosen-underline: 2px;
 
-  /*
-   * The alarm dot, and the ONE colour here that does not flip by scheme.
-   *
-   * `bubble.ts` and `chip.ts` each argued for this: it means "read me", so it
-   * must not politely adapt to its surroundings. It is allowed to be one value
-   * because it MEASURES as one — 3.96 and 4.21 on this palette's two papers in
-   * light, 4.09 and 3.76 in dark, against a 3.00 floor for a non-text mark.
-   *
-   * The proposal drops it, on the grounds that its shell has no always-visible
-   * alarm. Her COMPANION still does — the dot on her shoulder chip — and
-   * `resolvePalette` throws when the token is missing, by design. It stays.
-   */
-  --alarm: #d1495b;
+  /* ---- the frame, in the delivery's own numbers -------------------------- */
+  --rail-w: 210px;
+  --margin-w: 236px;
+  --machine-nav-w: 232px;
+  --topbar-h: 38px;
+  --status-h: 34px;
 
-  /*
-   * ---- the live microphone -------------------------------------------------
-   *
-   * Five roles for one fact, because it is the fact this repository calls the
-   * worst one to get wrong: an open microphone with nothing on screen saying so.
-   *
-   * Blue on purpose. It cannot be HERS — the halo over her head is already her
-   * colour and the two would merge — and it cannot be `--warn-*`, because an open
-   * microphone is a state and not a problem. The third status family, and the
-   * first that means "on" rather than "wrong".
-   *
-   * A dot is a non-text mark, so the floor is 3.00 (WCAG 1.4.11).
-   */
-  --live: light-dark(#2f6fb5, #6fa8e0);
-  --live-ink: light-dark(#2f5f95, #9cc4ea);
-  --live-line: light-dark(#c4d3e4, #31465c);
-  --live-bg: light-dark(#eaf1f8, #17222e);
-  /*
-   * The closed state. Grey, not red: closed is the SAFE state and should not
-   * read as an alarm. Deliberately quiet at 2.71:1 light, 3.54:1 dark.
-   */
-  --live-off: light-dark(#98a2ad, #6b7682);
-
-  /*
-   * ---- working ------------------------------------------------------------
-   *
-   * The FOURTH status family, and the only one that means "this is fine".
-   *
-   * `--warn-*` says a person has an errand, `--alarm` says read me now, and
-   * `--live-*` says a device is on. None of them can say "the thing you came
-   * here to check is healthy", and the settings window needs to: a pane where
-   * the only status that is ever drawn is a bad one leaves "nothing there" with
-   * two meanings — fine, and not checked yet — for checks that genuinely have a
-   * not-checked-yet.
-   *
-   * FIXED, not hers. `accent.ts` states that the accent is her and there is no
-   * second place to set an app colour, and this does not break that rule so
-   * much as fall outside it: whether the Codex CLI on this machine is signed in
-   * has nothing to do with which character is worn, and a green light that
-   * turned blue because somebody put on a blue persona would be reporting the
-   * wrong subject. It is the same argument `--live` already makes for not
-   * taking her hue, one family over.
-   *
-   * Measured, like the rest of this block. A light is a non-text mark, so the
-   * floor is 3.00 (WCAG 1.4.11); these are text-grade anyway because the word
-   * beside them may take the colour too:
-   *
-   *   light `#1f7a44` — 4.85 on `--paper`, 5.16 on `--paper-2`, 4.97 on `--warn-bg`
-   *   dark  `#5fbc84` — 7.66 on `--paper`, 7.03 on `--paper-2`, 6.51 on `--warn-bg`
-   */
-  --ok: light-dark(#1f7a44, #5fbc84);
-  /* The glow around a lit one. Her veil's trick: the same hue at low alpha, so
-     it sits on an unknown surface without deciding what is behind it. */
-  --ok-wash: light-dark(rgb(31 122 68 / 18%), rgb(95 188 132 / 22%));
-
-  /*
-   * ---- the halo over her head ----------------------------------------------
-   *
-   * Geometry as tokens because several surfaces draw it and the ellipse has to
-   * match across all of them — the awake states, the sleeping one, and the
-   * travelling bead, which needs the same two radii the border does or it leaves
-   * the halo.
-   *
-   * Small and tilted rather than a plate she stands on: a halo reads as belonging
-   * to her at any size, and it survives her being drawn at 44px in a list, where
-   * a ground ellipse would just look like a shadow.
-   */
+  /* ---- her halo, on her own window --------------------------------------- */
   --ring-w: 66px;
   --ring-h: 16px;
-  /* The lean. Enough to read as perspective, not enough to look knocked off. */
   --ring-tilt: -12deg;
-  /* Drawn over a desktop whose colour is unknown, so paper at low alpha. */
-  --ring-thinking: rgb(250 251 252 / 62%);
-  --ring-asleep: rgb(250 251 252 / 42%);
+  --ring-thinking: rgb(250 246 243 / 62%);
+  --ring-asleep: rgb(250 246 243 / 42%);
 
-  /* ---- type: three roles. Display+body, labels, data ----------------------- */
-  --sans:
-    'Archivo', -apple-system, system-ui, 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK SC',
-    sans-serif;
-  --narrow: 'Archivo Narrow', 'Archivo', system-ui, 'PingFang SC', 'Hiragino Sans', sans-serif;
-  --mono: 'IBM Plex Mono', 'Sarasa Mono SC', 'Sarasa Mono J', ui-monospace, Menlo, monospace;
+  /* ---- three faces, three jobs -------------------------------------------
+   *
+   * The CJK fallbacks come from the operating system: a character called
+   * せんせい has to render on the first launch, and bundling a CJK face would be
+   * tens of megabytes to replace what macOS already ships.
+   */
+  --serif: 'Literata', ui-serif, Georgia, 'Songti SC', 'Hiragino Mincho ProN', serif;
+  --sans: 'Sora', system-ui, 'PingFang SC', 'Hiragino Sans', sans-serif;
+  --narrow: 'Sora', system-ui, 'PingFang SC', 'Hiragino Sans', sans-serif;
+  --mono: 'DM Mono', 'Sarasa Mono SC', 'Sarasa Mono J', ui-monospace, Menlo, monospace;
 
-  --t-title: clamp(30px, 3.6vw, 44px);
-  --t-h1: 34px;
-  --t-h2: 26px;
-  --t-h3: 21px;
-  --t-lead: 17px;
-  --t-body: 15px;
-  --t-ui: 14px;
-  --t-ui-2: 13.5px;
+  /* Literata: her name, her words, section titles, every sentence of prose. */
+  --t-title: 46px;
+  --t-h1: 30px;
+  --t-h2: 21px;
+  --t-h3: 19px;
+  --t-lead: 15.5px;
+  --t-body: 14px;
   --t-sm: 13px;
-  --t-cap: 12.5px;
+  /* Sora: buttons, labels, controls, state words. Never prose, never her name. */
+  --t-ui: 13px;
+  --t-ui-2: 12.5px;
+  --t-cap: 11.5px;
+  --t-label: 9.5px;
+  /* DM Mono: times, counts, paths, keys, filenames. "Never larger than the
+     thing it annotates" — which is why 12px is the ceiling. */
   --t-data: 12px;
-  --t-label: 11px;
+  --t-data-2: 11px;
   --t-micro: 10.5px;
   --t-nano: 10px;
+
   --track: 0.14em;
-  --track-2: 0.1em;
-  /*
-   * Two more positive steps, named by ROLE rather than extended as a number.
-   *
-   * `--track` and `--track-2` keep the handoff's names and values, and six and
-   * eight sites respectively already read them. `--track-wide` is wider than
-   * `--track`, so calling it `--track-3` would put the widest step at the
-   * bottom of a sequence that reads downwards — and renumbering to fix that
-   * would silently move fourteen sites the handoff pins.
-   */
+  --track-2: 0.08em;
   --track-wide: 0.16em;
   --track-narrow: 0.12em;
-  /*
-   * ONE negative step, where there were three literals.
-   *
-   * -0.005em, -0.015em and -0.02em sat on the three pieces of large text in the
-   * shelf — a card name, the name editor, a conversation's date. They are the
-   * same job, optical tightening at display sizes, and three values within
-   * 0.015em of each other is drift rather than a scale: at 26px the widest gap
-   * between them is a third of a pixel. Collapsed to the middle one, which is
-   * the only rendered change in this file.
-   */
   --track-tight: -0.015em;
-
-  /* ---- weight: the four the shelf actually uses --------------------------- */
-  /*
-   * Named, because `font-weight: 600` twenty-six times is the same defect as a
-   * hardcoded colour and reads as more legitimate only out of habit.
-   *
-   * Bounded by what the FONTS carry, which is the part a number hides:
-   * `Archivo` is declared `400 700` and `Archivo Narrow` `500 600`, so these
-   * four are real weights in the family rather than a browser's synthesis. IBM
-   * Plex Mono ships 400 and 500 only — `--mono` at `--w-semibold` would be a
-   * faux bold, and having the steps named is what makes that reviewable.
-   */
   --w-regular: 400;
   --w-medium: 500;
   --w-semibold: 600;
   --w-bold: 700;
-
-  /* ---- leading: two, for two lengths of text ------------------------------ */
-  /*
-   * The shelf had 1.5 on three notes, 1.55 on a fourth and 1.6 in the textarea.
-   * The fourth is drift — it is the same kind of block as the other three — and
-   * it is folded in. The textarea is different in kind: text somebody writes
-   * and re-reads at length, rather than a sentence under a control.
-   */
   --leading: 1.5;
   --leading-long: 1.6;
 
-  /* ---- rhythm. UNCHANGED, and that is a decision -------------------------- */
-  /*
-   * The proposal runs a 1px-granular rhythm and leaves its spacing on literals,
-   * naming two ways to close that: snap to this ramp, or renumber it to a 2px
-   * ladder. Snapping is taken.
-   *
-   * The artifact's measurements are a mockup's; renumbering `--s4`…`--s7` would
-   * silently move three windows that already read them, and "silently" is the
-   * word that decides it. Nothing here changes, so nothing already built moves.
-   */
+  /* ---- rhythm: 4 · 8 · 12 · 16 · 22 · 30 · 40 ---------------------------- */
   --s-px: 1px;
   --s0: 2px;
   --s1: 4px;
-  --s2: 6px;
-  --s3: 8px;
-  --s4: 12px;
-  --s5: 16px;
-  --s6: 20px;
-  --s7: 26px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 22px;
+  --s6: 30px;
+  --s7: 40px;
   --s8: 72px;
 
-  /* ---- shape: seven radii, one step softer than before --------------------- */
-  --r0: 3px;
-  --r1: 6px;
-  --r2: 10px;
-  --r3: 12px;
-  --r4: 16px;
-  --r5: 18px;
+  /* ---- shape: 3px on anything you operate, 0 elsewhere, 6px on the window -
+   *
+   * There is no `--r0`. "0 everywhere else" is the default, and a rung nothing
+   * plays is what this scale's own check exists to catch.
+   */
+  --r-control: 3px;
+  --r-window: 6px;
+  --r1: var(--r-control);
+  --r2: var(--r-control);
+  --r3: var(--r-window);
+  --r4: var(--r-window);
+  --r5: var(--r-window);
   --r-pill: 999px;
 
-  /* ---- elevation. Cooled to the new ink, and lighter ----------------------- */
-  --hair: light-dark(rgb(16 22 28 / 12%), rgb(233 237 241 / 14%));
-  --hair-soft: light-dark(rgb(16 22 28 / 6%), rgb(233 237 241 / 8%));
-  --hair-desk: inset 0 0 0 1px light-dark(rgb(0 0 0 / 10%), rgb(233 237 241 / 10%));
-  --lift-0: 0 1px 2px rgb(16 22 28 / 7%);
-  --lift-1:
-    0 1px 2px rgb(16 22 28 / 5%), 0 10px 24px light-dark(rgb(16 22 28 / 9%), rgb(0 0 0 / 40%));
-  --lift-2:
-    0 2px 6px rgb(16 22 28 / 6%), 0 18px 44px light-dark(rgb(16 22 28 / 12%), rgb(0 0 0 / 50%));
-  --lift-window:
-    0 30px 70px light-dark(rgb(16 22 28 / 14%), rgb(0 0 0 / 55%)),
-    0 0 0 1px light-dark(rgb(16 22 28 / 7%), rgb(233 237 241 / 8%));
+  /* ---- hairlines, not shadows -------------------------------------------- */
+  --lift-0: none;
+  --lift-1: none;
+  --lift-2: none;
+  --lift-window: 0 18px 48px rgb(22 18 15 / 22%);
 
   --duration-fast: 120ms;
   --duration: 220ms;
-  --reading: 78ch;
+  /* One reading measure. */
+  --reading: 66ch;
 }
 
 /*
@@ -469,7 +331,7 @@
  * above another boxed text field, all three doing the same kind of job.
  */
 button.btn {
-  min-height: 30px;
+  min-height: var(--s6);
   /* The floor. Under it, "Wear" and "Put the built-in back" are two boxes of
      different lengths and the row reads as ragged — which was the study's real
      finding, and it is solved by a width floor rather than by removing the box. */
@@ -606,7 +468,9 @@ select:hover {
  */
 input[type='text']:placeholder-shown,
 input[type='search']:placeholder-shown {
-  border-color: var(--rule);
+  /* `--rule-2`, the heavier of the two: this is the one state where a field is
+     asked to read as a BOX rather than as a line. */
+  border-color: var(--rule-2);
   background-color: var(--paper);
 }
 /*

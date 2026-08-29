@@ -3,12 +3,11 @@ import {
   countByDay,
   dayHeadingLabel,
   dayKey,
-  monthGrid,
+  monthDays,
   monthLabel,
   openingDay,
   startOfDay,
   stepMonth,
-  weekdayInitials,
 } from './month'
 
 describe('the day an instant belongs to', () => {
@@ -28,48 +27,29 @@ describe('the day an instant belongs to', () => {
 })
 
 describe('the grid', () => {
-  it('starts the week on Monday', () => {
-    // 1 August 2026 is a Saturday, so it lands in the sixth column with five
-    // blanks before it. A Sunday-first grid would put it in the seventh.
-    const weeks = monthGrid(2026, 7)
-    expect(weeks[0]?.slice(0, 5).every((one) => one === null)).toBe(true)
-    expect(weeks[0]?.[5]?.day).toBe(1)
+  it('is one row of days, with no leading blanks', () => {
+    // A STRIP: the delivered design draws a whole month at a glance as a single
+    // line. The blanks a week grid needs are the thing it removes.
+    const days = monthDays(2026, 7)
+    expect(days.length).toBe(31)
+    expect(days[0]?.day).toBe(1)
+    expect(days[days.length - 1]?.day).toBe(31)
+    expect(days.every((one) => one !== null)).toBe(true)
   })
 
-  it('holds every day of the month exactly once', () => {
-    for (const [year, month, days] of [
-      [2026, 7, 31],
-      [2026, 3, 30],
-      [2026, 1, 28],
-      // A leap February, from the platform rather than from a rule written here.
-      [2024, 1, 29],
-    ] as const) {
-      const flat = monthGrid(year, month)
-        .flat()
-        .filter((one) => one !== null)
-      expect(
-        flat.map((one) => one.day),
-        `${year}-${month}`,
-      ).toEqual(Array.from({ length: days }, (_, i) => i + 1))
-    }
+  it('knows how long every month is, including February', () => {
+    expect(monthDays(2026, 1).length).toBe(28)
+    // 2028 is a leap year, and the platform is what answers rather than a rule
+    // written here.
+    expect(monthDays(2028, 1).length).toBe(29)
+    expect(monthDays(2026, 3).length).toBe(30)
   })
 
-  it('pads the last week so every row is seven cells', () => {
-    for (const [year, month] of [
-      [2026, 7],
-      [2026, 1],
-      [2024, 1],
-    ] as const) {
-      for (const week of monthGrid(year, month)) expect(week.length).toBe(7)
-    }
-  })
-
-  it('gives each cell the local midnight of its own day', () => {
-    const cell = monthGrid(2026, 7)
-      .flat()
-      .find((one) => one?.day === 14)
-    expect(cell?.at).toBe(new Date(2026, 7, 14).getTime())
-    expect(cell?.at).toBe(startOfDay(new Date(2026, 7, 14, 17, 26).getTime()))
+  it('gives each day the instant it starts at', () => {
+    const days = monthDays(2026, 7)
+    const third = days[2]
+    expect(new Date(third!.at).getDate()).toBe(3)
+    expect(new Date(third!.at).getMonth()).toBe(7)
   })
 })
 
@@ -96,19 +76,6 @@ describe('what the labels say', () => {
         day: 'numeric',
         month: 'long',
       }),
-    )
-  })
-
-  it('heads the columns Monday first, in the platform language', () => {
-    const initials = weekdayInitials()
-    expect(initials.length).toBe(7)
-    // 1 January 2024 was a Monday. Derived rather than hard-coded, so a Chinese
-    // or German interface gets its own letters and not English ones.
-    expect(initials[0]).toBe(
-      new Date(2024, 0, 1).toLocaleDateString(undefined, { weekday: 'narrow' }),
-    )
-    expect(initials[6]).toBe(
-      new Date(2024, 0, 7).toLocaleDateString(undefined, { weekday: 'narrow' }),
     )
   })
 })

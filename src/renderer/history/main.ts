@@ -8,26 +8,31 @@ import type {
   ShelfView,
   ToolUse,
 } from '@shared/history-window'
-import { DEFAULT_PRONOUN, forPronoun, label as paneLabel, type Pronoun } from '@shared/pronoun'
+import {
+  DEFAULT_PRONOUN,
+  forPronoun,
+  label as paneLabel,
+  type ByPronoun,
+  type Pronoun,
+} from '@shared/pronoun'
 import { applyAccent } from '../design/apply-accent'
+import { MAY_DO } from '../settings/pane/may-do'
 import { PANES } from '../settings/panes'
 import { type PaneHandlers } from '../settings/pane'
 import { MochiAvatar } from '../companion/rig/mochi'
-import { byDay, clockLabel, dayLabel, interruptions, lengthLabel } from './format'
+import { byDay, clockLabel, interruptions, lengthLabel } from './format'
 import { drawCentred } from './centre'
-import { CUT, fact } from './glyph'
 import {
   dayHeadingLabel,
   dayKey,
-  monthGrid,
+  monthDays,
   monthLabel,
   startOfDay,
   stepMonth,
-  weekdayInitials,
   countByDay,
   openingDay,
 } from './month'
-import { assembledPanel, characterCards, characterSheet } from './shelf'
+import { assembledPanel, characterCards, characterSheet, characterSubject } from './shelf'
 import { castActions } from './sheet/cast'
 import { faceTile } from './sheet/face-tile'
 import { type ShelfHandlers } from './sheet/row'
@@ -47,7 +52,6 @@ import {
   castEl,
   charactersCountEl,
   charactersEl,
-  contextEl,
   countEl,
   dropHersEl,
   dropSomeEl,
@@ -58,12 +62,10 @@ import {
   micEl,
   micLabelEl,
   navEl,
-  need,
   paneEl,
   pickEl,
   pickOffEl,
   queryEl,
-  shellTabsEl,
   stateEl,
   stateHowEl,
   sureEl,
@@ -76,11 +78,21 @@ import {
   troublesEl,
   troublesLabelEl,
   wakeEl,
+  pageHersEl,
+  pageMachineEl,
+  railMachineEl,
+  viewsEl,
+  findingEl,
+  permitsEl,
+  marginHersEl,
+  subjectEl,
+  marginTalkEl,
 } from './elements'
 import { say } from './status'
-import { empty, facts, iconButton, marked, toolChips } from './bits'
+import { empty, facts, iconButton, marked } from './bits'
 import { freshness } from './freshness'
-import { PLACES, alongTabs, type Place } from './tabs'
+import { PLACES, VIEWS, alongViews, isHers, type Place } from './tabs'
+import { marginBlock, marginColumn, marginFacts } from './margin'
 import { sureExportEl } from './elements'
 import { offerACopyFirst } from './keep-a-copy'
 import { afresh } from '../rules/afresh'
@@ -448,12 +460,134 @@ function speaker(): string {
   return worn?.name ?? forPronoun(SAYS.spoke, saying())
 }
 
+/**
+ * View III: what she may do, and what she is told she can.
+ *
+ * ## Why this is one of HER views rather than a group on the machine's page
+ *
+ * The grants are per-character — each one is stored against the worn character
+ * and reads differently for a character worn as `he`. They sat in the Machine
+ * tab beside the keyboard shortcuts, which are true whoever is worn, so the one
+ * page in this window that mixed the two was the one page that could not say
+ * which it was about. Rule 6 of the delivery is the same observation from the
+ * other side: "The machine is not her."
+ *
+ * ## The split
+ *
+ * "What you permit" is the reading column — the switches, which are the thing
+ * you came here to operate. "What she is told she can do" is the margin: the
+ * capability descriptions are the largest body of text the model is handed,
+ * they are not editable, and they are apparatus by the margin's own definition.
+ *
+ * Both are drawn because §9 of the brief asks for both by name — "the assembled
+ * instruction, and separately the capability descriptions that accompany it" —
+ * so the assembled panel sits under the capabilities rather than being dropped
+ * for want of a column.
+ */
+function renderPermits(): void {
+  if (machine === null) {
+    empty(permitsEl, forPronoun(SAYS.readingPermits, saying()))
+    return
+  }
+  const drawn = [...MAY_DO.render(machine, machineHandlers)]
+  /*
+    Split on the pane's own heading rather than restructuring it.
+
+    `panes.ts` is imported unchanged and its tests still describe what it
+    returns; the heading is where "what you permit" stops and "what she is told
+    she can do" starts, and it is already there because the pane always drew
+    both.
+  */
+  const at = drawn.findIndex((node) => node instanceof HTMLHeadingElement)
+  permitsEl.replaceChildren(...(at === -1 ? drawn : drawn.slice(0, at)))
+  wakeEl.replaceChildren(
+    ...(at === -1 ? [] : drawn.slice(at)),
+    ...(shelf === null ? [] : assembledPanel(shelf, handlers)),
+  )
+}
+
+/**
+ * The margin of view II: what this conversation is, beside what was said in it.
+ *
+ * Every fact here was the transcript's first block — a heading giving the time,
+ * the turn count and the length, above the first thing anybody said. That put
+ * apparatus where the subject goes, and it is the failure the brief records as
+ * "the thing a person came to read must be more prominent than when it
+ * happened".
+ *
+ * "What it was about" is drawn even when there is nothing to say, because the
+ * absence is the normal case and it is not a failure: the summary comes from a
+ * separate model call that often does not run. An empty block would be
+ * indistinguishable from one that could not be read.
+ */
+function renderTalkMargin(turns: readonly HistoryTurn[], tools: readonly ToolUse[]): void {
+  const her = saying()
+  const first = turns[0]?.at ?? Date.now()
+  const last = turns.at(-1)?.at ?? first
+  const cut = interruptions(turns)
+  const lines = [
+    `began ${clockLabel(first)}`,
+    `ended ${clockLabel(last)}`,
+    `${String(turns.length)} ${turns.length === 1 ? 'turn' : 'turns'} · ${lengthLabel(first, last)}`,
+  ]
+  // Only when there was one. A line reading "0 interrupted" is a fact nobody
+  // needs and it makes the ordinary conversation look like a report.
+  if (cut > 0) lines.push(`${String(cut)} interrupted`)
+
+  const used = [...new Set(tools.map((one) => one.name))]
+  marginTalkEl.replaceChildren(
+    ...marginColumn(
+      marginBlock(forPronoun(SAYS.marginTalkHead, her), marginFacts(...lines)),
+      marginBlock(forPronoun(SAYS.marginAbout, her), forPronoun(SAYS.marginNoSummary, her)),
+      marginBlock(
+        forPronoun(SAYS.marginUsedHead, her),
+        used.length === 0 ? forPronoun(SAYS.marginUsedNone, her) : marginFacts(...used),
+      ),
+    ),
+  )
+}
+
+/**
+ * The margin of view I: what the controls beside it are, and where she lives.
+ *
+ * Apparatus about her sheet rather than more of her sheet. The two notes are the
+ * ones the delivery writes out, and they are the two facts about these controls
+ * that are not visible from operating them: that her colour is enforced against
+ * a contrast floor and may be refused, and that an empty expression set is legal.
+ */
+function renderHerMargin(): void {
+  if (shelf === null) return
+  const her = saying()
+  // The WORN character's file, because `characterSheet` draws the worn one and
+  // this margin sits beside it. Reading a different character here would put
+  // one character's path under another's controls.
+  const stored = shelf.characters.find((one) => one.id === shelf?.wornId)?.source ?? null
+  marginHersEl.replaceChildren(
+    ...marginColumn(
+      marginBlock('In the margin', forPronoun(SAYS.marginIs, her)),
+      marginBlock(forPronoun(SAYS.marginColourHead, her), forPronoun(SAYS.marginColour, her)),
+      marginBlock(forPronoun(SAYS.marginFacesHead, her), forPronoun(SAYS.marginFaces, her)),
+      marginBlock(
+        forPronoun(SAYS.marginStored, her),
+        // The path, or the honest answer that there is not one. A built-in with
+        // no file of her own is a real state, not a missing value.
+        marginFacts(stored ?? forPronoun(SAYS.marginBuiltIn, her)),
+      ),
+    ),
+  )
+}
+
 /** Draw the open character in the main column. */
 function openCharacter(): void {
   if (shelf === null) return
   const arriving = !showingCharacter
   showingCharacter = true
   paneEl.replaceChildren(characterSheet(shelf, handlers))
+  // The subject sits above the views, outside the scrolling column: her name is
+  // what they are views OF, and it scrolled away with the rest of the sheet.
+  const subject = characterSubject(shelf, handlers)
+  subjectEl.replaceChildren(...(subject === null ? [] : [subject]))
+  renderHerMargin()
   // Only when the pane ARRIVES on the character. Every write re-reads and
   // redraws the sheet, so forgetting her notes — a button near the bottom —
   // would otherwise throw the page back to the top the moment it worked.
@@ -476,63 +610,88 @@ let place: Place = 'cast'
 
 function showPlace(next: Place): void {
   place = next
-  for (const one of PLACES) {
-    need(`tab-${one.id}`, HTMLElement).hidden = one.id !== place
-  }
-  // Search belongs to the Archive and to nothing else. Hidden rather than
-  // emptied, so what is typed in it survives a trip to Cast and back.
-  contextEl.hidden = place !== 'archive'
+  /*
+    Two pages, not three panels.
+
+    Her page holds the three numbered views; the machine is a page of its own
+    because it is not about her. `[hidden]` carries it, with the `!important`
+    the token file argues for — this window has shipped a hidden panel that was
+    on screen twice, both times because an author `display` outranked the UA's.
+  */
+  pageHersEl.hidden = !isHers(place)
+  pageMachineEl.hidden = isHers(place)
+
+  // One body per view in the reading column, and one in the margin. Separate
+  // elements rather than one that is rebuilt, so a transcript survives a trip
+  // to her sheet and back.
+  paneEl.hidden = place !== 'cast'
+  marginHersEl.hidden = place !== 'cast'
+  talkEl.hidden = place !== 'archive'
+  listEl.hidden = place !== 'archive'
+  marginTalkEl.hidden = place !== 'archive'
+  permitsEl.hidden = place !== 'permits'
+  wakeEl.hidden = place !== 'permits'
+
+  // Search and the day strip belong to what she has said and to nothing else.
+  // Hidden rather than emptied, so what is typed survives a trip away and back.
+  findingEl.hidden = place !== 'archive'
+  calEl.hidden = place !== 'archive'
+  countEl.hidden = place !== 'archive'
   /*
     And so do the deletion controls, for the same reason.
 
-    They act on conversations. Leaving them visible on the character sheet or on
-    Machine would put "Delete all" under a heading that says something else,
+    They act on conversations. Leaving them visible on her sheet or on the
+    machine would put "Delete all" under a heading that says something else,
     which is how a control's scope gets misread in the one direction that
-    cannot be undone. Leaving the archive also LEAVES select mode: a selection
-    the user can no longer see is one they have stopped agreeing to.
+    cannot be undone.
   */
-  // T3: leaving the archive cancels. The rule is `rules/picking.ts`'s.
+  // T3: leaving the archive cancels picking. The rule is `rules/picking.ts`'s.
   picking.wentTo(place)
   showPicking()
   /*
-    Cast repaints the open character on arrival.
+    Her sheet repaints the open character on arrival.
 
     `showingCharacter` is turned OFF when a transcript or a problem report is
-    opened, and nothing turned it back on: coming back to Cast left the pane
-    holding whatever was last drawn there with no card marked current, and the
-    next write's reload skipped repainting it because `openCharacter` is only
-    reached through a card click.
+    opened, and nothing turned it back on: coming back left the pane holding
+    whatever was last drawn there with no row marked current.
   */
   if (place === 'cast' && shelf !== null && !showingCharacter) openCharacter()
+  if (place === 'permits') renderPermits()
   /*
-    The transcript column says what it is FOR when nothing is open in it.
+    The reading column says what it is FOR when nothing is open in it.
 
     Half a window of blank paper beside a list is indistinguishable from a
     transcript that failed to load, and it was the first thing on screen every
-    time somebody opened the Archive. Only when nothing is open — a re-render
-    while a conversation is up must not throw it away.
+    time somebody opened what she has said.
   */
   if (place === 'archive' && open === null && talkEl.childElementCount === 0) {
     empty(talkEl, forPronoun(SAYS.pickOne, saying()))
   }
   renderPlaces()
-  // Read on arrival rather than held: the machine pane's answers come from disk
-  // and from another window's writes, so a cached copy is stale the first time
-  // it matters.
-  if (place === 'machine') void loadMachine()
+  // Read on arrival rather than held: the machine's answers come from disk and
+  // from another window's writes, so a cached copy is stale when it matters.
+  // Both the machine page and view III read from the machine's answers, and
+  // both come from disk and from another window's writes — so a cached copy is
+  // stale the first time it matters.
+  if (place === 'machine' || place === 'permits') void loadMachine()
 }
 
 /**
- * The three tabs, built ONCE and thereafter only marked.
+ * The three views, built ONCE and thereafter only marked.
  *
  * They used to be recreated on every `showPlace`, which is a re-render fired
- * from inside a tab's own click handler: the element being clicked is detached
- * mid-event and replaced by a new one, so keyboard focus lands on `<body>` and
- * the next Tab starts over from the top of the window. A strip of three buttons
- * that cannot be operated twice from the keyboard is a strip that only works
- * with a mouse.
+ * from inside a view's own click handler: the element being clicked is detached
+ * mid-event and replaced, so keyboard focus lands on `<body>` and the next Tab
+ * starts over from the top of the window.
  */
-const tabs = new Map<Place, HTMLButtonElement>()
+const views = new Map<Place, HTMLButtonElement>()
+
+/** Which wording belongs to which view. The tables are in `shelf-says.ts`. */
+const VIEW_SAYS: Readonly<Record<'cast' | 'archive' | 'permits', ByPronoun>> = {
+  cast: SAYS.viewCast,
+  archive: SAYS.viewArchive,
+  permits: SAYS.viewPermits,
+}
 
 /**
  * The whole `tab` contract, not a third of it.
@@ -541,56 +700,72 @@ const tabs = new Map<Place, HTMLButtonElement>()
  * then marked the live one with `aria-current` alone. That is a valid attribute
  * and it is not the one this pattern is read through: assistive technology asks
  * a tab for `aria-selected`, and a tablist whose tabs never answer it presents
- * as three buttons with no state, inside a container promising state. Declaring
- * a role and then not honouring its contract is worse than declaring none,
- * because the promise is what a reader navigates by.
+ * as buttons with no state inside a container promising state.
  *
- * `aria-current` STAYS. The stylesheet selects on it — `.shell-tab[aria-current='true']`
- * — and the two attributes are not rivals: one says "this is where you are in
- * the app", the other says "this tab is the selected one".
+ * `aria-current` STAYS: the stylesheet selects on it, and the two are not
+ * rivals — one says "this is where you are", the other "this one is selected".
  *
  * ## And the keyboard
  *
  * A tablist is one stop, not three: `Tab` enters it and arrows move within it.
- * Three buttons each taking a tab stop is what the comment above this function
- * already complains about from the other direction. Roving `tabindex` is what
- * makes the container one stop.
+ * Roving `tabindex` is what makes the container one stop. Arrowing cannot reach
+ * the machine — see `alongViews`, which is where that rule is held and tested.
  */
 function renderPlaces(): void {
-  if (tabs.size === 0) {
-    for (const one of PLACES) {
+  if (views.size === 0) {
+    for (const one of VIEWS) {
       const button = document.createElement('button')
-      button.className = 'shell-tab'
+      button.className = 'view'
       button.type = 'button'
       button.setAttribute('role', 'tab')
-      // Named, so the panel can point back at it and be labelled by the word
-      // somebody clicked rather than by nothing.
       button.id = `tab-for-${one.id}`
-      button.setAttribute('aria-controls', `tab-${one.id}`)
-      button.textContent = one.label
+      button.setAttribute('aria-controls', 'reading')
+      // The numeral and the title, because these are parts of one document
+      // rather than three destinations.
+      const numeral = document.createElement('span')
+      numeral.className = 'view-numeral'
+      numeral.textContent = one.numeral
+      const label = document.createElement('span')
+      label.className = 'view-label'
+      button.append(numeral, label)
       button.addEventListener('click', () => {
         showPlace(one.id)
       })
       button.addEventListener('keydown', (event: KeyboardEvent) => {
-        const moved = alongTabs(event.key, one.id)
+        const moved = alongViews(event.key, one.id)
         if (moved === null) return
-        // Taken, so the arrow does not also scroll the pane behind the strip.
+        // Taken, so the arrow does not also scroll the column behind the strip.
         event.preventDefault()
         showPlace(moved)
-        tabs.get(moved)?.focus()
+        views.get(moved)?.focus()
       })
-      tabs.set(one.id, button)
-      shellTabsEl.append(button)
+      views.set(one.id, button)
+      viewsEl.append(button)
     }
+    railMachineEl.addEventListener('click', () => {
+      showPlace('machine')
+    })
   }
-  for (const [id, button] of tabs) {
+  for (const [id, button] of views) {
     const here = id === place
+    /*
+      The wording is re-resolved every time, not written once at creation.
+
+      These are three sentences about her, and the worn character can change
+      from the tray while this window is open — a label set at build time would
+      go on saying "Who she is" for a character worn as `he`, which is the exact
+      failure `SettingsView.pronoun` records.
+    */
+    const label = button.querySelector('.view-label')
+    const wording = id === 'machine' ? null : VIEW_SAYS[id]
+    if (label !== null && wording !== null) label.textContent = forPronoun(wording, saying())
     button.setAttribute('aria-current', String(here))
     button.setAttribute('aria-selected', String(here))
-    // ROVING: only the selected tab is a tab stop, so `Tab` enters the strip
-    // once and the arrows move inside it.
+    // ROVING: only the selected view is a tab stop, so `Tab` enters once and
+    // the arrows move inside.
     button.tabIndex = here ? 0 : -1
   }
+  railMachineEl.setAttribute('aria-current', String(place === 'machine'))
 }
 
 function renderWake(): void {
@@ -898,73 +1073,15 @@ function copyButton(text: string): HTMLButtonElement {
   return button
 }
 
-/**
- * What this conversation was, over the top of it.
- *
- * Read off the TURNS rather than looked up in the list. A search result can
- * open a conversation that is not in `conversations` at all — the list is the
- * worn character's recent ones and the search is everything ever said — so a
- * lookup would leave the header blank exactly when somebody arrived from a
- * search. The turns are already in hand and answer all three facts.
- *
- * The artifact also draws a row of tool chips here: `ask_workspace ×2`. Those
- * were left out rather than invented, because nothing archived a call — the
- * store held turns and a capability's answer reached the model and the problem
- * log and never the record. `plan-v2.md` W5 wrote down what it would take;
- * `session_tool` is that table, written from the same observer that records
- * "last used", and these are its chips.
- *
- * They come from the CONVERSATION row rather than from the turns, because a
- * call is not a turn — she can look something up without saying anything, and
- * deriving chips from what was said would miss exactly the lookups that took
- * long enough to be worth showing.
- */
-function transcriptHead(turns: readonly HistoryTurn[], tools: readonly ToolUse[]): HTMLElement {
-  const head = document.createElement('div')
-  head.className = 'talk-head'
+/*
+  `transcriptHead` stood here.
 
-  const first = turns[0]?.at ?? Date.now()
-  const last = turns.at(-1)?.at ?? first
-  const title = document.createElement('div')
-  title.className = 'talk-when'
-  title.textContent = `${dayLabel(first, Date.now())}, ${clockLabel(first)}`
-
-  /*
-    The SAME function the list beside this calls, and that is the point.
-
-    These two facts were built as strings here and again over there, so a change
-    to one of them was a change to one of them. The third fact is this header's
-    alone: an interruption count is about the conversation being read, and the
-    list is a column of six rows where a third mark on each would be noise.
-
-    The last turn's timestamp is what `ended_at` is — see `lengthLabel`, which
-    is deliberate about not pretending to seconds for the same reason.
-  */
-  const said: Node[] = [...facts(turns.length, lengthLabel(first, last))]
-  const cut = interruptions(turns)
-  if (cut > 0) {
-    said.push(
-      fact(CUT, String(cut), `${String(cut)} ${cut === 1 ? 'interruption' : 'interruptions'}`),
-    )
-  }
-
-  const meta = document.createElement('div')
-  meta.className = 'talk-facts'
-  meta.append(...said)
-
-  head.append(title, meta)
-  // Its own row, under the facts. A chip is a name and the facts are marks, so
-  // a single line holding both reads as one list of unlike things — and the
-  // ordinary conversation has no chips at all, which would leave the row empty
-  // half the time if they shared it.
-  if (tools.length > 0) {
-    const called = document.createElement('div')
-    called.className = 'talk-tools'
-    called.append(...toolChips(tools))
-    head.append(called)
-  }
-  return head
-}
+  It drew the conversation's time, turn count, length and interruption count as
+  the first block of the transcript — apparatus above the subject, which is the
+  arrangement the delivered design inverts. Every fact it built is now in
+  `renderTalkMargin`, in the margin, and the reading column starts with what was
+  actually said.
+*/
 
 async function show(token: string, term: string): Promise<void> {
   const stillWanted = looking.request()
@@ -1000,9 +1117,11 @@ async function show(token: string, term: string): Promise<void> {
   transcript.className = 'transcript'
   // From the conversation the list already holds. `history:turns` answers turns
   // alone, and a second round trip for two numbers would be a request per open.
-  transcript.append(
-    transcriptHead(turns, conversations.find((one) => one.token === token)?.tools ?? []),
-  )
+  // The head is APPARATUS and it lives in the margin now — "Subject first,
+  // apparatus in the margin. Nothing to the right of the rule is a thing you
+  // came to read." What she said leads the column.
+  renderTalkMargin(turns, conversations.find((one) => one.token === token)?.tools ?? [])
+  transcript.append()
 
   let run: HTMLElement | null = null
   let said: HTMLElement | null = null
@@ -1119,48 +1238,45 @@ function renderCalendar(now: number): void {
     }),
   )
 
-  const grid = document.createElement('div')
-  grid.className = 'grid'
-  for (const initial of weekdayInitials()) {
-    const cell = document.createElement('div')
-    cell.className = 'initial'
-    cell.textContent = initial
-    grid.append(cell)
-  }
-  for (const week of monthGrid(year, month)) {
-    for (const cell of week) {
-      if (cell === null) {
-        // `blank`, not `empty`: this window already styles `.empty` as the
-        // sentence a pane shows when it has nothing in it, and it was sizing
-        // two of the six week rows to 80px.
-        const blank = document.createElement('div')
-        blank.className = 'blank'
-        grid.append(blank)
-        continue
-      }
-      const many = counts.get(cell.at) ?? 0
-      const day = document.createElement('button')
-      day.className = `day${many > 0 ? ' has' : ''}${cell.at === today ? ' today' : ''}`
-      day.type = 'button'
-      day.textContent = String(cell.day)
-      day.setAttribute('aria-current', String(cell.at === picked))
-      day.disabled = many === 0
-      if (many > 0) {
-        day.title = `${String(many)} ${many === 1 ? 'conversation' : 'conversations'}`
-        const dot = document.createElement('span')
-        dot.className = 'dot'
-        day.append(dot)
-        day.addEventListener('click', () => {
-          picked = cell.at
-          renderCalendar(Date.now())
-          renderList(Date.now())
-        })
-      }
-      grid.append(day)
+  /*
+    ONE ROW, not a grid of weeks.
+
+    "A whole month at a glance. Days with nothing in them are pale and do not
+    respond — they are not offering anything." The weekday initials go with the
+    grid: a strip answers "when did we talk", and the day of the week is a
+    different question this window never asked.
+  */
+  const strip = document.createElement('div')
+  strip.className = 'strip'
+  for (const cell of monthDays(year, month)) {
+    const many = counts.get(cell.at) ?? 0
+    const day = document.createElement('button')
+    day.className = `day${many > 0 ? ' has' : ''}${cell.at === today ? ' today' : ''}`
+    day.type = 'button'
+    const numeral = document.createElement('span')
+    numeral.className = 'day-n'
+    numeral.textContent = String(cell.day)
+    day.append(numeral)
+    day.setAttribute('aria-current', String(cell.at === picked))
+    // A1: a day with nothing on it is not a button you can press. A cell that
+    // looks pressable and answers with an empty column is the same lie as a
+    // tool she cannot call.
+    day.disabled = many === 0
+    if (many > 0) {
+      day.title = `${String(many)} ${many === 1 ? 'conversation' : 'conversations'}`
+      const dot = document.createElement('span')
+      dot.className = 'dot'
+      day.append(dot)
+      day.addEventListener('click', () => {
+        picked = cell.at
+        renderCalendar(Date.now())
+        renderList(Date.now())
+      })
     }
+    strip.append(day)
   }
 
-  calEl.replaceChildren(head, grid)
+  calEl.replaceChildren(head, strip)
 }
 
 /**
@@ -1461,8 +1577,22 @@ function readProblemCount(): void {
   void window.mochiHistory
     .problems()
     .then((problems) => {
-      troublesEl.hidden = problems.length === 0
-      troublesLabelEl.textContent = `${String(problems.length)} ${problems.length === 1 ? 'problem' : 'problems'}`
+      /*
+        SAID either way, rather than hidden when there is nothing.
+
+        An empty corner is the same picture whether nothing has gone wrong or
+        the count could not be read, and the status bar exists precisely so the
+        window's two standing questions have one place to be answered. "nothing
+        has gone wrong" is an answer; an absence is not.
+      */
+      const many = problems.length
+      troublesEl.hidden = false
+      troublesEl.classList.toggle('quiet', many === 0)
+      troublesEl.disabled = many === 0
+      troublesLabelEl.textContent =
+        many === 0
+          ? 'nothing has gone wrong'
+          : `${String(many)} ${many === 1 ? 'problem' : 'problems'}`
     })
     .catch((error: unknown) => {
       // The console, as the comment always claimed. It said the console was
@@ -1643,20 +1773,36 @@ async function loadMachine(): Promise<void> {
     return
   }
   renderMachine()
+  // View III draws from the same read. Without this it keeps whatever it had
+  // when the write went out, which is the state somebody just changed.
+  if (place === 'permits') renderPermits()
 }
 
 function renderMachine(): void {
   const view = machine
   if (view === null) return
   navEl.replaceChildren(
-    ...PANES.map((one) => {
+    ...PANES.map((one, at) => {
       const button = document.createElement('button')
       button.className = 'tab'
       button.type = 'button'
       button.setAttribute('aria-current', String(one.id === openGroup))
+      /*
+        Numbered, as the delivery draws them.
+
+        Not decoration: a column of six sentences with no other structure is a
+        list you have to read to count, and the numeral is what lets somebody
+        say "the third one" — which is how people refer to a settings group they
+        are half-remembering. `aria-hidden`, because a screen reader already
+        announces position in a list and would otherwise say it twice.
+      */
+      const numeral = document.createElement('span')
+      numeral.className = 'tab-n'
+      numeral.textContent = String(at + 1)
+      numeral.setAttribute('aria-hidden', 'true')
       const label = document.createElement('span')
       label.textContent = paneLabel(one.label, view.pronoun)
-      button.append(label)
+      button.append(numeral, label)
       // A dot means somebody should look, not that something is off — see
       // `panes.ts`. A withheld grant is a decision and never wears one.
       if (one.attention(view) !== null) {

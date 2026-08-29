@@ -67,6 +67,16 @@ export function whoBand(
   // collisions of exactly this shape.
   const band = element('div', 'who-band')
   band.append(faceTile(worn.face, 108))
+  /*
+    The same admission the rail makes — contract C4.
+
+    Without it her face is a 108px hole in the subject row and the name starts a
+    face-width in from the views under it, which reads as a layout mistake
+    rather than as "this character has no face". The rail said so and the
+    subject did not, so the one place a person looks first was the one place
+    that stayed quiet about it.
+  */
+  if (worn.face === undefined) band.classList.add('faceless')
 
   const name = savedField({
     className: 'who-name',

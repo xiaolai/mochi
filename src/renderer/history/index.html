@@ -38,532 +38,602 @@
         height: 100%;
       }
 
-      /* ---- the strip that is always first ---------------------------------- */
-      /*
-        SHRINKABLE, where it used to be `flex: none`.
-
-        The topbar is the one strip in this window with no fluid column, and it
-        shipped 126px too wide at the window's OWN minimum size. `window.ts`
-        enforces `minWidth: 900`; the bar's contents need 1026px and could not
-        give any of it back, so from 900px to 1025px the microphone's state mark
-        sat off the right edge entirely and the turn count was clipped. The only
-        way to see them was to scroll the whole shell sideways, which pushes the
-        wordmark and the tabs off the other edge — measured across the range, and
-        it comes right at exactly 1026px.
-
-        The search field is the largest fixed item on the strip at 340px and the
-        one thing in a title bar that is naturally elastic, so it is what gives.
+      /* ---- the strip that is always first ----------------------------------
+        Only what is true on every page: the mark, and her state. The three
+        places and the search field used to live here too, which put the
+        window's navigation and one pane's control on the same strip as a fact
+        about the running app. Navigation is the rail's job now and search
+        belongs to the view that searches.
       */
-      .topbar-context {
-        flex: 0 1 auto;
-        display: flex;
-        align-items: center;
-        min-width: 0;
-      }
-      /*
-        Only the size and the shape are this window's.
-
-        The border, the fill, and the way an empty field keeps an edge while a
-        filled one goes quiet are all the field component's, in `tokens.css` —
-        which is why a search box nobody has typed in still looks operable
-        without a rule here saying so.
-      */
-      .topbar-context input[type='search'] {
-        /*
-          340px is the WANTED width, not a floor. `max-width: 100%` is what lets
-          the shrink above actually reach the input rather than stopping at its
-          box, and the floor keeps it a search field rather than letting it
-          collapse toward nothing at some width nobody tested.
-
-          At the enforced 900px minimum this settles around 280px, with the
-          wordmark rule below giving back the rest.
-        */
-        width: 340px;
-        min-width: 180px;
-        max-width: 100%;
-        padding: var(--s1) var(--s4);
-        border-radius: var(--r-pill);
-      }
-      /*
-        The wordmark steps aside before anything is clipped.
-
-        1030px is measured rather than picked: it is the first width at which
-        the strip fits with every item at its natural size. Her mark stays — it
-        is 26px and it is the thing that says which character this window is
-        showing — and the window's own title bar carries the name.
-      */
-      @media (max-width: 1030px) {
-        .topbar .wordmark,
-        .topbar .divider {
-          display: none;
-        }
-      }
       .topbar {
+        height: var(--topbar-h);
         flex: none;
-        height: 60px;
         display: flex;
         align-items: center;
-        gap: var(--s4);
-        padding: 0 var(--s6);
+        gap: var(--s2);
+        padding: 0 14px 0 var(--s3);
         background: var(--paper-2);
         border-bottom: var(--s-px) solid var(--rule);
       }
-      .topbar .divider {
-        margin-inline: var(--s2);
-      }
-      /* Her face beside the wordmark, as the artifact draws it. */
-      /*
-        One lockup with the wordmark, so the two share a centre line rather than
-        each sitting on whatever baseline its own box gives it.
-      */
       .mark {
+        width: 18px;
+        height: 18px;
         flex: none;
-        display: block;
-        align-self: center;
       }
       .wordmark {
-        font-family: var(--narrow);
-        font-weight: var(--w-bold);
-        font-size: var(--t-body);
-        letter-spacing: var(--track-wide);
-        text-transform: uppercase;
-      }
-      .divider {
-        width: var(--s-px);
-        height: 22px;
-        background: var(--rule);
-      }
-      .state {
-        display: flex;
-        align-items: baseline;
-        gap: var(--s4);
-      }
-      .state .what {
-        font-family: var(--narrow);
-        font-size: var(--t-data);
-        font-weight: var(--w-semibold);
+        font-family: var(--sans);
+        font-size: var(--t-cap);
+        font-weight: var(--w-medium);
         letter-spacing: var(--track-narrow);
-        text-transform: uppercase;
-      }
-      .state .how {
-        font-family: var(--mono);
-        font-size: var(--t-data);
         color: var(--ink-2);
-      }
-      /*
-        The microphone, as a mark at the end of the strip.
-
-        Read the markup above for why the words survive as the accessible name,
-        and why the two states differ in weight and fill rather than only in
-        colour.
-      */
-      /*
-        `--live-off`, not `--ink-3`, and `--live` when it is open.
-
-        That family exists for exactly this fact and the pill never used it: it
-        was drawn in HER colour, which `tokens.css` rules out in as many words —
-        the halo over her head is already her colour and the two would merge.
-        Blue is the third status family and the first that means "on" rather
-        than "wrong".
-
-        TWO states, where there were three. The third was `off` — the
-        `microphone` grant withheld — drawn with a line through the mark,
-        because a decision somebody made must not read as a fault and the shape
-        had to say so to anybody who cannot see the colour. That grant is gone
-        (`@shared/grants` records why), so resting is the only thing that closes
-        the device and the slash has nothing left to mean.
-      */
-      .mic {
-        flex: none;
-        display: flex;
-        align-items: center;
-        color: var(--live-off);
-      }
-      .mic svg {
-        display: block;
-        overflow: visible;
-      }
-      .mic .cap {
-        fill: none;
-        stroke: currentColor;
-        stroke-width: 1.6;
-      }
-      .mic .arc,
-      .mic .stem {
-        fill: none;
-        stroke: currentColor;
-        stroke-width: 1.6;
-        stroke-linecap: round;
-      }
-      .mic.open {
-        color: var(--live);
-      }
-      /* Thicker when it is open, so the state carries at a glance and not only
-         on inspection — this is the one fact on the strip that must not be
-         missed. */
-      .mic.open .arc,
-      .mic.open .stem {
-        stroke-width: 1.9;
-      }
-      /* FILLED when it is open, so the loudest state is also the solid one. */
-      .mic.open .cap {
-        fill: currentColor;
-      }
-      /*
-        Present to a screen reader, absent to a pointer. Not `display: none`,
-        which removes it from the accessibility tree as well and would delete
-        the one sentence this mark exists to say.
-      */
-      .ghost {
-        position: absolute;
-        width: var(--s-px);
-        height: var(--s-px);
-        margin: -1px;
-        padding: 0;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
-        border: 0;
       }
       .grow {
         flex: 1;
       }
-      .stat {
-        font-family: var(--mono);
-        font-size: var(--t-data);
-        color: var(--ink-3);
-      }
-
-      /* ---- the three named places ------------------------------------------ */
-      /*
-        A tab strip under the state bar, not beside the content. The window has
-        one subject at a time now, so the switch belongs where a window title
-        would be rather than inside either pane.
-      */
-      .shell-tabs {
-        flex: none;
+      /* Apparatus: what she is doing, and the keys that change it. */
+      .state {
         display: flex;
         align-items: center;
-        gap: var(--s1);
-      }
-      .shell-tab {
-        padding: var(--s1) var(--s4);
-        border: 0;
-        border-bottom: var(--s0) solid transparent;
-        border-radius: var(--r-pill);
-        background: transparent;
-        font-family: var(--narrow);
-        font-size: var(--t-label);
-        font-weight: var(--w-bold);
-        letter-spacing: var(--track);
-        text-transform: uppercase;
+        gap: 14px;
+        font-family: var(--mono);
+        font-size: var(--t-data-2);
         color: var(--ink-3);
-        cursor: default;
+        text-transform: uppercase;
+        letter-spacing: var(--track-2);
       }
-      .shell-tab:hover {
-        color: var(--ink-2);
+      .state .how {
+        text-transform: none;
+        letter-spacing: 0;
       }
-      /*
-        Her colour, because which place you are in is chrome — and this palette's
-        chrome has no hue of its own. `--her-deep` is the one that carries it.
-      */
-      /*
-        A FILLED pill in her colour, not an underline.
-
-        The underline was right while this strip was a row of its own; in the
-        title strip it competes with the rule under it. Filled says "you are
-        here" at a glance, and `--her-deep` is the token that exists so her
-        colour can carry white — swept for every theme and refused by
-        `contrastFailures` for a hue it would fail on.
-      */
-      .shell-tab[aria-current='true'] {
-        background: var(--her-deep);
-        color: var(--her-deep-ink);
-        border-bottom-color: transparent;
-      }
-      /* Each pane owns the whole window under the strip. */
-      .tab-pane {
-        flex: 1;
-        min-height: 0;
+      .mic {
         display: flex;
-        flex-direction: column;
+        align-items: center;
+        flex: none;
+        color: var(--ink-3);
+      }
+      .mic svg {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.4;
+        stroke-linecap: round;
+      }
+      .mic.open {
+        color: var(--her);
+      }
+      .mic.open .cap {
+        fill: currentColor;
+        stroke: none;
+      }
+      .mic {
+        position: relative;
+      }
+      .ghost {
+        position: absolute;
+        width: var(--s-px);
+        height: var(--s-px);
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
       }
 
-      /* ---- archive: the day list, and one conversation at a time ------------ */
-      .archive-body {
-        flex: 1;
-        min-height: 0;
-        display: grid;
-        grid-template-columns: 300px minmax(0, 1fr);
-      }
-      /*
-        A COLUMN, not a card floating in a padded field.
-
-        It was inset with a border and a 12px radius, which put a rounded box of
-        list inside a rectangle of window and left a 20px channel of nothing
-        between it and the transcript. The artifact runs it edge to edge with a
-        single rule down the right, exactly as the Cast list does — one window,
-        one treatment for a column of choices.
+      /* ---- the frame: a rail, and one page at a time -----------------------
+        The rail is the window's table of contents and it never goes away. A
+        character list that appears on one tab only is a list you have to
+        navigate to in order to find out what you could navigate to.
       */
-      .archive-side {
+      .frame {
+        flex: 1;
+        display: flex;
         min-height: 0;
+      }
+      .rail {
+        width: var(--rail-w);
+        flex: none;
         display: flex;
         flex-direction: column;
         background: var(--paper-2);
         border-right: var(--s-px) solid var(--rule);
-      }
-      .archive-side > .list {
-        flex: 1;
-        margin: 0;
+        padding-top: var(--s4);
         overflow-y: auto;
       }
-
-      /* ---- the calendar over the day it opens on --------------------------- */
-      .cal {
-        flex: none;
-        padding: var(--s5) var(--s5) var(--s4);
-        border-bottom: var(--s-px) solid var(--rule);
+      .rail-head,
+      .rail-says {
+        margin: 0;
+        font-family: var(--sans);
+        font-size: var(--t-label);
+        font-weight: var(--w-medium);
+        letter-spacing: var(--track-wide);
+        text-transform: uppercase;
+        color: var(--ink-3);
+        padding: 0 18px var(--s3);
+        max-width: none;
       }
-      .cal .head {
+      .rail-cast {
+        display: flex;
+        flex-direction: column;
+      }
+      /*
+        A row, and the chosen one gets a BAR.
+
+        The 21px left padding on an unchosen row is the bar's 3px paid back, so
+        every name starts on the same vertical line whether or not it is chosen
+        — a list whose text shifts sideways as the selection moves is one that
+        reads as two lists.
+      */
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        width: 100%;
+        padding: 9px 18px 9px 21px;
+        border: 0;
+        border-left: var(--chosen-bar) solid transparent;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .rail-row:hover {
+        background: var(--paper);
+      }
+      .rail-row[aria-current='true'] {
+        background: var(--paper);
+        border-left-color: var(--her);
+        padding-left: 18px;
+      }
+      /* Rule 6: the machine gets none of her colour, so its bar is ink. */
+      .rail-machine[aria-current='true'] {
+        border-left-color: var(--ink-2);
+      }
+      .rail-row .tile {
+        flex: none;
+      }
+      /*
+        A character who named a face and did not get it — contract C4.
+
+        Dashed and empty rather than the built-in standing in for her: the face
+        is the one thing that tells two characters apart, so substituting it
+        makes the list stop doing its only job, and it looks deliberate.
+      */
+      .who-band.faceless .tile,
+      .rail-row.faceless .tile {
+        /*
+          SIZED here, and it has to be.
+
+          `faceTile` refuses to draw a face it does not have and returns a bare
+          `<canvas>` — deliberately, so the tile is empty rather than showing
+          somebody else, and deliberately without width or height attributes so
+          it draws nothing at all. `faceTile` gives it its own width and height
+          now, so the size is not this rule's job; what IS this rule's job is
+          saying that the absence is deliberate.
+
+          Dashed, so it reads as a marked absence rather than as a picture that
+          failed to load — which is the whole reason the size could move into
+          the element in the first place.
+        */
+        border: var(--s-px) dashed var(--rule-2);
+        border-radius: var(--r-control);
+      }
+      .rail-titles {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-px);
+        /* `flex: 1` with `min-width: 0`, both. Without the second a flex item
+           refuses to shrink below its content, so a long name pushes the row
+           wider than the rail instead of ellipsing — which is how "Wisp" and
+           "worn now" came to need 368px in a 206px column. */
+        flex: 1;
+        min-width: 0;
+      }
+      .rail-name {
+        font-family: var(--serif);
+        font-size: var(--t-sm);
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .rail-worn,
+      .rail-stat {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: var(--sans);
+        font-size: var(--t-label);
+        letter-spacing: var(--track-2);
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      /*
+        Making and deleting characters: WORDS, not boxes.
+
+        "Rules do the grouping. Boxes are reserved for the two things that need
+        one: a control and a warning." Four bordered buttons stacked under a
+        list of two characters made the making of characters heavier than the
+        characters, which is the wrong way round on a rail whose job is saying
+        who exists.
+
+        The name field keeps its box, because an empty field with no edge is a
+        placeholder floating over paper — the one case `tokens.css` argues a box
+        IS needed.
+      */
+      .rail-make {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: var(--s1) 14px;
+        padding: var(--s4) 18px 0;
+      }
+      .rail-make .row {
+        display: contents;
+      }
+      .rail-make input[type='text'] {
+        flex: 1 1 100%;
+        min-width: 0;
+        font-size: var(--t-cap);
+      }
+      .rail-make .btn {
+        min-height: 0;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        border-bottom: var(--s-px) solid transparent;
+        border-radius: 0;
+        background: transparent;
+        font-family: var(--sans);
+        font-size: var(--t-cap);
+        font-weight: var(--w-regular);
+        color: var(--ink-2);
+      }
+      .rail-make .btn:hover:not(:disabled) {
+        color: var(--ink);
+        border-bottom-color: var(--rule-2);
+      }
+      .rail-make .btn.primary {
+        color: var(--ink);
+        font-weight: var(--w-medium);
+      }
+      /* The destructive one stays legible and stays a word. It is red, and it
+         is not a box, which is the delivery's own rule for it. */
+      .rail-make .btn.bad {
+        color: var(--red);
+      }
+      .rail-foot {
+        margin-top: auto;
+        padding-bottom: var(--s3);
+      }
+      .rail-rule {
+        height: var(--s-px);
+        background: var(--rule);
+        margin: var(--s4) 18px var(--s2);
+      }
+      .rail-machine {
+        justify-content: space-between;
+      }
+      .rail-machine .rail-name {
+        font-family: var(--sans);
+        font-size: var(--t-ui);
+      }
+
+      /* ---- a page ----------------------------------------------------------
+        Two of them, and only one on screen. `[hidden]` in the token file is
+        what actually hides the other, with `!important`, for the reason stated
+        there.
+      */
+      .main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .page {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .head {
+        flex: none;
+        padding: var(--s6) var(--s7) 0;
+      }
+      .subject {
+        display: flex;
+        align-items: center;
+        gap: 26px;
+        padding-bottom: var(--s5);
+      }
+      .subject:empty {
+        display: none;
+      }
+      /*
+        The three views, as a sub-navigation under her name.
+
+        Numbered, because they are parts of one document rather than
+        destinations — I, II, III reads as a contents list and Cast/Archive/
+        Machine reads as three apps sharing a window.
+      */
+      .views {
+        display: flex;
+        gap: var(--s6);
+        border-bottom: var(--s-px) solid var(--rule-2);
+      }
+      .view {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        padding: 0 0 9px;
+        border: 0;
+        border-bottom: var(--chosen-underline) solid transparent;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .view-numeral {
+        font-family: var(--mono);
+        font-size: var(--t-nano);
+        letter-spacing: var(--track);
+        color: var(--ink-3);
+      }
+      .view-label {
+        font-family: var(--serif);
+        font-size: var(--t-h3);
+        color: var(--ink-3);
+        white-space: nowrap;
+      }
+      .view[aria-current='true'] {
+        border-bottom-color: var(--her);
+      }
+      .view[aria-current='true'] .view-label,
+      .view[aria-current='true'] .view-numeral {
+        color: var(--ink);
+      }
+      .view:hover .view-label {
+        color: var(--ink-2);
+      }
+      .view-head {
+        display: flex;
+        flex-direction: column;
+      }
+      .view-head:empty {
+        display: none;
+      }
+
+      /* ---- the reading column, and the margin ------------------------------
+        "Its structure is a printed page: a subject, a reading column, and a
+        margin for apparatus." Nothing to the right of the rule is a thing you
+        came to read.
+      */
+      .spread,
+      .machine-spread {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) var(--margin-w);
+      }
+      .machine-spread {
+        grid-template-columns: var(--machine-nav-w) minmax(0, 1fr) var(--margin-w);
+      }
+      .reading,
+      .machine-pane {
+        min-width: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 26px;
+        padding: 26px var(--s5) var(--s6) var(--s7);
+      }
+      .margin {
+        border-left: var(--s-px) solid var(--rule);
+        background: var(--paper-2);
+        padding: 26px 26px var(--s6) var(--s5);
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .margin-block {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .margin-head {
+        margin: 0;
+        font-family: var(--sans);
+        font-size: var(--t-label);
+        font-weight: var(--w-medium);
+        letter-spacing: var(--track-wide);
+        text-transform: uppercase;
+        color: var(--ink-3);
+        max-width: none;
+      }
+      .margin-facts {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s0);
+        font-family: var(--mono);
+        font-size: var(--t-data-2);
+        color: var(--ink-2);
+      }
+      .margin-rule {
+        height: var(--s-px);
+        background: var(--rule);
+      }
+
+      /* ---- this machine ----------------------------------------------------
+        Its own mark, and none of her colour anywhere on the page.
+      */
+      .machine-subject {
+        display: flex;
+        align-items: center;
+        gap: var(--s5);
+        padding-bottom: var(--s5);
+        border-bottom: var(--s-px) solid var(--rule-2);
+      }
+      .machine-mark {
+        width: 52px;
+        height: 52px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: var(--s-px) solid var(--rule-2);
+        border-radius: var(--r-control);
+        color: var(--ink-3);
+        font-size: var(--t-h2);
+      }
+      .machine-titles h1 {
+        margin: 0;
+        font-family: var(--serif);
+        font-size: var(--t-h1);
+        font-weight: var(--w-regular);
+        color: var(--ink);
+      }
+      .machine-says {
+        margin: var(--s1) 0 0;
+        font-family: var(--sans);
+        font-size: var(--t-cap);
+        color: var(--ink-3);
+        max-width: none;
+      }
+      .groups {
+        border-right: var(--s-px) solid var(--rule);
+        padding: var(--s5) var(--s6) 0 var(--s7);
+        overflow-y: auto;
+      }
+      /* ---- the day strip ---------------------------------------------------
+        "A whole month at a glance. Days with nothing in them are pale and do
+        not respond — they are not offering anything."
+
+        One row of 31, a numeral over a dot. It replaced a seven-column month
+        grid, which answered a question this window never asked: what day of the
+        week the 14th was. The strip answers the one it does ask — when did we
+        talk — and it costs one line instead of six.
+      */
+      .daystrip {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 0 var(--s3);
+      }
+      .daystrip .head {
         display: flex;
         align-items: center;
         gap: var(--s2);
-        margin-bottom: var(--s4);
-      }
-      .cal .month {
-        flex: 1;
-        min-width: 0;
-        font-family: var(--narrow);
-        font-size: var(--t-label);
-        font-weight: var(--w-bold);
-        letter-spacing: var(--track);
-        text-transform: uppercase;
-      }
-      .cal .step {
         flex: none;
+      }
+      .daystrip .month {
+        font-family: var(--sans);
+        font-size: var(--t-cap);
+        font-weight: var(--w-medium);
+        color: var(--ink-2);
+        white-space: nowrap;
+      }
+      .daystrip .step {
         display: flex;
-        padding: var(--s1);
+        padding: var(--s0);
         border: 0;
-        border-radius: var(--r1);
         background: transparent;
         color: var(--ink-3);
-        cursor: default;
+        cursor: pointer;
       }
-      .cal .step:hover:not(:disabled) {
-        background: var(--paper-hover);
+      .daystrip .step:hover:not(:disabled) {
         color: var(--ink);
       }
-      .cal .step:disabled {
-        opacity: 0.3;
+      .daystrip .step:disabled {
+        color: var(--rule-2);
       }
-      .cal .step svg {
-        display: block;
+      .daystrip .step svg {
         fill: none;
         stroke: currentColor;
-        stroke-width: 1.8;
+        stroke-width: 1.5;
         stroke-linecap: round;
-        stroke-linejoin: round;
       }
-      .cal .grid {
+      .strip {
+        flex: 1;
+        min-width: 0;
         display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: var(--s-px);
-      }
-      .cal .initial {
-        display: grid;
-        place-items: center;
-        height: var(--s6);
-        font-family: var(--narrow);
-        font-size: var(--t-nano);
-        font-weight: var(--w-bold);
-        letter-spacing: var(--track-2);
-        color: var(--ink-3);
+        grid-template-columns: repeat(31, 1fr);
       }
       /*
-        A day is a button only when there is something on it. A cell that looks
-        pressable and answers with an empty column is the same lie as a tool she
-        cannot call.
+        A day. Pale and inert unless something happened on it.
+
+        `disabled` rather than a class, so it is the browser and the
+        accessibility tree that refuse the press rather than a missing click
+        handler — contract A1.
       */
-      .cal .day {
-        position: relative;
-        display: grid;
-        place-items: center;
-        height: 28px;
-        padding: 0;
+      .day {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--s1);
+        padding: 0 0 var(--s1);
         border: 0;
-        border-radius: var(--r2);
         background: transparent;
         color: var(--ink-3);
-        font: inherit;
-        font-size: var(--t-data);
-        font-variant-numeric: tabular-nums;
+        cursor: pointer;
+      }
+      .day:disabled {
+        color: var(--rule-2);
         cursor: default;
       }
-      .cal .day.has {
+      .day-n {
+        font-family: var(--mono);
+        font-size: var(--t-nano);
+      }
+      .day.has {
+        color: var(--ink-2);
+      }
+      .day.has:hover {
         color: var(--ink);
-        font-weight: var(--w-semibold);
       }
-      .cal .day.has:hover {
-        background: var(--paper-hover);
+      .day.today .day-n {
+        font-weight: var(--w-medium);
+        color: var(--ink);
       }
-      /* Today is named even when nothing happened on it. */
-      .cal .day.today {
-        box-shadow: inset 0 0 0 1px var(--rule);
-      }
-      .cal .day[aria-current='true'] {
-        background: var(--her-deep);
-        box-shadow: none;
-        color: var(--her-deep-ink);
-      }
-      /* How much was said, without saying how much. */
-      .cal .day .dot {
-        position: absolute;
-        bottom: 3px;
-        width: 3px;
-        height: 3px;
-        border-radius: 50%;
+      /* The dot is the whole indication, so a day with nothing has none — an
+         empty circle would be a mark that means "no mark". */
+      .day .dot {
+        width: var(--s1);
+        height: var(--s1);
+        border-radius: var(--r-pill);
         background: var(--her);
+        opacity: 0.55;
       }
-      .cal .day[aria-current='true'] .dot {
-        background: var(--her-deep-ink);
+      .day[aria-current='true'] .day-n {
+        color: var(--ink);
+        font-weight: var(--w-medium);
       }
-      /*
-        `.blank`, NOT `.empty` — which this window already uses for the sentence
-        it shows when a pane has nothing in it: `margin: 26px auto` and a 46ch
-        measure. Those landed on the five leading cells of a month and made two
-        of the six week rows 80px tall instead of 28.
-
-        The seventh rule in this stylesheet to mean two things at once, and the
-        first one a picture caught before a person did.
-      */
-      .cal .blank {
-        height: 28px;
+      .day[aria-current='true'] .dot {
+        opacity: 1;
+        transform: scale(1.4);
       }
-      /* The day the list is showing, over the list. */
-      .archive-side .picked {
-        flex: none;
+      /* The day being read, and how many are on it. */
+      .day-head {
+        margin: 0;
         display: flex;
         align-items: baseline;
         gap: var(--s3);
-        padding: var(--s4) var(--s5) var(--s2);
-      }
-      .archive-side .picked .what {
-        font-family: var(--narrow);
-        font-size: var(--t-label);
-        font-weight: var(--w-bold);
-        letter-spacing: var(--track);
-        text-transform: uppercase;
-      }
-      .archive-side .picked .stat {
-        font-family: var(--mono);
-        font-size: var(--t-data);
-        color: var(--ink-3);
-      }
-      .archive-side > .list .entry:first-child {
-        border-top: 0;
-      }
-      /*
-        A day, over the run of conversations that happened on it.
-
-        Every row used to begin with its own "Today"/"Yesterday" in a list that
-        was already in date order — 173 rows each restating the same word. The
-        day moves to a heading and the row keeps the clock, which is what the
-        artifact draws and what makes the column scannable at that length.
-      */
-      .archive-side > .list .day {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        padding: var(--s4) var(--s5) var(--s2);
-        background: var(--paper-2);
-        font-family: var(--narrow);
-        font-size: var(--t-label);
-        font-weight: var(--w-bold);
-        letter-spacing: var(--track);
-        text-transform: uppercase;
-        color: var(--ink-3);
-      }
-      /* Nothing above the first heading to rule off from. */
-      .archive-side > .list .day + .entry {
-        border-top: 0;
-      }
-      /*
-        A conversation marked for deletion.
-
-        Her colour rather than red: the row is SELECTED, which is a neutral
-        state — the red belongs on the button that acts, not on everything the
-        button might reach. Marking three rows red before anybody has decided
-        reads as though the deletion has already happened.
-      */
-      .entry.picked {
-        background: var(--her-wash);
-        box-shadow: inset 2px 0 0 var(--her);
-      }
-      /* The tick, which is what makes "selected" legible without colour. */
-      .entry .tick {
-        display: none;
-        margin-right: var(--s2);
-        color: var(--her);
-        font-variant-numeric: tabular-nums;
-      }
-      .picking .entry .tick {
-        display: inline;
-      }
-      /*
-        The confirmation. Centred, narrow, and quiet — the backdrop does the
-        work of saying "answer this first", so the box itself does not need to
-        shout.
-      */
-      #sure {
-        max-width: 42ch;
-        padding: var(--s6);
-        border: var(--s-px) solid var(--rule);
-        border-radius: var(--r3);
-        background: var(--paper);
-        color: var(--ink);
-      }
-      #sure::backdrop {
-        background: color-mix(in oklab, var(--ink) 32%, transparent);
-      }
-      #sure h2 {
-        margin: 0 0 var(--s3);
-        font-size: var(--t-h3);
-      }
-      #sure p {
-        margin: 0 0 var(--s6);
-        color: var(--ink-2);
-        font-size: var(--t-sm);
-        line-height: var(--leading);
-      }
-      .sure-do {
-        display: flex;
-        gap: var(--s3);
-        justify-content: flex-end;
-      }
-      /* The transcript column: its own scroll, clear of the drawer's hairline. */
-      #talk {
-        min-height: 0;
-        overflow-y: auto;
-        padding: var(--s7) var(--s7) var(--s8);
-      }
-
-      /* What the whole tab is for, under the six groups that make it up. */
-      .nav-foot {
-        margin: auto 0 0;
-        padding: var(--s6) var(--s5) 0;
+        padding-bottom: 10px;
+        border-bottom: var(--s-px) solid var(--rule);
+        font-family: var(--sans);
         font-size: var(--t-cap);
-        line-height: var(--leading);
         color: var(--ink-3);
+        max-width: none;
       }
-
       /* ---- machine: the six groups, as they were ---------------------------- */
-      .machine {
-        /* Named, so the rule that collapses it need not restate the other two. */
-        --tools-w: 320px;
-        display: grid;
-        grid-template-columns: 196px minmax(0, 1fr) var(--tools-w);
-        min-height: 0;
-      }
+      /*
+        `.machine` used to define this page's grid, and it was the SIXTH class
+        collision in this stylesheet: the delivered frame gives every page a
+        `.page` that is a flex column, and `.machine` — later in the sheet at
+        equal specificity — turned the machine's page back into a three-column
+        grid, so its header rendered beside its navigation instead of above it.
+
+        The grid is `.machine-spread` now, defined once in the frame section
+        with the delivery's own track widths. What survives here is the rule
+        that COLLAPSES the third track, which is contract M2 and tested.
+      */
       /*
         NO EMPTY THIRD COLUMN.
 
@@ -588,14 +658,11 @@
         without. That is the right way round -- five panes are full width, and
         two shift once on arrival.
       */
-      .machine:not(:has(> .machine-tools > .tool-card)) {
-        --tools-w: 0px;
+      .machine-spread:not(:has(> .machine-tools > .tool-card)) {
+        grid-template-columns: var(--machine-nav-w) minmax(0, 1fr) 0;
       }
-      .machine:not(:has(> .machine-tools > .tool-card)) > .machine-tools {
+      .machine-spread:not(:has(> .machine-tools > .tool-card)) > .machine-tools {
         display: none;
-      }
-      .nav-head {
-        padding: 0 var(--s4) var(--s3);
       }
       /* The tool list, beside the grants that decide which rows it has. */
       .machine-tools {
@@ -618,55 +685,81 @@
         border-radius: var(--r3);
         padding: var(--s5);
       }
-      .machine > .nav {
-        display: flex;
-        flex-direction: column;
-        padding: var(--s5) var(--s3);
-        border-right: var(--s-px) solid var(--rule);
-        overflow-y: auto;
-      }
       /*
-        The groups fill the nav, so the footer under them can sit at the bottom.
-
-        The gap lives here rather than on `.nav` because `.nav` now holds two
-        things — the heading and this — and one gap governing both would put the
-        buttons' 2px between the heading and the first of them.
+        The groups fill the column, so the footer under them sits at the bottom.
       */
       #nav-groups {
-        flex: 1;
-        min-height: 0;
         display: flex;
         flex-direction: column;
+        flex: 1;
+        min-height: 0;
         gap: var(--s0);
+      }
+      /* What this page is NOT about, said where somebody looking for her voice
+         in here would read it. */
+      .nav-foot {
+        margin: auto 0 0;
+        padding-top: var(--s4);
+        font-family: var(--sans);
+        font-size: var(--t-label);
+        letter-spacing: var(--track-2);
+        color: var(--ink-3);
+        max-width: none;
       }
       .machine-pane {
         min-height: 0;
         overflow-y: auto;
         padding: var(--s5) var(--s6) var(--s6);
       }
+      /*
+        A numbered row, separated by a rule rather than boxed.
+
+        It was a filled, rounded chip per group — six boxes down a column, which
+        is the treatment "boxes are reserved for a control and a warning"
+        excludes. The rule between them does the grouping and the numeral does
+        the counting.
+      */
       .tab {
         display: flex;
-        align-items: center;
-        gap: var(--s3);
+        align-items: baseline;
+        gap: 10px;
         width: 100%;
         text-align: left;
-        padding: var(--s2) var(--s4);
+        padding: 7px 0;
         border: 0;
-        border-radius: var(--r2);
+        border-top: var(--s-px) solid var(--rule);
+        border-radius: 0;
         background: transparent;
         color: var(--ink-2);
-        font: inherit;
+        font-family: var(--serif);
         font-size: var(--t-sm);
-        cursor: default;
+        cursor: pointer;
+      }
+      /* The first has nothing above it to be separated from. */
+      #nav-groups .tab:first-of-type {
+        border-top: 0;
+      }
+      .tab-n {
+        font-family: var(--mono);
+        font-size: var(--t-nano);
+        color: var(--ink-3);
       }
       .tab:hover {
-        background: var(--paper-hover);
+        color: var(--ink);
       }
       .tab[aria-current='true'] {
-        background: var(--chrome-wash);
         color: var(--ink);
-        font-weight: var(--w-semibold);
+        font-weight: var(--w-medium);
       }
+      .tab[aria-current='true'] .tab-n {
+        color: var(--ink-2);
+      }
+      /*
+        The chip's fill and its second `aria-current` rule stood here, later in
+        the sheet than the numbered-row rules above and therefore winning: the
+        open group kept a filled, rounded block behind it. Chosen is weight and
+        ink, and the rule between rows is the grouping.
+      */
       /* A dot means somebody should look, not that something is off. */
       .tab .dot {
         width: 7px;
@@ -899,213 +992,161 @@
         color: var(--red);
       }
 
-      /* ---- characters ------------------------------------------------------ */
-      .strip {
-        flex: none;
-        display: flex;
-        align-items: baseline;
-        gap: var(--s4);
-        padding: var(--s6) var(--s6) 0;
-      }
-      h3 {
-        margin: 0;
-        font-family: var(--narrow);
-        font-size: var(--t-data);
-        font-weight: var(--w-bold);
-        letter-spacing: var(--track);
-        text-transform: uppercase;
-        color: var(--ink-3);
-      }
-      /*
-        The cast, as a column of rows.
-
-        It was a row of wide cards across the top of the window: the widest part
-        of the screen spent on the characters you are NOT editing, with the one
-        you are in a strip beneath. A list holds as many as you like in the
-        space four cards needed, and it is what the artifact draws.
+      /* ---- the day's conversations, and the one being read ------------------
+        A list of what was said on the chosen day, above the transcript. Rows
+        rather than cards, and rules rather than boxes: "Rules do the grouping.
+        Boxes are reserved for the two things that need one: a control and a
+        warning."
       */
-      .cards {
-        flex: 1;
-        min-height: 0;
+      .list {
         display: flex;
         flex-direction: column;
-        gap: var(--s1);
-        padding: 0 var(--s3) var(--s5);
-        overflow-y: auto;
       }
-      /*
-        The list's own footer: what you do TO the list, under it.
-
-        `flex: none` against the `.cards` above it, which is `flex: 1` and
-        scrolls — so the buttons stay put while the characters move past them,
-        which is the whole reason this is a footer rather than the bottom of the
-        scroll. The rule above it is the same one the drawer draws across the
-        window, and it means the same thing in both places.
-
-        `flex-wrap` because "Delete Constance Wickham" is as long as the label
-        gets and this column is 268px: without it the row would decide the
-        column's width instead of the other way round.
-      */
-      .cast-foot {
-        flex: none;
-        padding: var(--s4) var(--s5) var(--s5);
-        border-top: var(--s-px) solid var(--rule);
+      /* The day being read, and how many are on it. */
+      .picked {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s3);
+        padding-bottom: 10px;
+        border-bottom: var(--s-px) solid var(--rule);
       }
-      .cast-foot .row {
-        gap: var(--s2);
+      .picked .what {
+        font-family: var(--serif);
+        font-size: var(--t-h3);
+        color: var(--ink);
       }
-      .cast-foot input[type='text'] {
-        width: 100%;
+      .stat {
+        font-family: var(--mono);
+        font-size: var(--t-data-2);
+        color: var(--ink-3);
       }
-      .cast-foot .btn {
-        /* The window-wide floor is 9ch, which overflows a 268px column two
-           buttons wide. They are stacked here, so the floor has nothing to
-           even up and a full-width button is the more legible answer. */
-        min-width: 0;
-        width: 100%;
-      }
-      .card {
+      .entry {
         display: flex;
         align-items: center;
         gap: var(--s3);
-        padding: var(--s2) var(--s3);
+        width: 100%;
+        padding: 9px 0;
         border: 0;
-        border-radius: var(--r3);
+        border-bottom: var(--s-px) solid var(--rule);
+        border-left: var(--chosen-bar) solid transparent;
+        padding-left: var(--s3);
         background: transparent;
         color: inherit;
         font: inherit;
         text-align: left;
-        cursor: default;
+        cursor: pointer;
       }
-      .card .tile {
-        flex: none;
-        display: block;
+      .entry:hover {
+        background: var(--paper-2);
       }
       /*
-        Her face could not be resolved, so the row says so instead of showing
-        the built-in and letting a list of identical mochis pass for a design.
-        A dashed hole is the smallest honest thing that fits where she goes.
+        Chosen is a BAR and a word, never a fill alone: her hue behind a chosen
+        row measures 1.01:1 against the surface on some characters, and a fill
+        nobody can see is not a state.
       */
-      .card.faceless .tile {
-        width: 44px;
-        height: 44px;
-        border: var(--s-px) dashed var(--warn-line);
-        border-radius: var(--r2);
+      .entry[aria-current='true'] {
+        background: var(--her-wash);
+        border-left-color: var(--her);
       }
-      .card .titles {
-        min-width: 0;
+      .entry .when {
         display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: var(--s-px);
+        align-items: center;
+        gap: var(--s2);
+        font-family: var(--mono);
+        font-size: var(--t-data-2);
+        color: var(--ink-2);
       }
       /*
-        NOT gold. In the artifact gold is what "STAGED · NOT GRANTED" is written
-        in — a state that wants looking at — so a gold edge appearing under the
-        pointer says a character has a problem every time the mouse crosses it.
+        The box that says whether this row is picked for deletion.
+
+        A CHARACTER, not a styled square: it has to be legible without colour
+        and it has to survive being read aloud, and `☐` / `☑` do both without
+        the row having to carry a real checkbox it would then have to keep in
+        step with the selection.
       */
-      .card:hover {
-        background: var(--paper-hover);
-      }
-      /*
-        A FILL, not an outline.
-
-        This was a 1px edge in her colour with a lift under it, which is what the
-        artifact draws — and in a column of otherwise borderless rows it read as
-        one row having been promoted to a button rather than as the row being
-        open. An outline is a shape; a wash is a state.
-
-        The same treatment the Machine tab's nav already gives the group you are
-        in, twelve pixels away in the same window and doing exactly the same job:
-        saying which of N things this column is currently about.
-
-        Not `--paper` either. It is 3% off the `--paper-2` this column is painted
-        with, so without the edge it was invisible; the edge had been carrying
-        the whole indication.
-      */
-      .card[aria-current='true'] {
-        background: var(--chrome-wash);
-      }
-      .card .name {
-        font-size: var(--t-ui);
-        font-weight: var(--w-semibold);
-        letter-spacing: var(--track-tight);
-        overflow-wrap: anywhere;
-      }
-      .card .worn {
-        font-family: var(--narrow);
-        font-size: var(--t-nano);
-        font-weight: var(--w-semibold);
-        letter-spacing: var(--track-2);
-        text-transform: uppercase;
+      .tick {
+        font-family: var(--mono);
+        font-size: var(--t-data);
         color: var(--ink-3);
       }
-      /*
-        Which one she IS, said once, on the row it is true of.
-
-        A tick, not the word in a pill. The row already carries her name, her
-        pronoun and her voice, and a fourth caps word was the loudest thing on it
-        and said the least. Her colour, so the mark is the same fact the accent
-        already stands for — see `tokens.css` on the two jobs it keeps.
+      .entry[data-picked='true'] .tick {
+        color: var(--her);
+      }
+      /* Only while a selection is being made, so the column of boxes is not a
+         permanent invitation to delete something. */
+      .list:not(.picking) .tick {
+        display: none;
+      }
+      .fact {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s1);
+        color: var(--ink-3);
+      }
+      .fact svg {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.4;
+        stroke-linecap: round;
+      }
+      /* ---- what she is told, in the margin ---------------------------------
+        The three-column Cast tab is gone: a list of characters down the left, her
+        sheet in the middle and a "next wake" panel down the right. The list is
+        the rail now and the panel is the margin of view III, which is where it
+        belongs — what she is TOLD she can do is apparatus for what she may do,
+        not a third column standing beside her name.
       */
-      .card .wearing {
-        flex: none;
-        display: flex;
-        color: var(--ink-brand);
-      }
-
-      /* ---- cast: a list, the open character, and what she will be told ------ */
-      .cast {
-        display: grid;
-        grid-template-columns: 268px minmax(0, 1fr) 360px;
-        min-height: 0;
-      }
-      .cast-list {
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        background: var(--paper-2);
-        border-right: var(--s-px) solid var(--rule);
-      }
-      /*
-        A COLUMN, like the cast list opposite it — not a card inside one.
-
-        `#panel-wake` carried `.panel`: a bordered, rounded, `--paper-2` card
-        with its own 16px padding, sitting inside a bordered `--paper-2` column.
-        Two edges and two surfaces for one thing, and the inner one said nothing
-        the outer had not. The class had no other user in this window and its
-        rules went with it.
-
-        20px of padding rather than 16, so this column's heading sits on the
-        same line as `CHARACTERS` on the far side. They were 13px apart.
-
-        A BOTTOM as well, which it did not have. Nothing used to reach the foot
-        of this column — the panel stopped wherever its text ran out and left
-        blank paper under it — so an open bottom cost nothing and was never
-        noticed. Save and Cancel sit on that edge now, and a button flush
-        against the drawer's rule reads as having fallen out of the column.
-      */
-      .cast-wake {
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        padding: var(--s6);
-        background: var(--paper-2);
-        border-left: var(--s-px) solid var(--rule);
-      }
-
       /*
         How tall the system prompt panel's two views are, at least.
 
         A local custom property rather than the number twice: the whole point is
         that the readout and the editor cannot disagree, and two literals is
-        exactly how they would come to.
+        exactly how they would come to. It went missing when the three-column
+        Cast tab's rules were replaced, and `design-values.test.ts` caught it —
+        an undefined custom property makes the whole declaration invalid at
+        computed-value time, so the panel simply had no floor.
       */
       #app {
         --wake-floor: 220px;
       }
 
       /* ---- the controls the sections hold ---------------------------------- */
+      /*
+        A LIST BOX is not a dropdown, and the field rules in `tokens.css` are
+        written for a dropdown.
+
+        `Hearing you` asks which languages are spoken and the answer is genuinely
+        plural, so that control is `multiple` with `size = 8`. Three of the rules
+        it inherits are wrong for that, and together they left it with no visible
+        box at all:
+
+        - `appearance: none` strips the native list frame. On a collapsed select
+          that frame is replaced by the border and fill; on a list box nothing
+          replaced it.
+        - The border and background are TRANSPARENT at rest. That is the quiet
+          treatment, and it rests on there being something to read — a collapsed
+          select always shows its value, and eight rows with no frame are not a
+          control.
+        - The chevron is drawn at `top 50%`, so on a tall list it floats in the
+          middle of the rows pointing at nothing that opens.
+
+        So: no chevron, no room reserved for one, and the box drawn at rest.
+      */
+      select[multiple] {
+        background-image: none;
+        padding-right: var(--s2);
+        border-color: var(--rule-2);
+        background-color: var(--paper);
+      }
+      /*
+        FOCUS is left exactly as it is for every other field: the fill without
+        the border, so the focus outline is not doubled by a hairline a pixel
+        inside it. Restated here only because the rule above is later in the
+        cascade at equal specificity and would otherwise win.
+      */
+      select[multiple]:focus {
+        border-color: transparent;
+      }
       /*
         Which words she takes: three choices, not a dropdown of three.
 
@@ -1627,12 +1668,27 @@
         wrong element. Two meanings in one global stylesheet is the defect;
         naming the specific thing is the fix.
       */
+      /*
+        HER FACE AND HER NAME, as the page's subject rather than its first
+        section.
+
+        It was the first block of the scrolling column, with the column's own
+        padding and a rule under it — so the thing the page is about scrolled
+        away, and what stayed at the top read as belonging to nobody. It sits
+        above the views now, which is what makes "Who she is" and "What she has
+        said" mean anything: they are views OF a subject, and the subject has to
+        be visible while you read them.
+
+        No padding and no rule of its own: `.head` places it and the views'
+        border is the line under it. Two rules a few pixels apart is what the
+        old arrangement drew.
+      */
       .who-band {
         display: flex;
-        align-items: flex-end;
-        gap: var(--s6);
-        padding: var(--s7) var(--s7) var(--s6);
-        border-bottom: var(--s-px) solid var(--rule);
+        align-items: center;
+        gap: var(--s5);
+        width: 100%;
+        min-width: 0;
       }
       .who-band .tile {
         flex: none;
@@ -1872,26 +1928,6 @@
         never the record. Drawing the chips would be inventing them —
         `plan-v2.md` W5 has what it would take.
       */
-      .talk-head {
-        display: flex;
-        flex-direction: column;
-        gap: var(--s3);
-        padding-bottom: var(--s5);
-        border-bottom: var(--s-px) solid var(--rule);
-      }
-      .talk-when {
-        font-size: var(--t-h2);
-        font-weight: var(--w-bold);
-        letter-spacing: var(--track-tight);
-      }
-      .talk-facts {
-        display: flex;
-        align-items: center;
-        gap: var(--s4);
-        font-family: var(--mono);
-        font-size: var(--t-data);
-        color: var(--ink-3);
-      }
       /*
         What she reached for, on its own row under the facts.
 
@@ -1899,12 +1935,6 @@
         stylesheet -- a build with six would otherwise push the row off its
         column rather than taking a second line.
       */
-      .talk-tools {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: var(--s2);
-      }
       /*
         A chip reads as a THING SHE DID, not as a control.
 
@@ -2160,278 +2190,130 @@
         color: var(--ink-3);
       }
 
-      /* ---- the strip along the bottom -------------------------------------- */
-      .drawer {
+      /* ---- the strip along the bottom --------------------------------------
+        What just happened, and whether anything has gone wrong, both always in
+        the same place.
+
+        This was a toast that appeared and faded, plus a chip in a drawer. A
+        message that removes itself is one somebody can miss entirely, and the
+        answer to "did that save?" should be readable a minute later rather than
+        for four seconds after the fact. The bar is always there, so its being
+        empty is itself an answer.
+      */
+      .status {
+        height: var(--status-h);
         flex: none;
-        height: 48px;
-        display: flex;
-        align-items: center;
-        gap: var(--s5);
-        padding: 0 var(--s6);
-        background: var(--paper-2);
-        border-top: var(--s-px) solid var(--rule);
-      }
-      .warn {
         display: flex;
         align-items: center;
         gap: var(--s2);
-        font-family: var(--mono);
-        font-size: var(--t-data);
-        color: var(--warn-ink);
-        background: none;
-        border: 0;
-        padding: 0;
-        cursor: default;
+        padding: 0 18px;
+        background: var(--paper-2);
+        border-top: var(--s-px) solid var(--rule);
       }
-      .warn .dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: var(--warn-line);
-        flex: none;
-      }
-
-      /* The button treatment is `button.btn` in tokens.css — a box, told apart
-         from the select beside it by fill and weight rather than by border. */
-      /*
-        HERS, not gold.
-
-        `accent.ts` states the design's second semantic rule — *the accent is
-        her*, derived from `colBody`, with no second place to set an app colour
-        — and then this rule set one. The gold was the last of a chrome hue that
-        file records as a migration reported finished and never made: the open
-        tab, the card ring, a selected row and the search hit all take her
-        colour, so the mark somebody sees most often was the only thing left
-        arguing for a palette nothing else in the window uses.
-
-        `--ink-brand` rather than `--her` or `--her-deep`, and which of the three
-        is not a matter of taste. This ring is read against the PAGE, and
-        `--ink-brand` is the one of them composed per scheme for exactly that:
-        `--her` is her body, which measures about 1.7:1 on `--paper` and is not
-        an indicator at all, and `--her-deep` is one value for both schemes
-        because white is read against IT rather than it against anything —
-        3.1:1 on a dark page, which clears by too little to be worth having.
-
-        What makes it safe for a hue nobody has seen: `contrastFailures` checks
-        `--ink-brand` against her own wash at 4.5:1 in both schemes and falls
-        back to the built-in when it fails. `--paper` is lighter than that wash
-        in light and darker than it in dark, so the measured pairing is the
-        WORSE one either way — every character that can be worn clears 4.5:1
-        here, against a bar of 3:1.
-      */
-      :focus-visible {
-        outline: var(--s0) solid var(--ink-brand);
-        outline-offset: 1px;
-      }
-      /*
-        EVERY field is quiet at rest now, and the rule lives in `tokens.css`.
-
-        This window used to answer it twice and differently: a `select` was
-        transparent-until-hover, with a comment arguing that *"a column of grey
-        dropdown chrome is the single biggest reason this window read as a form
-        where the artifact reads as a document"*, and an `input[type='text']`
-        two rules above it kept a resting border. The Machine tab's "Looking
-        things up" group draws all three in one column — Workspace, Web search,
-        Codex profile — so the mismatch was visible in a single glance and
-        nothing about the three jobs justified it.
-
-        What stays here is the CHEVRON, which is a `select`'s alone and needs
-        room reserved for it on the right that no text field wants.
-      */
-      select {
-        appearance: none;
-        padding-right: var(--s6);
-        padding-left: var(--s2);
-        font-size: var(--t-body);
-        /* Drawn rather than shipped: one token, both schemes. */
-        background-image:
-          linear-gradient(45deg, transparent 50%, currentColor 50%),
-          linear-gradient(135deg, currentColor 50%, transparent 50%);
-        background-position:
-          right 13px top 50%,
-          right 8px top 50%;
-        background-size:
-          5px 5px,
-          5px 5px;
-        background-repeat: no-repeat;
-      }
-      /*
-        A LIST BOX is not a dropdown, and everything above is written for a
-        dropdown.
-
-        `Hearing you` asks which languages are spoken, and the answer is
-        genuinely plural — so that control is `multiple` with `size = 8`. Three
-        of the rules it inherits are wrong for that, and together they left it
-        with no visible box at all:
-
-        - `appearance: none` strips the native list frame. On a collapsed
-          select that frame is replaced by the border and fill below; on a list
-          box nothing replaced it.
-        - The border and background are TRANSPARENT at rest. That is the quiet
-          treatment, and `tokens.css` explains what it rests on — "the quiet
-          rule rests on there being something to read". A collapsed select
-          always shows its value. Eight rows with no frame are not a control.
-        - The chevron is drawn at `top 50%`, so on a tall list it floats in the
-          middle of the rows pointing at nothing that opens.
-
-        So: no chevron, no room reserved for one, and the box drawn at rest.
-      */
-      select[multiple] {
-        background-image: none;
-        padding-right: var(--s2);
-        border-color: var(--rule);
-        background-color: var(--paper);
-      }
-      /*
-        FOCUS is left exactly as it is for every other field: the fill without
-        the border, so the gold `:focus-visible` outline is not doubled by a
-        hairline a pixel inside it. Restated here only because the rule above
-        is later in the cascade at equal specificity and would otherwise win.
-      */
-      select[multiple]:focus {
-        border-color: transparent;
-      }
-      .row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--s3);
-        align-items: center;
-      }
-      .note {
-        margin: var(--s2) 0 0;
-        font-size: var(--t-cap);
-        color: var(--ink-3);
-      }
-      code {
-        font-family: var(--mono);
-        font-size: var(--t-data);
-        overflow-wrap: anywhere;
-        user-select: text;
-      }
-      mark {
-        background: var(--gold-wash);
-        color: var(--gold);
-        border-radius: var(--r0);
-      }
-      /*
-        What just happened. Gone in ten seconds, or sooner if you say so.
-
-        It used to stay until the next write replaced it, which left the last
-        thing you did sitting over the window for the rest of the session — and
-        `#said:empty` was how it hid, which stopped working the moment it held a
-        button. `[hidden]` in `tokens.css` does that job now, and it is a state
-        the renderer sets rather than a side effect of the text being blank.
-
-        IN the drawer, not floating over it. It was `position: fixed; bottom:
-        56px`, which put a full-width bar eight pixels above the full-width bar
-        the window already had. It keeps its own surface, which is what makes
-        `.bad` tint the message rather than the whole status line.
-
-        No elevation any more: it sits ON a surface now rather than over the
-        document, and a shadow inside a bar reads as a seam.
-      */
       #said {
-        flex: 0 1 auto;
-        min-width: 0;
         margin: 0;
         display: flex;
         align-items: center;
         gap: var(--s2);
-        padding: var(--s1) var(--s2) var(--s1) var(--s4);
-        border-radius: var(--r-pill);
-        background: var(--paper);
-        box-shadow: inset 0 0 0 1px var(--rule);
-        font-size: var(--t-sm);
-      }
-      /*
-        ONE line, with the rest in the tooltip.
-
-        The drawer is a fixed 48px, so a message that wrapped would be clipped
-        rather than shown — and the renderer sets `title` to the same text, so
-        nothing is only half available.
-      */
-      #said-what {
         min-width: 0;
+        font-family: var(--sans);
+        font-size: var(--t-cap);
+        color: var(--ink-2);
+        max-width: none;
+      }
+      #said-what {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
       #said-shut {
-        flex: none;
         display: flex;
-        padding: var(--s1);
+        flex: none;
+        padding: 0;
         border: 0;
-        border-radius: var(--r1);
         background: transparent;
         color: var(--ink-3);
-        cursor: default;
-      }
-      #said-shut:hover {
-        background: var(--paper-hover);
-        color: var(--ink);
+        cursor: pointer;
       }
       #said-shut svg {
-        display: block;
         fill: none;
         stroke: currentColor;
-        stroke-width: 1.8;
+        stroke-width: 1.5;
         stroke-linecap: round;
       }
-      #said.bad {
-        color: var(--red);
-        background: var(--red-bg);
-        box-shadow: inset 0 0 0 1px var(--red);
+      #said-shut:hover {
+        color: var(--ink);
+      }
+      /*
+        The problem count, as a word and a mark.
+
+        `--live` and `--live-off` are the blue family, and this is the one place
+        that spends it: a count of things that have gone wrong is not a warning
+        about what you are about to do — the two status families are for that —
+        it is a report, and it reads as one.
+      */
+      .warn {
+        display: flex;
+        align-items: center;
+        gap: var(--s1);
+        flex: none;
+        padding: var(--s0) var(--s2);
+        border: var(--s-px) solid transparent;
+        border-radius: var(--r-control);
+        background: transparent;
+        font-family: var(--sans);
+        font-size: var(--t-cap);
+        color: var(--live);
+        cursor: pointer;
+      }
+      .warn:hover {
+        border-color: var(--live-line);
+        background: var(--live-bg);
+      }
+      .warn .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: var(--r-pill);
+        background: currentColor;
+      }
+      /* Nothing wrong, and it says so rather than showing nothing. */
+      .warn.quiet {
+        color: var(--live-off);
+      }
+      .status .btn {
+        flex: none;
       }
     </style>
   </head>
   <body>
+    <!--
+      Two pages and a rail, which is the delivered architecture rather than a
+      strip of three tabs. `dev-docs/design-system/STRUCTURE.md` records where
+      each number here comes from; the short version is that this window is one
+      document about somebody, and the machine is a different document that gets
+      its own page because it is not about her.
+    -->
     <div id="app">
       <!--
-        One strip: who she is, where you are, and what this place needs.
-
-        The tab bar was a second row under this one, which put two horizontal
-        rules across the top of a window whose whole point is that it has one
-        subject at a time. The three places live in the strip, the pane's own
-        context sits in the middle, and her state stays on the right where it
-        was — the microphone is the one thing here that is true whatever tab you
-        are on.
+        The topbar carries only what is true on every page: the mark, and her
+        state. It used to hold the three tabs and the search field as well,
+        which put the window's navigation and one pane's control on the same
+        strip as a fact about the running app.
       -->
       <div class="topbar">
         <canvas class="mark" id="mark"></canvas>
         <span class="wordmark">mochi</span>
-        <span class="divider"></span>
-        <nav class="shell-tabs" id="shell-tabs" role="tablist"></nav>
-        <div class="topbar-context" id="topbar-context">
-          <!--
-          Search belongs to the strip, not to the pane: "search first" is the
-          Archive's whole shape, and a field inside the pane put it below the
-          rule that separates the window's subject from its chrome.
-        -->
-          <input
-            id="q"
-            type="search"
-            placeholder="Search everything ever said"
-            autocomplete="off"
-          />
-        </div>
         <span class="grow"></span>
         <span class="state"
           ><span class="what" id="state"></span><span class="how" id="state-how"></span
         ></span>
-        <span class="stat" id="count"></span>
         <!--
-          The microphone, last and as a mark.
-
-          It was a bordered pill reading MICROPHONE OPEN, ahead of everything
-          else on the right. The words are KEPT — as the accessible name and as
-          the tooltip — because a microphone that is open with nothing saying so
-          is the worst thing this app can do, and an icon alone is only a
-          statement to somebody already looking at it.
-
-          Three states, told apart by SHAPE and not only by colour: filled for
-          open, hollow for closed, struck through for a grant that is withheld.
-          Colour alone would leave the most important state on this strip
-          invisible to a colour-blind reader.
+          The microphone, last and as a mark. The words are KEPT as the
+          accessible name and the tooltip: a microphone that is open with
+          nothing saying so is the worst thing this app can do, and an icon
+          alone is only a statement to somebody already looking at it. Three
+          states told apart by SHAPE and not only colour — filled for open,
+          hollow for closed, struck through for a grant that is withheld.
         -->
         <span class="mic" id="mic">
           <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
@@ -2443,115 +2325,120 @@
         </span>
       </div>
 
-      <!--
-        The open character gets the middle of the window, and her sections in
-        order rather than a stack of identical plates.
-
-        The cast was a row of cards across the top, which spent the widest part
-        of the window on the characters you are NOT editing and left the one you
-        are in a column beneath. A list holds as many as you like in the space a
-        row of four needed.
-      -->
-      <section class="tab-pane cast" id="tab-cast" role="tabpanel" aria-labelledby="tab-for-cast">
-        <aside class="cast-list">
-          <div class="strip">
-            <h3>Characters</h3>
-            <span class="stat" id="characters-count"></span>
+      <div class="frame">
+        <!--
+          The rail is the window's table of contents and it is always present:
+          who exists, and the machine underneath them. A character list that
+          only appears on one tab is a list you have to navigate to in order to
+          find out what you could navigate to.
+        -->
+        <nav class="rail" aria-label="Characters, and this machine">
+          <p class="rail-head" id="characters-count"></p>
+          <div class="rail-cast" id="characters"></div>
+          <div class="rail-make" id="cast-actions"></div>
+          <div class="rail-foot">
+            <div class="rail-rule"></div>
+            <button class="rail-row rail-machine" id="rail-machine" type="button">
+              <span class="rail-name">This machine</span>
+              <span class="rail-stat" id="machine-check"></span>
+            </button>
+            <p class="rail-says">true whoever is worn</p>
           </div>
-          <div class="cards" id="characters"></div>
-          <!--
-            New, Duplicate and Delete, under the list they act on.
-
-            They were the last section of the character sheet, which is the one
-            place on that pane that is not about the open character — and being
-            last put the control that makes a SECOND character below the fold of
-            a long scroll, on the one install that has exactly one. This column
-            is what they change, so this is where they live: a footer to the
-            list, the way the drawer is a footer to the window.
-          -->
-          <div class="cast-foot" id="cast-actions"></div>
-        </aside>
-        <div id="pane"></div>
-        <aside class="cast-wake">
-          <div id="panel-wake"></div>
-        </aside>
-      </section>
-
-      <!--
-        The archive gets the whole window: search across the top, conversations
-        on the left, the transcript at a reading measure. It was a 380px column
-        beside a character's fields, at whatever width was left over.
-      -->
-      <!--
-        A calendar over the day it opens on, and that day's conversations under
-        it. The column was a single scrolling list of everything, which answers
-        "what happened lately" and cannot answer "what did I say on the 14th"
-        without a long scroll — and search, which is the third question, already
-        has the strip above.
-      -->
-      <section
-        class="tab-pane archive"
-        id="tab-archive"
-        role="tabpanel"
-        aria-labelledby="tab-for-archive"
-        hidden
-      >
-        <div class="archive-body">
-          <aside class="archive-side">
-            <div class="cal" id="calendar"></div>
-            <div class="list" id="list"></div>
-          </aside>
-          <div id="talk"></div>
-        </div>
-      </section>
-
-      <!--
-        Three columns, not two. The tool list used to scroll under the grants,
-        which is where you look last for the thing the grants are ABOUT — a
-        withheld grant removes a row from it, so the two belong side by side or
-        the connection is a scroll away.
-      -->
-      <section
-        class="tab-pane machine"
-        id="tab-machine"
-        role="tabpanel"
-        aria-labelledby="tab-for-machine"
-        hidden
-      >
-        <nav class="nav" id="nav">
-          <h3 class="nav-head">This machine</h3>
-          <div id="nav-groups"></div>
         </nav>
-        <div class="machine-pane" id="machine-pane"></div>
-        <aside class="machine-tools" id="machine-tools"></aside>
-      </section>
+
+        <main class="main">
+          <!-- Her page: one subject, three numbered views of it. -->
+          <section class="page hers" id="page-hers">
+            <header class="head">
+              <div class="subject" id="subject"></div>
+              <nav class="views" id="views" role="tablist" aria-label="Her page"></nav>
+              <!-- What the view on screen needs in its head: the search field on
+                   II, and the day strip under it. Empty on the others. -->
+              <div class="view-head" id="view-head">
+                <!-- II carries a search field and the day strip; the others
+                     leave this empty and `:empty` collapses it. -->
+                <div class="finding" id="finding" hidden>
+                  <input
+                    id="q"
+                    type="search"
+                    placeholder="Search everything ever said"
+                    autocomplete="off"
+                  />
+                </div>
+                <div class="daystrip" id="calendar" hidden></div>
+                <!-- How many, beside the day it counts, rather than in a
+                     drawer at the foot of the window. -->
+                <p class="day-head" id="count" hidden></p>
+              </div>
+            </header>
+            <div class="spread">
+              <!--
+                One reading column, three possible bodies — one per view. They
+                are separate elements rather than one that is rebuilt, so a
+                transcript survives a trip to her sheet and back, and so the
+                search results are not thrown away by a repaint of somewhere
+                else.
+              -->
+              <div class="reading" id="reading">
+                <div id="pane" hidden></div>
+                <!-- The day's conversations come BEFORE the one being read:
+                     the list is how you choose, and a transcript above the
+                     thing that chose it reads as two unrelated columns. -->
+                <div class="list" id="list" hidden></div>
+                <div class="talk" id="talk" hidden></div>
+                <div id="permits" hidden></div>
+              </div>
+              <!--
+                The margin. Apparatus lives here and nothing you came to read
+                does: "Nothing to the right of the rule is a thing you came to
+                read."
+              -->
+              <aside class="margin" id="margin">
+                <div id="margin-hers" hidden></div>
+                <div id="margin-talk" hidden></div>
+                <div id="panel-wake" hidden></div>
+              </aside>
+            </div>
+          </section>
+
+          <!-- This machine: its own page, its own mark, none of her colour. -->
+          <section class="page machine" id="page-machine" hidden>
+            <header class="head">
+              <div class="machine-subject">
+                <span class="machine-mark" aria-hidden="true">&#9636;</span>
+                <div class="machine-titles">
+                  <h1>This machine</h1>
+                  <p class="machine-says">Not about her. True whoever is worn.</p>
+                </div>
+              </div>
+            </header>
+            <div class="machine-spread">
+              <nav class="groups" id="nav-groups" aria-label="Groups"></nav>
+              <div class="machine-pane" id="machine-pane"></div>
+              <!-- Both classes, and it needs both: `margin` is what it IS on the
+                   page, `machine-tools` is what the M2 collapse rule selects.
+                   With only the first, `:has(> .machine-tools > .tool-card)`
+                   never matched and the column collapsed on every pane —
+                   including the two that have something to put in it. -->
+              <aside class="margin machine-tools" id="machine-tools"></aside>
+            </div>
+          </section>
+        </main>
+      </div>
 
       <!--
-        The window's status line: what is wrong, what just happened, and the one
-        action that is about the window rather than about her.
+        The status bar. What just happened, and whether anything has gone wrong,
+        both always in the same place.
 
-        The grab handle that used to open this row is GONE. It was a 46 x 4 pill
-        with no listener anywhere — an affordance inherited from the artifact for
-        a drawer that does not open — and a handle nobody can grab is the same
-        kind of thing as a caption for machinery that does not exist.
-
-        `#said` moved IN here. It was `position: fixed; bottom: 56px`, which is a
-        floating strip resting eight pixels above this one: two horizontal bars
-        at the bottom of the window saying different kinds of thing. It is still
-        its own element with its own surface, so `#said.bad` tints the message
-        and not the problems chip or `Export…` beside it.
-
-        The dismiss button is in the markup rather than added by the renderer so
-        it is never a MUTATION of the live region: only the text changes, so only
-        the text is announced, and "Dismiss" is not read out after every save.
+        This was a toast that appeared and faded, plus a chip in a drawer. A
+        message that removes itself is one somebody can miss entirely, and the
+        answer to "did that save?" should be readable a minute later rather than
+        for four seconds after the fact.
       -->
-      <div class="drawer">
-        <button class="warn" id="troubles" type="button" hidden>
-          <span class="dot"></span><span id="troubles-label"></span>
-        </button>
-        <p id="said" role="status" aria-live="polite" hidden>
+      <div class="status">
+        <p id="said" role="status" aria-live="polite">
           <span id="said-what"></span>
-          <button id="said-shut" type="button" aria-label="Dismiss" title="Dismiss">
+          <button id="said-shut" type="button" aria-label="Dismiss" title="Dismiss" hidden>
             <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
               <path d="M4 4 12 12M12 4 4 12"></path>
             </svg>
@@ -2559,17 +2446,21 @@
         </p>
         <span class="grow"></span>
         <!--
-          Only while the archive is on screen: they act on conversations, and a
-          delete control visible from the character sheet is one whose scope the
-          surrounding page contradicts.
+          Only while what she has said is on screen: they act on conversations,
+          and a delete control visible from her character sheet is one whose
+          scope the surrounding page contradicts.
         -->
-        <button class="btn" id="pick" type="button" hidden>Select…</button>
+        <button class="btn" id="pick" type="button" hidden>Select&#8230;</button>
         <button class="btn" id="pick-off" type="button" hidden>Cancel</button>
         <button class="btn bad" id="drop-some" type="button" hidden disabled>Delete</button>
-        <button class="btn bad" id="drop-hers" type="button" hidden>Delete all…</button>
-        <button class="btn" id="export" type="button">Export…</button>
+        <button class="btn bad" id="drop-hers" type="button" hidden>Delete all&#8230;</button>
+        <button class="btn" id="export" type="button" hidden>Export&#8230;</button>
+        <button class="warn" id="troubles" type="button" hidden>
+          <span class="dot"></span><span id="troubles-label"></span>
+        </button>
       </div>
     </div>
+
     <!--
       A SEPARATE surface, not a button that arms itself.
 

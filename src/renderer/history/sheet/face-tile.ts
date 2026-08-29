@@ -46,7 +46,31 @@ export function faceTile(
     job it has. That is exactly what a stale main process looked like, and it
     looked like a design decision. Empty is honest; the caller reports it.
   */
-  if (face === undefined) return canvas
+  if (face === undefined) {
+    /*
+      SIZED, and nothing drawn into it.
+
+      A `<canvas>` with no width or height has an intrinsic 300×150, so a bare
+      one here is eleven times wider than the tile beside it. That never showed
+      while the cast column carried a `.faceless .tile { width: 44px }` rule
+      that happened to compensate; the moment that column was replaced, one
+      character's row pushed the rail 115px wider than the rail itself.
+
+      The earlier rule here was that a sized-but-blank canvas "reads as a
+      picture that failed to load rather than as a missing face". That was true
+      of a blank square and it is not true of what the design draws now: the
+      delivered treatment is a DASHED, hatched box, which reads as a marked
+      absence rather than as a failure — see `.faceless .tile`. So the size is
+      the element's own, and the stylesheet says what the absence looks like.
+
+      Attributes rather than `style`, because that is what makes the intrinsic
+      size go away — and because the size is then a fact about the element that
+      survives whatever sheet is in force.
+    */
+    canvas.width = px
+    canvas.height = px
+    return canvas
+  }
   const ratio = Math.min(window.devicePixelRatio || 1, 3)
   canvas.width = Math.round(px * ratio)
   canvas.height = Math.round(px * ratio)
@@ -82,51 +106,16 @@ export function faceTile(
   return canvas
 }
 
-/**
- * Which one she IS, as a check rather than as the word.
- *
- * The row already carries her name, her pronoun and her voice; a fourth caps
- * word in a pill was the loudest thing on it and said the least. A tick is read
- * without being read.
- *
- * It keeps the WORD for anybody not looking at it. `role="img"` plus an
- * `aria-label` is what makes a graphic announce as "worn" — dropping to a bare
- * icon otherwise deletes the fact from a screen reader entirely, which is a
- * regression that no screenshot shows.
- *
- * The span exists so the class is on an element `element()` made. `stylesheets.
- * test.ts` finds classes by reading `element('span', 'x')` out of the source,
- * and an SVG's class is set through `setAttribute` — invisible to that check,
- * which is how a rule quietly stops governing anything here.
- */
-export function wornMark(): HTMLElement {
-  const NS = 'http://www.w3.org/2000/svg'
-  const mark = element('span', 'wearing')
-  mark.setAttribute('role', 'img')
-  mark.setAttribute('aria-label', 'worn')
+/*
+  `wornMark` stood here: a tick with `role="img"` and `aria-label="worn"`, drawn
+  in the corner of a character card.
 
-  const svg = document.createElementNS(NS, 'svg')
-  svg.setAttribute('viewBox', '0 0 16 16')
-  svg.setAttribute('width', '15')
-  svg.setAttribute('height', '15')
-  // The graphic is announced by the span above it, so the shape itself is
-  // hidden rather than announced twice.
-  svg.setAttribute('aria-hidden', 'true')
-
-  const tick = document.createElementNS(NS, 'path')
-  tick.setAttribute('d', 'M3.5 8.6 6.4 11.5 12.5 4.8')
-  tick.setAttribute('fill', 'none')
-  // `currentColor`, so the mark takes her colour from the rule rather than
-  // carrying a second copy of it in the markup.
-  tick.setAttribute('stroke', 'currentColor')
-  tick.setAttribute('stroke-width', '2')
-  tick.setAttribute('stroke-linecap', 'round')
-  tick.setAttribute('stroke-linejoin', 'round')
-
-  svg.append(tick)
-  mark.append(svg)
-  return mark
-}
+  The rail says "worn now" in words under her name instead, which is the
+  delivered design's own answer and a better one — the rule that a mark's
+  meaning must also exist as words is satisfied most simply by not needing a
+  mark. It went with the cards; nothing calls it, and a tested function nobody
+  calls is the shape this repository has been bitten by before.
+*/
 
 /** SHE / HER, HE / HIM, IT / ITS — the caps line under her name. */
 export const PRONOUN_CAPS: ByPronoun = { she: 'she / her', he: 'he / him', it: 'it / its' }
