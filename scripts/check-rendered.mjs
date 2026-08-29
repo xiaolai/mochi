@@ -449,6 +449,20 @@ async function audit(page) {
         return out;
       })()`)
 
+      /*
+        Every face is listed, not only the wrong ones.
+
+        A face outside the three is a defect a machine can find. A face that is
+        one of the three and doing the WRONG JOB is not: "true whoever is worn"
+        was set in Sora — legal, and the treatment for something you operate —
+        while it is a note, which this design sets in mono. Nothing measured
+        could call that wrong; a person reading the list can.
+      */
+      if (process.argv.includes('--faces')) {
+        for (const face of Object.keys(found.faces)) {
+          console.log(`      ${theme}/${place}  ${face}: ${found.faces[face].join(' ')}`)
+        }
+      }
       const oddFace = Object.keys(found.faces).filter((f) => !FACES.includes(f))
       const oddSize = Object.keys(found.sizes).filter((v) => !SIZES.includes(parseFloat(v)))
       const oddRadius = Object.keys(found.radii).filter((v) => !RADII.includes(v))
@@ -1170,6 +1184,23 @@ async function main() {
     }
     if (process.argv.includes('--audit')) await audit(page)
     if (process.argv.includes('--space')) await breathing(page)
+    if (process.argv.includes('--rail')) {
+      await page.run(`document.getElementById('rail-machine').click()`)
+      await wait(700)
+      const seen = await page.run(`(() => {
+        const of = (sel) => {
+          const e = document.querySelector(sel);
+          if (!e || e.getClientRects().length === 0) return sel + ': not drawn';
+          const b = e.getBoundingClientRect();
+          const s = getComputedStyle(e);
+          return sel + '  x=' + Math.round(b.x) + '..' + Math.round(b.right) +
+            '  y=' + Math.round(b.y) + '..' + Math.round(b.bottom) +
+            '  bg=' + s.backgroundColor + '  pad=' + s.padding;
+        };
+        return ['.rail', '.rail-foot', '.rail-rule', '#rail-machine', '.rail-says', '.status', '.frame'].map(of);
+      })()`)
+      console.log('\n  ' + seen.join('\n  ') + '\n')
+    }
     if (process.argv.includes('--shot')) await photograph(page)
     /*
       Checked at the WINDOW'S FLOOR as well as at its opening size.
