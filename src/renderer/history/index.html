@@ -317,8 +317,22 @@
         border: 0;
         background: transparent;
       }
+      /*
+        The RULE thickens; no box appears.
+
+        An outline on this field draws a rounded rectangle around the one
+        control on the subject row that is deliberately not a rectangle. It opts
+        out of the ring and the line under it carries focus instead — and the
+        padding pays back the pixel the thicker rule takes, so nothing moves
+        under the pointer.
+      */
+      #q:focus-visible {
+        outline: none;
+      }
       .finding:focus-within {
-        border-bottom-color: var(--ink-3);
+        border-bottom-width: var(--s0);
+        border-bottom-color: var(--ink);
+        padding-bottom: var(--s1);
       }
       /*
         The three views, as a sub-navigation under her name.

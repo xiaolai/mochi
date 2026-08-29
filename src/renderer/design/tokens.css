@@ -499,6 +499,41 @@ select:focus {
 }
 
 /*
+ * THE FOCUS RING, and it is this application's rather than the operating
+ * system's.
+ *
+ * ## There was no rule at all
+ *
+ * Three comments in this repository describe "the gold `:focus-visible`
+ * outline" and reason carefully about not doubling it with a field's own
+ * hairline. No rule anywhere defined one. What was being reasoned about was the
+ * BROWSER'S default ring, which follows the system accent colour — so the
+ * colour of focus in this window was whatever the person had picked in System
+ * Settings, its shape was a rounded rectangle whatever the control, and none of
+ * it had been measured against anything.
+ *
+ * It showed on the search field: a ruled line with a rounded amber box drawn
+ * around it, on the one row where the design draws no boxes at all.
+ *
+ * ## `--ink`, not her colour
+ *
+ * Focus and chosen are different questions — where the keyboard is, and what is
+ * selected — and this window already spends her colour on the second. A ring in
+ * the same hue makes a focused row and a chosen row the same picture. `--ink`
+ * is the text colour, so it is the one value in the palette guaranteed to be
+ * legible on every surface here: 12.52:1 at worst.
+ *
+ * `:focus-visible` rather than `:focus`, so a pointer click does not ring the
+ * control it just pressed. Controls whose whole treatment is a RULE opt out of
+ * the box and thicken their rule instead — see `#q` and `.wake-edit`, which
+ * cannot take an outline without becoming the rectangle they exist not to be.
+ */
+:focus-visible {
+  outline: var(--s0) solid var(--ink);
+  outline-offset: var(--s0);
+}
+
+/*
  * `hidden` MEANS hidden, in every window.
  *
  * The UA gives `[hidden]` a `display: none` of the lowest possible weight, so

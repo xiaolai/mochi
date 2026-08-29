@@ -484,3 +484,81 @@ describe('the tool column collapses when there is no tool list', () => {
     ).toBe(true)
   })
 })
+
+/**
+ * Focus is this application's decision, not the operating system's.
+ *
+ * Three comments in this repository reasoned carefully about "the gold
+ * `:focus-visible` outline" and no rule anywhere defined one. What they were
+ * reasoning about was the BROWSER'S default ring: its colour followed the
+ * system accent, its shape was a rounded rectangle whatever the control, and
+ * none of it had been measured against this palette. It was found by looking at
+ * the running window, which is the only way it could be found — every check
+ * here reads rules, and the defect was the absence of one.
+ */
+/** A sheet with its comments taken out, so prose about a rule is not the rule. */
+function bare(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
+describe('the focus ring is declared', () => {
+  it('exists at all, in the token file every window loads', () => {
+    const tokens = bare(TOKENS)
+    expect(tokens, 'no :focus-visible rule — focus is whatever the system says').toMatch(
+      /:focus-visible\s*\{[^}]*outline:/,
+    )
+  })
+
+  it('is a colour from this palette rather than a system one', () => {
+    // `auto` and the UA keyword are what a browser gives when nothing is said,
+    // and a literal is a value nothing measured.
+    const ring = /:focus-visible\s*\{([^}]*)\}/.exec(bare(TOKENS))?.[1] ?? ''
+    expect(ring).toMatch(/outline:[^;]*var\(--/)
+    expect(ring).not.toMatch(/outline:\s*auto/)
+  })
+
+  it('is opted out of only where a rule replaces it', () => {
+    /*
+      A control may refuse the ring — the search field and her name both do,
+      because an outline turns them into the rectangle they exist not to be —
+      but only if something else shows focus. `outline: none` with nothing
+      beside it is a control the keyboard cannot be seen on.
+
+      The replacement may be in the same block or in another rule for the same
+      selector, and the selector is escaped before it becomes a pattern: these
+      are CSS selectors, and `input[type='text']` read as a regular expression
+      is a character class that matches almost anything.
+    */
+    const sheet = bare(inlineStyleOf('history'))
+    const shows = /(border|background|box-shadow|text-decoration)/
+    const rules = [...sheet.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((one) => ({
+      selector: (one[1] ?? '').trim(),
+      block: one[2] ?? '',
+    }))
+    let checked = 0
+    for (const [at, rule] of rules.entries()) {
+      if (!/outline:\s*none/.test(rule.block)) continue
+      checked += 1
+      /*
+        The replacement is in the same block, or it is the NEXT rule.
+
+        Adjacency rather than "somewhere in the sheet", because that is the
+        convention worth holding: a control that refuses the ring says what
+        shows focus instead, immediately, where the next reader will see both.
+        `#q` refuses it and `.finding:focus-within` — its container, the line
+        under the field — carries it on the following line.
+      */
+      const beside = rules[at + 1]?.block ?? ''
+      const shown =
+        shows.test(rule.block) ||
+        (shows.test(beside) && /focus/.test(rules[at + 1]?.selector ?? ''))
+      expect(
+        shown,
+        `${rule.selector} refuses the focus ring; the rule beside it has to show focus instead`,
+      ).toBe(true)
+    }
+    // Counted, so a parser that stopped matching cannot pass as a sheet with
+    // nothing to check.
+    expect(checked).toBeGreaterThan(0)
+  })
+})
