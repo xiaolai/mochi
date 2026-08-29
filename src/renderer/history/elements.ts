@@ -14,16 +14,6 @@ export function need<T extends Element>(id: string, kind: new () => T): T {
   return found
 }
 
-export const markEl = need('mark', HTMLCanvasElement)
-
-export const stateEl = need('state', HTMLElement)
-
-export const stateHowEl = need('state-how', HTMLElement)
-
-export const micEl = need('mic', HTMLElement)
-
-export const micLabelEl = need('mic-label', HTMLElement)
-
 export const countEl = need('count', HTMLElement)
 
 export const charactersEl = need('characters', HTMLElement)

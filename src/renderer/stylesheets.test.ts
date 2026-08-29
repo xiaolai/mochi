@@ -164,7 +164,16 @@ describe('a class the renderer toggles is never a bare selector', () => {
     // matching — a green test that reads exactly like a passing one.
     const all = WINDOWS.flatMap((window) => toggledClassesOf(window))
     expect(all.length).toBeGreaterThan(0)
-    expect(all).toContain('open')
+    /*
+      A NAMED one, so the extraction cannot pass by finding nothing.
+
+      It was `open`, from the microphone on the strip across the top of the
+      shelf. That strip is gone — its facts are the title bar's, the tray's and
+      her halo's — so the canary is `picking`, which is the archive's select
+      mode and the toggled class with the most reason to stay: a list styled
+      `.picking` bare would show its tick boxes on every conversation, always.
+    */
+    expect(all).toContain('picking')
   })
 
   it.each(WINDOWS)('%s', (window) => {

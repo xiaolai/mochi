@@ -122,33 +122,21 @@ export type HistoryExport =
  */
 export type ShelfCharacter = SettingsPersona
 
-/**
- * Her state, for the strip across the top of the shelf.
- *
- * The handoff is blunt about why this is there and why it is first: *"a
- * microphone that is open with nothing saying so is the worst thing a desktop
- * companion can do."* So it is not decoration and it is not a status bar — it
- * is the one surface that always answers whether she is listening.
- */
-export interface ShelfState {
-  /**
-   * Awake or resting, and that is now the WHOLE answer about the microphone.
-   *
-   * There used to be a second field here — the `microphone` grant — because the
-   * strip had to tell "she is resting" apart from "this machine forbids it".
-   * That grant is gone (`@shared/grants` records why), so resting is the only
-   * thing that closes the device and one boolean says so without ambiguity.
-   */
-  readonly asleep: boolean
-  /** The key that wakes her, or null when another application took it. */
-  readonly restKey: string | null
-}
+/*
+  `ShelfState` stood here: whether she was awake, and the key that changes it.
+
+  It existed for the strip across the top of the shelf, and that strip is gone —
+  the operating system's title bar carries the name, the tray carries her state
+  and the shortcut, and the microphone is her halo. Nothing read either field
+  once the strip went, which `nothing-written-goes-unread.test.ts` is what
+  noticed: a field that crosses the bridge and is read by nobody is a fact main
+  computes on every read, sends, and cannot be held to.
+*/
 
 /** Everything the shelf's character half draws, answered in one call. */
 export interface ShelfView {
   /** The worn face, resolved. See `SettingsView.face` — same rule, same reason. */
   readonly face: FaceSpec
-  readonly state: ShelfState
   readonly wornId: string
   readonly characters: readonly ShelfCharacter[]
   readonly avatars: readonly SettingsAvatar[]

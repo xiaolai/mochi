@@ -19,9 +19,7 @@ import { applyAccent } from '../design/apply-accent'
 import { MAY_DO } from '../settings/pane/may-do'
 import { PANES } from '../settings/panes'
 import { type PaneHandlers } from '../settings/pane'
-import { MochiAvatar } from '../companion/rig/mochi'
 import { byDay, clockLabel, interruptions, lengthLabel } from './format'
-import { drawCentred } from './centre'
 import {
   dayHeadingLabel,
   dayKey,
@@ -58,16 +56,11 @@ import {
   exportEl,
   listEl,
   machineEl,
-  markEl,
-  micEl,
-  micLabelEl,
   navEl,
   paneEl,
   pickEl,
   pickOffEl,
   queryEl,
-  stateEl,
-  stateHowEl,
   sureEl,
   sureNoEl,
   sureWhatEl,
@@ -349,39 +342,26 @@ let showingCharacter = true
  */
 const looking = latest()
 
-/**
- * The strip the handoff puts first, and the reason it is first.
- *
- * One fact, where there were two. Whether she is awake IS whether the
- * microphone is open now: the `microphone` grant was the other half — what this
- * machine permitted, as against where she was left — and it is gone, because
- * macOS already owns that answer and resting already hands the device back.
- * `@shared/grants` carries the argument.
- */
-function renderState(view: ShelfView): void {
-  const { asleep, restKey } = view.state
-  stateEl.textContent = asleep ? 'asleep' : 'awake'
-  stateHowEl.textContent =
-    restKey === null
-      ? 'no key — another application has it'
-      : `${restKey} to ${asleep ? 'wake' : 'rest'}`
+/*
+  `renderState` stood here, and `drawMark` below it.
 
-  /*
-    TWO states on the mark, where there were three.
+  They drew a strip across the top of this window carrying the application's
+  mark, its name, whether she was awake, the key that changes that, and a
+  microphone indicator. Every one of those is said better somewhere else:
 
-    The third was `off` — a grant this machine withheld, drawn with a line
-    through the microphone so that a decision somebody made could not read as
-    "she happens to be resting". With that grant gone, her attention is the
-    whole of it: open or closed, and nothing else can close it.
-  */
-  micEl.classList.toggle('open', !asleep)
+  - The name is in the operating system's own title bar, which this window has —
+    the strip was a second title bar under the real one.
+  - Her state and the key are on the tray menu, and the key is a global shortcut
+    that works whether or not this window is open.
+  - The microphone is HER HALO. `halo.ts` says why in as many words: "The shelf's
+    strip says MICROPHONE OPEN in green, which is only true for whoever is
+    looking at the shelf, and the shelf is shut almost always. She is the thing
+    on screen all day." The strip was the version of that fact that had already
+    been judged inadequate, kept running beside its replacement.
 
-  const words = asleep ? 'microphone closed' : 'microphone open'
-  // The words survive the pill. `#mic-label` is off-screen rather than deleted,
-  // so a screen reader still gets the sentence; `title` is what a pointer gets.
-  micLabelEl.textContent = words
-  micEl.title = words
-}
+  A duplicate of a fact is not free: it is a second thing to keep in step, and
+  the one that is wrong is the one nobody is looking at.
+*/
 
 /* ---- the characters ------------------------------------------------------ */
 
@@ -408,34 +388,6 @@ function renderCards(): void {
     install that has exactly one. See `castActions`.
   */
   castEl.replaceChildren(...castActions(shelf, handlers))
-}
-
-/**
- * Her face beside the wordmark.
- *
- * The worn one, redrawn on every read, because switching character from the
- * tray while this window is open changes who the strip is about. One frame — a
- * blinking mark in a title bar is motion with nothing to say.
- */
-function drawMark(face: ShelfView['face']): void {
-  // Sized to the wordmark beside it rather than to a number of its own: the two
-  // are one lockup, and a 22px mark next to 15px caps read as a picture that
-  // happened to be filed there.
-  const px = 26
-  const ratio = Math.min(window.devicePixelRatio || 1, 3)
-  markEl.width = Math.round(px * ratio)
-  markEl.height = Math.round(px * ratio)
-  markEl.style.width = `${String(px)}px`
-  markEl.style.height = `${String(px)}px`
-  // Offscreen and blitted centred, exactly as `faceTile` does it and through the
-  // same function: the rig reserves headroom for a worst-case pose, so drawn
-  // straight in she sits low and the lockup looks out of line. See `centre.ts`.
-  drawCentred(markEl, (offCtx) => {
-    const avatar = new MochiAvatar(offCtx, { face, size: 'fit-canvas', random: () => 0.5 })
-    avatar.resize(px, px, ratio)
-    avatar.setIdle(false)
-    avatar.render(0)
-  })
 }
 
 /**
@@ -905,9 +857,7 @@ async function readShelf(): Promise<void> {
    * The design's second semantic rule — the accent is her — and it is applied
    * on every read because the worn character can change from this very window.
    */
-  drawMark(view.face)
   const unreadable = applyAccent(document.documentElement, view.face)
-  renderState(view)
   renderCards()
   renderWake()
   if (unreadable.length > 0) {

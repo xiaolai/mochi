@@ -214,11 +214,16 @@
   --chosen-bar: 3px;
   --chosen-underline: 2px;
 
-  /* ---- the frame, in the delivery's own numbers -------------------------- */
+  /* ---- the frame, in the delivery's own numbers --------------------------
+   *
+   * No `--topbar-h`: there is no strip across the top. The delivery draws one
+   * at 38px and this window does not have it, because the facts it carried are
+   * the operating system title bar's, the tray's and her halo's. A token for a
+   * thing that is not drawn is a rung nobody plays.
+   */
   --rail-w: 210px;
   --margin-w: 236px;
   --machine-nav-w: 232px;
-  --topbar-h: 38px;
   --status-h: 34px;
 
   /* ---- her halo, on her own window --------------------------------------- */
@@ -262,7 +267,6 @@
   --track: 0.14em;
   --track-2: 0.08em;
   --track-wide: 0.16em;
-  --track-narrow: 0.12em;
   --track-tight: -0.015em;
   --w-regular: 400;
   --w-medium: 500;

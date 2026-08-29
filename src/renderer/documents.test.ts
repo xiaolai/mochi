@@ -68,11 +68,12 @@ const DOCUMENTS: readonly {
       // Offered inside the confirmation, because that is the one moment
       // somebody wants a copy before the irreversible click.
       'sure-export',
-      'mark',
-      'state',
-      'state-how',
-      'mic',
-      'mic-label',
+      // `mark`, `state`, `state-how`, `mic` and `mic-label` were the strip
+      // across the top. It was a second title bar under the operating system's
+      // own, and every fact on it is carried better elsewhere — the tray has
+      // her state and the key, and her halo has the microphone, which
+      // `halo.ts` argues for precisely because a strip in a window that is shut
+      // almost always is only true for whoever is looking at it.
       'count',
       'characters',
       'characters-count',

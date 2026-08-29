@@ -2891,12 +2891,6 @@ ipcMain.handle('shelf:read', (): ShelfView => {
       worn.size,
     ).face,
     pronoun: worn.pronoun,
-    // Her state, for the strip across the top. `resting` is held in this
-    // process because three things change it.
-    state: {
-      asleep: resting.asleep,
-      restKey: keyIfWorking('rest'),
-    },
     wornId: worn.id,
     characters: listPersonas(
       catalog,

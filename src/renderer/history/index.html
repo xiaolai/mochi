@@ -38,84 +38,6 @@
         height: 100%;
       }
 
-      /* ---- the strip that is always first ----------------------------------
-        Only what is true on every page: the mark, and her state. The three
-        places and the search field used to live here too, which put the
-        window's navigation and one pane's control on the same strip as a fact
-        about the running app. Navigation is the rail's job now and search
-        belongs to the view that searches.
-      */
-      .topbar {
-        height: var(--topbar-h);
-        flex: none;
-        display: flex;
-        align-items: center;
-        gap: var(--s2);
-        padding: 0 14px 0 var(--s3);
-        background: var(--paper-2);
-        border-bottom: var(--s-px) solid var(--rule);
-      }
-      .mark {
-        width: 18px;
-        height: 18px;
-        flex: none;
-      }
-      .wordmark {
-        font-family: var(--sans);
-        font-size: var(--t-cap);
-        font-weight: var(--w-medium);
-        letter-spacing: var(--track-narrow);
-        color: var(--ink-2);
-      }
-      .grow {
-        flex: 1;
-      }
-      /* Apparatus: what she is doing, and the keys that change it. */
-      .state {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        font-family: var(--mono);
-        font-size: var(--t-data-2);
-        color: var(--ink-3);
-        text-transform: uppercase;
-        letter-spacing: var(--track-2);
-      }
-      .state .how {
-        text-transform: none;
-        letter-spacing: 0;
-      }
-      .mic {
-        display: flex;
-        align-items: center;
-        flex: none;
-        color: var(--ink-3);
-      }
-      .mic svg {
-        fill: none;
-        stroke: currentColor;
-        stroke-width: 1.4;
-        stroke-linecap: round;
-      }
-      .mic.open {
-        color: var(--her);
-      }
-      .mic.open .cap {
-        fill: currentColor;
-        stroke: none;
-      }
-      .mic {
-        position: relative;
-      }
-      .ghost {
-        position: absolute;
-        width: var(--s-px);
-        height: var(--s-px);
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
-      }
-
       /* ---- the frame: a rail, and one page at a time -----------------------
         The rail is the window's table of contents and it never goes away. A
         character list that appears on one tab only is a list you have to
@@ -2221,6 +2143,12 @@
         for four seconds after the fact. The bar is always there, so its being
         empty is itself an answer.
       */
+      /* Pushes what follows it to the far end of a row. It came from the strip
+         across the top and outlived it: the status bar uses it for the same
+         job. */
+      .grow {
+        flex: 1;
+      }
       .status {
         height: var(--status-h);
         flex: none;
@@ -2316,36 +2244,19 @@
     -->
     <div id="app">
       <!--
-        The topbar carries only what is true on every page: the mark, and her
-        state. It used to hold the three tabs and the search field as well,
-        which put the window's navigation and one pane's control on the same
-        strip as a fact about the running app.
-      -->
-      <div class="topbar">
-        <canvas class="mark" id="mark"></canvas>
-        <span class="wordmark">mochi</span>
-        <span class="grow"></span>
-        <span class="state"
-          ><span class="what" id="state"></span><span class="how" id="state-how"></span
-        ></span>
-        <!--
-          The microphone, last and as a mark. The words are KEPT as the
-          accessible name and the tooltip: a microphone that is open with
-          nothing saying so is the worst thing this app can do, and an icon
-          alone is only a statement to somebody already looking at it. Three
-          states told apart by SHAPE and not only colour — filled for open,
-          hollow for closed, struck through for a grant that is withheld.
-        -->
-        <span class="mic" id="mic">
-          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-            <rect class="cap" x="6" y="1.6" width="4" height="7.2" rx="2"></rect>
-            <path class="arc" d="M3.6 7.4a4.4 4.4 0 0 0 8.8 0"></path>
-            <path class="stem" d="M8 11.9V14.2"></path>
-          </svg>
-          <span class="ghost" id="mic-label"></span>
-        </span>
-      </div>
+        NO STRIP ACROSS THE TOP.
 
+        There was one: the application's mark, its name, whether she was awake,
+        the key that changes that, and a microphone indicator. It was a second
+        title bar under the operating system's own, and every fact on it is said
+        better elsewhere — the name by the real title bar, her state and the key
+        by the tray, and the microphone by her halo, which `halo.ts` argues for
+        precisely because a strip in a window that is shut almost always is only
+        true for whoever is looking at it.
+
+        The rail is the first thing in this window now, which is what the
+        delivered design draws.
+      -->
       <div class="frame">
         <!--
           The rail is the window's table of contents and it is always present:
