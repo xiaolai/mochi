@@ -1,4 +1,5 @@
-# Run the gate. `pnpm verify` = prettier --check → oxlint --type-aware → tsc → vitest.
+# Run the gates. `pnpm verify` = prettier --check → oxlint --type-aware → tsc →
+# vitest. `pnpm verify:rendered` then builds and checks what the window DRAWS.
 #
 # ## Why this file exists at all
 #
@@ -47,9 +48,11 @@ permissions:
 jobs:
   verify:
     runs-on: macos-latest
-    # The suite is ~6s locally; the ceiling is here so a hung `vitest` or a
-    # wedged `pnpm install` fails in minutes instead of running up against
-    # GitHub's six-hour default.
+    # The pure suite is ~30s locally and the rendered gate about a minute; the
+    # ceiling is here so a hung `vitest`, a wedged `pnpm install` or an Electron
+    # that never draws fails in minutes instead of running up against GitHub's
+    # six-hour default. The rendered gate carries its own four-minute watchdog
+    # for the same reason, one level down.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
@@ -70,3 +73,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm verify
+
+      # The rendered gate: the half of the contract that only exists once a
+      # browser has laid the window out. It builds, launches the app twice over
+      # a seeded profile in a temporary user-data directory, and throws it away.
+      #
+      # Here rather than inside `pnpm verify` because that gate is pure and runs
+      # constantly; this one needs a build and a window, and costs about a
+      # minute. Both have to be green — a rule held only by the fast one is a
+      # rule that was lost every previous time the view was rewritten.
+      - run: pnpm verify:rendered

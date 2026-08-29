@@ -33,7 +33,8 @@
     "lint": "oxlint --type-aware",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "verify:rendered": "pnpm build && node scripts/check-rendered.mjs"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.6",
