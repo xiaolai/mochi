@@ -1,5 +1,6 @@
 import { type Pane } from './pane'
 import { ABOUT } from './pane/about'
+import { STORAGE } from './pane/storage'
 import { HEARING } from './pane/hearing'
 import { KEYS } from './pane/keys'
 import { LOOKING } from './pane/looking'
@@ -49,11 +50,18 @@ import { PROMPTS } from './pane/prompts'
   view III of her page now. See `renderPermits` and Rule 6 of the delivery:
   "The machine is not her."
 
-  ## Six, where the delivery's nav says seven
+  ## Seven, and the seventh came from the code
 
-  The seventh is "Storage", and the delivery names it in the navigation and
-  draws no content for it anywhere in the document. Rather than invent a pane
-  under cover of adopting a design, it is left out and the gap is recorded
-  here: what belongs in it is a question for whoever drew the nav.
+  The delivery names "Storage" in its navigation and draws no content for it
+  anywhere in the document. What is in it was therefore read out of this
+  repository rather than off the page: `About` was already answering two
+  questions — what this build IS, and where it keeps things — and the second
+  half is a group. It ended with the deletion that forgets every conversation of
+  every character, under a version number, which is the strongest argument the
+  code makes for the split the design asked for.
+
+  `storage.ts` records what was deliberately NOT moved into it: export, which is
+  per character; retention, which is per character; and any measure of size,
+  which nothing in the store can answer.
 */
-export const PANES: readonly Pane[] = [LOOKING, HEARING, PROMPTS, ON_SCREEN, KEYS, ABOUT]
+export const PANES: readonly Pane[] = [LOOKING, HEARING, PROMPTS, ON_SCREEN, KEYS, STORAGE, ABOUT]

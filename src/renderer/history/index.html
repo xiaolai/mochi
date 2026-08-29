@@ -932,6 +932,27 @@
         border-bottom: var(--s-px) solid var(--rule);
       }
       /*
+        The path shrinks; the button does not.
+
+        A `<code>` holding an absolute path has a min-content width of the whole
+        path, and a flex item will not shrink below that without `min-width: 0`
+        — so at the window's floor the row grew past the pane and took its
+        button with it, two pixels at a time. The path is the part that can be
+        elided and the button is the part that has to stay pressable.
+      */
+      .folder > div:first-child {
+        min-width: 0;
+      }
+      .folder code {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .folder > .btn {
+        flex: none;
+      }
+      /*
         A field and the button that fills it, on one line.
 
         The button sits AFTER the input and does not grow: the field is the part

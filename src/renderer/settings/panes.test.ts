@@ -72,7 +72,7 @@ function settled(): SettingsView {
 }
 
 describe('the groups this page holds', () => {
-  it('is six, in the order they are drawn, and does not include her grants', () => {
+  it('is seven, in the order they are drawn, and does not include her grants', () => {
     /*
       `where` is gone, folded into `about`.
 
@@ -97,17 +97,23 @@ describe('the groups this page holds', () => {
       say what it is about. See `panes.ts`, which carries the argument, and
       `renderPermits`, which draws them.
 
-      The delivery's own navigation says "Seven groups"; the seventh is
-      "Storage", which it names and never draws. It is left out rather than
-      invented, and that gap is recorded in `panes.ts` too.
+      The delivery's own navigation says "Seven groups" and names the seventh
+      "Storage" without drawing it. Its contents were read out of this
+      repository instead — see `storage.ts`, which also records what was
+      deliberately left out of it.
     */
     expect(PANES.map((one) => one.id)).toEqual([
       'looking',
       'hearing',
-
       'prompts',
       'on-screen',
       'keys',
+      // `storage` before `about`: it is where things are kept, which somebody
+      // arrives looking for, and About is a version number, which nobody does.
+      // It carries the folders, the root under them and the deletion that
+      // empties all of it — the second half `about` was answering under a name
+      // that described the first.
+      'storage',
       'about',
     ])
   })
