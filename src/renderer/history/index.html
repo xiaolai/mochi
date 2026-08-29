@@ -32,6 +32,20 @@
         font: var(--t-ui) / 1.5 var(--sans);
         user-select: none;
       }
+      /*
+        NO BROWSER MARGIN on a paragraph.
+
+        `<p>` carries a user agent `margin: 1em 0`, which is 13px here — so
+        every note in this window put thirteen pixels above and below itself,
+        collapsing against whatever gap its container had already decided. It
+        showed as a machine pane whose rows sat 0 and 13px apart with no rule
+        able to say why. Room between things is the container's decision in this
+        design; a paragraph does not get a vote.
+      */
+      p {
+        margin: 0;
+      }
+
       #app {
         display: flex;
         flex-direction: column;
@@ -449,11 +463,34 @@
         gap: 26px;
         padding: 26px var(--s5) var(--s6) var(--s7);
       }
+      /*
+        The machine's rows carry their own rhythm — `padding: 12px 0` and a rule
+        above each — so the column adds none. With both, one field sat 26px from
+        the next and another 48px, for no reason either could state.
+      */
+      .machine-pane {
+        gap: 0;
+      }
       .margin {
         border-left: var(--s-px) solid var(--rule);
         background: var(--paper-2);
         padding: 26px 26px var(--s6) var(--s5);
         overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      /*
+        The margin's bodies carry the column's gap.
+
+        `.margin` sets `gap: 18px` and its children are the three per-view
+        bodies, so the gap never reached the blocks inside them — the same shape
+        as `.sheet`, where the reading column's rhythm stopped at `#pane`. Each
+        body is a column in its own right and has to say so.
+      */
+      #margin-hers,
+      #margin-talk,
+      #panel-wake {
         display: flex;
         flex-direction: column;
         gap: 18px;
@@ -819,7 +856,6 @@
         display: flex;
         flex-direction: column;
         gap: var(--s2);
-        margin-bottom: var(--s5);
         padding: var(--s4) var(--s5);
         border: var(--s-px) solid var(--rule);
         border-radius: var(--r3);
@@ -1656,9 +1692,19 @@
         The air is the SECTIONS' own padding now, so there is no container gap
         left to put on the wrong box.
       */
+      /*
+        Her sections, at the reading column's own rhythm.
+
+        The column sets `gap: 26px` and its only child is `#pane`, so the gap
+        never reached the sections — nine of them, all touching, with every
+        pixel of room coming from each section's own padding. Stated here
+        because this container is what the column's gap would have governed if
+        the sheet were not wrapped.
+      */
       .sheet {
         display: flex;
         flex-direction: column;
+        gap: 26px;
       }
       /*
         A section: a caps heading, a hint in mono beside it, and whatever
@@ -1670,18 +1716,27 @@
         prompt wants a textarea, a voice wants ten pills; a plate can offer one
         shape and did.
       */
+      /*
+        A section has NO padding of its own, and no rule under it.
+
+        It had `padding: 30px 40px` inside a reading column that already pads by
+        40 — so every field on her sheet was indented eighty pixels from the
+        page edge while the views above it sat at forty, and two adjacent
+        sections put SIXTY pixels between their contents in a column whose own
+        rhythm is twenty-six.
+
+        The delivery draws these as plain blocks: `gap: 12px` inside, and the
+        column's `gap: 26px` between. Measured, not noticed — nine gaps of 0px
+        with all the room coming from padding is what a sweep sees and an eye
+        reads as "why is this so airy".
+      */
       .section {
         display: flex;
         flex-direction: column;
-        gap: var(--s4);
-        padding: var(--s6) var(--s7);
-        border-bottom: var(--s-px) solid var(--rule);
+        gap: var(--s3);
       }
       /* Nothing below the last one to divide it from. */
-      .section:last-child {
-        border-bottom: 0;
-        padding-bottom: var(--s8);
-      }
+      /* The column's own padding ends the list; a section adds nothing. */
       .section > .head {
         display: flex;
         align-items: baseline;
@@ -1817,6 +1872,15 @@
           transparent.
         */
         field-sizing: content;
+        /*
+          And `align-self`, or the sizing is ignored.
+
+          `.who-of` is a flex column, so its default `align-items: stretch`
+          makes every child fill the width — `field-sizing: content` sets a
+          PREFERRED size and stretch overrides it. The rule under her name ran
+          the width of the column while the name was four characters long.
+        */
+        align-self: flex-start;
         min-width: 4ch;
         max-width: 100%;
         padding: var(--s0) 0;

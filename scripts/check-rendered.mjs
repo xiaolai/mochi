@@ -473,6 +473,68 @@ async function audit(page) {
   console.log('  ─────────────────────────────────────────────────────────────\n')
 }
 
+/**
+ * The room between things, measured rather than looked at.
+ *
+ * The delivery's rhythm is `4 · 8 · 12 · 16 · 22 · 30 · 40`, and its artboards
+ * also use 7, 9, 11, 14, 18, 26 and 34 — so the ladder is a spine, not a
+ * whitelist. What a whitelist cannot tell you anyway is the thing that actually
+ * reads as sloppy: the SAME relationship spaced differently in two places, and
+ * a container whose children are all one distance apart except one.
+ *
+ * So this reports, per container, the real gaps between consecutive visible
+ * children — bottom of one to top of the next — and flags the odd one out.
+ */
+async function breathing(page) {
+  console.log('\n  ─── breathing room ──────────────────────────────────────────')
+  for (const place of ['cast', 'archive', 'permits', 'machine']) {
+    await page.run(
+      `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
+    )
+    await wait(700)
+    const rooms = await page.run(`(() => {
+      const name = (e) => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') +
+        (e.className && typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(' ')[0] : '');
+      const out = [];
+      const holders = document.querySelectorAll('.rail, #reading, #margin, #margin-hers, #margin-talk, #machine-pane, #machine-tools, #nav-groups, .head, .sheet, .list, #pane, #permits, .subject');
+      for (const holder of holders) {
+        if (holder.getClientRects().length === 0) continue;
+        const kids = [...holder.children].filter((e) => e.getClientRects().length > 0 && !e.hidden);
+        if (kids.length < 2) continue;
+        const gaps = [];
+        for (let i = 0; i < kids.length - 1; i += 1) {
+          const a = kids[i].getBoundingClientRect();
+          const b = kids[i + 1].getBoundingClientRect();
+          // Only stacked pairs; a row's neighbours are a different question.
+          if (b.top < a.bottom - 1) continue;
+          gaps.push({ px: Math.round(b.top - a.bottom), from: name(kids[i]), to: name(kids[i + 1]) });
+        }
+        if (gaps.length > 0) out.push({ holder: name(holder), gaps });
+      }
+      return out;
+    })()`)
+    console.log(`  ${place}:`)
+    for (const room of rooms) {
+      const counts = {}
+      for (const g of room.gaps) counts[g.px] = (counts[g.px] ?? 0) + 1
+      const distinct = Object.keys(counts)
+        .map(Number)
+        .sort((a, b) => a - b)
+      const common = distinct.reduce(
+        (best, v) => (counts[v] > (counts[best] ?? 0) ? v : best),
+        distinct[0],
+      )
+      const odd = room.gaps.filter((g) => g.px !== common)
+      console.log(
+        `      ${room.holder}  ${room.gaps.length} gaps · mostly ${common}px · ${JSON.stringify(counts)}`,
+      )
+      for (const g of odd.slice(0, 4))
+        console.log(`          ${g.px}px between ${g.from} and ${g.to}`)
+    }
+  }
+  console.log('  ─────────────────────────────────────────────────────────────\n')
+}
+
 /* ---- looking at it ------------------------------------------------------ */
 
 /**
@@ -1107,6 +1169,7 @@ async function main() {
       return
     }
     if (process.argv.includes('--audit')) await audit(page)
+    if (process.argv.includes('--space')) await breathing(page)
     if (process.argv.includes('--shot')) await photograph(page)
     /*
       Checked at the WINDOW'S FLOOR as well as at its opening size.

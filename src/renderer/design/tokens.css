@@ -299,7 +299,13 @@
   --s5: 22px;
   --s6: 30px;
   --s7: 40px;
-  --s8: 72px;
+  /*
+    `--s8` was 72px, and it was spent on one thing: the last section of her
+    sheet padding itself away from the foot of the column. That padding is gone
+    with the rest of the sections' — the column's own `padding-bottom` ends the
+    list — and a rung nobody plays is what this file's own check exists to
+    catch. The ladder is the delivery's: 4 · 8 · 12 · 16 · 22 · 30 · 40.
+  */
 
   /* ---- shape: 3px on anything you operate, 0 elsewhere, 6px on the window -
    *
