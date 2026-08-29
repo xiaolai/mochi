@@ -768,6 +768,7 @@ const handlers: ShelfHandlers = {
     })()
   },
   persona: (action) => {
+    const naming = action.kind === 'create' || action.kind === 'duplicate'
     void write(
       () => window.mochiHistory.character(action),
       action.kind === 'delete'
@@ -775,7 +776,25 @@ const handlers: ShelfHandlers = {
         : action.kind === 'restore-built-in'
           ? forPronoun(SAYS.restored, saying())
           : forPronoun(SAYS.made, saying()),
-    )
+    ).then(() => {
+      /*
+        THE CURSOR GOES TO HER NAME.
+
+        The rail has no field to type one in — the design draws two words and
+        nothing else — so a new character arrives called "New character" and the
+        one place this window renames a character is put in front of you,
+        already selected. Without this the default name is a thing you have to
+        go and find, and the first character somebody makes stays called that.
+
+        After the write, because the reload rebuilds the sheet: focusing the
+        field that is about to be replaced focuses nothing.
+      */
+      if (!naming) return
+      const field = subjectEl.querySelector('input')
+      if (field === null) return
+      field.focus()
+      field.select()
+    })
   },
   memory: (action) => {
     void write(

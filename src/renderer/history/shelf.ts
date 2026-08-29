@@ -1,5 +1,6 @@
 import type { ShelfView } from '@shared/history-window'
 import { forPronoun } from '@shared/pronoun'
+import { castDangerous } from './sheet/cast'
 import { element } from '../element'
 import { editing } from '../rules/editing'
 import { SAYS } from './shelf-says'
@@ -185,6 +186,17 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
     promptSection(view, worn, handlers),
     memorySection(view, handlers),
   )
+  /*
+    Deleting her, or putting the built-in back, LAST.
+
+    They were in the rail under the list of characters, where "Delete <her name>"
+    named the worn character while sitting under all of them. Here there is one
+    character the page is about, and the section is at the foot of it — the order
+    runs from what she IS toward what can be done to her, and nothing below it
+    would be read after somebody has decided to remove her.
+  */
+  const dangerous = castDangerous(worn, view.pronoun, handlers)
+  if (dangerous !== null) page.append(dangerous)
   return page
 }
 

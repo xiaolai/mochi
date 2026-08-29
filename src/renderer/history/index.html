@@ -168,39 +168,33 @@
         color: var(--ink-3);
       }
       /*
-        Making and deleting characters: WORDS, not boxes.
+        Making a character: two underlined words, exactly as drawn.
 
-        "Rules do the grouping. Boxes are reserved for the two things that need
-        one: a control and a warning." Four bordered buttons stacked under a
-        list of two characters made the making of characters heavier than the
-        characters, which is the wrong way round on a rail whose job is saying
-        who exists.
+        `display: flex; gap: 14px; padding: 16px 18px 0; font-family: Sora;
+        font-size: 11.5px; color: var(--ink-2)`, and each word carries a 1px
+        rule in `--rule-2` with a pixel of space above it. Those are the
+        delivery's own numbers.
 
-        The name field keeps its box, because an empty field with no edge is a
-        placeholder floating over paper — the one case `tokens.css` argues a box
-        IS needed.
+        UNDERLINED AT REST, not on hover. An underline that appears when the
+        pointer arrives is a control you have to find by sweeping; these are two
+        words in a column of names and the rule is what says they are not a
+        third name.
+
+        Four bordered buttons and a text field stood here — the making of
+        characters drawn heavier than the characters, on a rail whose job is
+        saying who exists.
       */
       .rail-make {
         display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        gap: var(--s1) 14px;
+        gap: 14px;
         padding: var(--s4) 18px 0;
-      }
-      .rail-make .row {
-        display: contents;
-      }
-      .rail-make input[type='text'] {
-        flex: 1 1 100%;
-        min-width: 0;
-        font-size: var(--t-cap);
       }
       .rail-make .btn {
         min-height: 0;
         min-width: 0;
-        padding: 0;
+        padding: 0 0 var(--s-px);
         border: 0;
-        border-bottom: var(--s-px) solid transparent;
+        border-bottom: var(--s-px) solid var(--rule-2);
         border-radius: 0;
         background: transparent;
         font-family: var(--sans);
@@ -210,16 +204,11 @@
       }
       .rail-make .btn:hover:not(:disabled) {
         color: var(--ink);
-        border-bottom-color: var(--rule-2);
+        border-bottom-color: var(--ink-3);
       }
-      .rail-make .btn.primary {
-        color: var(--ink);
-        font-weight: var(--w-medium);
-      }
-      /* The destructive one stays legible and stays a word. It is red, and it
-         is not a box, which is the delivery's own rule for it. */
-      .rail-make .btn.bad {
-        color: var(--red);
+      .rail-make .btn:disabled {
+        color: var(--ink-3);
+        border-bottom-color: var(--rule);
       }
       .rail-foot {
         margin-top: auto;

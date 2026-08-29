@@ -555,6 +555,32 @@ async function checks(page, where = '') {
     bad('A6', 'the rendered form is identical to the raw text, so this proves nothing')
   else ok('A6', 'copying takes the original text, indentation and newline intact')
 
+  /* --- the rail makes characters; it does not remove them --------------- */
+  const rail = await page.run(`(() => {
+    const make = [...document.querySelectorAll('.rail-make button')].map((b) => b.textContent.trim());
+    const railWords = document.querySelector('.rail').textContent;
+    const onHerPage = [...document.querySelectorAll('#pane button')].map((b) => b.textContent.trim());
+    return { make, removes: /delete|remove/i.test(railWords), onHerPage: onHerPage.filter((t) => /^Delete /.test(t)) };
+  })()`)
+  if (rail.make.length === 0) bad('rail', 'the rail offers no way to make a character')
+  else if (rail.removes)
+    bad(
+      'rail',
+      'the rail offers a deletion: it would act on the WORN character while sitting under a list of all of them — ' +
+        JSON.stringify(rail.make),
+    )
+  else if (rail.onHerPage.length === 0)
+    bad('rail', 'no character can be deleted anywhere — it left the rail and arrived nowhere')
+  else
+    ok(
+      'rail',
+      'makes characters (' +
+        JSON.stringify(rail.make) +
+        ') and removes them only from her own page (' +
+        JSON.stringify(rail.onHerPage) +
+        ')',
+    )
+
   /* --- C4: a character with no face file is not drawn as somebody else --- */
   const faces = await page.run(`(() => {
     const cards = [...document.querySelectorAll('.rail-cast .rail-row')];
