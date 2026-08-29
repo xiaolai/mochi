@@ -30,80 +30,66 @@ describe('confirming a deletion', () => {
     expect(MAIN).toContain('sureEl.showModal()')
   })
 
-  it('acts on a snapshot, not on whatever is selected when it is answered', () => {
-    // Both can change while the question is on screen: the tray can switch
-    // character, and the list is still live underneath.
-    const ask = MAIN.slice(MAIN.indexOf('function askFirst'))
-    expect(ask.slice(0, ask.indexOf('\n}'))).toContain('doomed = about')
+  /*
+    D1 AND D3 MOVED to `rules/doomed.ts`, where they are exercised.
 
+    They were asserted here by reading `main.ts` and checking the order of two
+    assignments and the presence of two sentences. Right about the rules, and
+    tied to a file. What is left below is what a pure test cannot see: that this
+    window reaches for the rule, keeps no second copy of it, and answers the
+    question exactly once.
+  */
+  it('reaches for the rule rather than keeping its own snapshot', () => {
+    expect(MAIN).toContain("from '../rules/doomed'")
+    expect(MAIN).not.toMatch(/let doomed/)
+  })
+
+  it('answers the question ONCE, through the rule', () => {
+    // The property arming cannot have: a second press gets nothing back. The
+    // rule enforces it; this is the assertion that the window asks it.
     const yes = MAIN.slice(MAIN.indexOf("sureYesEl.addEventListener('click'"))
     const body = yes.slice(0, yes.indexOf('\n})'))
-    expect(body).toContain('const about = doomed')
-    // Read once and cleared before anything is deleted, so a second press
-    // cannot act on the same snapshot twice.
-    expect(body.indexOf('doomed = null')).toBeLessThan(body.indexOf('deleteThem(about)'))
+    expect(body).toContain('sure.answer()')
     // And the live selection is not consulted here at all.
-    expect(body).not.toContain('chosen')
+    expect(body).not.toContain('picking.chosen()')
   })
 
-  it('drops the snapshot when the question is dismissed with Escape', () => {
-    // `<dialog>` closes on Escape without running the cancel handler, so a
+  it('drops the snapshot when the surface closes, however it closed', () => {
+    // A `<dialog>` closes on Escape without running the cancel handler, so a
     // snapshot left behind would be available to a later confirmation.
     const closed = MAIN.slice(MAIN.indexOf("sureEl.addEventListener('close'"))
-    expect(closed.slice(0, closed.indexOf('\n})'))).toContain('doomed = null')
+    expect(closed.slice(0, closed.indexOf('\n})'))).toContain('sure.drop()')
   })
 
-  it('names the scope and the count, never a bare "are you sure"', () => {
-    expect(MAIN).toContain('Delete ${String(tokens.length)} conversations?')
-    expect(MAIN).toContain('cannot be undone')
-    // The global one says what it reaches beyond the worn character, and what
-    // it leaves alone -- "everything" in a window that also holds characters
-    // reads as more than it is.
-    expect(MAIN).toContain('Delete every conversation, for every character?')
-    expect(MAIN).toContain('Characters, voices and looks are untouched.')
-  })
-})
-
-describe('choosing what to delete', () => {
-  it('is a mode, so the list stays readable', () => {
-    // A delete affordance on every row is noise while reading and a misclick
-    // surface at once.
-    expect(HTML).not.toContain('class="entry-delete"')
-    expect(MAIN).toContain('let picking = false')
+  it('words the question when it is ASKED, not when it is answered', () => {
+    // Worded later it is recomputed from whatever is live then, so a character
+    // switch while the question waits makes it describe the wrong character.
+    const ask = MAIN.slice(MAIN.indexOf('function askFirst'))
+    expect(ask.slice(0, ask.indexOf('\n}'))).toContain('about.asks')
   })
 
-  it('does not open a transcript while choosing', () => {
-    /*
-      A click that also navigated would make "this one" and "show me this one"
-      impossible to tell apart.
-
-      ANCHORED ON THE GUARD, not on the first click listener in the file. This
-      took `MAIN.indexOf("button.addEventListener('click'")` — which finds the
-      SHELL TABS listener, three hundred lines earlier — and then sliced to the
-      first `\n  })` after it. That window reached the real handler only because
-      nothing between the two happened to close a callback at that indentation,
-      and it stopped doing so the moment something did. The test then failed
-      while the guard it checks was untouched, which is the worst way for a
-      source-scanning test to be wrong: it accuses the code.
-    */
-    const guard = MAIN.slice(MAIN.indexOf('if (picking) {'))
-    const branch = guard.slice(0, guard.indexOf('\n    }'))
-    expect(branch, 'the choosing branch falls through into opening the transcript').toContain(
-      'return',
-    )
-    // And the guard really is inside a click handler, which is the half the
-    // anchor above no longer proves on its own.
-    const before = MAIN.slice(0, MAIN.indexOf('if (picking) {'))
+  it('asks the rule what a click means, rather than deciding here', () => {
+    // The one thing a pure test cannot see: that the answer is consulted at the
+    // place a conversation is clicked.
+    const guard = MAIN.slice(MAIN.indexOf('picking.click(token)'))
+    expect(guard, 'nothing consults the rule at the click').not.toBe('')
+    const before = MAIN.slice(0, MAIN.indexOf('picking.click(token)'))
     expect(before.slice(before.lastIndexOf('addEventListener'))).toContain("'click'")
   })
 
-  it('clears the selection when the archive is left', () => {
-    // A selection the user can no longer see is one they have stopped agreeing
-    // to.
+  it('tells the rule when the window changes place', () => {
     const place = MAIN.slice(MAIN.indexOf('function showPlace'))
-    expect(place.slice(0, place.indexOf('\n}'))).toContain(
-      "if (place !== 'archive' && picking) stopPicking()",
-    )
+    expect(place.slice(0, place.indexOf('\n}'))).toContain('picking.wentTo(place)')
+  })
+
+  it('is a mode, so the list stays readable', () => {
+    // A delete affordance on every row is noise while reading and a misclick
+    // surface at once. D4: no single gesture removes one conversation.
+    expect(HTML).not.toContain('class="entry-delete"')
+    // The mode exists and is entered deliberately — the rule owns the state,
+    // and this window owns the control that turns it on.
+    expect(HTML).toContain('id="pick"')
+    expect(MAIN).toContain('picking.start()')
   })
 
   it('drops the selection when the character changes', () => {
@@ -135,14 +121,6 @@ describe('what the page does with the answer', () => {
     const del = MAIN.slice(MAIN.indexOf('async function deleteThem'))
     const body = del.slice(0, del.indexOf('\n}'))
     expect(body).toContain('talkEl.replaceChildren()')
-  })
-
-  it('says deleted and not-yet-scrubbed as the different things they are', () => {
-    // The rows go inside a transaction; the words leave the write-ahead log at
-    // a checkpoint a reader can hold off. Saying "deleted" while the second is
-    // outstanding is a promise the disk has not kept.
-    expect(MAIN).toContain('result.pending')
-    expect(MAIN).toContain('still being cleared from the file')
   })
 
   it('reports a refusal rather than pretending it worked', () => {

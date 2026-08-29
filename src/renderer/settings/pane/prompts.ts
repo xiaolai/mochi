@@ -27,6 +27,7 @@
  * unedited, which is the failure `store/prompt.ts` describes.
  */
 import { element } from '../../element'
+import { editing } from '../../rules/editing'
 import { type Pane } from '../pane'
 import { SAYS } from '../panes-says'
 import { canSave, lengthNote } from './prompt-edit'
@@ -98,39 +99,43 @@ export const PROMPTS: Pane = {
 
       const save = element('button', 'btn primary', 'Save')
       save.type = 'button'
-      save.disabled = true
       const reset = element('button', 'btn', 'Reset')
       reset.type = 'button'
-      reset.disabled = !one.edited
+      /*
+        The rule lives in `rules/editing`, which holds and tests the whole of
+        C3: both controls go on dispatch, the box goes with them, and nothing
+        re-enables here. `writeMachine` re-reads and this pane is rebuilt from
+        what main actually holds, which is the one path that cannot show a state
+        the store disagrees with — the rule `recheckCodex` states.
+      */
+      const doc = editing(one.text, {
+        // A difference rather than having typed, and never over the bound.
+        mayCommit: (draft, was) => canSave(draft, was, one.limit),
+        // Reset restores what SHIPPED, so it is offered by the stored text
+        // having been edited — not by anything having been typed here.
+        mayRevert: () => one.edited,
+      })
+      const showState = (): void => {
+        save.disabled = !doc.canCommit()
+        reset.disabled = !doc.canRevert()
+        box.disabled = doc.sending()
+      }
+      showState()
       box.addEventListener('input', () => {
-        // See `canSave`: a difference rather than having typed, and never over
-        // the bound.
-        save.disabled = !canSave(box.value, one.text, one.limit)
+        doc.typed(box.value)
+        showState()
         sayLength(box.value)
       })
-      /*
-        BOTH DISABLED on dispatch, not just the one that was pressed.
-
-        They were left live, so a second click — or Save followed straight by
-        Reset — started two writes whose completion order nothing guarantees.
-        The window re-reads after each, so the LAST ANSWER wins rather than the
-        last click, and the pane could settle on the state somebody had just
-        changed their mind about.
-
-        Nothing re-enables them here. `writeMachine` re-reads and this pane is
-        rebuilt from what main actually holds, which is the one path that cannot
-        show a state the store disagrees with — the rule `recheckCodex` states.
-      */
-      const dispatch = (text: string | null): void => {
-        save.disabled = true
-        reset.disabled = true
-        handlers.prompt(one.key, text)
-      }
       save.addEventListener('click', () => {
-        dispatch(box.value)
+        const text = doc.commit()
+        if (text === null) return
+        showState()
+        handlers.prompt(one.key, text)
       })
       reset.addEventListener('click', () => {
-        dispatch(null)
+        if (!doc.revertByWriting()) return
+        showState()
+        handlers.prompt(one.key, null)
       })
       const actions = element('div', 'row')
       actions.append(save, reset)

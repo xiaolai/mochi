@@ -83,6 +83,13 @@ import { freshness } from './freshness'
 import { PLACES, alongTabs, type Place } from './tabs'
 import { sureExportEl } from './elements'
 import { offerACopyFirst } from './keep-a-copy'
+import { afresh } from '../rules/afresh'
+import { latest } from '../rules/latest'
+import { writes } from '../rules/writes'
+import { readEverything } from '../rules/boot'
+import { picking as pickingMode } from '../rules/picking'
+import { confirmation, saidOf, wordsFor, type Doomed } from '../rules/doomed'
+import { showing } from '../rules/showing'
 
 /*
   A wall clock on every line this window prints, installed before it prints one.
@@ -150,44 +157,46 @@ let open: string | null = null
  * misclick surface at once. It is entered deliberately, cleared on leaving, and
  * changes nothing else about the page.
  */
-let picking = false
+const picking = pickingMode()
 
-/** The conversations chosen so far, by token. */
-const chosen = new Set<string>()
+/*
+  D1 lives in `rules/doomed.ts` now, with its own tests.
 
-/**
- * What the confirmation was opened ABOUT, frozen at that moment.
- *
- * The whole reason the confirmation is a separate surface. Re-reading `chosen`
- * and the worn character when the second button is pressed means whatever
- * changed in between is silently what gets deleted -- and both can change,
- * because the tray can switch character and the list is still live underneath.
- * A confirmation that can target moving state is not a confirmation.
- */
-type Doomed =
-  | { readonly kind: 'some'; readonly id: string; readonly tokens: readonly string[] }
-  | { readonly kind: 'hers'; readonly id: string; readonly who: string }
-  | { readonly kind: 'everything' }
-
-let doomed: Doomed | null = null
+  It was a type, a `let`, and an assignment order that a source-reading test
+  asserted the shape of. The rule is a decision — take a snapshot, answer it
+  once, drop it — so it is exercised there rather than grepped here.
+*/
+const sure = confirmation()
 
 /** Put the drawer's controls in the state the mode says they should be in. */
 function showPicking(): void {
   const here = place === 'archive'
-  pickEl.hidden = !here || picking
-  pickOffEl.hidden = !here || !picking
-  dropSomeEl.hidden = !here || !picking
-  dropHersEl.hidden = !here || picking
-  dropSomeEl.disabled = chosen.size === 0
-  dropSomeEl.textContent = chosen.size === 0 ? 'Delete' : `Delete ${String(chosen.size)}`
-  listEl.classList.toggle('picking', picking)
+  const on = picking.on()
+  const many = picking.chosen().length
+  pickEl.hidden = !here || on
+  pickOffEl.hidden = !here || !on
+  dropSomeEl.hidden = !here || !on
+  dropHersEl.hidden = !here || on
+  dropSomeEl.disabled = many === 0
+  dropSomeEl.textContent = many === 0 ? 'Delete' : `Delete ${String(many)}`
+  listEl.classList.toggle('picking', on)
 }
 
 function stopPicking(): void {
-  picking = false
-  chosen.clear()
+  picking.stop()
   showPicking()
   renderList(Date.now())
+}
+
+/** The question's sentence, taken at the moment it is asked. See `Doomed`. */
+function asWords(about: { readonly kind: Doomed['kind']; readonly tokens?: readonly string[] }): {
+  readonly asks: string
+  readonly because: string
+} {
+  return wordsFor(about, {
+    hers: forPronoun(SAYS.dropHers, saying()),
+    hersWhy: forPronoun(SAYS.dropHersWhy, saying()),
+  })
 }
 
 /**
@@ -198,10 +207,13 @@ function stopPicking(): void {
  * state on the second click. For the only irreversible action in the app, none
  * of those are acceptable.
  */
-function askFirst(about: Doomed, what: string, why: string): void {
-  doomed = about
-  sureWhatEl.textContent = what
-  sureWhyEl.textContent = why
+function askFirst(about: Doomed): void {
+  sure.ask(about)
+  // FROM THE SNAPSHOT, never recomputed when the question is answered. See
+  // `rules/doomed.ts` — the sentence is the whole of what the person answering
+  // can see, so it is frozen with the thing it describes.
+  sureWhatEl.textContent = about.asks
+  sureWhyEl.textContent = about.because
   // Reset, because a "Saved 12" left from the last time would read as a copy
   // taken of THESE conversations.
   sureExportEl.textContent = 'Save a copy first'
@@ -211,7 +223,7 @@ function askFirst(about: Doomed, what: string, why: string): void {
 }
 
 pickEl.addEventListener('click', () => {
-  picking = true
+  picking.start()
   showPicking()
   renderList(Date.now())
 })
@@ -221,66 +233,46 @@ pickOffEl.addEventListener('click', () => {
 })
 
 dropSomeEl.addEventListener('click', () => {
-  if (chosen.size === 0) return
+  if (picking.chosen().length === 0) return
   // The snapshot: this set, this character, as they are NOW.
   const id = shelf?.wornId
   if (id === undefined) return
-  const tokens = [...chosen]
-  askFirst(
-    { kind: 'some', id, tokens },
-    tokens.length === 1
-      ? 'Delete this conversation?'
-      : `Delete ${String(tokens.length)} conversations?`,
-    'What was said in them is removed from this machine. This cannot be undone.',
-  )
+  const tokens = picking.chosen()
+  askFirst({ kind: 'some', id, tokens, ...asWords({ kind: 'some', tokens }) })
 })
 
 dropHersEl.addEventListener('click', () => {
   const id = shelf?.wornId
   if (id === undefined) return
-  askFirst(
-    { kind: 'hers', id, who: forPronoun(SAYS.droppedHers, saying()) },
-    forPronoun(SAYS.dropHers, saying()),
-    forPronoun(SAYS.dropHersWhy, saying()),
-  )
+  askFirst({
+    kind: 'hers',
+    id,
+    who: forPronoun(SAYS.droppedHers, saying()),
+    ...asWords({ kind: 'hers' }),
+  })
 })
 
 sureNoEl.addEventListener('click', () => {
-  doomed = null
+  sure.drop()
   sureEl.close()
 })
 
 // Escape closes a `<dialog>` without any of this running, so the snapshot is
 // dropped here too rather than left to be acted on by a later confirmation.
 sureEl.addEventListener('close', () => {
-  doomed = null
+  sure.drop()
 })
 
 offerACopyFirst()
 
 sureYesEl.addEventListener('click', () => {
-  const about = doomed
-  doomed = null
+  // Answered ONCE. A second press — a double-click, a key repeat, a click
+  // landing before the surface closes — gets null and deletes nothing.
+  const about = sure.answer()
   sureEl.close()
   if (about === null) return
   void deleteThem(about)
 })
-
-/** Say what happened, in the terms the store answered in. */
-function saidOf(result: { gone: number | null; pending: boolean }, about: Doomed): string {
-  const scrubbing = result.pending
-    ? ' They are still being cleared from the file, which finishes on its own.'
-    : ''
-  if (about.kind === 'some') {
-    // The count main really removed, which is not always the number chosen: a
-    // conversation can have gone in another window since. Saying "3 deleted"
-    // when 2 went would be a small lie in the one place people check.
-    const gone = result.gone ?? about.tokens.length
-    return `${gone === 1 ? 'One conversation' : `${String(gone)} conversations`} deleted.${scrubbing}`
-  }
-  if (about.kind === 'hers') return `${about.who}${scrubbing}`
-  return `Every conversation deleted.${scrubbing}`
-}
 
 async function deleteThem(about: Doomed): Promise<void> {
   /*
@@ -343,7 +335,7 @@ let showingCharacter = true
  * you opened, painting the wrong transcript. Debouncing the search stops queued
  * timers; it does nothing about a query already in flight.
  */
-let generation = 0
+const looking = latest()
 
 /**
  * The strip the handoff puts first, and the reason it is first.
@@ -387,7 +379,7 @@ function renderCards(): void {
     ...characterCards(shelf, showingCharacter ? shelf.wornId : null, (id) => {
       showingCharacter = true
       open = null
-      generation += 1
+      looking.moved()
       // Wearing is what makes the switch real; the sheet follows from the
       // re-read rather than from a local guess about what changed.
       if (shelf !== null && id !== shelf.wornId) return handlers.wear(id)
@@ -499,8 +491,9 @@ function showPlace(next: Place): void {
     cannot be undone. Leaving the archive also LEAVES select mode: a selection
     the user can no longer see is one they have stopped agreeing to.
   */
-  if (place !== 'archive' && picking) stopPicking()
-  else showPicking()
+  // T3: leaving the archive cancels. The rule is `rules/picking.ts`'s.
+  picking.wentTo(place)
+  showPicking()
   /*
     Cast repaints the open character on arrival.
 
@@ -620,7 +613,7 @@ function saying(): Pronoun {
 
 const handlers: ShelfHandlers = {
   wear: (id) => {
-    generation += 1
+    looking.moved()
     void write(() => window.mochiHistory.wear(id), forPronoun(SAYS.worn, saying()))
   },
   save: (change) => {
@@ -686,11 +679,11 @@ const handlers: ShelfHandlers = {
  * conversations are re-read too, because wearing somebody changes whose they
  * are — the archive is scoped per character.
  */
-/** The shelf's queue. Same argument as `machineQueue`. */
-let shelfQueue: Promise<void> = Promise.resolve()
+/** The shelf's queue. Same argument as `machineWrites`; see `rules/writes.ts`. */
+const shelfWrites = writes()
 
 async function write(act: () => Promise<SettingsWrite>, done: string): Promise<void> {
-  const mine = shelfQueue.then(async () => {
+  await shelfWrites.add(async () => {
     try {
       const result = await act()
       say(result.ok ? done : result.why, !result.ok)
@@ -707,8 +700,6 @@ async function write(act: () => Promise<SettingsWrite>, done: string): Promise<v
     */
     await reload()
   })
-  shelfQueue = mine.catch(() => undefined)
-  await mine
 }
 
 /** Everything, from main, in the order the panes are drawn. */
@@ -795,10 +786,10 @@ function row(
   subject: string | null,
 ): HTMLButtonElement {
   const button = document.createElement('button')
-  button.className = chosen.has(token) ? 'entry picked' : 'entry'
+  button.className = picking.chosen().includes(token) ? 'entry picked' : 'entry'
   button.type = 'button'
   button.setAttribute('aria-current', String(token === open))
-  if (picking) button.setAttribute('aria-pressed', String(chosen.has(token)))
+  if (picking.on()) button.setAttribute('aria-pressed', String(picking.chosen().includes(token)))
 
   const when = document.createElement('div')
   when.className = 'when'
@@ -807,7 +798,7 @@ function row(
   // ordinary hover.
   const tick = document.createElement('span')
   tick.className = 'tick'
-  tick.textContent = chosen.has(token) ? '☑' : '☐'
+  tick.textContent = picking.chosen().includes(token) ? '☑' : '☐'
   tick.setAttribute('aria-hidden', 'true')
   when.append(tick)
   const stamp = document.createElement('span')
@@ -835,19 +826,15 @@ function row(
   }
 
   button.addEventListener('click', () => {
-    if (picking) {
-      // Choosing, not reading. The transcript is deliberately NOT opened: the
-      // point of the mode is that a click means "this one", and a click that
-      // also navigated would make the two impossible to tell apart.
-      if (chosen.has(token)) chosen.delete(token)
-      else chosen.add(token)
+    // A4: what a click MEANS is `rules/picking.ts`'s decision, not this row's.
+    if (picking.click(token).kind === 'selected') {
       showPicking()
       renderList(Date.now())
       return
     }
     open = token
     showingCharacter = false
-    generation += 1
+    looking.moved()
     renderCards()
     void show(token, snippet?.term ?? '')
     troublesEl.setAttribute('aria-current', 'false')
@@ -980,19 +967,19 @@ function transcriptHead(turns: readonly HistoryTurn[], tools: readonly ToolUse[]
 }
 
 async function show(token: string, term: string): Promise<void> {
-  const mine = generation
+  const stillWanted = looking.request()
   let turns: readonly HistoryTurn[]
   try {
     turns = await window.mochiHistory.turns(token)
   } catch (error: unknown) {
     // Loud, and in the pane that failed. Leaving the previous transcript up
     // with no message is indistinguishable from this one having loaded.
-    if (mine === generation) empty(talkEl, `Could not read that conversation: ${String(error)}`)
+    if (stillWanted()) empty(talkEl, `Could not read that conversation: ${String(error)}`)
     return
   }
   // Somebody has moved on. Painting this now would replace what they asked for
   // with what they closed.
-  if (mine !== generation || showingCharacter || open !== token) return
+  if (!stillWanted() || showingCharacter || open !== token) return
   if (turns.length === 0) {
     empty(talkEl, 'Nothing was kept from this conversation.')
     return
@@ -1340,7 +1327,7 @@ async function readConversations(): Promise<void> {
         after confirming a deletion of three, which is the worst way to learn
         that a control was talking about the wrong thing.
       */
-      if (picking) stopPicking()
+      if (picking.on()) stopPicking()
     }
     // Her NAME, from the shelf, falling back to the id `history:list` answers
     // with. The cards say "Loki"; a title bar saying `loki` beside them would
@@ -1361,7 +1348,9 @@ async function readConversations(): Promise<void> {
       box. The field said one thing and the column showed another, with nothing
       to say which was in force.
     */
-    if (queryEl.value.trim() === '') renderList(Date.now())
+    // A5's decision is `rules/showing.ts`'s, so every caller that repaints this
+    // column gets the same answer — the defect was that one of them did not.
+    if (showing(queryEl.value) === 'a day') renderList(Date.now())
     else runSearch()
   } catch (error: unknown) {
     /*
@@ -1402,7 +1391,7 @@ async function readConversations(): Promise<void> {
 function renderProblems(problems: readonly HistoryProblem[]): void {
   open = null
   showingCharacter = false
-  generation += 1
+  looking.moved()
   renderCards()
   troublesEl.setAttribute('aria-current', 'true')
 
@@ -1500,11 +1489,7 @@ let openGroup = PANES[0]?.id ?? ''
 
 const machineHandlers: PaneHandlers = {
   forgetEveryTalk: () => {
-    askFirst(
-      { kind: 'everything' },
-      'Delete every conversation, for every character?',
-      'Every conversation this app has stored is removed from this machine, including any belonging to characters that are no longer here. Characters, voices and looks are untouched. This cannot be undone.',
-    )
+    askFirst({ kind: 'everything', ...asWords({ kind: 'everything' }) })
   },
   lookup: (change) => {
     void writeMachine(() => window.mochiSettings.lookup(change), 'Saved.')
@@ -1608,10 +1593,10 @@ const machineHandlers: PaneHandlers = {
  * body already catches everything it can; the `catch` on the chain is for
  * whatever it cannot.
  */
-let machineQueue: Promise<void> = Promise.resolve()
+const machineWrites = writes()
 
 async function writeMachine(run: () => Promise<SettingsWrite>, ok: string): Promise<void> {
-  const mine = machineQueue.then(async () => {
+  await machineWrites.add(async () => {
     try {
       const answer = await run()
       // Main's own refusal sentence when it has one — it knows why, and a generic
@@ -1622,8 +1607,6 @@ async function writeMachine(run: () => Promise<SettingsWrite>, ok: string): Prom
     }
     await loadMachine()
   })
-  machineQueue = mine.catch(() => undefined)
-  await mine
 }
 
 /** See `freshness`. Tab entries, writes, workspace picks and rechecks all read. */
@@ -1757,19 +1740,19 @@ troublesEl.addEventListener('click', () => {
   // Asked again on every click rather than kept: more can arrive while the
   // window is open — a capability that throws mid-conversation is exactly the
   // kind that does.
-  generation += 1
-  const mine = generation
+  looking.moved()
+  const stillWanted = looking.request()
   void window.mochiHistory
     .problems()
     .then((found) => {
       // The same staleness rule every other read here follows. Without it a
       // slow problems read lands on top of a conversation opened after the
       // click, and the transcript is replaced by a report nobody asked for now.
-      if (mine !== generation) return
+      if (!stillWanted()) return
       renderProblems(found)
     })
     .catch((error: unknown) => {
-      if (mine === generation) empty(talkEl, `Could not read what went wrong: ${String(error)}`)
+      if (stillWanted()) empty(talkEl, `Could not read what went wrong: ${String(error)}`)
     })
 })
 
@@ -1821,11 +1804,11 @@ exportEl.addEventListener('click', () => {
  */
 function runSearch(): void {
   const term = queryEl.value.trim()
-  if (term === '') {
+  if (showing(queryEl.value) === 'a day') {
     renderList(Date.now())
     return
   }
-  const mine = generation
+  const stillWanted = looking.request()
   void window.mochiHistory
     .search(term)
     .then((hits) => {
@@ -1833,11 +1816,11 @@ function runSearch(): void {
       // running, and FTS5 answers a short term far more slowly than a long
       // one — so the results for `a` used to land after `apple` and replace
       // them.
-      if (mine !== generation) return
+      if (!stillWanted()) return
       renderHits(group(hits), term)
     })
     .catch((error: unknown) => {
-      if (mine === generation) empty(listEl, `Could not search: ${String(error)}`)
+      if (stillWanted()) empty(listEl, `Could not search: ${String(error)}`)
     })
 }
 
@@ -1846,12 +1829,14 @@ queryEl.addEventListener('input', () => {
   // Debounced. Every keystroke is an FTS5 query and an IPC round trip, and a
   // fast typist would queue a dozen of them to throw away eleven.
   if (searching !== null) clearTimeout(searching)
-  generation += 1
+  looking.moved()
   searching = window.setTimeout(runSearch, 140)
 })
 
-window.addEventListener('focus', readProblemCount)
-readProblemCount()
+// The launch read and the read on return are one registration, so neither can
+// exist without the other — see `rules/afresh` for the session-long blind spot
+// that came of writing them as two statements.
+afresh(window, readProblemCount)
 renderPlaces()
 showPlace('cast')
 
@@ -1879,16 +1864,16 @@ window.mochiHistory.onShow((asked) => {
  * still leaves the conversations loading. The two are independent everywhere
  * except in the order they run.
  */
-void readShelf()
-  .then(() => {
+void readEverything({
+  characters: async () => {
+    await readShelf()
     openCharacter()
-  })
-  .catch((error: unknown) => {
+  },
+  conversations: readConversations,
+  characterTrouble: (error) => {
     empty(charactersEl, `Could not read the characters: ${String(error)}`)
-  })
-  .finally(() => {
-    void readConversations()
-  })
+  },
+})
 
 /*
   THE LAST RESORT, and there was none.

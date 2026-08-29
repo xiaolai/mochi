@@ -1,6 +1,7 @@
 import type { ShelfView } from '@shared/history-window'
 import { forPronoun } from '@shared/pronoun'
 import { element } from '../element'
+import { editing } from '../rules/editing'
 import { SAYS } from './shelf-says'
 import { colourSection } from './sheet/colour'
 import { PRONOUN_CAPS, faceTile, wornMark } from './sheet/face-tile'
@@ -283,52 +284,50 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
     }),
   })
 
-  editor.addEventListener('input', () => {
-    // The Save is enabled by there being a difference, not by having typed —
-    // typing a character and deleting it is not a change to save.
-    const changed = editor.value !== view.prompt.text
-    save.disabled = !changed
-    cancel.disabled = !changed
+  /*
+    The rule lives in `rules/editing`, which holds and tests the whole of C3 —
+    including THE BOX GOING WITH THE BUTTONS. Only the buttons were disabled
+    once, so the box stayed live for the whole round trip, and the save ends in
+    a `reload` that rebuilds this panel from what main now holds. Anything typed
+    in between was replaced without a word: the caret jumped, the words went,
+    and the only thing that had happened was a save somebody asked for.
+
+    Cancel is the LOCAL way back — it restores the draft and writes nothing, so
+    it must not take the lock. The catalogued prompts' Reset is the other shape,
+    a write that restores what shipped. Same rule, two verbs.
+  */
+  const doc = editing(view.prompt.text)
+  const showState = (): void => {
+    save.disabled = !doc.canCommit()
+    cancel.disabled = !doc.canRevert()
+    editor.disabled = doc.sending()
     count.textContent = wakeCount('write', {
       sent: view.assembled.length,
       tools: view.toolsSent.length,
       draft: editor.value.length,
     })
-  })
+  }
   save.disabled = true
   cancel.disabled = true
 
+  editor.addEventListener('input', () => {
+    doc.typed(editor.value)
+    showState()
+  })
   save.addEventListener('click', () => {
-    /*
-      THE BOX GOES WITH THE BUTTONS.
-
-      Only the buttons were disabled, so the box stayed live for the whole
-      round trip — and the save ends in a `reload`, which rebuilds this panel
-      from what main now holds. Anything typed in between was replaced without a
-      word: the caret jumped, the words went, and the only thing that had
-      happened was a save somebody asked for.
-
-      Disabled rather than left alone and merged afterwards: there is one
-      document here and two writers, and the honest answer to that is to have
-      one of them wait. The round trip is an IPC call, not a network one.
-    */
-    editor.disabled = true
-    save.disabled = true
-    cancel.disabled = true
-    handlers.prompt(editor.value)
+    const text = doc.commit()
+    if (text === null) return
+    showState()
+    handlers.prompt(text)
   })
   cancel.addEventListener('click', () => {
+    if (!doc.canRevert()) return
+    doc.revert()
     // Back to what is stored, not to empty. Cancel undoes the edit; there is a
     // separate and deliberate way to store nothing, which is to clear the box
     // and Save.
-    editor.value = view.prompt.text
-    save.disabled = true
-    cancel.disabled = true
-    count.textContent = wakeCount('write', {
-      sent: view.assembled.length,
-      tools: view.toolsSent.length,
-      draft: editor.value.length,
-    })
+    editor.value = doc.draft()
+    showState()
   })
 
   head.append(tabs)

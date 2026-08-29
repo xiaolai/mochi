@@ -13,6 +13,7 @@ import { element } from '../../element'
 import { faceTile } from './face-tile'
 import { type ShelfHandlers, section } from './row'
 import { EMOTIONS, type Emotion } from '@shared/avatar'
+import { moods, type Moods } from '../../rules/moods'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { type ByPronoun, forPronoun } from '@shared/pronoun'
 /**
@@ -99,12 +100,12 @@ export const MOOD_WHEN: Readonly<Record<Emotion, ByPronoun>> = {
  */
 function moodTile(
   emotion: Emotion,
-  on: Set<Emotion>,
+  on: Moods,
   view: ShelfView,
   worn: ShelfCharacter,
   handlers: ShelfHandlers,
 ): HTMLElement {
-  const allowed = on.has(emotion)
+  const allowed = on.allowed().includes(emotion)
   const tile = element('div', allowed ? 'mood' : 'mood off')
   /*
     The DRAWING is the button, not the tile around it.
@@ -159,11 +160,10 @@ function moodTile(
       Mutating the live set makes the second payload include the first, which
       is what somebody clicking two tiles in a row asked for.
     */
-    if (box.checked) on.add(emotion)
-    else on.delete(emotion)
-    // The whole list, every time. `applyChange` sorts it back into `EMOTIONS`
-    // order, so what is stored does not depend on the order they were clicked.
-    handlers.save({ id: worn.id, faces: EMOTIONS.filter((one) => on.has(one)) })
+    // The live set, mutated rather than rebuilt from a render-time snapshot —
+    // and the whole list every time, in `EMOTIONS` order. Both are C2's rule,
+    // and both live in `rules/moods.ts` where they are exercised.
+    handlers.save({ id: worn.id, faces: on.allow(emotion, box.checked) })
   })
   const label = element('label', undefined, 'allowed')
   label.htmlFor = box.id
@@ -178,7 +178,7 @@ export function moodSection(
   worn: ShelfCharacter,
   handlers: ShelfHandlers,
 ): HTMLElement {
-  const on = new Set(worn.faces)
+  const on = moods(worn.faces)
   const grid = element('div', 'moods')
   for (const emotion of EMOTIONS) {
     grid.append(moodTile(emotion, on, view, worn, handlers))
@@ -190,6 +190,7 @@ export function moodSection(
   // every face to a manifest that does not mention them, and an empty list is
   // somebody saying none. The tool refuses in as many words; the pane should
   // not let that be a surprise.
-  if (on.size === 0) body.push(element('p', 'note bad', forPronoun(SAYS.noMoods, view.pronoun)))
+  if (on.allowed().length === 0)
+    body.push(element('p', 'note bad', forPronoun(SAYS.noMoods, view.pronoun)))
   return section('Moods', forPronoun(SAYS.moods, view.pronoun), ...body)
 }

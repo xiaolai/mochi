@@ -8,6 +8,7 @@
  * imports it.
  */
 import { element } from '../../element'
+import { acknowledged } from '../../rules/acknowledged'
 import { type Emotion } from '@shared/avatar'
 import { type NoteAction, type PersonaAction, type PersonaChange } from '@shared/ipc'
 export interface ShelfHandlers {
@@ -70,7 +71,7 @@ export function chooser(
     the thing being corrected: a value the row has asked for is a fact about
     this row, not about what is drawn.
   */
-  let asked = chosen
+  const wants = acknowledged(chosen)
   /** Every button by its value, so the row can move its own mark. */
   const drawn = new Map<string, HTMLElement>()
   const wrap = element('div', className)
@@ -95,9 +96,9 @@ export function chooser(
     }
     button.addEventListener('click', () => {
       // Nothing to save when it is already the answer, and a write would
-      // redraw the pane under the pointer for no change.
-      if (entry.value === asked) return
-      asked = entry.value
+      // redraw the pane under the pointer for no change. C1's rule, and the
+      // acknowledgement half with it — see `rules/acknowledged.ts`.
+      if (wants.ask(entry.value) === null) return
       // Moved here too, so the row shows what it asked for while the save is
       // in flight rather than the answer it is replacing.
       for (const [other, control] of drawn) {
