@@ -167,7 +167,18 @@
   /* ---- ink ---------------------------------------------------------------- */
   --ink: light-dark(#10161c, #e9edf1);
   --ink-2: light-dark(#47525c, #aeb8c2);
-  --ink-3: light-dark(#5f6a76, #8f99a4);
+  /*
+    Measured against `--chrome-wash`, not against the page.
+
+    The old pair (#5f6a76 / #8f99a4) reads 4.43:1 light and 4.48:1 dark on
+    `--chrome-wash`, which is what a CHOSEN card is filled with -- so the line
+    under a character's name failed the app's own 4.5:1 floor in both themes,
+    and only when she was the one selected. `applyAccent` never caught it: that
+    guards a character's hue against the page, and this is built-in chrome
+    against built-in chrome. Now 4.96:1 light and 5.07:1 dark on the wash, and
+    higher on every lighter surface.
+  */
+  --ink-3: light-dark(#58626d, #99a3ae);
   /*
    * A label on the DESK rather than on paper, which needs its own floor: the
    * board is darker than paper in light and darker still in dark, and `--ink-3`
