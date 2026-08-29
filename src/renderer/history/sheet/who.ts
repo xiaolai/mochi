@@ -66,7 +66,11 @@ export function whoBand(
   // label over a turn in a transcript. See the stylesheet for the four earlier
   // collisions of exactly this shape.
   const band = element('div', 'who-band')
-  band.append(faceTile(worn.face, 108))
+  // 52px, which is the delivery's. It was 108 — a portrait at the top of a
+  // scrolling column of her properties. On a subject row beside her name it is
+  // a face on a line of type, and 108 makes the line as tall as the views under
+  // it.
+  band.append(faceTile(worn.face, 52))
   /*
     The same admission the rail makes — contract C4.
 

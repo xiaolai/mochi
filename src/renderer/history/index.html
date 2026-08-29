@@ -118,7 +118,6 @@
         is the one thing that tells two characters apart, so substituting it
         makes the list stop doing its only job, and it looks deliberate.
       */
-      .who-band.faceless .tile,
       .rail-row.faceless .tile {
         /*
           SIZED here, and it has to be.
@@ -134,6 +133,11 @@
           failed to load — which is the whole reason the size could move into
           the element in the first place.
         */
+        border: var(--s-px) dashed var(--rule-2);
+        border-radius: var(--r-control);
+      }
+      /* The same admission at the subject's size. */
+      .who-band.faceless .tile {
         border: var(--s-px) dashed var(--rule-2);
         border-radius: var(--r-control);
       }
@@ -248,14 +252,73 @@
         flex: none;
         padding: var(--s6) var(--s7) 0;
       }
+      /*
+        The subject row: her face, her name, and the search that is about her.
+
+        `align-items: center` and `gap: 18px`, which are the delivery's numbers.
+        The `flex: 1` spacer is what pushes the search to the far end rather
+        than a `justify-content` on the row — the row has three items and only
+        one of them is meant to move.
+      */
       .subject {
         display: flex;
         align-items: center;
-        gap: 26px;
+        gap: 18px;
         padding-bottom: var(--s5);
       }
-      .subject:empty {
-        display: none;
+      .subject-of {
+        min-width: 0;
+      }
+      /*
+        A RULED LINE, not a box.
+
+        "Rules do the grouping. Boxes are reserved for the two things that need
+        one: a control and a warning." A search field with something in it reads
+        as a field; the box is what an empty one needs, and this one always has
+        a placeholder saying what it searches. It was a bordered input on a row
+        of its own, which is two of that sentence's rules broken at once.
+      */
+      .finding {
+        display: flex;
+        align-items: center;
+        gap: var(--s2);
+        width: 300px;
+        flex: none;
+        padding: 0 var(--s0) 5px;
+        border-bottom: var(--s-px) solid var(--rule-2);
+      }
+      .finding-mark {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-3);
+        flex: none;
+      }
+      /*
+        `#q`, not `.finding input`. The window's own `input[type='search']` rule
+        is (0,1,1) and would beat a bare class — which is how her name kept the
+        ordinary field's box for a build, and it is written up in `who.ts`.
+      */
+      #q {
+        flex: 1;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        font-family: var(--serif);
+        font-size: var(--t-body);
+        color: var(--ink);
+      }
+      #q::placeholder {
+        color: var(--ink-3);
+      }
+      #q:hover,
+      #q:focus {
+        border: 0;
+        background: transparent;
+      }
+      .finding:focus-within {
+        border-bottom-color: var(--ink-3);
       }
       /*
         The three views, as a sub-navigation under her name.
@@ -1618,8 +1681,7 @@
       .who-band {
         display: flex;
         align-items: center;
-        gap: var(--s5);
-        width: 100%;
+        gap: 18px;
         min-width: 0;
       }
       .who-band .tile {
@@ -1650,6 +1712,13 @@
         that reads as correct, compiles, and governs nothing.
       */
       input[type='text'].who-name {
+        /* 30px, 600, -0.02em, line-height 1 — the delivery's own numbers for
+           her name. It is the largest thing on the page and it is a serif. */
+        font-family: var(--serif);
+        font-size: var(--t-h1);
+        font-weight: var(--w-semibold);
+        letter-spacing: -0.02em;
+        line-height: 1;
         width: 100%;
         padding: var(--s0) 0;
         border: 0;
@@ -2271,14 +2340,23 @@
           <!-- Her page: one subject, three numbered views of it. -->
           <section class="page hers" id="page-hers">
             <header class="head">
-              <div class="subject" id="subject"></div>
-              <nav class="views" id="views" role="tablist" aria-label="Her page"></nav>
-              <!-- What the view on screen needs in its head: the search field on
-                   II, and the day strip under it. Empty on the others. -->
-              <div class="view-head" id="view-head">
-                <!-- II carries a search field and the day strip; the others
-                     leave this empty and `:empty` collapses it. -->
+              <!--
+                The subject row: her face, her name, and — when it is what she
+                has said you are looking at — the search field, pushed to the
+                far end of the same line.
+
+                Search is ON THIS ROW and not on one of its own. It searches
+                everything she has ever said, so its subject is her, and her
+                name is what says which "her". A row of its own under the views
+                made it look like a control belonging to the view rather than a
+                question about the character, and gave the head three rules to
+                cross instead of two.
+              -->
+              <div class="subject">
+                <div class="subject-of" id="subject"></div>
+                <span class="grow"></span>
                 <div class="finding" id="finding" hidden>
+                  <span class="finding-mark" aria-hidden="true">&#8981;</span>
                   <input
                     id="q"
                     type="search"
@@ -2286,9 +2364,12 @@
                     autocomplete="off"
                   />
                 </div>
+              </div>
+              <nav class="views" id="views" role="tablist" aria-label="Her page"></nav>
+              <!-- The day strip, under the views and above the rule. Its own
+                   row in the delivery, and the only thing in this one. -->
+              <div class="view-head" id="view-head">
                 <div class="daystrip" id="calendar" hidden></div>
-                <!-- How many, beside the day it counts, rather than in a
-                     drawer at the foot of the window. -->
                 <p class="day-head" id="count" hidden></p>
               </div>
             </header>

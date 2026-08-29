@@ -355,11 +355,14 @@ async function photograph(page) {
       `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
     )
     await wait(900)
+    const showing = await page.run(
+      `[...document.querySelectorAll('.view')].find((v) => v.getAttribute('aria-current') === 'true')?.textContent ?? (document.getElementById('page-machine').hidden ? 'none' : 'machine')`,
+    )
     const shot = await page.send('Page.captureScreenshot', { format: 'png' })
     const data = shot.result?.data
     if (!data) continue
     writeFileSync(join(into, `${place}.png`), Buffer.from(data, 'base64'))
-    console.log(`  shot  dev-docs/shots/${place}.png`)
+    console.log(`  shot  dev-docs/shots/${place}.png  showing: ${showing}`)
   }
 }
 
