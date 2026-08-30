@@ -2117,13 +2117,6 @@
         `baseline`, so three 12px words sit on the line her 46px name sits on
         rather than floating in the middle of it.
       */
-      .who-named {
-        display: flex;
-        align-items: baseline;
-        gap: var(--s4);
-        flex-wrap: wrap;
-        min-width: 0;
-      }
       /*
         One line of apparatus under her name: where she is stored, and what she
         calls you, joined by a middot.
@@ -2134,10 +2127,18 @@
         the sentence, so it reads as "calls you nothing yet" with a blank in it
         rather than as a labelled input.
       */
+      /*
+        One line under her name: the words she takes, what she calls you, and
+        where she is stored.
+
+        `baseline` rather than `center`, because the pronoun buttons are Sora
+        and the rest is DM Mono at a different size — centring two faces of
+        unlike height on a line makes neither sit on it.
+      */
       .who-facts {
         display: flex;
         align-items: baseline;
-        gap: 10px;
+        gap: var(--s4);
         flex-wrap: wrap;
         font-family: var(--mono);
         font-size: var(--t-cap);

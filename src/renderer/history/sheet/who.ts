@@ -118,19 +118,23 @@ export function whoBand(
   })
 
   /*
-    HER NAME, then the words she takes. One line.
+    ONE LINE: the words she takes, then what she calls you.
 
-    The pronoun sat below her name, after "calls you", among the apparatus —
-    which made it read as another fact about her file rather than as the thing
-    every sentence in this window bends to. It belongs beside her name because
-    it is part of naming her: "Mochi · she".
+    "she he it  calls you nothing yet" reads as a sentence about her, and that
+    is the point of the order — the pronoun is the subject of the clause the
+    field completes. Split across two lines it was two facts; on one line it is
+    one statement, and the control that changes the first half sits next to the
+    half it changes.
 
-    `baseline`, so three 12px words sit on the line her 46px name sits on rather
-    than floating in the middle of it.
+    Her file goes at the far end of the same line, which is where it was: it
+    answers "which of these on disk am I editing", and it is the only thing here
+    nobody came looking for.
   */
-  const named = element('div', 'who-named')
-  named.append(
-    name,
+  const calls = element('span', 'who-calls')
+  calls.append(document.createTextNode('calls you '), called)
+
+  const facts = element('div', 'who-facts')
+  facts.append(
     chooser(
       'switchers',
       PRONOUNS.map((one) => ({ value: one, label: one })),
@@ -139,29 +143,22 @@ export function whoBand(
         handlers.save({ id: worn.id, pronoun: value })
       },
     ),
-  )
-
-  /*
-    Then one line of apparatus: where she is stored, and what she calls you.
-
-    Both are DM Mono and both are facts about her rather than controls — the
-    delivery joins them with a middot and puts the field inline in the sentence,
-    so "calls you nothing yet" reads as a sentence with a blank in it rather
-    than as a labelled input.
-  */
-  const facts = element('div', 'who-facts')
-  const calls = element('span', 'who-calls')
-  calls.append(document.createTextNode('calls you '), called)
-  facts.append(
-    // Where her file is — the one line that answers "which of these on disk am
-    // I editing".
-    element('span', 'meta', worn.source ?? forPronoun(SAYS.noFile, view.pronoun)),
-    element('span', 'who-dot', '·'),
     calls,
+    /*
+      A middot, not a spacer.
+
+      `grow` was here and pushed nothing: `.who-band` has no width of its own,
+      so there was no room to distribute and her file simply sat two spaces
+      after "nothing yet" — two facts with nothing saying they were two. The
+      delivery joins this line with a middot in `--rule-2`, which is quieter
+      than a gap wide enough to read as a separator and cannot collapse.
+    */
+    element('span', 'who-dot', '·'),
+    element('span', 'meta', worn.source ?? forPronoun(SAYS.noFile, view.pronoun)),
   )
 
   const of = element('div', 'who-of')
-  of.append(named, facts)
+  of.append(name, facts)
   band.append(of)
   return band
 }
