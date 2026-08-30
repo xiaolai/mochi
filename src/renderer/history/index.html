@@ -657,11 +657,27 @@
         border-radius: var(--r-control);
         background: var(--paper);
         box-shadow: none;
-        display: flex;
         flex-direction: column;
         gap: var(--s3);
       }
+      /*
+        `display` ONLY when it is open.
+
+        This rule said `display: flex` unconditionally, and an author `display`
+        beats the user agent's `[popover]:not(:popover-open) { display: none }`
+        — author styles win over UA styles whatever the specificity. So the
+        picker was painted permanently: `open=false`, `display=flex`, a 157×175
+        box sitting under the month at all times.
+
+        The exact defect `[hidden]` in the token file argues about at length,
+        and the third time this window has had it: `.panel` was `display: flex`
+        so an inactive tab's contents sat under the active one, `.warn` was
+        `display: flex` so a chip reading "0 problems" stayed in the drawer, and
+        now this. The token file carries the general protection; this rule is
+        written the way that protection expects.
+      */
       .month-pick:popover-open {
+        display: flex;
         /* Under the button it belongs to, not over the days it is choosing. */
         top: anchor(bottom);
       }

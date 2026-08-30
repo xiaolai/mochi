@@ -550,6 +550,28 @@ select:focus {
 }
 
 /*
+ * A POPOVER THAT IS NOT OPEN IS NOT ON SCREEN, whatever an author says.
+ *
+ * The user agent hides one with `display: none`, and an author `display` beats
+ * it — author styles win over UA styles regardless of specificity. So a rule as
+ * ordinary as `.month-pick { display: flex }` paints a closed popover
+ * permanently, and nothing about the markup, the state or the accessibility
+ * tree looks wrong: `:popover-open` is false the whole time.
+ *
+ * This is the same failure as `[hidden]` below, through a different mechanism,
+ * and this window has now had it three times — `.panel`, `.warn` and
+ * `.month-pick`. `!important` is the point rather than a shortcut, for the
+ * reason that one gives: a rule that can be outranked reintroduces the bug the
+ * first time somebody writes `display` on a popover.
+ *
+ * A popover that needs a `display` when open says so on `:popover-open`, which
+ * this does not touch.
+ */
+[popover]:not(:popover-open) {
+  display: none !important;
+}
+
+/*
  * `hidden` MEANS hidden, in every window.
  *
  * The UA gives `[hidden]` a `display: none` of the lowest possible weight, so

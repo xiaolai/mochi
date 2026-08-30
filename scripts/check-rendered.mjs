@@ -647,6 +647,24 @@ async function checks(page, where = '') {
     )
   else ok('A2', 'picking narrows to that day (' + afterPick.head + ') without scrolling')
 
+  /* --- nothing is on screen that has not been opened --------------------- */
+  const closed = await page.run(`(() => {
+    /*
+      A popover that is not open must not be drawn — and an author display
+      declaration beats the user agent's, so this is checkable only by looking.
+    */
+    const shut = [...document.querySelectorAll('[popover]')].filter((p) => !p.matches(':popover-open'));
+    const drawn = shut.filter((p) => p.getClientRects().length > 0);
+    return { shut: shut.length, drawn: drawn.map((p) => '#' + (p.id || '?')) };
+  })()`)
+  if (closed.shut === 0) bad('closed', 'no popover was found, so this proves nothing')
+  else if (closed.drawn.length > 0)
+    bad(
+      'closed',
+      closed.drawn.length + ' closed popovers are on screen: ' + JSON.stringify(closed.drawn),
+    )
+  else ok('closed', 'all ' + closed.shut + ' closed popovers are off screen')
+
   /* --- the month and the days are one row -------------------------------- */
   const oneRow = await page.run(`(() => {
     const month = document.querySelector('.daystrip .month');
@@ -701,6 +719,32 @@ async function checks(page, where = '') {
     bad('month', 'typing a year did not move the strip: ' + picker.moved)
   else if (picker.stillOpen) bad('month', 'the picker stayed open over the strip it had just moved')
   else ok('month', 'opens, refuses "20", moves to ' + picker.moved + ', and closes behind itself')
+
+  /*
+    Escape, which is the platform's and has to actually reach it.
+
+    A popover gets this for free and that is the reason for using one — but
+    "for free" is a claim about a mechanism, and the mechanism is only in force
+    if the element really is a popover and really is open. Both have been true
+    and neither was, in this window, an hour ago.
+  */
+  await page.run(`document.querySelector('.daystrip .month').click()`)
+  await wait(400)
+  for (const type of ['keyDown', 'keyUp']) {
+    await page.send('Input.dispatchKeyEvent', {
+      type,
+      key: 'Escape',
+      code: 'Escape',
+      windowsVirtualKeyCode: 27,
+      nativeVirtualKeyCode: 27,
+    })
+  }
+  await wait(400)
+  const gone = await page.run(
+    `(() => { const p = document.getElementById('month-pick'); return { open: p.matches(':popover-open'), drawn: p.getClientRects().length > 0 }; })()`,
+  )
+  if (gone.open || gone.drawn) bad('month', 'Escape did not close the picker')
+  else ok('month', 'Escape closes it')
 
   // Back where the rest of the checks expect it.
   await page.run(`(() => {
@@ -1267,6 +1311,19 @@ async function main() {
         return ['.rail', '.rail-foot', '.rail-rule', '#rail-machine', '.rail-says', '.status', '.frame'].map(of);
       })()`)
       console.log('\n  ' + seen.join('\n  ') + '\n')
+    }
+    if (process.argv.includes('--pick')) {
+      await page.run(`document.getElementById('tab-for-archive').click()`)
+      await wait(700)
+      const seen = await page.run(`(() => {
+        const p = document.getElementById('month-pick');
+        const s = getComputedStyle(p);
+        const b = p.getBoundingClientRect();
+        return 'before any click — open=' + p.matches(':popover-open') +
+          '  display=' + s.display + '  drawn=' + (p.getClientRects().length > 0) +
+          '  box=' + Math.round(b.width) + 'x' + Math.round(b.height);
+      })()`)
+      console.log('\n  ' + seen + '\n')
     }
     if (process.argv.includes('--strip')) {
       await page.run(`document.getElementById('tab-for-archive').click()`)
