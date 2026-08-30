@@ -24,6 +24,8 @@ export const castEl = need('cast-actions', HTMLElement)
 
 export const paneEl = need('pane', HTMLElement)
 
+export const statusEl = need('status', HTMLElement)
+
 export const talkEl = need('talk', HTMLElement)
 
 export const navEl = need('nav-groups', HTMLElement)

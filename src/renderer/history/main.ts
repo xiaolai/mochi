@@ -71,6 +71,7 @@ import {
   sureWhatEl,
   sureWhyEl,
   sureYesEl,
+  statusEl,
   talkEl,
   troublesEl,
   troublesBodyEl,
@@ -213,6 +214,12 @@ function showPicking(): void {
   dropSomeEl.disabled = many === 0
   dropSomeEl.textContent = many === 0 ? 'Delete' : `Delete ${String(many)}`
   listEl.classList.toggle('picking', on)
+  /*
+    The foot grows to 56 while it carries buttons — the four artboards that draw
+    a taller bar are exactly the ones with a row of controls in it, and this is
+    the only place that knows whether any is on screen.
+  */
+  statusEl.classList.toggle('acts', here && (any || on))
 }
 
 function stopPicking(): void {

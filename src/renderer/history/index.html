@@ -589,9 +589,11 @@
       }
 
       #sure {
-        max-width: 480px;
-        padding: var(--s5) var(--s6);
-        border: var(--s-px) solid var(--rule);
+        /* A5's: 520 wide, 30/32 of padding, and NO border — the lift is what
+           lifts it, and a surface with both says the same thing twice. */
+        max-width: 520px;
+        padding: 30px var(--s6);
+        border: 0;
         border-radius: var(--r-panel);
         background: var(--paper);
         box-shadow: var(--lift-top);
@@ -606,22 +608,24 @@
         background: light-dark(rgb(10 10 11 / 28%), rgb(0 0 0 / 55%));
       }
 
+      /*
+        A 520px PANEL over its own trigger — C1's — not a bar across the window.
+
+        It was `left: 32px; right: 32px`, so 1216px at the default size for a
+        surface holding one subject, one mono line, one sentence and two buttons.
+        The width was the whole difference between "this came out of the status
+        bar" and "a bar appeared": C1 rises it from the right, over the control
+        that opens it, which is what makes the connection readable without
+        anything saying so.
+      */
       #troubles-drawer {
         position: fixed;
-        left: var(--s6);
+        left: auto;
         right: var(--s6);
+        width: 520px;
+        max-width: calc(100vw - var(--s6) * 2);
         bottom: calc(var(--status-h) + var(--s2));
         max-height: 60vh;
-        margin: 0;
-        padding: var(--s5) var(--s6);
-        border: var(--s-px) solid var(--rule);
-        border-radius: var(--r-panel);
-        background: var(--paper);
-        box-shadow: var(--lift-top);
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        gap: var(--s3);
       }
 
       #troubles-head {
@@ -928,16 +932,28 @@
         that v2 draws as a pill with no rule at all. It was v1's answer carried
         across whole.
 
-        V5's answer fits a pill exactly: the control's own edge at 2px ink, drawn
-        inside the border box so nothing moves. The input keeps opting out, or the
-        pill and the box inside it would both ring.
+        It carried V5's answer — 2px ink inside the border box, no gap, no outer
+        ring — which is the treatment `tokens.css` replaced. So one field in the
+        masthead wore the system page's focus while every other control in the
+        window wore the self-audit addendum's sandwich: one state, two
+        definitions, in one build. That is the audit's own item B with a different
+        body, and it is settled the same way — the addendum wins, because the
+        system page is the file the audit says to stop trusting.
+
+        The INPUT keeps opting out. `:focus-within` on the pill is what shows the
+        state, or the pill and the box inside it would both ring; the sheet's own
+        check requires an opt-out to have a rule beside it that paints, and this
+        is that rule.
       */
       #q:focus-visible {
         outline: none;
       }
       .finding:focus-within {
-        outline: var(--s0) solid var(--ink);
-        outline-offset: calc(-1 * var(--s0));
+        outline: var(--s-px) solid var(--ink);
+        outline-offset: 3px;
+        box-shadow:
+          0 0 0 var(--s-px) var(--ink),
+          0 0 0 3px var(--paper);
       }
       /*
         The three views, as a sub-navigation under her name.
@@ -990,9 +1006,15 @@
         The raised one carries `--paper`, and it needs a lift to read as raised
         on a track that is only one step darker than it.
       */
+      /*
+        FLAT. `HerHead` draws the raised one as plain `#fff` on `#f4f4f5` and
+        gives it no shadow — one step of surface is the whole signal, which is
+        the same argument `--chosen-2` makes for a picked row. The lift was added
+        here and it is one of the two places `tokens.css` says a small lift does
+        not go.
+      */
       .view[aria-current='true'] {
         background: var(--paper);
-        box-shadow: var(--lift-small);
       }
       .view[aria-current='true'] .view-label {
         color: var(--ink);
@@ -1274,6 +1296,18 @@
         background: var(--paper-3);
         color: var(--ink-2);
         font-size: var(--t-h3);
+        /* The mark is DRAWN, not typed. It was `&#9636;`, so a 22px box was
+           whatever face on the machine happens to carry U+25A4 — never Outfit,
+           and different on a machine that has a different fallback. Two
+           declarations on a pseudo-element cannot do that. */
+        font-size: 0;
+      }
+      .machine-mark::before {
+        content: '';
+        width: var(--s5);
+        height: var(--s5);
+        border-radius: 6px;
+        border: 1.5px solid var(--ink-2);
       }
       .machine-titles h1 {
         margin: 0;
@@ -1283,11 +1317,17 @@
         letter-spacing: var(--track-tight);
         color: var(--ink);
       }
+      /*
+        13.5 in `--ink-2`, which is what B1 through B7 draw and what every other
+        explanatory line on that page uses. It was 12 in `--ink-3` — the page's
+        second-most-read line, set quieter than the sentences under its own
+        fields.
+      */
       .machine-says {
         margin: var(--s1) 0 0;
         font-family: var(--sans);
-        font-size: var(--t-cap);
-        color: var(--ink-3);
+        font-size: var(--t-sm);
+        color: var(--ink-2);
         max-width: none;
       }
       /*
@@ -1896,12 +1936,17 @@
         nobody knows — the third being the state a two-colour light had no way
         to draw and therefore drew as "cannot".
 
-        A ring around the lit one only. An 8px dot on paper reads as a bullet;
-        the glow is what makes it a light.
+        8px, and no ring around the lit one. It carried `--s3` (12) with a 3px
+        `--chosen-2` glow, on the argument that "an 8px dot on paper reads as a
+        bullet; the glow is what makes it a light". That is an argument, and it
+        is an argument against a drawing that was made: B1b draws all seven
+        states at 8px flat, in a card padded 16 to 18. A stylesheet comment is
+        not where a disagreement with an artboard gets settled — if the glow is
+        right the board should gain it.
       */
       .light {
-        width: var(--s3);
-        height: var(--s3);
+        width: var(--s2);
+        height: var(--s2);
         flex: none;
         border-radius: var(--r-pill);
         background: var(--rule-2);
@@ -1923,17 +1968,21 @@
       */
       .light.on {
         background: var(--ink);
-        box-shadow: 0 0 0 3px var(--chosen-2);
       }
 
+      /* INK, which is B1b's. `--ink-3` made the hollow one quieter than the
+         dashed one, inverting the two: not-usable is a stronger claim than
+         nobody-knows. */
       .light.off {
         background: transparent;
-        box-shadow: inset 0 0 0 1.5px var(--ink-3);
+        box-shadow: inset 0 0 0 1.5px var(--ink);
       }
 
+      /* `--ink-2`, B1b's `#5b5b60` — one step under the hollow one, which is
+         the right order: not-usable is a firmer claim than nobody-knows. */
       .light.unknown {
         background: transparent;
-        border: 1.5px dashed var(--ink-3);
+        border: 1.5px dashed var(--ink-2);
       }
       .codex .note {
         margin: 0;
@@ -2006,17 +2055,38 @@
         artboard draws, and it stays findable at either end where the fill behind
         it changes.
       */
+      /*
+        A 1.5px INK RING, not a hairline — A1's, and the reason is the track.
+
+        The thumb sat on `--rule-2` with the small lift. At the left end the fill
+        behind it is ink, so a `#d4d4d8` hairline against it is very nearly
+        nothing, and the thing that has to stay findable at both ends of a slider
+        is its edge. The artboard rings it in ink and lifts it; that pairing is
+        one of the two places the small lift IS drawn.
+      */
       .size-slider::-webkit-slider-thumb {
         appearance: none;
         width: var(--s4);
         height: var(--s4);
+        border: 0;
         border-radius: var(--r-pill);
         background: var(--paper);
-        border: var(--s-px) solid var(--rule-2);
-        box-shadow: var(--lift-small);
+        box-shadow:
+          0 0 0 1.5px var(--ink),
+          0 1px 3px rgb(0 0 0 / 18%);
       }
+      /*
+        The RING deepens on hover, not the fill.
+
+        This filled the thumb with `--ink-2`, which turns it into "a bulge in the
+        bar rather than a thing on it" — the phrase four lines up in the rule
+        that rejects exactly this shape. A paper thumb on an ink track is the
+        drawing; hovering thickens its edge and leaves the object alone.
+      */
       .size-slider:hover::-webkit-slider-thumb {
-        background: var(--ink-2);
+        box-shadow:
+          0 0 0 2px var(--ink),
+          0 1px 3px rgb(0 0 0 / 18%);
       }
       .size-reading {
         color: var(--ink-2);
@@ -2939,7 +3009,19 @@
         display: flex;
         flex-direction: column;
         gap: var(--s5);
-        max-width: var(--measure);
+      }
+      /*
+        The CONTROLS carry the cap, not the sheet — see `--measure-field`.
+
+        A single-line field at 420 is the width the machine's page draws and the
+        width A1's own fields sit at; letting one fill a 760 column is the
+        "no control grows with the window" the self-audit asked for, applied to
+        the control rather than to everything around it.
+      */
+      .sheet input[type='text'],
+      .sheet select,
+      .sheet textarea {
+        max-width: var(--measure-field);
       }
       /*
         A section: a caps heading, a hint in mono beside it, and whatever
@@ -3586,10 +3668,18 @@
           because `--reading` next door said 66ch. v2 settles it by sizing the
           TRACK: the transcript column is 616, which is the 600px measure plus
           its own padding, so there is nothing left for a max-width to do.
+
+          THAT LAST SENTENCE IS TRUE AT 1280 AND NOWHERE ELSE. The track is a
+          `1fr` and grows with the window, so at 1600 her turns ran to about
+          936px — the one surface in this window where a long line costs the
+          most was the one with no cap on it. 全部页面 puts `max-width: 600px` on
+          the transcript's own inner column, which is the thing that holds at
+          every width rather than at the default one.
         */
         display: flex;
         flex-direction: column;
         gap: var(--s6);
+        max-width: var(--measure-read);
       }
       /*
         What this conversation was, over the top of it.
@@ -3878,6 +3968,12 @@
         apparatus column beside it — a surface that recedes by colour AND by a
         rule says it twice.
       */
+      /* 56 while the foot carries buttons — see `--status-h-acts`. The class is
+         put on by `showPicking`, which is the one place that knows whether any
+         of them is on screen. */
+      .status.acts {
+        height: var(--status-h-acts);
+      }
       .status {
         height: var(--status-h);
         flex: none;
@@ -4144,7 +4240,7 @@
           <section class="page machine" id="page-machine" hidden>
             <header class="head">
               <div class="machine-subject">
-                <span class="machine-mark" aria-hidden="true">&#9636;</span>
+                <span class="machine-mark" aria-hidden="true"></span>
                 <div class="machine-titles">
                   <h1>This machine</h1>
                   <p class="machine-says">These settings apply whoever she is.</p>
@@ -4174,7 +4270,7 @@
           answer to "did that save?" should be readable a minute later rather than
           for four seconds after the fact.
         -->
-          <div class="status">
+          <div class="status" id="status">
             <!--
             THE ACTIONS ARE ON THE LEFT, which is A3's arrangement and A6's.
 

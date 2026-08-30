@@ -239,7 +239,19 @@
     `--lift-top` has one consumer so far — the problems drawer. The confirm
     sheet and the month picker are the other two the rule admits; when they take
     it, the rendered gate's allow-list already names all three by id.
-  */
+   *
+ * ## Two elements, and they are named
+ *
+ * "Nothing else" was false in this file the moment `--lift-small` had consumers,
+ * and the file said as much four lines up. The artboards draw a small lift in
+ * exactly two places: the knob of a switch, in six screens, and the slider's
+ * thumb, where it pairs with a 1.5px ink ring. Both are objects sitting ON a
+ * track, which is the one thing in this vocabulary a shadow is allowed to say.
+ *
+ * It had drifted onto the current view pill, which `HerHead` draws flat, and off
+ * the knob, which every board lifts. Named here so the next reader checks the
+ * two rather than re-deriving the rule.
+*/
   --lift-small: 0 1px 2px rgb(0 0 0 / 14%);
   --lift-top: light-dark(0 24px 60px rgb(0 0 0 / 28%), 0 24px 60px rgb(0 0 0 / 55%));
 
@@ -270,10 +282,23 @@
   /*
     44, measured. It was 30, taken from a single `height:30px` in the delivery —
     which is the design document's own chrome, not a screen. Fourteen of the
-    twenty artboards foot at 44 and four at 56; 44 is the bar, and the four are
-    the screens whose foot carries a row of buttons.
+    twenty artboards foot at 44 and four at 56.
   */
   --status-h: 44px;
+  /*
+    And the four, which the sentence above used to name and then not build.
+
+    They are the feet that carry a ROW OF BUTTONS: A3, A5 and A6 put Select,
+    Export and Delete all in the bar, and a 32px pill in a 44px bar leaves six
+    pixels either side. `.status.acts` is put on by the renderer exactly when one
+    of those controls is on screen, so the height follows the content rather than
+    the page — the archive's foot is 44 until there is something in the archive
+    to act on.
+
+    Prose that names an exception nobody built is how the last audit's list of
+    contradicting comments got to nine.
+  */
+  --status-h-acts: 56px;
   /*
     The one thing in the window with a measure of its own.
 
@@ -291,17 +316,6 @@
   --ring-tilt: -12deg;
   --ring-thinking: rgb(250 250 250 / 62%);
   --ring-asleep: rgb(250 250 250 / 42%);
-
-  /* ---- her bubble, over an unknown desktop -------------------------------
-   *
-   * Not the window's surfaces: the bubble sits on somebody's wallpaper, so it
-   * carries its own opaque paper and its own edge. Dark is `#0f0f11` — LIGHTER
-   * than the window's `#08080a`, deliberately, because it floats on a desktop
-   * and needs a little weight of its own.
-   *
-   *   ink on paper      19.79:1 light   18.34:1 dark
-   *   ahead on paper     4.57:1 light    5.66:1 dark
-   */
 
   /* ---- her bubble, over an unknown desktop -------------------------------
    *
@@ -433,11 +447,26 @@
     them side by side end up different widths for no reason anybody chose, and
     a text field 700px wide is a line nobody can track back to its start.
 
-    The COLUMN may still be wider than this — the sizing document is explicit
-    that surplus width goes to the apparatus column and to whitespace rather
-    than into the line.
+    THREE numbers, because the artboards cap three different things and one
+    number was doing the job of all of them.
+
+    `--measure-read` is prose: 600, which is what 全部页面 puts on the transcript's
+    inner column. `--measure-field` is a single-line control at 420, the width
+    the machine's page already draws. `--measure-slider` is 300, because a
+    slider's width IS its resolution.
+
+    What is NOT capped is her sheet. It carried 640 and the artboards do not:
+    A1's column is `flex:1` and each control takes its own width, and A7 puts
+    `Allowed` and its switch at the PANE's right edge, 760 out — at 640 that row
+    pulled in 120px and the page grew a second right margin. The column is the
+    cap for a column; the cap belongs on the things inside it.
+
+    The COLUMN may still be wider than any of these — the sizing document is
+    explicit that surplus width goes to the apparatus column and to whitespace
+    rather than into the line.
   */
-  --measure: 640px;
+  --measure-read: 600px;
+  --measure-field: 420px;
   --measure-slider: 300px;
   --s-px: 1px;
   --s0: 2px;
@@ -663,6 +692,13 @@ input[type='checkbox']::before {
      — and `--duration` is zeroed under reduced motion by the block at the foot
      of this file. */
   transition: transform var(--duration-fast);
+  /*
+    The lift the artboards give every knob: `0 1px 2px rgb(0 0 0 / 14%)`, in six
+    places. Without it a white knob on the `#e6e6e8` off-track has one step of
+    grey between it and the thing it sits in, and that step is what a shadow is
+    for — this is one of the two elements `--lift-small` is actually drawn on.
+  */
+  box-shadow: var(--lift-small);
 }
 
 input[type='checkbox']:checked {
@@ -745,6 +781,23 @@ input[type='checkbox']:disabled {
 }
 
 /*
+ * WHAT IT COSTS IN ROOM, written down so the first keyboard pass over the day
+ * strip is not a surprise.
+ *
+ * The sandwich paints 4px OUTSIDE the border box: 1px edge, 2px of paper, 1px
+ * ring. Every container that holds a focusable control has to have that much
+ * slack or the ring lands on a neighbour. `.groups` has 12px of padding and
+ * `.reading` has 32, so both are clear. The day strip is not: 25px cells at a
+ * 1px gap means the paper gap of a focused day covers part of the two days
+ * either side of it.
+ *
+ * That is survivable — the ring is still unambiguous, it is the neighbours that
+ * are momentarily obscured, and only one day is focused at a time — and it is a
+ * known consequence rather than an oversight. The alternative is a strip that
+ * spends 8px of every cell on room for a ring that is shown on one of them.
+ */
+
+/*
  * A POPOVER THAT IS NOT OPEN IS NOT ON SCREEN, whatever an author says.
  *
  * The user agent hides one with `display: none`, and an author `display` beats
@@ -793,11 +846,16 @@ input[type='checkbox']:disabled {
 /*
  * Honoured, not ignored -- the same rule the handoff states for duration.
  *
- * AND THIS BLOCK IS NOT WHERE IT IS HONOURED, which the previous version of
- * this comment let a reader believe. There are zero `transition` and zero
- * `@keyframes` declarations in either window, so the two tokens it zeroes are
- * read by nothing and this rule protects nothing. It is a placeholder, kept
- * because the vocabulary is where a future transition should reach.
+ * IT PROTECTS EXACTLY ONE THING, and it did not always. This said there were
+ * "zero `transition` and zero `@keyframes` declarations in either window", which
+ * stopped being true 130 lines above it: the switch's knob moves on
+ * `--duration-fast`, and `suspended-for-redesign.md` records that transition as
+ * the reason that token came back onto `design-values.test.ts`'s `KNOWN` — "the
+ * window's first CSS motion, so the reduced-motion block at the foot of
+ * `tokens.css` finally protects something". The foot of the file went on saying
+ * it protected nothing.
+ *
+ * One is still nearly none, and the vocabulary is here for the second.
  *
  * The motion in this app is HERS, and it is a canvas: the breath, the drift,
  * the blink schedule and the ambient loops. `rig/mochi.ts` gates all of it on

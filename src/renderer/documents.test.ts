@@ -57,6 +57,7 @@ const DOCUMENTS: readonly {
     ids: [
       // The body's column track, which is laid out differently per view.
       'spread',
+      'status',
       // What has gone wrong, and the part of the drawer it is written into.
       'troubles-drawer',
       'troubles-body',

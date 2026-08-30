@@ -815,11 +815,30 @@ async function audit(page) {
     carry no class — which is luck rather than design, and is why this comment
     exists rather than three tidier names.
 
-    `span.light` is the one that is not a top-layer surface. A ring around a lit
-    status light is what makes an 8px dot read as a light rather than a bullet;
-    it lifts nothing.
+    `span.light` is GONE from this list, and that is the point of re-deriving an
+    exemption rather than carrying it. It was inherited from v1's "the only
+    permitted shadow", and by the time anybody looked it was exempting a
+    different shadow on a different element for a different reason — a 3px glow
+    around the readiness light, argued for in a stylesheet comment against a
+    board that draws all seven states flat at 8px. The board won and the glow
+    went, so the exemption has nothing left to exempt.
   */
-  const ALLOWED = ['span.light', 'dialog#sure', 'div#troubles-drawer', 'div#month-pick.month-pick']
+  const ALLOWED = ['dialog#sure', 'div#troubles-drawer', 'div#month-pick.month-pick']
+
+  /*
+    Radii that are ARTWORK rather than a rung on the ladder.
+
+    `tokens.css` states the distinction — "every one of those is INSIDE a mark:
+    artwork, not a rung" — and the sweep has no way to see it, so it reported the
+    same three deviations on every run of every screen. A report whose top is
+    always identical is a report nobody reads, which is how the last one got to
+    forty entries.
+
+    Both are drawn shapes standing in for a picture: the rail's machine tile at 9
+    and the machine masthead's mark at 18, each with a smaller square inside it.
+    Named, so adding a fourth is a decision somebody makes here.
+  */
+  const RADIUS_IS_ARTWORK = ['span.rail-tile', 'span.machine-mark']
 
   console.log('\n  ─── the sweep ───────────────────────────────────────────────')
   for (const theme of ['light', 'dark']) {
@@ -873,7 +892,13 @@ async function audit(page) {
       const lines = []
       for (const f of oddFace) lines.push(`face  ${f}  ${found.faces[f].join(' ')}`)
       for (const v of oddSize) lines.push(`size  ${v}  ${found.sizes[v].join(' ')}`)
-      for (const v of oddRadius) lines.push(`radius  ${v}  ${found.radii[v].join(' ')}`)
+      for (const v of oddRadius) {
+        // Every element carrying it has to be artwork, not merely one of them —
+        // the same all-or-nothing the shadow list below uses, so a new element
+        // borrowing an artwork radius still shows up.
+        if (found.radii[v].every((one) => RADIUS_IS_ARTWORK.includes(one))) continue
+        lines.push(`radius  ${v}  ${found.radii[v].join(' ')}`)
+      }
       for (const v of shadows) {
         const who = found.shadows[v]
         if (who.every((one) => ALLOWED.includes(one))) continue
@@ -2596,6 +2621,60 @@ async function main() {
     })
     await settle(page)
     await layoutChecks(page, 'at the 1120px floor')
+
+    /*
+      AND WIDE, which is where a missing cap hides.
+
+      The floor catches things that stop fitting. A cap that does nothing is the
+      opposite failure and only shows the other way: the transcript's track is
+      616 at the default, so `max-width: 600` looked redundant there and the
+      column grew with the window — her turns ran to about 936px at 1600, on the
+      one surface in this window where a long line costs the most.
+    */
+    await page.send('Emulation.setDeviceMetricsOverride', {
+      width: 1600,
+      height: 900,
+      deviceScaleFactor: 0,
+      mobile: false,
+    })
+    await settle(page)
+    /*
+      `at` is the suffix `layoutChecks` sets for the width it ran at, and it is
+      module state — so a check running after that pass inherited "[at the 1120px
+      floor]" while measuring at 1600. Cleared here rather than in `ok`, because
+      the suffix is right for the checks that set it.
+    */
+    at = ''
+    await step('measure-holds', async () => {
+      const wide = await page.run(`(() => {
+        const at = document.getElementById('tab-for-archive');
+        if (at) at.click();
+        const row = document.querySelector('#list .entry');
+        if (row) row.click();
+        return null;
+      })()`)
+      void wide
+      await new Promise((r) => setTimeout(r, 400))
+      const held = await page.run(`(() => {
+        const caps = [
+          ['the transcript', '.transcript', 600],
+          ['a field on her page', '.sheet input[type=text]', 420],
+          ['her size slider', '.size-slider', 300],
+        ];
+        const over = [];
+        for (const [what, sel, cap] of caps) {
+          for (const el of document.querySelectorAll(sel)) {
+            if (el.getClientRects().length === 0) continue;
+            const w = Math.round(el.getBoundingClientRect().width);
+            if (w > cap + 1) over.push(what + ' is ' + w + ' against a cap of ' + cap);
+          }
+        }
+        return { over, width: window.innerWidth };
+      })()`)
+      if (held.over.length > 0)
+        bad('measure-holds', `at ${String(held.width)}px: ` + held.over.join('; '))
+      else ok('measure-holds', `nothing outruns its measure at ${String(held.width)}px`)
+    })
     await page.send('Emulation.clearDeviceMetricsOverride')
 
     page.close()
