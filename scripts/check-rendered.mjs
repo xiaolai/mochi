@@ -665,6 +665,37 @@ async function checks(page, where = '') {
     )
   else ok('closed', 'all ' + closed.shut + ' closed popovers are off screen')
 
+  /* --- the picker hangs off the button, not off the window --------------- */
+  const under = await page.run(`(() => {
+    const open = document.querySelector('.daystrip .month');
+    open.click();
+    const pick = document.getElementById('month-pick');
+    const a = open.getBoundingClientRect();
+    const b = pick.getBoundingClientRect();
+    pick.hidePopover();
+    return {
+      overlaps: b.left < a.right && b.right > a.left,
+      below: b.top >= a.bottom - 1,
+      near: Math.round(b.top - a.bottom),
+      at: Math.round(b.left) + ',' + Math.round(b.top),
+      button: Math.round(a.left) + ',' + Math.round(a.bottom),
+    };
+  })()`)
+  await wait(300)
+  if (!under.overlaps)
+    bad(
+      'anchored',
+      'the picker is not under its button: picker at ' +
+        under.at +
+        ', button at ' +
+        under.button +
+        ' — a popover is in the top layer, so `position: absolute` resolves against the window',
+    )
+  else if (!under.below) bad('anchored', 'the picker covers the button it hangs off')
+  else if (under.near > 24)
+    bad('anchored', 'the picker floats ' + under.near + 'px below its button')
+  else ok('anchored', 'the picker opens ' + under.near + 'px under the month it belongs to')
+
   /* --- the month and the days are one row -------------------------------- */
   const oneRow = await page.run(`(() => {
     const month = document.querySelector('.daystrip .month');
@@ -1312,6 +1343,38 @@ async function main() {
       })()`)
       console.log('\n  ' + seen.join('\n  ') + '\n')
     }
+    if (process.argv.includes('--edges')) {
+      await page.run(`document.getElementById('tab-for-archive').click()`)
+      await wait(700)
+      await page.run(`document.querySelector('.daystrip .month').click()`)
+      await wait(500)
+      const seen = await page.run(`(() => {
+        const out = [];
+        for (const el of document.querySelectorAll('body *')) {
+          if (el.getClientRects().length === 0) continue;
+          const s = getComputedStyle(el);
+          const styles = [s.borderTopStyle, s.borderRightStyle, s.borderBottomStyle, s.borderLeftStyle];
+          const colours = [s.borderTopColor, s.borderRightColor, s.borderBottomColor, s.borderLeftColor];
+          const dashed = styles.some((v) => v === 'dashed' || v === 'dotted');
+          const reddish = colours.some((c) => {
+            const n = (c.match(/[0-9.]+/g) || []).map(Number);
+            return n.length >= 3 && n[0] > 140 && n[0] > n[1] + 40 && n[0] > n[2] + 40;
+          });
+          const outline = s.outlineStyle !== 'none' && s.outlineWidth !== '0px';
+          if (!dashed && !reddish && !outline) continue;
+          const b = el.getBoundingClientRect();
+          out.push(
+            el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + '.' + (el.className || '?') +
+            '  border=' + s.border + '  outline=' + s.outline +
+            '  box=' + Math.round(b.x) + ',' + Math.round(b.y) + ' ' + Math.round(b.width) + 'x' + Math.round(b.height)
+          );
+        }
+        return out.slice(0, 8);
+      })()`)
+      console.log(
+        '\n  ' + (seen.length ? seen.join('\n  ') : 'nothing dashed, red or outlined') + '\n',
+      )
+    }
     if (process.argv.includes('--pick')) {
       await page.run(`document.getElementById('tab-for-archive').click()`)
       await wait(700)
@@ -1342,8 +1405,27 @@ async function main() {
     if (process.argv.includes('--open-month')) {
       await page.run(`(() => { document.getElementById('tab-for-archive').click(); })()`)
       await wait(700)
+      await page.send('Emulation.setDeviceMetricsOverride', {
+        width: 1820,
+        height: 1180,
+        deviceScaleFactor: 0,
+        mobile: false,
+      })
+      await wait(600)
       await page.run(`document.querySelector('.daystrip .month').click()`)
       await wait(500)
+      const { writeFileSync, mkdirSync } = await import('node:fs')
+      mkdirSync(join(ROOT, 'dev-docs', 'shots'), { recursive: true })
+      const shot = await page.send('Page.captureScreenshot', { format: 'png' })
+      if (shot.result?.data) {
+        writeFileSync(
+          join(ROOT, 'dev-docs', 'shots', 'picker.png'),
+          Buffer.from(shot.result.data, 'base64'),
+        )
+        console.log('  shot  dev-docs/shots/picker.png')
+      }
+      page.close()
+      return
     }
     if (process.argv.includes('--shot')) await photograph(page)
     /*

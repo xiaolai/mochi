@@ -614,7 +614,6 @@
         flex: none;
       }
       .month-wrap {
-        position: relative;
         display: inline-flex;
       }
       /*
@@ -641,6 +640,19 @@
         border-bottom-color: var(--ink-3);
       }
       /*
+        The button is the ANCHOR the picker hangs off.
+
+        A popover is in the top layer, which means its `position: absolute` is
+        resolved against the viewport and NOT against whatever it sits inside —
+        so `.month-wrap { position: relative }` did nothing and `left: 0` put
+        the picker at the left edge of the window, in the rail, a third of the
+        way down. Naming an anchor is the only way to tie a top-layer element to
+        an ordinary one.
+      */
+      .daystrip .month {
+        anchor-name: --month-button;
+      }
+      /*
         The picker, in the top layer.
 
         `popover` rather than a positioned menu: Escape and a click outside
@@ -650,7 +662,8 @@
       */
       .month-pick {
         position: absolute;
-        inset: auto auto auto 0;
+        position-anchor: --month-button;
+        inset: auto;
         margin: 0;
         padding: var(--s3);
         border: var(--s-px) solid var(--rule-2);
@@ -678,8 +691,15 @@
       */
       .month-pick:popover-open {
         display: flex;
-        /* Under the button it belongs to, not over the days it is choosing. */
+        /*
+          Under the button it belongs to, left edges aligned, and above it
+          instead when there is no room below — `flip-block` is what makes that
+          the browser's problem rather than a resize listener's.
+        */
         top: anchor(bottom);
+        left: anchor(left);
+        margin-top: var(--s2);
+        position-try-fallbacks: flip-block;
       }
       .month-year {
         width: 100%;
