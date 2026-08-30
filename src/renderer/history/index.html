@@ -995,9 +995,10 @@
         the machine's own section of the sheet: a 26px gap, then no gap, then a
         different padding. Two of the three had no effect and nothing said which.
       */
+      /* The same gutter as every other pane, and the sections' own rhythm. */
       .machine-pane {
-        gap: 0;
-        padding: var(--s5) var(--s6) var(--s6);
+        gap: 26px;
+        padding: var(--s5) var(--s6);
       }
       /*
         One catalogued prompt: a title, what it is for, the text, and the two
@@ -1124,30 +1125,44 @@
         selector somebody has to remember, and `rule-6` in the rendered gate is
         what says so.
       */
+      /*
+        THE MACHINE'S MASTHEAD, which is HerHead with a mark instead of a face.
+
+        Same shape, same place, same job — the band that says whose page this
+        is. It carried a rule under it that her page does not have, so the two
+        pages disagreed about what a masthead is; the rule under the BODY does
+        that separating for both.
+      */
       .machine-subject {
         display: flex;
-        align-items: center;
-        gap: var(--s5);
-        padding-bottom: var(--s5);
-        border-bottom: var(--s-px) solid var(--rule-2);
+        align-items: flex-start;
+        gap: 20px;
       }
+      /*
+        Where her face goes on her page, at the same 60px — a sunken tile with a
+        small outlined square in it. It is not a picture of anything: the machine
+        has no face, and drawing one would be the claim this whole page exists to
+        refuse.
+      */
       .machine-mark {
-        width: 52px;
-        height: 52px;
+        width: 60px;
+        height: 60px;
         flex: none;
         display: flex;
         align-items: center;
         justify-content: center;
-        border: var(--s-px) solid var(--rule-2);
-        border-radius: var(--r-part);
-        color: var(--ink-3);
-        font-size: var(--t-h2);
+        border: 0;
+        border-radius: 18px;
+        background: var(--paper-3);
+        color: var(--ink-2);
+        font-size: var(--t-h3);
       }
       .machine-titles h1 {
         margin: 0;
         font-family: var(--sans);
         font-size: var(--t-h1);
-        font-weight: var(--w-regular);
+        font-weight: var(--w-medium);
+        letter-spacing: var(--track-tight);
         color: var(--ink);
       }
       .machine-says {
@@ -1610,14 +1625,22 @@
         application, so the card is outlined rather than alarmed, and only when
         the state is actually KNOWN to be unusable. See `rules/readiness.ts`.
       */
+      /*
+        A SUNKEN PANEL, not a bordered card.
+
+        B1 draws the readiness card as `--paper-3` at the panel radius with no
+        edge at all — a recessed area on the page rather than an object sitting
+        on it. A border plus a fill is two ways of saying the same boundary, and
+        this window's whole vocabulary is that the fill does it.
+      */
       .codex {
         display: flex;
         flex-direction: column;
         gap: var(--s2);
-        padding: var(--s4) var(--s5);
-        border: var(--s-px) solid var(--rule);
-        border-radius: var(--r-card);
-        background: var(--paper-2);
+        padding: 18px 20px;
+        border: 0;
+        border-radius: var(--r-panel);
+        background: var(--paper-3);
       }
       .codex.bad {
         border-color: var(--rule-2);
