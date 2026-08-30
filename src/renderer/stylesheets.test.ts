@@ -669,3 +669,97 @@ describe('a class the frame writes is not also one the renderer writes', () => {
     expect(both).toEqual([])
   })
 })
+
+/**
+ * A class built in more than one file is styled without an ancestor.
+ *
+ * The fourth rule in this file, and the one with the most instances. A class
+ * whose only rule is `#panel-wake .row` or `.grant .switch` is styled in the one
+ * place its author was looking at and unstyled everywhere else — and unstyled is
+ * not blank, it is the browser's defaults, which is a `<div>` that is a block
+ * when the file that made it assumed a flex row.
+ *
+ *   `.note`    forty-four uses, one rule: `.section .note`. Everywhere outside
+ *              a settings row it was unmeasured body text in the operating
+ *              face.
+ *   `.row`     four files, one rule: `#panel-wake .row`, which set
+ *              `align-items: center` on something still `display: block`. So
+ *              the rule did nothing, the `.grow` spacer inside it did nothing,
+ *              and Save and Reset touched edge to edge under all twenty-seven
+ *              prompt editors.
+ *   `.switch`  two panes, one rule: `.grant .switch`. On the machine's page the
+ *              box sat above its label instead of beside it.
+ *   `.meta`    three files, two rules, neither reaching the third — "edited"
+ *              beside a prompt drew as body text next to a caps heading.
+ *
+ * Two files is the threshold because that is the point at which the ancestor
+ * assumption is already known to be false: whoever wrote the second one was in
+ * a different part of the document from whoever wrote the rule.
+ *
+ * ## What counts as styled
+ *
+ * A selector with no combinator — `.row`, `button.btn.primary`, `.note.bad`,
+ * `.day:hover`. Those apply wherever the element is. Anything with a descendant,
+ * child or sibling combinator is scoped to a place, which is the thing being
+ * checked for.
+ */
+describe('a class built in more than one file is styled without an ancestor', () => {
+  /** Every class each module builds, by the files that build it. */
+  function builtBy(): ReadonlyMap<string, readonly string[]> {
+    const where = new Map<string, string[]>()
+    for (const path of sourcesUnder(fileURLToPath(new URL('./', import.meta.url)))) {
+      const source = readFileSync(path, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+      const found = [
+        ...source.matchAll(/element\(\s*'[\w-]+'\s*,\s*'([^']+)'/g),
+        ...source.matchAll(/\.className\s*=\s*'([^']+)'/g),
+      ]
+      for (const one of found) {
+        for (const name of (one[1] ?? '').split(/\s+/)) {
+          if (name === '') continue
+          const files = where.get(name) ?? []
+          if (!files.includes(path)) files.push(path)
+          where.set(name, files)
+        }
+      }
+    }
+    return where
+  }
+
+  /** Whether any rule names this class in a selector that is not scoped. */
+  function styledAnywhere(css: string, name: string): boolean {
+    const wanted = new RegExp(`\\.${name}(?![\\w-])`)
+    return selectorsOf(css).some((one) => !/[\s>+~]/.test(one) && wanted.test(one))
+  }
+
+  /**
+   * Classes that legitimately have only scoped rules, because they legitimately
+   * mean something different in each place.
+   *
+   * `.dot` is the whole list: it is a 4px mark on a day cell, a 6px one beside a
+   * voice, a state light in the drawer and a bullet in a note, and every one of
+   * those has its own rule. A base rule for it would be a size that is wrong
+   * four times. That is the test a candidate has to pass — not "it works today"
+   * but "every context styles it, on purpose".
+   */
+  const PER_CONTEXT = new Set(['dot'])
+
+  it('has something to check, and knows the ones that broke', () => {
+    const built = builtBy()
+    expect((built.get('row') ?? []).length).toBeGreaterThan(1)
+    expect((built.get('note') ?? []).length).toBeGreaterThan(1)
+    // The canary for the extractor itself: `.dot` is on the list, so it must
+    // still be found in more than one file or the list is silently vacuous.
+    expect((built.get('dot') ?? []).length).toBeGreaterThan(1)
+  })
+
+  it('history', () => {
+    const css = stylesheetOf('history')
+    const unstyled = [...builtBy()]
+      .filter(([name, files]) => files.length > 1 && !PER_CONTEXT.has(name))
+      .filter(([name]) => !styledAnywhere(css, name))
+      .map(([name]) => name)
+    expect(unstyled).toEqual([])
+  })
+})

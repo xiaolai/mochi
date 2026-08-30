@@ -76,6 +76,50 @@
         text-wrap: pretty;
       }
       /*
+        A line of things side by side, with room between them.
+
+        `.row` is built in four files and had NO rule of its own — the only one
+        naming it was `#panel-wake .row`, and that set `align-items: center` on
+        an element whose `display` was still `block`, so it did nothing, and so
+        did the `.grow` spacer inside it. Save and Reset touched, edge to edge,
+        under every one of the twenty-seven prompt editors.
+
+        10px is the delivery's gap between adjacent buttons, which is what these
+        rows mostly hold.
+      */
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      /*
+        A control and the word for it.
+
+        Same defect: built in two panes, styled only as `.grant .switch`, so the
+        one on the machine's On screen group was a block and its box sat above
+        its label instead of beside it. What is particular to the grant is that
+        it is RIGHT-aligned in a right-hand column, and that is all that rule
+        says now.
+      */
+      .switch {
+        display: flex;
+        align-items: center;
+        gap: var(--s2);
+      }
+      /*
+        A machine-shaped annotation beside something: "edited", a count, a file.
+
+        Built in three files, styled in two places, unstyled in the third — so
+        the "edited" marker beside a catalogued prompt drew as 13px body text
+        next to a 9.5px caps heading. Mono at 12px, which is the ceiling the
+        scale sets for it: "never larger than the thing it annotates".
+      */
+      .meta {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-3);
+      }
+      /*
         A caution, in the one colour this window uses for one.
 
         It drew in TWO: `--red` outside a section and `--warn-ink` inside one,
@@ -1305,11 +1349,10 @@
         text-align: right;
         flex: none;
       }
+      /* The grant's sits in a right-hand column, and that is the only thing
+         about it that is not every switch's. */
       .grant .switch {
-        display: flex;
-        align-items: center;
         justify-content: flex-end;
-        gap: var(--s2);
       }
       .grant .used {
         font-family: var(--mono);
@@ -1776,22 +1819,8 @@
         flex-direction: column;
         gap: var(--s2);
       }
-      /*
-        CENTRE, not baseline. The count beside the heading is mono and the
-        heading is narrow-caps; aligning their baselines pushed the h3 down by
-        the difference between two fonts' metrics, which is how one of these two
-        columns ended up with its title 13px lower than the other.
-      */
-      #panel-wake .row {
-        align-items: center;
-      }
       #panel-wake .note {
         margin: 0 0 var(--s2);
-        color: var(--ink-3);
-      }
-      #panel-wake .meta {
-        font-family: var(--mono);
-        font-size: var(--t-data);
         color: var(--ink-3);
       }
       /*
@@ -2235,7 +2264,7 @@
         gap: var(--s4);
         flex-wrap: wrap;
         font-family: var(--mono);
-        font-size: var(--t-cap);
+        font-size: var(--t-data);
         color: var(--ink-3);
       }
       .who-facts .meta {
