@@ -30,6 +30,9 @@ export const SAYS = {
      before `change` puts it back, which is the only time anybody sees it. */
   herName: { she: 'Her name', he: 'His name', it: 'Its name' },
   herWords: { she: 'Her words', he: 'His words', it: 'Its words' },
+  /* The hint beside Appearance when she carries her own hue rather than one of
+     the eight. */
+  ownAppearance: { she: 'her own', he: 'his own', it: 'its own' },
   sentAtWake: {
     she: 'sent at her next wake',
     he: 'sent at his next wake',

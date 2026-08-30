@@ -35,7 +35,7 @@ export function colourSection(
 ): HTMLElement {
   if (view.faceSource !== null) {
     const said = element('p', 'note', forPronoun(SAYS.colourAuthored, view.pronoun))
-    return section('Colour', view.faceSource, said)
+    return section('Appearance', view.faceSource, said)
   }
   /*
     Named a file and did not get it, so there is nobody to paint.
@@ -47,7 +47,7 @@ export function colourSection(
   */
   if (worn.face === undefined) {
     const said = element('p', 'note bad', forPronoun(SAYS.colourMissing, view.pronoun))
-    return section('Colour', worn.avatarId ?? 'missing', said)
+    return section('Appearance', worn.avatarId ?? 'missing', said)
   }
 
   const grid = element('div', 'themes')
@@ -74,5 +74,12 @@ export function colourSection(
   if (worn.theme === null) {
     body.push(element('p', 'note', forPronoun(SAYS.ownHue, view.pronoun)))
   }
-  return section('Colour', forPronoun(SAYS.colour, view.pronoun), ...body)
+  /*
+    The hint is which appearance she is WEARING, not where her file is.
+
+    A1 puts the theme's own name there — "mint" — because the hint beside a
+    heading answers "which one is in force", and a path answers a question the
+    apparatus column is already answering.
+  */
+  return section('Appearance', worn.theme ?? forPronoun(SAYS.ownAppearance, view.pronoun), ...body)
 }

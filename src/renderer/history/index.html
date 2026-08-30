@@ -1706,7 +1706,12 @@
         flex: 1 1 auto;
         min-width: 0;
         appearance: none;
-        height: var(--s2);
+        /*
+          FOUR pixels, not eight. The artboard draws the track as a rule she sits
+          on rather than as a bar — the thumb is the control, and a track half its
+          height is what makes that read.
+        */
+        height: var(--s1);
         border-radius: var(--r-pill);
         background: linear-gradient(
           to right,
@@ -1715,18 +1720,22 @@
         );
         cursor: pointer;
       }
+      /*
+        WHITE with an edge, sitting on the track rather than filling it.
+
+        It was ink with a paper ring, which on an ink-filled track is a bulge in
+        the bar rather than a thing on it. Paper with a hairline is what the
+        artboard draws, and it stays findable at either end where the fill behind
+        it changes.
+      */
       .size-slider::-webkit-slider-thumb {
         appearance: none;
         width: var(--s4);
         height: var(--s4);
         border-radius: var(--r-pill);
-        background: var(--ink);
-        /*
-          A ring in the page's own colour, so the thumb reads as sitting ON the
-          bar rather than as a bulge in it — and so it is still findable where
-          it stops, at either end, when the fill behind it is the same tone.
-        */
-        border: var(--s0) solid var(--paper);
+        background: var(--paper);
+        border: var(--s-px) solid var(--rule-2);
+        box-shadow: var(--lift-small);
       }
       .size-slider:hover::-webkit-slider-thumb {
         background: var(--ink-2);
@@ -2152,20 +2161,41 @@
         gap: var(--s2);
       }
       /* The eight colour swatches, each one HER at that theme. */
+      /*
+        A TRAY, and it is as wide as its contents.
+
+        A1 draws the eight appearances inside one sunken 22px panel — the panel
+        is what says they are one choice. Eight loose squares on the page read as
+        eight things, and `width: fit-content` is what stops the tray becoming a
+        band across a 760px column with six squares of air in it.
+      */
       .themes {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--s2);
+        gap: 6px;
+        width: fit-content;
+        padding: 10px 14px;
+        border-radius: var(--r-panel);
+        background: var(--paper-3);
       }
+      /*
+        52 x 44, which is her face's own proportion rather than a square.
+
+        A square put her in a box and left daylight above and below; the artboard
+        draws the tile to the shape of the drawing it holds. Unchosen ones sit at
+        0.9 — a step of presence rather than of colour, so which one is worn
+        survives somebody who cannot see the difference between two greens.
+      */
       .theme {
         width: 52px;
-        height: 52px;
+        height: 44px;
         display: grid;
         place-items: center;
-        border: var(--s-px) solid transparent;
-        border-radius: var(--r-part);
+        border: 0;
+        border-radius: var(--r-card);
         background: transparent;
         padding: 0;
+        opacity: 0.9;
         cursor: pointer;
       }
       .theme:hover {
@@ -2182,8 +2212,8 @@
         close to no colour at all.
       */
       .theme[aria-current='true'] {
-        background: var(--chosen-2);
-        border-color: var(--ink);
+        background: var(--paper);
+        opacity: 1;
       }
       /*
         THE SAME SHAPE AS THE PRONOUN, because it is the same question.
@@ -2197,18 +2227,30 @@
         `padding: 4px 10px`, and the chosen one taking her wash at `radius 3px`.
         So that is what a chooser looks like here, whatever it is choosing.
       */
+      /*
+        OUTLINED pills, and the chosen one fills.
+
+        Ten voices are ten options, not ten labels: each carries its own edge so
+        the row reads as a set of things you can press. It was a bare row at
+        `--t-data` — the mono size — for a list of words that are names.
+      */
       .pills button {
         display: inline-flex;
         align-items: center;
         gap: var(--s2);
-        padding: var(--s1) 10px;
-        border: 0;
-        border-radius: var(--r-part);
+        padding: 6px 15px;
+        border: var(--s-px) solid var(--rule);
+        border-radius: var(--r-pill);
         background: transparent;
-        color: var(--ink-3);
+        color: var(--ink-2);
         font-family: var(--sans);
-        font-size: var(--t-data);
+        font-size: var(--t-ui);
         cursor: pointer;
+      }
+
+      .pills button:hover[aria-current='false'] {
+        border-color: var(--rule-2);
+        color: var(--ink);
       }
       /*
         The mark on a recommended voice, and on the sentence that explains it.
@@ -2236,10 +2278,10 @@
         color: var(--ink);
       }
       .pills button[aria-current='true'] {
-        background: var(--chosen-2);
-        /* The word takes `--ink`; see the switchers above for why. */
-        color: var(--ink);
-        font-weight: var(--w-semibold);
+        border-color: var(--ink);
+        background: var(--ink);
+        color: var(--paper);
+        font-weight: var(--w-medium);
       }
       /*
         The face is a control now: click it to see that expression on her.
