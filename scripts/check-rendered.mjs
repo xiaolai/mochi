@@ -1177,20 +1177,58 @@ async function checks(page, where = '') {
   else ok('editable', 'all ' + editable.seen + ' editable things say so at rest')
 
   /*
-    C5 stood here: "seeing a mood and permitting it are two separate actions and
-    must never be confusable".
+    C5 · SEEING A FACE AND PERMITTING IT ARE TWO ACTIONS.
 
-    There are no mood tiles. Nothing in this application ever consulted a
-    character's expression set to decide what she wears, so the switch changed
-    one sentence in her instructions and nothing else — the whole section is
-    gone and every character has all eight. A rule with no subject cannot be
-    checked, and pretending otherwise is how a suite comes to be full of green
-    that means nothing.
+    This check was removed when the mood tiles were, and the note left in its
+    place said: "If a control ever offers looking-at and permitting side by side
+    again, this is the check it needs." A2c is that control.
 
-    The RULE is not wrong and it is recorded in `rebuild-contract.md`. If a
-    control ever offers looking-at and permitting side by side again, this is
-    the check it needs.
+    Two things are asserted, and they fail in opposite directions:
+
+    - Every tile draws its face WHATEVER the switch says. A gallery that hid
+      withheld expressions would collapse the two questions into one control, and
+      "you can always look" is the rule.
+    - The face is not INSIDE the switch's label. Wrapping a tile in a `<label>`
+      whose `<input>` lives in it is invalid HTML, and it makes looking at a face
+      a click that permits it.
   */
+  const tiles = await page.run(`(() => {
+    const all = [...document.querySelectorAll('.face-tile')];
+    return {
+      count: all.length,
+      drawn: all.filter((t) => t.querySelector('canvas') !== null).length,
+      switched: all.filter((t) => t.querySelector('input[type=checkbox]') !== null).length,
+      withheld: all.filter((t) => t.querySelector('input[type=checkbox]')?.checked === false).length,
+      wrapped: all.filter((t) => t.querySelector('label canvas') !== null).length,
+    };
+  })()`)
+  if (tiles.count === 0) bad('C5', 'no expression tiles on her page, so nothing was measured')
+  else if (tiles.drawn !== tiles.count)
+    bad('C5', `${String(tiles.count - tiles.drawn)} of ${String(tiles.count)} tiles draw no face`)
+  else if (tiles.switched !== tiles.count)
+    bad(
+      'C5',
+      `${String(tiles.count - tiles.switched)} of ${String(tiles.count)} tiles have no switch`,
+    )
+  else if (tiles.wrapped > 0)
+    bad('C5', `${String(tiles.wrapped)} tiles put the face inside the switch's own label`)
+  else
+    /*
+      The withheld half is only PROVED when something is withheld.
+
+      The seeded profile permits all eight, so `drawn === count` holds whether or
+      not a withheld tile would be hidden — the interesting case is not on
+      screen. Said out loud rather than reported as a pass, which is the same
+      honesty the day-counting checks on the machine's page already practise.
+    */
+    ok(
+      'C5',
+      tiles.withheld > 0
+        ? `all ${String(tiles.count)} faces drawn and separately switched, ` +
+            `including ${String(tiles.withheld)} withheld`
+        : `all ${String(tiles.count)} faces drawn and separately switched — none is ` +
+            'withheld in this profile, so "withheld faces are still drawn" is untested here',
+    )
 
   /* --- contrast: the floors the app enforces at runtime ------------------ */
   /*

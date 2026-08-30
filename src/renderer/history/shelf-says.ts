@@ -122,6 +122,36 @@ export const SAYS = {
   /* The destructive control on her notes. Named, because "Erase everything" on
      its own does not say everything of WHAT — and the sheet it opens says the
      rest. */
+  expressions: {
+    she: 'Her expressions',
+    he: 'His expressions',
+    it: 'Its expressions',
+  },
+  seeingAndPermitting: {
+    she:
+      'Each one is drawn here at the size she appears on your desktop. Seeing one and ' +
+      'permitting it are two separate things — the tile shows you the face, the switch under ' +
+      'it decides whether she may wear it.',
+    he:
+      'Each one is drawn here at the size he appears on your desktop. Seeing one and ' +
+      'permitting it are two separate things — the tile shows you the face, the switch under ' +
+      'it decides whether he may wear it.',
+    it:
+      'Each one is drawn here at the size it appears on your desktop. Seeing one and ' +
+      'permitting it are two separate things — the tile shows you the face, the switch under ' +
+      'it decides whether it may wear it.',
+  },
+  mayBeEmpty: {
+    she:
+      'Withholding one does not hide the tile — you can always look. The set may legally be ' +
+      'empty: switch all eight off and she is simply never told she has a face to change.',
+    he:
+      'Withholding one does not hide the tile — you can always look. The set may legally be ' +
+      'empty: switch all eight off and he is simply never told he has a face to change.',
+    it:
+      'Withholding one does not hide the tile — you can always look. The set may legally be ' +
+      'empty: switch all eight off and it is simply never told it has a face to change.',
+  },
   eraseKept: {
     she: 'Erase everything she has kept…',
     he: 'Erase everything he has kept…',

@@ -431,6 +431,59 @@
         into what reads as a paragraph, set in a monospace measure inside a
         proportional column.
       */
+      /*
+        HER EIGHT FACES, at the size she is actually drawn.
+
+        `auto-fill` rather than a fixed column count: her size is her own, so a
+        character drawn at 60% needs a tighter grid than one at 140%, and a fixed
+        four-across would leave one of them in a column of mostly air.
+      */
+      .faces {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: var(--s5);
+      }
+
+      .face-tile {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--s2);
+        padding: var(--s4);
+        border-radius: var(--r-card);
+        background: var(--paper-3);
+      }
+
+      .face-name {
+        font-family: var(--sans);
+        font-size: var(--t-ui);
+        font-weight: var(--w-medium);
+        color: var(--ink);
+      }
+
+      .face-when {
+        margin: 0;
+        font-size: var(--t-cap);
+        line-height: var(--leading);
+        color: var(--ink-3);
+      }
+
+      /*
+        The word beside the switch, and it is not decoration.
+
+        "开关一律配一个词" — every switch carries a word, because the meaning a
+        mark carries has to exist as text for somebody who does not see it. It
+        says which state the switch is IN rather than what pressing it would do,
+        so it reads the same as the switch itself.
+      */
+      .face-allow {
+        font-family: var(--sans);
+        font-size: var(--t-label);
+        letter-spacing: var(--track-2);
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+
       .kept {
         display: flex;
         flex-direction: column;
