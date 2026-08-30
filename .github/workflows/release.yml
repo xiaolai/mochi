@@ -1,0 +1,229 @@
+# Cut a release: build the macOS artifacts, prove Gatekeeper will open them,
+# publish them, and hand the version to the Homebrew tap.
+#
+# Triggered by pushing a tag `v*`, which is what `.claude/commands/bump.md`
+# produces. Nothing here decides a version — the tag is the decision, and the
+# first thing this does is refuse to run if the tag and `package.json` disagree.
+#
+# ## Why notarization is turned on HERE and not in `electron-builder.yml`
+#
+# That file says `notarize: false`, and it argues for it: submitting uploads the
+# binary to Apple, which is outward-facing and "is the user's call to make, not a
+# side effect of running a build script". That argument is right and this
+# workflow does not overturn it — it satisfies it. Cutting a release IS the
+# deliberate act, so the flag is flipped on the command line, for this build
+# only, with `-c.mac.notarize=true`. A developer running `pnpm dist:mac` on
+# their own machine still submits nothing.
+#
+# The team id stays out of the repository, which `electron-builder.yml` also
+# argues for at length: `app-builder-lib` reads `APPLE_TEAM_ID`, `APPLE_ID` and
+# `APPLE_APP_SPECIFIC_PASSWORD` from the ENVIRONMENT and never from the config,
+# so `notarize: true` carries no identity with it.
+#
+# ## The silent skip this exists to close
+#
+# `MacTargetHelper.getNotarizeOptions` returns `undefined` when none of those
+# env vars are set, and `notarizeIfProvided` then logs "skipped macOS
+# notarization" at WARN and continues. A missing secret therefore produces a
+# green build and an unnotarized dmg — the exact shape of failure this project
+# refuses everywhere else. Two things close it: the secrets are checked by name
+# before anything is built, and `scripts/verify-signing.sh` runs against the
+# real artifacts afterwards and exits non-zero on a missing stapled ticket.
+#
+# ## Windows is deliberately not published here
+#
+# One macOS runner can cross-build the NSIS installer — measured 2026-08-31,
+# electron-builder 26 needs no Wine for it — so adding `--win` is one word. It is
+# not added because the result would be an UNSIGNED executable published as a
+# release asset, and shipping one is a distribution decision rather than a build
+# detail. Homebrew is macOS; this workflow is scoped to what the tap consumes.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Creating a release and uploading assets is a write.
+permissions:
+  contents: write
+
+# Never two releases of one tag at once, and never cancel one in flight: a
+# half-uploaded release is worse than a slow one, and the tap job downstream
+# polls for assets that a cancelled run would never finish writing.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    # Signing and two notarization round-trips to Apple dominate this. The
+    # ceiling is well above the expected run and well below GitHub's six-hour
+    # default, which on a macOS runner bills at ten times the Linux rate.
+    timeout-minutes: 60
+    env:
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # BEFORE anything expensive. A missing secret discovered after a
+      # twenty-minute build is a missing secret discovered five notarization
+      # uploads deep, behind a generic error, instead of here with its name.
+      #
+      # `${!var-}` and not `${!var}`: indirect expansion of an unset name is an
+      # error under `set -u`, and the point is to REPORT the missing name rather
+      # than abort with "unbound variable".
+      - name: Refuse to start without the credentials this needs
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -uo pipefail
+          missing=0
+          for var in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD \
+                     APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!var-}" ]; then
+              echo "::error::$var is not set. See this file's header for what each one is."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      # The tag is the version. If `package.json` says something else, one of
+      # the two is a mistake and neither is safe to guess at: the dmg is named
+      # from `package.json` and the tap's URLs are built from the tag, so a
+      # mismatch publishes a cask pointing at a file that does not exist.
+      - name: The tag and the manifest must agree
+        id: version
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          MANIFEST=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$MANIFEST" ]; then
+            echo "::error::tag is v$TAG but package.json says $MANIFEST"
+            exit 1
+          fi
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # THE GATES, again, on the tag.
+      #
+      # `bump` refuses to tag over a red gate, but it refuses on the machine
+      # that ran it. A tag can be pushed from anywhere, and "the release is the
+      # one artifact people trust without checking" is exactly why the check
+      # belongs on the thing being released rather than on somebody's laptop.
+      - run: pnpm verify
+
+      - run: pnpm verify:rendered
+
+      - name: Import the Developer ID certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          # GENERATED, not a literal. The keychain lives for the length of this
+          # job on a runner that is destroyed with it, so the password protects
+          # nothing — but a literal one is indistinguishable from a real
+          # credential to anything reading the diff, and `~/.git-hooks` refuses
+          # a push that adds `unlock-keychain -p <word>` for exactly that
+          # reason. It is right to: a scanner cannot tell a throwaway from the
+          # real thing, and the day somebody pastes a real one in is the day
+          # nobody looks twice.
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import certificate.p12 -k build.keychain \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          # The word splitting here is the POINT, not an oversight: the
+          # substitution yields one quoted path per existing keychain and each
+          # has to arrive as its own argument. Quoting it would pass the whole
+          # list as a single keychain name and drop every one of them from the
+          # search list, which presents later as codesign failing to find an
+          # identity that is demonstrably imported.
+          # shellcheck disable=SC2046
+          security list-keychains -d user -s build.keychain \
+            $(security list-keychains -d user | tr -d '"')
+          rm certificate.p12
+
+      # `--publish never`: the assets are uploaded by `gh release create` below,
+      # against a tag that already exists, so electron-builder's own publisher
+      # has nothing to do and would only be a second thing that can create a
+      # release.
+      #
+      # No `--arm64`/`--x64` flags: `electron-builder.yml` already names both
+      # architectures for both targets, and repeating them here would be a
+      # second place for that list to drift.
+      - name: Build, sign and notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          pnpm build
+          npx electron-builder --mac --publish never -c.mac.notarize=true
+
+      # The half that cannot be inferred from a green build. This reads the
+      # ARTIFACTS: Developer ID authority, hardened runtime, a secure timestamp,
+      # and a stapled notarization ticket — and it tells `Notarized Developer
+      # ID` apart from `Unnotarized`, which is the difference between an app
+      # that opens on somebody else's Mac and one that does not.
+      - name: Prove Gatekeeper will open it
+        run: pnpm verify:signing
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # `--verify-tag` so a release is never created for a tag that is not
+          # there; `--notes-from-tag` because `bump` writes the summary into the
+          # annotated tag and a second copy would be a second thing to keep true.
+          gh release create "v${VERSION}" \
+            --repo "$REPO" \
+            --title "v${VERSION}" \
+            --verify-tag \
+            --notes-from-tag \
+            release/*.dmg \
+            release/*.zip \
+            release/*.blockmap \
+            release/latest-mac.yml
+
+      # `gh workflow run` rather than a `release` event on the tap side: the
+      # event fires before the assets finish uploading, and the tap job's first
+      # act is to download them and hash them.
+      #
+      # NOT `continue-on-error`. A tap that silently stays a version behind is a
+      # `brew upgrade` that silently does nothing, and this is the only step
+      # that would report it.
+      - name: Hand the version to the Homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh workflow run update-homebrew.yml --repo "$REPO" -f version="$VERSION"
+          echo "Asked the tap to move to $VERSION"

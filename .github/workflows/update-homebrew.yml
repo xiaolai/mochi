@@ -1,0 +1,202 @@
+# Move `xiaolai/homebrew-tap` to a version this repository has already released.
+#
+# `release.yml` calls this with `gh workflow run` once its assets are uploaded,
+# rather than the tap listening for a `release` event: that event fires when the
+# release is created, which is before the dmgs finish uploading, and the first
+# thing this job does is download them.
+#
+# It can also be run by hand from the Actions tab, which is the reason for the
+# guards below — a `workflow_dispatch` takes whatever version somebody types.
+#
+# ## What it needs
+#
+# `HOMEBREW_TAP_TOKEN` — a token with `contents: write` on `xiaolai/homebrew-tap`.
+# The built-in `GITHUB_TOKEN` cannot be used: its scope stops at this repository,
+# and the whole job is a commit to a different one.
+#
+# ## What it does NOT verify, and why that is not a gap
+#
+# It does not check the signature on the dmg. The trust chain for a cask is
+# Apple's: Developer ID codesigning plus notarization, enforced by Gatekeeper on
+# the installing machine. `release.yml` proves that on a macOS runner, against
+# the artifacts, with `scripts/verify-signing.sh`, before the release is ever
+# published — so by the time this job runs it has already been established.
+# Re-checking it here would mean a macOS runner at ten times the cost to repeat
+# a check that has passed and that every user's Gatekeeper performs anyway.
+
+name: update-homebrew
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish, without the leading v (e.g. 0.1.3)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  update-tap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Through `env`, never interpolated into a `run:` body. A
+      # `workflow_dispatch` input is text somebody typed, and text somebody
+      # typed that reaches a shell through `${{ }}` is a command they can run.
+      VERSION: ${{ github.event.inputs.version }}
+      REPO: xiaolai/mochi
+      DMG_BASE: https://github.com/xiaolai/mochi/releases/download
+    steps:
+      - name: The version has to look like a version
+        run: |
+          set -euo pipefail
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must look like X.Y.Z (got '$VERSION')"
+            exit 1
+          fi
+
+      # Checked out BEFORE the long wait, so the regression guard can refuse in
+      # seconds rather than after fifteen minutes of polling for assets.
+      - name: Check out the tap
+        uses: actions/checkout@v5
+        with:
+          repository: xiaolai/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      # A misfired dispatch with an old version would walk every `brew upgrade`
+      # user backwards, and they would have no way to know it had happened.
+      - name: Refuse to move the tap backwards
+        run: |
+          set -euo pipefail
+          CURRENT=$(grep '^  version "' homebrew-tap/Casks/mochi.rb 2>/dev/null \
+            | head -1 | awk -F'"' '{print $2}' || true)
+          if [ -z "$CURRENT" ]; then
+            echo "No mochi cask in the tap yet — this is the first publish."
+            exit 0
+          fi
+          if [ "$VERSION" = "$CURRENT" ]; then
+            echo "::error::the tap is already at $CURRENT — refusing to re-publish"
+            exit 1
+          fi
+          HIGHER=$(printf '%s\n%s' "$VERSION" "$CURRENT" | sort -V | tail -1)
+          if [ "$HIGHER" != "$VERSION" ]; then
+            echo "::error::refusing to move the tap from $CURRENT down to $VERSION"
+            exit 1
+          fi
+          echo "$VERSION is above $CURRENT — proceeding"
+
+      # `curl -L` follows redirects and `%{http_code}` reports the FINAL code,
+      # so 200 is the only code worth matching: a 302 never reaches the output.
+      - name: Wait for both disk images to exist
+        run: |
+          set -euo pipefail
+          ARM="${DMG_BASE}/v${VERSION}/Mochi-${VERSION}-arm64.dmg"
+          INTEL="${DMG_BASE}/v${VERSION}/Mochi-${VERSION}-x64.dmg"
+          for i in $(seq 1 30); do
+            ARM_CODE=$(curl -sI -o /dev/null -w '%{http_code}' -L "$ARM")
+            INTEL_CODE=$(curl -sI -o /dev/null -w '%{http_code}' -L "$INTEL")
+            if [ "$ARM_CODE" = "200" ] && [ "$INTEL_CODE" = "200" ]; then
+              echo "Both are there."
+              exit 0
+            fi
+            echo "attempt $i/30 — arm64 $ARM_CODE, x64 $INTEL_CODE"
+            sleep 30
+          done
+          echo "::error::the disk images did not appear within fifteen minutes"
+          exit 1
+
+      - name: Hash them
+        id: sha256
+        run: |
+          set -euo pipefail
+          for arch in arm64 x64; do
+            curl -fsSL -o "mochi-${arch}.dmg" \
+              "${DMG_BASE}/v${VERSION}/Mochi-${VERSION}-${arch}.dmg"
+            SUM=$(sha256sum "mochi-${arch}.dmg" | cut -d ' ' -f 1)
+            echo "${arch}: ${SUM}"
+            echo "sha256_${arch}=${SUM}" >> "$GITHUB_OUTPUT"
+            rm "mochi-${arch}.dmg"
+          done
+
+      # The heredoc is UNQUOTED on purpose, and that is the one thing to read
+      # carefully here.
+      #
+      # It has to be, because `${VERSION}` and the two sums are shell variables
+      # that must expand — while `#{version}` is Ruby's own interpolation and
+      # survives untouched, since `#` means nothing to the shell. What an
+      # unquoted heredoc also does is execute backticks and `$(…)`, so it is
+      # only safe because neither value is free text: the version was matched
+      # against `^[0-9]+\.[0-9]+\.[0-9]+$` above, and the sums are hex cut out
+      # of `sha256sum`. Do not add a field here that carries prose.
+      #
+      # The blank line between `sha256` and `url`, and the ABSENCE of one
+      # between `end` and `on_intel`, are not a typo. `brew style` treats those
+      # two as separate stanza groups and the two arch blocks as one, and it
+      # says so with three correctable offences if they are written the way that
+      # reads more naturally. Checked with `brew style --cask` against a real
+      # tap before this file was committed.
+      - name: Write the cask
+        env:
+          SHA256_ARM64: ${{ steps.sha256.outputs.sha256_arm64 }}
+          SHA256_X64: ${{ steps.sha256.outputs.sha256_x64 }}
+        run: |
+          set -euo pipefail
+          cat > homebrew-tap/Casks/mochi.rb << RUBY
+          cask "mochi" do
+            version "${VERSION}"
+
+            on_arm do
+              sha256 "${SHA256_ARM64}"
+
+              url "https://github.com/${REPO}/releases/download/v#{version}/Mochi-#{version}-arm64.dmg"
+            end
+            on_intel do
+              sha256 "${SHA256_X64}"
+
+              url "https://github.com/${REPO}/releases/download/v#{version}/Mochi-#{version}-x64.dmg"
+            end
+
+            name "Mochi"
+            desc "Desktop voice companion that listens and talks back in real time"
+            homepage "https://github.com/${REPO}"
+
+            livecheck do
+              url :homepage
+              strategy :github_latest
+            end
+
+            # Electron 43 sets LSMinimumSystemVersion 12.0, so an older Mac
+            # cannot open the app at all. Without this line \`brew install\`
+            # would download 120MB and hand over something that refuses to
+            # launch, with the reason only in Console.
+            depends_on macos: :monterey
+
+            app "Mochi.app"
+
+            # Everything she is lives in the first of these: her characters,
+            # their faces, their memory and every transcript. \`zap\` is opt-in
+            # and means "leave no trace", so it belongs here — but it is the
+            # difference between uninstalling the app and deleting her.
+            zap trash: [
+              "~/Library/Application Support/Mochi",
+              "~/Library/Caches/com.mochi.companion",
+              "~/Library/Preferences/com.mochi.companion.plist",
+              "~/Library/Saved Application State/com.mochi.companion.savedState",
+            ]
+          end
+          RUBY
+
+          echo "----- Casks/mochi.rb -----"
+          cat homebrew-tap/Casks/mochi.rb
+
+      - name: Commit it
+        run: |
+          set -euo pipefail
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/mochi.rb
+          git commit -m "Update mochi to ${VERSION}"
+          git push
