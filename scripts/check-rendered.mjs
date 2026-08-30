@@ -514,9 +514,20 @@ function seedConversations(userData) {
       const made = session.run(who, began, began + 60_000)
       const sessionId = Number(made.lastInsertRowid)
       let at = began
-      for (const [who, text, cut] of talk.turns) {
+      /*
+        `speaker`, not `who` — the outer loop's `who` is the PERSONA and this one
+        shadowed it.
+
+        So `fts.run(text, rowid, who)` indexed every turn under `'you'` or
+        `'her'` instead of under the character, and the search index this seed
+        exists to populate was scoped to two persona ids that do not exist. The
+        rows are there and no query for a real character can reach them, which
+        is the shape of seed defect that makes a search check pass on an empty
+        result.
+      */
+      for (const [speaker, text, cut] of talk.turns) {
         at += 5_000
-        const row = turn.run(sessionId, at, who, text, cut)
+        const row = turn.run(sessionId, at, speaker, text, cut)
         if (text !== '') fts.run(text, Number(row.lastInsertRowid), who)
       }
     })
@@ -2570,7 +2581,7 @@ function bad(rule, what) {
 
 async function main() {
   const userData = mkdtempSync(join(tmpdir(), 'mochi-rendered-'))
-  let running = null
+  // Assigned to the module-level `running` so the watchdog can reach it.
   try {
     /* --- first launch: let the app build its store, and make a character --- */
     running = launch(userData)
@@ -2842,8 +2853,30 @@ async function main() {
   process.exit(failures.length ? 1 : 0)
 }
 
+/*
+  The launched app, at MODULE scope so the watchdog can kill it.
+
+  It was a `let` inside `main`, which the watchdog cannot see — so the kill added
+  there would have thrown `ReferenceError` at the one moment it exists to work.
+  Caught by reading the scope rather than by a timeout happening.
+*/
+let running = null
+
 const watchdog = setTimeout(() => {
   console.error('\nthe gate ran past 4 minutes — failing rather than hanging')
+  /*
+    TAKE THE APP WITH IT. `process.exit` skips `main`'s `finally`, so a timeout
+    left the detached Electron alive holding the debugging port — and the next
+    run then waits for a target that will never match, which reads as a slow
+    launch rather than as a stale process. Seen for real today, twice.
+  */
+  if (running) {
+    try {
+      process.kill(-running.app.pid, 'SIGKILL')
+    } catch {
+      running.app.kill('SIGKILL')
+    }
+  }
   process.exit(1)
 }, 240_000)
 watchdog.unref()

@@ -219,3 +219,44 @@ describe('her colour, taken far enough to be a mark', () => {
     expect(lifted.r).toBeGreaterThan(murky.r)
   })
 })
+
+describe('readableAgainst chooses a direction that can reach the floor', () => {
+  it('does not step toward the side with no room', () => {
+    /*
+      Found by the branch audit and confirmed by measurement. `#aaa` has
+      luminance 0.402, so a `> 0.5` test sent this toward WHITE, where the best
+      achievable is 2.32:1 — while black was available at 9.04:1. The old
+      version returned the white end and reported nothing.
+    */
+    const mid = { r: 170, g: 170, b: 170 }
+    const got = readableAgainst({ r: 120, g: 160, b: 140 }, mid, 3)
+    expect(contrast(got, mid)).toBeGreaterThanOrEqual(3)
+  })
+
+  it('still clears the floor against the two surfaces its callers use', () => {
+    const her = { r: 165, g: 216, b: 189 }
+    expect(
+      contrast(readableAgainst(her, { r: 255, g: 255, b: 255 }, AA_BODY), {
+        r: 255,
+        g: 255,
+        b: 255,
+      }),
+    ).toBeGreaterThanOrEqual(AA_BODY)
+    expect(
+      contrast(readableAgainst(her, { r: 20, g: 26, b: 23 }, AA_MARK), {
+        r: 20,
+        g: 26,
+        b: 23,
+      }),
+    ).toBeGreaterThanOrEqual(AA_MARK)
+  })
+
+  it('takes the smallest change that works, so her hue survives', () => {
+    // A floor is a floor, not an instruction to go black: a colour that clears
+    // it two steps out must not come back ten steps out.
+    const mid = { r: 200, g: 200, b: 200 }
+    const got = readableAgainst({ r: 150, g: 190, b: 170 }, mid, 3)
+    expect(contrast(got, mid)).toBeGreaterThanOrEqual(3)
+    expect(contrast(got, mid)).toBeLessThan(8)
+  })
+})

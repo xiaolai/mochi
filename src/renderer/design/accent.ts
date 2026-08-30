@@ -147,15 +147,36 @@ export const AA_MARK = 3.0
  */
 export function readableAgainst(base: Rgb, surface: Rgb, floor: number): Rgb {
   if (contrast(base, surface) >= floor) return base
-  // Toward black or toward white, whichever the surface is not.
-  const away = luminance(surface) > 0.5 ? -1 : 1
-  let best = base
+  /*
+    BOTH DIRECTIONS, and the smallest change that clears the floor wins.
+
+    It picked one from `luminance(surface) > 0.5`, which is a guess about which
+    way has room. On a mid surface it is the wrong guess and the function then
+    returns something BELOW the floor without saying so: against `#aaa`
+    (luminance 0.402) it stepped toward white, where the ceiling is 2.32:1, when
+    black was available at 9.04:1. Measured, not reasoned.
+
+    The two call sites here pass white and near-black, so neither could reach it
+    — which is exactly why it was worth fixing rather than leaving: the halo is
+    drawn over a desktop nobody chose, and this function's whole promise is a
+    ratio.
+  */
+  let best: Rgb | null = null
   for (let step = 1; step <= 20; step += 1) {
-    best = shade(base, away * (step / 20))
-    if (contrast(best, surface) >= floor) return best
+    for (const away of [-1, 1]) {
+      const tried = shade(base, away * (step / 20))
+      if (contrast(tried, surface) >= floor) return tried
+      best = tried
+    }
   }
-  // Nothing in twenty steps: black or white, whichever this was heading for.
-  return best
+  /*
+    Nothing in twenty steps either way. Return the end of whichever direction
+    got furthest, so the answer is the most readable one available rather than
+    the last one tried.
+  */
+  const black = shade(base, -1)
+  const white = shade(base, 1)
+  return contrast(black, surface) >= contrast(white, surface) ? black : (best ?? white)
 }
 
 export function toHex({ r, g, b }: Rgb): string {

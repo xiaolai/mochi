@@ -76,7 +76,17 @@ export function confirmation(): Confirmation {
   return {
     asking: () => about,
     ask: (next) => {
-      about = next
+      /*
+        A SNAPSHOT, not the caller's object.
+
+        D2's whole argument is that the sheet "takes a snapshot that a second
+        press cannot act on twice", and this stored the caller's `Doomed` by
+        reference — so a `kind: 'some'` whose `tokens` array the caller went on
+        to mutate would be confirmed against a list nobody was shown. The
+        question names what it is about at the moment it is asked; the answer
+        has to be about the same thing.
+      */
+      about = next.kind === 'some' ? { ...next, tokens: [...next.tokens] } : { ...next }
     },
     answer: () => {
       const mine = about
