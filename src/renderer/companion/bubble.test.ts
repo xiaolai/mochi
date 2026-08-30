@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { createBubble, runsFor, FADE_AFTER_QUIET_S } from './bubble'
+import { createBubble, runsFor, BUBBLE_REACH, FADE_AFTER_QUIET_S } from './bubble'
+import { haloClearance } from './halo'
 
 /** A context that records rather than paints. Nothing here needs pixels. */
 function recorder() {
   const filled: string[] = []
   const strokes: string[] = []
+  /**
+   * What each stroke was drawn IN, so an icon can be told from the bubble's own
+   * edge. Both are no-argument strokes, so `'rect'` alone stopped identifying
+   * the copy glyph the moment the surface grew an outline.
+   */
+  const strokeInk: string[] = []
   const arcs: string[] = []
   const rects: { x: number; y: number; w: number; h: number; alpha: number }[] = []
-  const drawn: { text: string; alpha: number }[] = []
+  const drawn: { text: string; alpha: number; colour: string }[] = []
   const rules: number[] = []
+  const gradients: string[][] = []
   const ctx = {
     save() {},
     restore() {},
@@ -21,7 +29,19 @@ function recorder() {
       filled.push(String(ctx.fillStyle))
     },
     fillText(text: string) {
-      drawn.push({ text, alpha: ctx.globalAlpha })
+      drawn.push({ text, alpha: ctx.globalAlpha, colour: String(ctx.fillStyle) })
+    },
+    // The cursor's underline and the foot fade are both plain rects.
+    fillRect(x: number, y: number, w: number, h: number) {
+      rects.push({ x, y, w, h, alpha: ctx.globalAlpha })
+      filled.push(String(ctx.fillStyle))
+    },
+    // The tail's tip is capped rather than pointed.
+    arcTo() {},
+    createLinearGradient() {
+      const stops: string[] = []
+      gradients.push(stops)
+      return { addColorStop: (_at: number, colour: string) => stops.push(colour) }
     },
     // The icons: Lucide artwork is stroked on a scaled grid, and the problem
     // badge is a pair of arcs.
@@ -29,6 +49,7 @@ function recorder() {
     scale() {},
     stroke(path?: unknown) {
       strokes.push(path === undefined ? 'rect' : 'path')
+      strokeInk.push(String(ctx.strokeStyle))
     },
     arc() {
       arcs.push(String(ctx.fillStyle))
@@ -52,16 +73,32 @@ function recorder() {
   return {
     ctx: ctx as unknown as CanvasRenderingContext2D,
     filled,
+    gradients,
     drawn,
     rules,
     strokes,
+    strokeInk,
     arcs,
     rects,
     raw: ctx,
   }
 }
 
-const COLOURS = { paper: '#f4f1ea', ink: '#16170f', alarm: '#d1495b' }
+/**
+ * The strokes belonging to an ICON, rather than to the bubble's own edge or to a
+ * control's ring — both of those are drawn in `--bubble-edge`.
+ */
+function iconStrokes(rec: { strokes: string[]; strokeInk: string[] }): string[] {
+  return rec.strokes.filter((_, at) => rec.strokeInk[at] !== COLOURS.edge)
+}
+
+const COLOURS = {
+  paper: '#ffffff',
+  ink: '#0a0a0b',
+  ahead: '#75757d',
+  edge: '#e6e6e8',
+  alarm: '#d1495b',
+}
 
 /** `howMany` seconds of 60fps frames, with `quietFor` held. `begun` is the
  *  utterance's answer to "has THIS response's audio started", not a clock's. */
@@ -96,7 +133,8 @@ describe('cutting a line into runs', () => {
   it('splits at where she has got to', () => {
     expect(runsFor('the owl taps', 0, 4)).toEqual([
       { text: 'the ', style: 'said' },
-      { text: 'owl taps', style: 'ahead' },
+      { text: 'owl', style: 'saying' },
+      { text: ' taps', style: 'ahead' },
     ])
   })
 
@@ -157,11 +195,19 @@ describe('what she has not said yet', () => {
     expect(paint(bubble, LINE, 4).text).toContain('ten')
   })
 
-  it('is dimmer than what she has said', () => {
+  it('is a colour of its own rather than a fraction of the ink', () => {
+    // It was `globalAlpha * 0.38`, which has no stated contrast at all — the
+    // result depends on what is behind it, and the whole argument for an opaque
+    // bubble is that nothing should. `--bubble-ahead` is measured against the
+    // bubble's own paper instead: 4.57:1 light, 5.66:1 dark.
     const bubble = createBubble()
     seconds(bubble, 1, 0)
-    const alphas = paint(bubble, LINE, 20).drawn.map((one) => one.alpha)
-    expect(Math.min(...alphas)).toBeLessThan(Math.max(...alphas))
+    const drawn = paint(bubble, LINE, 20).drawn
+    expect(drawn.map((one) => one.colour)).toContain(COLOURS.ahead)
+    expect(drawn.map((one) => one.colour)).toContain(COLOURS.ink)
+    // And every run is at ONE opacity: dimming is the colour's job now, so a
+    // second alpha would be two answers to the same question.
+    expect(new Set(drawn.map((one) => one.alpha)).size).toBe(1)
   })
 
   it('underlines nothing at all', () => {
@@ -267,65 +313,43 @@ describe('what fits on screen', () => {
     expect(later).not.toBe(frames[0])
   })
 
-  it('says how much more there is, and where in it the reader is', () => {
-    // Two earlier attempts at this were rejected against the running app. A `⋯`
-    // in the top-left padding read as a SECOND BUBBLE behind the first — it was
-    // reported as exactly that. A fade at the edges then sat almost entirely in
-    // the ten pixels of padding and said nothing.
-    //
-    // The rail is identified by its width: everything else rounded here is the
-    // bubble's own box or a copy icon on a scaled grid.
+  it('says there is more with a fade, and only when there is', () => {
+    // Four attempts, and the first three are the argument for this one. A `⋯`
+    // in the top-left padding read as a SECOND BUBBLE behind the first and was
+    // reported as exactly that. A fade at both edges sat inside the padding and
+    // said nothing. A rail said the most — how much more, and whereabouts — and
+    // that was the wrong thing to say: it is scrollbar furniture for reading a
+    // passage to its end, it implied a draggable thumb, and dragging it never
+    // did anything. A bubble is glanced at; the way to the rest is the third
+    // control, which opens her record.
     const bubble = createBubble()
     seconds(bubble, 1, 0)
-    const rail = (said: string, at: number) =>
-      paint(bubble, said, at).rects.filter((one) => one.w === 3)
-
-    expect(rail('Short enough.', 5)).toEqual([])
-    // Track and thumb, in that order.
-    expect(rail('word '.repeat(300), 10).length).toBe(2)
+    expect(paint(bubble, 'Short enough.', 5).gradients).toEqual([])
+    expect(paint(bubble, 'word '.repeat(300), 10).gradients.length).toBe(1)
   })
 
-  it('draws the thumb over the track, not instead of it', () => {
-    // Without a track the thumb is a floating mark with no scale behind it, and
-    // "how much more" goes back to being unanswered.
+  it('fades out through its own surface, never through black', () => {
+    // The keyword `transparent` is `rgba(0, 0, 0, 0)`. A canvas that
+    // interpolates without premultiplying takes the ramp through grey on its way
+    // out, so a white bubble grows a dirty band across its last line.
     const bubble = createBubble()
     seconds(bubble, 1, 0)
-    const rail = paint(bubble, 'word '.repeat(300), 10).rects.filter((one) => one.w === 3)
-    const [track, thumb] = rail
-    if (track === undefined || thumb === undefined) throw new Error('expected a track and a thumb')
-    expect(thumb.h).toBeLessThan(track.h)
-    expect(thumb.alpha).toBeGreaterThan(track.alpha)
-    expect(thumb.x).toBe(track.x)
+    const [stops] = paint(bubble, 'word '.repeat(300), 10).gradients
+    expect(stops).toEqual(['rgba(255, 255, 255, 0)', COLOURS.paper])
   })
 
-  it('moves the thumb down as she goes, and reaches the bottom at the end', () => {
-    const bubble = createBubble()
-    seconds(bubble, 1, 0)
-    const long = 'word '.repeat(300)
-    const thumbAt = (at: number) => {
-      const rail = paint(bubble, long, at).rects.filter((one) => one.w === 3)
-      const [track, thumb] = rail
-      if (track === undefined || thumb === undefined) throw new Error('expected a rail')
-      return { y: thumb.y, flush: thumb.y + thumb.h - (track.y + track.h) }
-    }
-    const first = thumbAt(10)
-    const last = thumbAt(long.length)
-    expect(last.y).toBeGreaterThan(first.y)
-    // Flush with the end of the track on the last line, not short of it — the
-    // thumb travels `track - thumb`, not the whole track.
-    expect(Math.abs(last.flush)).toBeLessThan(0.5)
-  })
-
-  it('keeps the rail clear of the control column', () => {
-    // The buttons end at `boxWidth - pad + 2`. A rail drawn under them would be
-    // invisible exactly when somebody is reaching for the scroll.
+  it('keeps the fade clear of the control column', () => {
+    // A fade running under the buttons would dim them at the exact moment
+    // somebody is reaching for one.
     const bubble = createBubble()
     seconds(bubble, 1, 0)
     const painted = paint(bubble, 'word '.repeat(300), 10, true)
-    const rail = painted.rects.filter((one) => one.w === 3)[0]
+    // The fade is the only thing drawn 24 tall; the underline is 2 and the box
+    // is the height of the bubble.
+    const fade = painted.rects.filter((one) => one.h === 24)[0]
     const controls = bubble.controls()
-    if (rail === undefined || controls === null) throw new Error('expected a rail and controls')
-    expect(rail.x).toBeGreaterThanOrEqual(controls.close.x + controls.close.w)
+    if (fade === undefined || controls === null) throw new Error('expected a fade and controls')
+    expect(fade.x + fade.w).toBeLessThanOrEqual(controls.close.x)
   })
 
   it('wraps by measurement, not by counting characters', () => {
@@ -415,12 +439,16 @@ describe('saying that something went wrong', () => {
     expect(shown(1, false).arcs).toContain('#d1495b')
   })
 
-  it('draws the icon under it, so the mark is attached to something', () => {
-    // Without this the dot floats in blank paper with no control beneath it.
+  it('sits on a control that is drawn whether or not anything is wrong', () => {
+    // This block used to draw the history icon ITSELF when nothing was hovered,
+    // because the controls were hover-only and a badge on an invisible control
+    // says nothing. The controls are permanent now, so the icon is already
+    // there and that half of the block is gone — along with its one chance of
+    // drawing the same icon twice.
     const quiet = shown(0, false)
     const troubled = shown(1, false)
-    expect(quiet.strokes.length).toBe(0)
-    expect(troubled.strokes.length).toBeGreaterThan(0)
+    expect(iconStrokes(quiet).length).toBeGreaterThan(0)
+    expect(iconStrokes(troubled).length).toBe(iconStrokes(quiet).length)
   })
 
   it('marks nothing when nothing is wrong', () => {
@@ -428,12 +456,12 @@ describe('saying that something went wrong', () => {
     expect(shown(0, true).arcs).not.toContain('#d1495b')
   })
 
-  it('still marks it while hovered, without drawing the icon twice', () => {
-    const troubled = shown(2, true)
-    expect(troubled.arcs).toContain('#d1495b')
-    // Three controls hovered: history (3 paths), copy (1 rect + 1 path), close
-    // (2 paths). An eighth stroke would mean history was drawn twice.
-    expect(troubled.strokes.length).toBe(7)
+  it('marks it whether or not the pointer is there, and never twice', () => {
+    expect(shown(2, true).arcs).toContain('#d1495b')
+    expect(shown(2, false).arcs).toContain('#d1495b')
+    // Three controls: history (3 paths), copy (1 rect + 1 path), close (2
+    // paths). An eighth would mean history had been drawn a second time.
+    expect(iconStrokes(shown(2, true)).length).toBe(7)
   })
 })
 
@@ -453,10 +481,10 @@ describe('the copy button says what happened, and only what happened', () => {
     const bubble = createBubble()
     seconds(bubble, 1, 0)
     bubble.copied()
-    expect(paint(bubble, 'Something she said.', 5, true).strokes).not.toContain('rect')
+    expect(iconStrokes(paint(bubble, 'Something she said.', 5, true))).not.toContain('rect')
     // 90 frames later it is offering again.
     seconds(bubble, 2, 0)
-    expect(paint(bubble, 'Something she said.', 5, true).strokes).toContain('rect')
+    expect(iconStrokes(paint(bubble, 'Something she said.', 5, true))).toContain('rect')
   })
 })
 
@@ -562,5 +590,15 @@ describe('going to sleep closes it', () => {
     bubble.dismiss()
     expect(paint(bubble, 'Before.', 5).painted).toBe(false)
     expect(paint(bubble, 'After she woke up.', 5).painted).toBe(true)
+  })
+})
+
+describe('the bubble clears her halo', () => {
+  it('stands off further above her than the ring takes', () => {
+    // `placeBubble` knew her body and nothing else, so an 18px gap measured from
+    // her scalp put the tail's tip INSIDE the ring. This is the assertion that
+    // stops it coming back while still looking right in a screenshot.
+    expect(BUBBLE_REACH.above).toBeGreaterThan(haloClearance())
+    expect(BUBBLE_REACH.above).toBeGreaterThan(BUBBLE_REACH.rest)
   })
 })

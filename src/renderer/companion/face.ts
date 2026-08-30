@@ -984,7 +984,22 @@ export function showFace(canvas: HTMLCanvasElement): Face {
       bubble.draw(
         ctx,
         canvas.clientWidth,
-        palette,
+        /*
+          The BUBBLE's colours, not the window's.
+
+          It is drawn over somebody's wallpaper rather than over this palette,
+          so it carries its own paper, ink, dimmed ink and edge — see
+          `--bubble-*` in `tokens.css`. Passing `palette` whole worked while the
+          two were the same values and would have gone on working right up to
+          the moment they diverged, which is this design.
+        */
+        {
+          paper: palette.bubblePaper,
+          ink: palette.bubbleInk,
+          ahead: palette.bubbleAhead,
+          edge: palette.bubbleEdge,
+          alarm: palette.alarm,
+        },
         utterance.text(),
         utterance.at(),
         herBox(),

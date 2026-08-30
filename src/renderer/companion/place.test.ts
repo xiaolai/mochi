@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { placeBubble, roomFor, sidesThatFit, type Body, type Room } from './place'
+import { placeBubble, roomFor, sidesThatFit, type Body, type Reach, type Room } from './place'
 
 /** Her, in the middle of a 700x560 canvas, standing with her feet at 340. */
 const HER: Body = { left: 303, top: 267, width: 94, height: 73 }
 const BOX = { w: 404, h: 164 }
-const REACH = 26
+/**
+ * Above her and beside her are different distances, and that asymmetry is the
+ * point: above her head there is a halo, and on the other three sides there is
+ * nothing. See `Reach` in `place.ts`, and `BUBBLE_REACH` for the real values.
+ */
+const REACH: Reach = { above: 43, rest: 26 }
 
 /** The whole canvas is on screen. */
 const OPEN: Room = { left: 10, top: 10, right: 690, bottom: 550 }
@@ -46,7 +51,7 @@ describe('which side she is spoken from', () => {
   it('above her, when there is room — because that is what speech looks like', () => {
     const placed = placeBubble(HER, BOX, OPEN, REACH)
     expect(placed.side).toBe('above')
-    expect(placed.y + BOX.h).toBe(HER.top - REACH)
+    expect(placed.y + BOX.h).toBe(HER.top - REACH.above)
   })
 
   it('centred on her horizontally', () => {
@@ -60,7 +65,7 @@ describe('which side she is spoken from', () => {
     const squeezed: Room = { ...OPEN, top: 260 }
     const placed = placeBubble(HER, BOX, squeezed, REACH)
     expect(placed.side).toBe('below')
-    expect(placed.y).toBe(HER.top + HER.height + REACH)
+    expect(placed.y).toBe(HER.top + HER.height + REACH.rest)
   })
 
   it('beside her only when neither above nor below will do', () => {
@@ -70,7 +75,7 @@ describe('which side she is spoken from', () => {
     const shallow: Room = { left: 0, top: 240, right: 700, bottom: 380 }
     const placed = placeBubble(HER, short, shallow, REACH)
     expect(placed.side).toBe('left')
-    expect(placed.x + short.w).toBe(HER.left - REACH)
+    expect(placed.x + short.w).toBe(HER.left - REACH.rest)
   })
 
   it('to her right when there is no room on her left either', () => {
@@ -78,7 +83,19 @@ describe('which side she is spoken from', () => {
     const shallow: Room = { left: 280, top: 240, right: 900, bottom: 380 }
     const placed = placeBubble(HER, short, shallow, REACH)
     expect(placed.side).toBe('right')
-    expect(placed.x).toBe(HER.left + HER.width + REACH)
+    expect(placed.x).toBe(HER.left + HER.width + REACH.rest)
+  })
+
+  it('stands off further above her than beside her, because the halo is there', () => {
+    // The asymmetry is the whole reason `Reach` is a record rather than a
+    // number. One distance measured from her body cannot know that something is
+    // ALREADY DRAWN over her head, and with a single reach the tail landed
+    // inside the ring — in the shipped build, not in a proposal.
+    expect(REACH.above).toBeGreaterThan(REACH.rest)
+    const above = placeBubble(HER, BOX, OPEN, REACH)
+    const below = placeBubble(HER, BOX, { ...OPEN, top: 260 }, REACH)
+    expect(HER.top - (above.y + BOX.h)).toBe(REACH.above)
+    expect(below.y - (HER.top + HER.height)).toBe(REACH.rest)
   })
 
   it('never goes beside her for a FULL-WIDTH bubble, and that is arithmetic', () => {
@@ -136,7 +153,7 @@ describe('when somebody has chosen a side', () => {
   it('honours the choice when it fits', () => {
     const placed = placeBubble(WIDE, BOX, WIDE_ROOM, REACH, 'left')
     expect(placed.side).toBe('left')
-    expect(placed.x + BOX.w).toBe(WIDE.left - REACH)
+    expect(placed.x + BOX.w).toBe(WIDE.left - REACH.rest)
   })
 
   it('falls back to the standing order when it does not', () => {

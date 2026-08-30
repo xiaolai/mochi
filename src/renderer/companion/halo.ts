@@ -134,6 +134,24 @@ export function haloReach(): number {
 }
 
 /**
+ * How much room the halo takes above her scalp, top of the ring included.
+ *
+ * `CLEAR` is daylight under the ring's LOWEST point, and the ring is drawn
+ * centred one `haloReach` above that — so the top of it is `CLEAR + 2·reach`
+ * from her head, about 27px.
+ *
+ * Exported because the bubble has to clear it and could not see it. `place.ts`
+ * knew her body and nothing else, so a tail measured 18px from her scalp landed
+ * INSIDE the ring — a collision in the shipped build rather than one this
+ * design introduces. Derived here rather than written down as 27 for the same
+ * reason `haloReach` is computed: `WIDTH` and `TILT` are numbers somebody
+ * adjusts by eye, and everything that has to stay clear of them must follow.
+ */
+export function haloClearance(): number {
+  return CLEAR + 2 * haloReach()
+}
+
+/**
  * Where it sits: centred on her, above her head.
  *
  * Above ALWAYS, with no room-aware flip. The chip moves to her other side when

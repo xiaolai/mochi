@@ -287,6 +287,31 @@
    *   ahead on paper     4.57:1 light    5.66:1 dark
    */
 
+  /* ---- her bubble, over an unknown desktop -------------------------------
+   *
+   * Not the window's surfaces: the bubble sits on somebody's wallpaper, so it
+   * carries its own opaque paper, its own ink and its own edge. Dark is
+   * `#0f0f11` — LIGHTER than the window's `#08080a`, deliberately, because it
+   * floats on a desktop and needs a little weight of its own.
+   *
+   * Read by `resolve.ts` into the canvas, never as `var()` in a sheet.
+   *
+   *   ink on paper      19.79:1 light   18.34:1 dark
+   *   ahead on paper     4.57:1 light    5.66:1 dark
+   */
+  --bubble-paper: light-dark(#ffffff, #0f0f11);
+  --bubble-ink: light-dark(#0a0a0b, #fafafa);
+  /*
+    What she has not said yet.
+
+    This was an alpha — 38% of the ink — which has no contrast ratio at all,
+    because the number depends on what is behind it and the whole argument for
+    an opaque bubble is that nothing should. A measured colour instead: dim, and
+    still over the floor. "淡是'她还没说到',不是'你不该读'."
+  */
+  --bubble-ahead: light-dark(#75757d, #8b8b93);
+  --bubble-edge: light-dark(#e6e6e8, #35353c);
+
   /* ---- two faces, two jobs ----------------------------------------------
    *
    * The CJK fallbacks come from the operating system: a character called

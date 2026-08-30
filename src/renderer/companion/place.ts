@@ -56,6 +56,32 @@ export interface Placed {
 }
 
 /**
+ * How far the box stands off her, and it is NOT one number.
+ *
+ * It was, and that is what put the tail inside the halo. Above her head there
+ * is already something drawn — the ring, about 27px of it — and a single reach
+ * measured from her body cannot know that. On the other three sides nothing is
+ * drawn over her, so they keep the distance the design chose for the tail.
+ *
+ * A record rather than a second positional number: `placeBubble(her, box, room,
+ * 43, 26)` is two anonymous distances in an order nobody can remember, and
+ * getting them the wrong way round puts the bubble further from her sideways
+ * than it is above her, which reads as a bug in the drawing rather than in the
+ * arithmetic.
+ */
+export interface Reach {
+  /** From her scalp to the tail's tip, clearing the halo. See `haloClearance`. */
+  readonly above: number
+  /** From her body, on the three sides nothing is drawn over. */
+  readonly rest: number
+}
+
+/** The reach that applies on one side. */
+function reachOn(side: Side, reach: Reach): number {
+  return side === 'above' ? reach.above : reach.rest
+}
+
+/**
  * The work area, in canvas pixels, intersected with the canvas itself.
  *
  * Both limits are real and neither implies the other. The canvas is a hard
@@ -107,24 +133,25 @@ function on(
   her: Body,
   box: { readonly w: number; readonly h: number },
   room: Room,
-  reach: number,
+  reach: Reach,
 ): { readonly x: number; readonly y: number; readonly fits: boolean } {
   const centredX = clamp(her.left + her.width / 2 - box.w / 2, room.left, room.right - box.w)
   const centredY = clamp(her.top + her.height / 2 - box.h / 2, room.top, room.bottom - box.h)
+  const off = reachOn(side, reach)
 
   if (side === 'above') {
-    const y = her.top - reach - box.h
+    const y = her.top - off - box.h
     return { x: centredX, y, fits: y >= room.top }
   }
   if (side === 'below') {
-    const y = her.top + her.height + reach
+    const y = her.top + her.height + off
     return { x: centredX, y, fits: y + box.h <= room.bottom }
   }
   if (side === 'left') {
-    const x = her.left - reach - box.w
+    const x = her.left - off - box.w
     return { x, y: centredY, fits: x >= room.left }
   }
-  const x = her.left + her.width + reach
+  const x = her.left + her.width + off
   return { x, y: centredY, fits: x + box.w <= room.right }
 }
 
@@ -133,7 +160,7 @@ export function sidesThatFit(
   her: Body,
   box: { readonly w: number; readonly h: number },
   room: Room,
-  reach: number,
+  reach: Reach,
 ): readonly Side[] {
   return ORDER.filter((side) => on(side, her, box, room, reach).fits)
 }
@@ -142,7 +169,7 @@ export function placeBubble(
   her: Body,
   box: { readonly w: number; readonly h: number },
   room: Room,
-  reach: number,
+  reach: Reach,
   prefer: SidePreference = 'auto',
 ): Placed {
   // A chosen side wins whenever it fits. When it does not, the standing order

@@ -44,6 +44,19 @@ export interface Palette {
   readonly paper: string
   readonly ink: string
   /**
+   * The bubble's own four, which are NOT the window's.
+   *
+   * It sits on somebody's wallpaper rather than on this palette, so it carries
+   * its own paper, its own ink, its own dimmed ink for what she has not said
+   * yet, and its own edge. In dark the paper is `#0f0f11` against the window's
+   * `#08080a` — lighter than the window on purpose, because a thing floating on
+   * a desktop needs a little weight of its own.
+   */
+  readonly bubblePaper: string
+  readonly bubbleInk: string
+  readonly bubbleAhead: string
+  readonly bubbleEdge: string
+  /**
    * The unread-problems dot, and the one colour here that does NOT flip by
    * scheme — see `--alarm` in `tokens.css` for the argument and the four
    * measurements that let it stay one value.
@@ -84,6 +97,10 @@ const READ = [
   { key: 'paper', token: '--paper', property: 'color' },
   { key: 'ink', token: '--ink', property: 'background-color' },
   { key: 'alarm', token: '--alarm', property: 'border-top-color' },
+  { key: 'bubblePaper', token: '--bubble-paper', property: 'outline-color' },
+  { key: 'bubbleInk', token: '--bubble-ink', property: 'text-emphasis-color' },
+  { key: 'bubbleAhead', token: '--bubble-ahead', property: 'caret-color' },
+  { key: 'bubbleEdge', token: '--bubble-edge', property: 'text-decoration-color' },
   /*
     The halo's three. `--her` and `--her-veil` are written onto the document by
     `applyAccent` from the WORN face, so reading them here is what makes the ring
@@ -95,7 +112,7 @@ const READ = [
     The chip's two. Plain colour properties, like the six above: they only have
     to be colour-valued and distinct, and nothing is ever painted with them.
   */
-  { key: 'herDeep', token: '--her-deep', property: 'text-decoration-color' },
+  { key: 'herDeep', token: '--her-deep', property: '-webkit-text-stroke-color' },
   { key: 'herDeepInk', token: '--her-deep-ink', property: 'column-rule-color' },
   { key: 'herVeil', token: '--her-veil', property: 'border-bottom-color' },
   { key: 'quiet', token: '--ring-thinking', property: 'border-left-color' },

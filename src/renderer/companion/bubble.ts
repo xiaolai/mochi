@@ -47,10 +47,12 @@
 
 import { wrapByWord } from './wrap'
 import { CHECK, CLOSE, COPY, HISTORY, strokeIcon } from './icons'
+import { haloClearance } from './halo'
 import {
   placeBubble,
   sidesThatFit,
   type Body,
+  type Reach,
   type Room,
   type Side,
   type SidePreference,
@@ -65,17 +67,46 @@ const FADE_S = 0.35
 /**
  * Lines the bubble may grow to.
  *
- * Eight rather than four because most of what she says fits in eight, and text
- * that fits never moves at all — which is the whole point of the change. Her
- * window is 320 tall and she stands 97 of it, so this is what is actually
- * available above her head.
+ * **Five, down from eight, and this is a judgement rather than a measurement.**
+ *
+ * Eight was measured: it is what fits above her head in a 320-tall window, and
+ * "text that fits never moves" is the property the number was chosen to give.
+ * Five keeps the property and lowers the threshold — more of what she says will
+ * now move, and HOW MUCH MORE has never been counted, because nothing has ever
+ * bucketed her turns by rendered line count.
+ *
+ * The argument for it is that fitting and belonging are different questions: at
+ * eight lines the box is 184px, which is 57% of her whole window and larger than
+ * she is. A bubble is something you glance at; a paragraph you have to settle
+ * into belongs in her record, which is what the third control opens.
+ *
+ * To put the number back on evidence, count the stored turns in
+ * `transcripts.db` by wrapped line count at `TEXT_W`. Until somebody does, this
+ * is taste — informed taste, and still taste.
  */
-const LINES = 8
+const LINES = 5
 
 export interface BubbleColours {
   /** The opaque surface. See rule 2. */
   readonly paper: string
   readonly ink: string
+  /**
+   * What she has not said yet, as a COLOUR rather than as an alpha.
+   *
+   * It was `globalAlpha * 0.38` of the ink, which has no stated contrast at all
+   * — it depends on the surface underneath, and the whole argument for an
+   * opaque bubble is that nothing should. `--bubble-ahead` is measured against
+   * the bubble's own paper: 4.57:1 light, 5.66:1 dark. Dim means "she has not
+   * got here yet", not "you are not meant to read this".
+   */
+  readonly ahead: string
+  /**
+   * Its own edge.
+   *
+   * A white bubble on a bright photograph has no boundary at all, and a shadow
+   * alone is not enough. This is the hairline that makes it a surface.
+   */
+  readonly edge: string
   /**
    * The unread-problems dot. Not themed, unlike everything else here.
    *
@@ -194,7 +225,28 @@ export interface Rect {
 /** One run of text on a line, and how it should look. */
 interface Run {
   readonly text: string
-  readonly style: 'said' | 'ahead'
+  readonly style: 'said' | 'saying' | 'ahead'
+}
+
+/**
+ * Word boundaries, by the platform's own segmenter rather than by splitting on
+ * spaces.
+ *
+ * She speaks Chinese routinely, and Chinese has no spaces — so a "word" found
+ * by looking for gaps is the entire line, and the underline below would run
+ * under all of it. `Intl.Segmenter` knows better, and `wrap.ts` beside this
+ * already leans on it for the same reason.
+ */
+const WORDS = new Intl.Segmenter(undefined, { granularity: 'word' })
+
+/** Where the word containing `at` starts and ends, or null if `at` is outside. */
+function wordAround(line: string, at: number): { start: number; end: number } | null {
+  if (at < 0 || at >= line.length) return null
+  for (const part of WORDS.segment(line)) {
+    const end = part.index + part.segment.length
+    if (at < end) return part.isWordLike === true ? { start: part.index, end } : null
+  }
+  return null
 }
 
 /**
@@ -209,10 +261,39 @@ export function runsFor(line: string, start: number, at: number): readonly Run[]
   const cut = (a: number, b: number): string =>
     line.slice(Math.max(0, a - start), Math.max(0, Math.min(line.length, b - start)))
 
-  const runs: Run[] = [
-    { text: cut(start, Math.min(at, end)), style: 'said' },
-    { text: cut(Math.max(start, at), end), style: 'ahead' },
-  ]
+  /*
+    THREE runs, and the middle one reverses a measured decision.
+
+    The word span was removed here once, and the reason is in the file's own
+    history: §60 measured this cursor's precision at −3% to −22%, so an
+    underline claiming to sit under the word she is saying is claiming an
+    accuracy the estimate does not have. Two runs claimed only "about here",
+    which is what is known.
+
+    The v2 design puts it back, with its eyes open: "位置是估的,永远会差半秒;
+    差的是下划线的位置,不是能不能读到" — the position is estimated and will
+    always be off by about half a second, and what is wrong is where the
+    underline sits, not whether the passage can be read. The whole passage is on
+    screen either way, so the error costs a misplaced mark rather than missing
+    words. It also buys a real thing: the same 2px underline marks a search hit
+    in the window, and both mean "this part, here".
+
+    That is a defensible trade and it is a REVERSAL. If the underline reads as
+    lying about where she is, this is the decision to revisit, and §60 is the
+    measurement to revisit it with.
+  */
+  const word = wordAround(line, at - start)
+  const runs: Run[] =
+    word === null
+      ? [
+          { text: cut(start, Math.min(at, end)), style: 'said' },
+          { text: cut(Math.max(start, at), end), style: 'ahead' },
+        ]
+      : [
+          { text: line.slice(0, word.start), style: 'said' },
+          { text: line.slice(word.start, word.end), style: 'saying' },
+          { text: line.slice(word.end), style: 'ahead' },
+        ]
   return runs.filter((run) => run.text !== '')
 }
 
@@ -225,6 +306,55 @@ export function runsFor(line: string, start: number, at: number): readonly Run[]
  */
 const TAIL = 8
 const GAP = 18
+/**
+ * The tip is rounded, not sharp.
+ *
+ * A point reads as a spike stuck into her; a 2.2px cap reads as a tail. Small
+ * enough that the direction is unaffected — the tail's whole job is to point.
+ */
+const TAIL_TIP = 2.2
+
+/**
+ * The box's own measurements, and they are MODULE constants rather than locals.
+ *
+ * They were declared inside `draw`, and `WIDEST_BUBBLE` restated two of them as
+ * literals — `TEXT_W + 10 * 2` and `LINES * 18`. That is the second copy of the
+ * arithmetic this file's own comment says it exists to avoid, and it survives
+ * only while nobody changes the padding. This design changes the padding.
+ */
+const PAD = 12
+/** The panel rung, same as the window's. 22, up from 12. */
+const RADIUS = 22
+/**
+ * The two corners either side of the tail, which are tighter.
+ *
+ * At 22 the curve runs so far along the edge that the tail grows straight out
+ * of it and reads as stuck on. 10 gives the tail a shoulder to sit on.
+ */
+const RADIUS_AT_TAIL = 10
+/**
+ * 14/20, up from 13/18.
+ *
+ * Not a preference: Outfit's x-height is smaller than the face this was set in,
+ * so 13px here would render smaller than the smallest body text in the window
+ * while carrying her actual words. Five lines at 20 plus 24 of padding is a
+ * 124px box — against 223px of usable room above her head once the halo has
+ * taken its 27.
+ */
+const FONT_PX = 14
+const LINE_H = 20
+/**
+ * The cursor: 2px, three under the baseline.
+ *
+ * With `textBaseline = 'top'` the baseline sits about 0.79em below the top of
+ * the line, so "3px under the baseline" lands at very close to `FONT_PX` from
+ * the top. That constant is used rather than an ascent read off the context,
+ * because `actualBoundingBoxAscent` is not populated by every canvas this runs
+ * on, and a silently-undefined ascent would strike the line through the middle
+ * of the word instead of under it.
+ */
+const UNDERLINE_W = 2
+const UNDERLINE_TOP = FONT_PX
 /**
  * The text column, in CSS pixels — a reading measure rather than the canvas.
  *
@@ -245,9 +375,9 @@ const TEXT_W = 340
  * The cost is a permanently narrower first line, which is the cheapest of the
  * three and the only one that never surprises anybody.
  */
-const BUTTON = 16
+const BUTTON = 18
 /** Between stacked buttons. Enough to separate two 24-grid glyphs, no more. */
-const BUTTON_GAP = 4
+const BUTTON_GAP = 5
 /**
  * ONE column, at the right edge, not a row across the top.
  *
@@ -258,7 +388,14 @@ const BUTTON_GAP = 4
  * always the top right corner, wherever the text ends.
  */
 const CONTROLS_W = BUTTON + 8
-/** Room for the whole column, so a one-line bubble is not shorter than it. */
+/**
+ * Room for the whole column, so a one-line bubble is not shorter than it.
+ *
+ * 72 — three 18s, two 5s and 4px of inset top and bottom. It is worth naming
+ * what this number decides: one line of text needs 44, so this is the FLOOR on
+ * the commonest bubble in the product, and the previous version left it out of
+ * the design entirely.
+ */
 const CONTROLS_H = BUTTON * 3 + BUTTON_GAP * 2 + 8
 
 /**
@@ -278,21 +415,73 @@ const CONTROLS_H = BUTTON * 3 + BUTTON_GAP * 2 + 8
  * and the control column — rather than restated, because a second copy of this
  * arithmetic is a menu that offers a side the drawing then refuses.
  */
-export const WIDEST_BUBBLE = { w: TEXT_W + 10 * 2 + CONTROLS_W, h: LINES * 18 + 10 * 2 }
-
-/** The gap the bubble keeps from her, tail included. See `GAP` and `TAIL`. */
-export const BUBBLE_REACH = 26
+export const WIDEST_BUBBLE = { w: TEXT_W + PAD * 2 + CONTROLS_W, h: LINES * LINE_H + PAD * 2 }
 
 /**
- * The reading rail: how much more there is, and where in it the reader is.
+ * The gap the bubble keeps from her, tail included — and it differs above.
  *
- * Three pixels wide and inset five from the right edge, which puts it clear of
- * the control column by three — the buttons end at `boxWidth - pad + 2`.
+ * `placeBubble` knew her body and nothing else, so `GAP` was measured from her
+ * scalp and the tail landed INSIDE the halo. That is a collision in the shipped
+ * build, not one this design introduces; the design is what noticed it.
+ *
+ * Above her, the tip clears the top of the ring and then keeps 8 more.
+ * Everywhere else nothing is drawn over her and `GAP` stands.
  */
-const RAIL_W = 3
-const RAIL_INSET = 5
-/** So a very long passage still has a thumb somebody can see. */
-const RAIL_MIN = 14
+export const BUBBLE_REACH: Reach = {
+  above: haloClearance() + 8 + TAIL,
+  rest: GAP + TAIL,
+}
+
+/**
+ * There is more, said by a fade rather than by a scrollbar.
+ *
+ * The rail that was here — a 3px track with a thumb — is furniture for reading
+ * a passage to its end, and that is not what a bubble is for. It also implied
+ * something draggable that never was.
+ *
+ * 24px of the surface's own colour over the last line says the same thing
+ * honestly: there is more, and it is not here that you read it. The way to the
+ * rest is the third control, which opens her record.
+ */
+const FADE_H = 24
+
+/**
+ * The same colour at zero alpha, for the top of the fade.
+ *
+ * NOT the keyword `transparent`, which is `rgba(0, 0, 0, 0)` — black at zero
+ * alpha. A canvas that interpolates a gradient without premultiplying takes the
+ * fade through grey on its way out, so a white bubble grows a dirty band across
+ * its last line. Emitting the surface's own channels makes the ramp correct
+ * whichever way the implementation interpolates.
+ *
+ * The colours arrive from `getComputedStyle`, so `rgb()` is what actually shows
+ * up here; the hex branch is for a caller assembling one in code, and the
+ * keyword is the honest last resort rather than a throw — a slightly wrong fade
+ * is not worth taking her window down for.
+ */
+function transparent(colour: string): string {
+  const text = colour.trim()
+  const rgb = /^rgba?\(([^)]+)\)$/.exec(text)
+  if (rgb !== null) {
+    const parts = (rgb[1] ?? '').split(/[\s,/]+/).filter((one) => one !== '')
+    const [r, g, b] = parts
+    if (r !== undefined && g !== undefined && b !== undefined) return `rgba(${r}, ${g}, ${b}, 0)`
+  }
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(text)
+  if (hex !== null) {
+    const body = hex[1] ?? ''
+    // Indexed rather than spread, for the reason `accent.ts` gives beside the
+    // same expansion: the regex has already restricted this to ASCII hex, so
+    // code-point iteration buys nothing, and spreading a string is the wrong
+    // default habit to build.
+    const twice = (at: number): string => body.charAt(at).repeat(2)
+    const wide = body.length === 3 ? twice(0) + twice(1) + twice(2) : body
+    const value = Number.parseInt(wide, 16)
+    const channel = (shift: number): string => String((value >> shift) & 255)
+    return `rgba(${channel(16)}, ${channel(8)}, ${channel(0)}, 0)`
+  }
+  return 'transparent'
+}
 
 /** The problem badge on the history control. A dot: a digit at this size is mush. */
 const DOT = 3.5
@@ -419,9 +608,6 @@ export function createBubble(): Bubble {
         return false
       }
 
-      const pad = 10
-      const radius = 12
-      const lineHeight = 18
       /**
        * How wide the text column may be — a fixed measure, not a fraction of
        * the canvas.
@@ -432,10 +618,12 @@ export function createBubble(): Bubble {
        * bubble's widest possible box, which is what `place.ts` needs in order
        * to know whether it fits beside her.
        */
-      const maxWidth = Math.min(TEXT_W, width - pad * 4 - CONTROLS_W)
+      const maxWidth = Math.min(TEXT_W, width - PAD * 4 - CONTROLS_W)
 
       ctx.save()
-      ctx.font = '13px -apple-system, system-ui, sans-serif'
+      // Outfit, the face the window is set in — the bubble is her words, and
+      // her words are read in the same face wherever they are read.
+      ctx.font = `${String(FONT_PX)}px Outfit, system-ui, sans-serif`
       ctx.textBaseline = 'top'
 
       // The WHOLE text, wrapped once and cached — see `linesFor`. There is no
@@ -491,16 +679,16 @@ export function createBubble(): Bubble {
       // Wide enough for the text OR for the controls, whichever needs more —
       // a one-word utterance must not produce a box the buttons hang out of.
       const boxWidth = Math.min(
-        maxWidth + pad * 2 + CONTROLS_W,
+        maxWidth + PAD * 2 + CONTROLS_W,
         Math.max(
-          CONTROLS_W + pad * 2,
-          Math.max(...shown.map((one) => ctx.measureText(one).width)) + pad * 2 + CONTROLS_W,
+          CONTROLS_W + PAD * 2,
+          Math.max(...shown.map((one) => ctx.measureText(one).width)) + PAD * 2 + CONTROLS_W,
         ),
       )
       // Tall enough for the text OR for the control column, whichever needs
       // more. Without the floor, "Yes." makes a box shorter than the three
       // stacked buttons and the last one hangs off the bottom edge.
-      const boxHeight = Math.max(shown.length * lineHeight + pad * 2, CONTROLS_H)
+      const boxHeight = Math.max(shown.length * LINE_H + PAD * 2, CONTROLS_H)
 
       /**
        * Just above her head, not at the top of the window.
@@ -522,7 +710,7 @@ export function createBubble(): Bubble {
        * window" and "on screen" are different questions. `room` answers the
        * second; see `place.ts`.
        */
-      const placed = placeBubble(her, { w: boxWidth, h: boxHeight }, room, GAP + TAIL, prefer)
+      const placed = placeBubble(her, { w: boxWidth, h: boxHeight }, room, BUBBLE_REACH, prefer)
       /*
         Where this bubble went, and what else THIS box could have done.
 
@@ -533,7 +721,7 @@ export function createBubble(): Bubble {
         reached the assignment.
       */
       offered = {
-        available: sidesThatFit(her, { w: boxWidth, h: boxHeight }, room, GAP + TAIL),
+        available: sidesThatFit(her, { w: boxWidth, h: boxHeight }, room, BUBBLE_REACH),
         using: placed.side,
       }
       const { x, y } = placed
@@ -546,7 +734,25 @@ export function createBubble(): Bubble {
       // showing through the words.
       ctx.fillStyle = colours.paper
       ctx.beginPath()
-      ctx.roundRect(x, y, boxWidth, boxHeight, radius)
+      /*
+        The two corners the tail comes out of are tighter than the other two.
+
+        At 22 the curve runs so far along the edge that the tail grows out of
+        the curve and reads as stuck on rather than as part of the shape. 10
+        leaves it a flat shoulder to sit on. Per-corner, in CSS order —
+        top-left, top-right, bottom-right, bottom-left.
+      */
+      const soft = RADIUS
+      const tight = RADIUS_AT_TAIL
+      const corners: [number, number, number, number] =
+        placed.side === 'above'
+          ? [soft, soft, tight, tight]
+          : placed.side === 'below'
+            ? [tight, tight, soft, soft]
+            : placed.side === 'left'
+              ? [soft, tight, tight, soft]
+              : [tight, soft, soft, tight]
+      ctx.roundRect(x, y, boxWidth, boxHeight, corners)
       ctx.fill()
 
       /**
@@ -558,24 +764,41 @@ export function createBubble(): Bubble {
        * edge — and a tail pointing at nothing is worse than no tail.
        */
       ctx.beginPath()
+      /*
+        `arcTo` for the tip, so the point is capped rather than sharp. A spike
+        reads as stuck into her; the tail only has to point at her.
+      */
       if (placed.side === 'above' || placed.side === 'below') {
-        const tip = Math.max(x + radius + TAIL, Math.min(x + boxWidth - radius - TAIL, centreX))
+        const tip = Math.max(x + tight + TAIL, Math.min(x + boxWidth - tight - TAIL, centreX))
         // The edge that FACES her, and the direction that reaches for her.
         const edge = placed.side === 'above' ? y + boxHeight - 1 : y + 1
         const reach = placed.side === 'above' ? TAIL : -TAIL
         ctx.moveTo(tip - TAIL, edge)
-        ctx.lineTo(tip, edge + reach)
+        ctx.arcTo(tip, edge + reach, tip + TAIL, edge, TAIL_TIP)
         ctx.lineTo(tip + TAIL, edge)
       } else {
-        const tip = Math.max(y + radius + TAIL, Math.min(y + boxHeight - radius - TAIL, centreY))
+        const tip = Math.max(y + tight + TAIL, Math.min(y + boxHeight - tight - TAIL, centreY))
         const edge = placed.side === 'left' ? x + boxWidth - 1 : x + 1
         const reach = placed.side === 'left' ? TAIL : -TAIL
         ctx.moveTo(edge, tip - TAIL)
-        ctx.lineTo(edge + reach, tip)
+        ctx.arcTo(edge + reach, tip, edge, tip + TAIL, TAIL_TIP)
         ctx.lineTo(edge, tip + TAIL)
       }
       ctx.closePath()
       ctx.fill()
+
+      /*
+        Its own edge, drawn over both fills so the seam between box and tail is
+        not stroked twice.
+
+        Rule 2 says the surface is opaque; this says it has a BOUNDARY. On a
+        bright photograph a white bubble has neither an outline nor a usable
+        shadow, and "anything carrying words gets its own opaque surface" is
+        only half the promise if you cannot tell where the surface ends.
+      */
+      ctx.strokeStyle = colours.edge
+      ctx.lineWidth = 1
+      ctx.stroke()
 
       /**
        * The controls, INSIDE the bubble's top right corner.
@@ -594,65 +817,85 @@ export function createBubble(): Bubble {
        * put a second speech-bubble glyph beside an actual speech bubble and left
        * two controls on screen for one utterance.
        */
-      const column = x + boxWidth - pad - BUTTON + 2
+      const column = x + boxWidth - PAD - BUTTON + 2
       const close = { x: column, y: y + 4, w: BUTTON, h: BUTTON }
       const copy = { x: column, y: close.y + BUTTON + BUTTON_GAP, w: BUTTON, h: BUTTON }
       const history = { x: column, y: copy.y + BUTTON + BUTTON_GAP, w: BUTTON, h: BUTTON }
       laidOut = { copy, close, history, box: { x, y, w: boxWidth, h: boxHeight } }
 
       let lineStart = offset
+      // One alpha for the whole passage. What she has not said yet is a
+      // COLOUR now, not a fraction of this one — see `BubbleColours.ahead`.
+      ctx.globalAlpha = opacity
       shown.forEach((line, row) => {
-        const top = y + pad + row * lineHeight
-        let left = x + pad
+        const top = y + PAD + row * LINE_H
+        let left = x + PAD
         for (const run of runsFor(line, lineStart, spoken)) {
+          const runWidth = ctx.measureText(run.text).width
           // Dimmed rather than hidden — the point of showing it at all.
-          ctx.globalAlpha = opacity * (run.style === 'ahead' ? 0.38 : 1)
-          ctx.fillStyle = colours.ink
+          ctx.fillStyle = run.style === 'ahead' ? colours.ahead : colours.ink
           ctx.fillText(run.text, left, top)
-          left += ctx.measureText(run.text).width
+          if (run.style === 'saying') {
+            ctx.fillRect(left, top + UNDERLINE_TOP, runWidth, UNDERLINE_W)
+          }
+          left += runWidth
         }
         lineStart += line.length
       })
       /**
-       * Controls, on hover only.
+       * Controls, ALWAYS — and this reverses the hover-only rule that was here.
        *
-       * Always-visible buttons put permanent chrome on something meant to be
-       * glanced at. Hover is detectable without taking the mouse — the window
-       * forwards `mousemove` while clicks pass through — so the text stays
-       * click-through and only these two rectangles ever become solid.
+       * The old argument was sound as far as it went: permanent chrome on
+       * something meant to be glanced at is chrome you stop seeing. What it did
+       * not weigh is that the room for these three is reserved on every frame
+       * anyway, so hiding them bought no space at all — it only made three
+       * controls undiscoverable to anybody who never happened to hover.
+       *
+       * v2 keeps them present and spends the visibility budget on WEIGHT
+       * instead: a light grey glyph in a stroked circle at rest, ink in a filled
+       * one under the pointer. Nothing moves and nothing reflows, which is the
+       * property the reserved column existed to give.
        */
-      if (hovered) {
-        const fresh = confirmedAt !== null && frames - confirmedAt < 90
-        ctx.globalAlpha = opacity
-        for (const [rect, icon] of [
-          [close, CLOSE],
-          [copy, fresh ? CHECK : COPY],
-          [history, HISTORY],
-        ] as const) {
-          // Inset, so Lucide's 24-grid artwork has the margin it is drawn for.
-          strokeIcon(ctx, icon, { x: rect.x + 2, y: rect.y + 2, size: rect.w - 4 }, colours.ink)
+      const fresh = confirmedAt !== null && frames - confirmedAt < 90
+      ctx.globalAlpha = opacity
+      for (const [rect, icon] of [
+        [close, CLOSE],
+        [copy, fresh ? CHECK : COPY],
+        [history, HISTORY],
+      ] as const) {
+        // Round, because round is what "you can press this" looks like in this
+        // vocabulary. Stroked at rest, filled once the pointer is on the bubble.
+        ctx.beginPath()
+        ctx.arc(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, 0, Math.PI * 2)
+        if (hovered) {
+          ctx.fillStyle = colours.edge
+          ctx.fill()
+        } else {
+          ctx.strokeStyle = colours.edge
+          ctx.lineWidth = 1
+          ctx.stroke()
         }
+        // Inset, so Lucide's 24-grid artwork has the margin it is drawn for.
+        strokeIcon(
+          ctx,
+          icon,
+          { x: rect.x + 3, y: rect.y + 3, size: rect.w - 6 },
+          hovered ? colours.ink : colours.ahead,
+        )
       }
 
       /**
-       * Something main could not do — said WITHOUT waiting to be hovered.
+       * Something main could not do: a badge on the way into her record.
        *
-       * Every other control here is hover-only, because permanent chrome on
-       * something meant to be glanced at is chrome you stop seeing. This one is
-       * the exception on purpose: the case it exists for is somebody editing a
-       * persona file, reloading, and seeing nothing change — because the file
-       * was rejected and a default took over. They have no reason to hover.
+       * This block used to draw the history icon itself when nothing was
+       * hovered, because the icon was otherwise not there and a badge on an
+       * invisible control says nothing. The controls are always drawn now, so
+       * that half of it is gone — the case it existed for (somebody edits a
+       * persona file, reloads, and sees nothing change because the file was
+       * rejected and a default took over) is served by the badge alone.
        */
       if (problems > 0) {
         ctx.globalAlpha = opacity
-        if (!hovered) {
-          strokeIcon(
-            ctx,
-            HISTORY,
-            { x: history.x + 2, y: history.y + 2, size: history.w - 4 },
-            colours.ink,
-          )
-        }
         ctx.fillStyle = colours.paper
         ctx.beginPath()
         ctx.arc(history.x + history.w - 2, history.y + 2, DOT + 1.5, 0, Math.PI * 2)
@@ -664,41 +907,32 @@ export function createBubble(): Bubble {
       }
 
       /**
-       * How much more there is, and where in it the reader is.
+       * There is more, and this is not where you read it.
        *
-       * Two earlier attempts, both rejected against the running app. A `⋯` at
-       * half alpha in the top-left padding, beside a rounded corner, **read as
-       * a second bubble peeking out from behind this one** and was reported as
-       * exactly that. A fade at the top and bottom edges then sat almost
-       * entirely in the ten pixels of padding, where it said nothing at all —
-       * and making it tall enough to read meant eating the line somebody was
-       * trying to read.
+       * Four attempts now, and the first three are worth keeping because each
+       * failed differently. A `⋯` at half alpha beside a rounded corner **read
+       * as a second bubble peeking out from behind this one** and was reported
+       * as exactly that. A fade at both edges sat inside the padding and said
+       * nothing. A rail said the most — how much more, and whereabouts — and it
+       * was the wrong thing to say: a scrollbar is furniture for reading a
+       * passage to its end, it implied a thumb somebody could drag, and dragging
+       * it never did anything.
        *
-       * A rail touches no text, cannot be mistaken for another surface, and
-       * says more than either: not just THAT there is more, but how much and
-       * whereabouts. It is drawn in the right margin, clear of the control
-       * column by a few pixels, and only when the passage does not fit.
+       * A bubble is glanced at. The honest signal is "there is more", full
+       * stop — and the way to the rest is the third control, which opens her
+       * record. So: 24px of the surface's own colour over the last line.
+       *
+       * Drawn INSIDE the padding's lower edge rather than over it, so the fade
+       * covers text rather than blank paper.
        */
       if (lines.length > LINES) {
-        const trackTop = y + pad
-        const trackHeight = boxHeight - pad * 2
-        const thumbHeight = Math.max(RAIL_MIN, (trackHeight * LINES) / lines.length)
-        // Positioned over the range it can actually travel, so the thumb is
-        // flush with the bottom on the last line rather than short of it.
-        const travel = trackHeight - thumbHeight
-        const progress = lastStart === 0 ? 0 : start / lastStart
-        const railX = x + boxWidth - RAIL_INSET
-
-        ctx.globalAlpha = opacity * 0.12
-        ctx.fillStyle = colours.ink
-        ctx.beginPath()
-        ctx.roundRect(railX, trackTop, RAIL_W, trackHeight, RAIL_W / 2)
-        ctx.fill()
-
-        ctx.globalAlpha = opacity * 0.42
-        ctx.beginPath()
-        ctx.roundRect(railX, trackTop + travel * progress, RAIL_W, thumbHeight, RAIL_W / 2)
-        ctx.fill()
+        const foot = y + boxHeight - PAD
+        const fade = ctx.createLinearGradient(0, foot - FADE_H, 0, foot)
+        fade.addColorStop(0, transparent(colours.paper))
+        fade.addColorStop(1, colours.paper)
+        ctx.globalAlpha = opacity
+        ctx.fillStyle = fade
+        ctx.fillRect(x + PAD, foot - FADE_H, boxWidth - PAD * 2 - CONTROLS_W, FADE_H)
       }
 
       ctx.restore()
