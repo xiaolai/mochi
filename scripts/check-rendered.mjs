@@ -1376,7 +1376,35 @@ async function checks(page, where = '') {
     const rings = []
     for (const place of ['cast', 'archive', 'machine']) {
       await goTo(page, place)
-      const found = await page.run(`(() => {
+      /*
+        EVERY GROUP on the machine's page, and not whichever one the run before
+        this happened to leave open.
+
+        `goTo` reaches the page; it does not choose the group, and the group is
+        held in a module-level `openGroup` that survives leaving the page. So
+        this measured Looking in a plain run and About after `--outline` had
+        walked all seven — five fields or eight, from the same code, with the
+        count silently reporting which. Neither number was wrong and neither was
+        the one this check claims to take.
+
+        Walking them is the fix rather than pinning one, because the comment
+        above says every field: the machine's fields are spread across seven
+        groups and six of them were never in the set.
+      */
+      const groups =
+        place === 'machine'
+          ? await page.run(`document.querySelectorAll('#nav-groups .tab').length`)
+          : 1
+      if (groups === 0) throw new Error('the machine page has no groups to walk')
+      for (let group = 0; group < groups; group += 1) {
+        if (place === 'machine') {
+          await page.run(
+            `(() => { const t = document.querySelectorAll('#nav-groups .tab')[${String(group)}];` +
+              ` if (t) t.click(); return true })()`,
+          )
+          await settle(page)
+        }
+        const found = await page.run(`(() => {
         const out = [];
         for (const f of document.querySelectorAll('input[type=text], input[type=search], select, textarea')) {
           if (f.getClientRects().length === 0 || f.disabled) continue;
@@ -1394,7 +1422,8 @@ async function checks(page, where = '') {
         }
         return out;
       })()`)
-      rings.push(...found)
+        rings.push(...found)
+      }
     }
     const gapped = rings.filter((one) => one.offset !== 0)
     const layered = rings.filter((one) => one.layered)
