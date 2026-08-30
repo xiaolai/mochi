@@ -2739,7 +2739,13 @@
         flex: none;
         display: flex;
         align-items: center;
-        gap: var(--s2);
+        /*
+          18px, which is the delivery's gap between the words at the foot of
+          "what she has said" — and its padding on this bar, so the space
+          between two of them is the space between the last one and the edge.
+          At 8px, five underlined words read as one underlined run.
+        */
+        gap: 18px;
         padding: 0 18px;
         background: var(--paper-2);
         border-top: var(--s-px) solid var(--rule);
@@ -2822,8 +2828,56 @@
       .warn.quiet {
         color: var(--live-off);
       }
-      .status .btn {
+      /*
+        What this page can do, at the foot of it — as WORDS.
+
+        These five were `.btn`: bordered, 3px radius, 6px of padding top and
+        bottom, one of them red. Four boxed controls and a red one, in a bar
+        34px tall whose whole job is to say what just happened. It read as a
+        toolbar that had fallen into the status line.
+
+        The delivery draws exactly these three at the foot of "what she has
+        said" and draws them like this: Sora 12px, `--ink-2`, no box, a 1px rule
+        under the word and one pixel of space above it. The destructive one is
+        `--red` over a muted red rule — "destructive is outlined, never filled:
+        findable, legible, not inviting", which for a word means coloured, not
+        boxed.
+
+        A rule under a word is also the only control treatment that fits a
+        34px bar without crowding it: nineteen pixels tall against a button's
+        twenty-nine.
+      */
+      .foot-do {
         flex: none;
+        border: 0;
+        border-bottom: var(--s-px) solid var(--rule-2);
+        border-radius: 0;
+        background: transparent;
+        padding: 0 0 var(--s-px);
+        font-family: var(--sans);
+        font-size: var(--t-ui-2);
+        color: var(--ink-2);
+        cursor: default;
+      }
+      .foot-do:hover:not(:disabled) {
+        color: var(--ink);
+        border-bottom-color: var(--ink-3);
+      }
+      /* The one that destroys something. Coloured and underlined in the same
+         weight as the others — it is not louder, it is only red. */
+      .foot-do.bad {
+        color: var(--red);
+        border-bottom-color: color-mix(in oklab, var(--red) 40%, var(--rule));
+      }
+      .foot-do.bad:hover:not(:disabled) {
+        color: var(--red);
+        border-bottom-color: var(--red);
+      }
+      /* Nothing is selected yet, so there is nothing to delete. The word stays
+         where it is rather than appearing when the first row is ticked. */
+      .foot-do:disabled {
+        color: var(--ink-3);
+        border-bottom-color: var(--rule);
       }
     </style>
   </head>
@@ -3003,11 +3057,11 @@
           and a delete control visible from her character sheet is one whose
           scope the surrounding page contradicts.
         -->
-        <button class="btn" id="pick" type="button" hidden>Select&#8230;</button>
-        <button class="btn" id="pick-off" type="button" hidden>Cancel</button>
-        <button class="btn bad" id="drop-some" type="button" hidden disabled>Delete</button>
-        <button class="btn bad" id="drop-hers" type="button" hidden>Delete all&#8230;</button>
-        <button class="btn" id="export" type="button" hidden>Export&#8230;</button>
+        <button class="foot-do" id="pick" type="button" hidden>Select&#8230;</button>
+        <button class="foot-do" id="pick-off" type="button" hidden>Cancel</button>
+        <button class="foot-do bad" id="drop-some" type="button" hidden disabled>Delete</button>
+        <button class="foot-do bad" id="drop-hers" type="button" hidden>Delete all&#8230;</button>
+        <button class="foot-do" id="export" type="button" hidden>Export&#8230;</button>
         <button class="warn" id="troubles" type="button" hidden>
           <span class="dot"></span><span id="troubles-label"></span>
         </button>
