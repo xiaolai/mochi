@@ -324,9 +324,10 @@ describe('the vocabulary that is declared and not yet spoken', () => {
     '--hair': 'hairlines are drawn as a border in --rule rather than as a shadow',
     '--lift-2': 'no surface lifts this far',
     '--lift-window': 'the windows are chromeless and cast no shadow of their own',
-    // Scale rungs between sizes nothing has needed.
+    // Scale rungs between sizes nothing has needed. `--t-lead` came off this
+    // list when the transcript took it: A3 sets both a turn of hers and one of
+    // yours at 15, which is the rung this is.
     '--r5': 'a radius between --r4 and the pill',
-    '--t-lead': 'a size between --t-h3 and --t-body',
   }
 
   /*

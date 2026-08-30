@@ -3824,13 +3824,23 @@
         stranger's hue behind her own words — cannot happen, because her words
         are on a grey nobody computes.
       */
+      /*
+        A3's bubble, at A3's numbers: the sunken grey, the PANEL radius, 13/18 of
+        padding, no edge.
+
+        It carried `--paper-2` at the card radius with a 1px rule and 12/16 of
+        padding — five values, none of them the drawing's. The radius is the one
+        that shows: 22 is what makes a bubble a bubble, and 14 is the rung for a
+        field. The border goes with it, because a filled surface with an outline
+        says the same thing twice — the same reason A5's sheet lost its.
+      */
       .bubble {
         position: relative;
-        padding: var(--s3) var(--s4);
-        border: var(--s-px) solid var(--rule);
-        border-radius: var(--r-card);
-        background: var(--paper-2);
-        font-size: var(--t-body);
+        padding: 13px 18px;
+        border: 0;
+        border-radius: var(--r-panel);
+        background: var(--paper-3);
+        font-size: var(--t-lead);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         user-select: text;
@@ -3845,7 +3855,7 @@
         said.
       */
       .line {
-        font-size: var(--t-body);
+        font-size: var(--t-lead);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         user-select: text;

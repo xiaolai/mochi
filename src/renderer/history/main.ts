@@ -1574,7 +1574,6 @@ async function show(token: string, term: string): Promise<void> {
     const line = document.createElement('div')
     line.className = turn.who === 'her' ? 'line' : 'line bubble'
     line.append(marked(turn.text, term))
-    said?.append(line)
 
     /*
       THE STAMP AND THE COPY UNDER THE TURN, in mono — A3's `13:01:22   copy`.
@@ -1589,6 +1588,21 @@ async function show(token: string, term: string): Promise<void> {
       the archive's precision, and inside one conversation the interval between
       turns is the fact somebody is reading these for.
     */
+    /*
+      HER TURNS CARRY THE STAMP; yours carries nothing — A3, exactly.
+
+      Every turn had one, which put a timestamp and a copy control under your own
+      bubble. A3 gives your side a bubble and nothing else, and the reason holds
+      up: the stamp answers "when did she say that" and the copy exists to take
+      HER words. Your own words are the ones you typed a moment ago.
+
+      An empty row is not the same as no row either — `visibility: hidden` still
+      reserves its 17px — so this is a branch rather than an empty facts line.
+    */
+    if (turn.who !== 'her') {
+      said?.append(line)
+      continue
+    }
     const facts = document.createElement('div')
     facts.className = 'turn-facts'
     if (turn.cut) {
@@ -1603,7 +1617,7 @@ async function show(token: string, term: string): Promise<void> {
       facts.append(mark)
     }
     facts.append(element('span', 'turn-at', secondsLabel(turn.at)), copyButton(turn.text))
-    said?.append(facts)
+    said?.append(line, facts)
   }
 
   /*
