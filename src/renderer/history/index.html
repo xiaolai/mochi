@@ -2487,41 +2487,19 @@
 
       /* ---- the controls the sections hold ---------------------------------- */
       /*
-        A LIST BOX is not a dropdown, and the field rules in `tokens.css` are
-        written for a dropdown.
+        `select[multiple]` stood here, and it went with its control.
 
-        `Hearing you` asks which languages are spoken and the answer is genuinely
-        plural, so that control is `multiple` with `size = 8`. Three of the rules
-        it inherits are wrong for that, and together they left it with no visible
-        box at all:
+        It undid three rules `tokens.css` writes for a DROPDOWN — the stripped
+        native frame, the transparent border and fill at rest, the chevron at
+        `top 50%` — none of which suit an eight-row list box. The rules were
+        right about their subject; the subject is gone. `Hearing you` draws
+        twenty-four pills now, for a reason that is not about styling: a plain
+        click in a list box deselects everything else, and that pane saves on
+        `change`. See `settings/pane/hearing.ts`.
 
-        - `appearance: none` strips the native list frame. On a collapsed select
-          that frame is replaced by the border and fill; on a list box nothing
-          replaced it.
-        - The border and background are TRANSPARENT at rest. That is the quiet
-          treatment, and it rests on there being something to read — a collapsed
-          select always shows its value, and eight rows with no frame are not a
-          control.
-        - The chevron is drawn at `top 50%`, so on a tall list it floats in the
-          middle of the rows pointing at nothing that opens.
-
-        So: no chevron, no room reserved for one, and the box drawn at rest.
+        This window builds no `select` in `multiple` any more, so the guard in
+        `stylesheets.test.ts` that kept these rules alive is retired too.
       */
-      select[multiple] {
-        background-image: none;
-        padding-right: var(--s2);
-        border-color: var(--rule-2);
-        background-color: var(--paper);
-      }
-      /*
-        FOCUS is left exactly as it is for every other field: the fill without
-        the border, so the focus outline is not doubled by a hairline a pixel
-        inside it. Restated here only because the rule above is later in the
-        cascade at equal specificity and would otherwise win.
-      */
-      select[multiple]:focus {
-        border-color: transparent;
-      }
       /*
         Which words she takes: three choices, not a dropdown of three.
 
@@ -2718,7 +2696,19 @@
         cursor: pointer;
       }
 
-      .pills button:hover[aria-current='false'] {
+      /*
+        `aria-pressed` beside `aria-current`, because this row is chosen two
+        different ways.
+
+        A voice or a pronoun is ONE of a set, which is `aria-current`. A
+        language is on or off, independently of every other one, which is
+        `aria-pressed` — a toggle button, not a position in a list. The two
+        carry the same drawing and must not carry the same attribute: announcing
+        twenty-four languages as "current" would tell a screen reader that
+        twenty-three of them had just been left.
+      */
+      .pills button:hover[aria-current='false'],
+      .pills button:hover[aria-pressed='false'] {
         border-color: var(--rule-2);
         color: var(--ink);
       }
@@ -2744,10 +2734,20 @@
         background: var(--her-deep);
         flex: none;
       }
-      .pills button:hover:not([aria-current='true']) {
+      /*
+        BOTH states excluded, not one.
+
+        This is more specific than the chosen rule below it, so a chosen pill
+        under the pointer takes its colour from here. With only `aria-current`
+        named, a pressed language pill matched — `--ink` text on the `--ink`
+        fill of its own chosen state, which is a word that disappears when you
+        point at it.
+      */
+      .pills button:hover:not([aria-current='true']):not([aria-pressed='true']) {
         color: var(--ink);
       }
-      .pills button[aria-current='true'] {
+      .pills button[aria-current='true'],
+      .pills button[aria-pressed='true'] {
         border-color: var(--ink);
         background: var(--ink);
         color: var(--paper);

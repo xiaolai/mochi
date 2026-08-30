@@ -1464,6 +1464,117 @@ async function checks(page, where = '') {
       )
   })
 
+  await step('languages', async () => {
+    /* --- many at once, and the ceiling holds where it is drawn ------------- */
+    /*
+      THE CONTROL WHOSE DEFECT CANNOT BE FOUND BY READING IT.
+
+      `Hearing you` was a `select` in `multiple`, and what was wrong with it was
+      in no rule and no string: a plain click in a list box deselects every
+      other option, and that pane saves on `change`. So somebody holding three
+      languages who clicked a fourth without the modifier key was left with one,
+      and the status bar said "Saved." Nothing in the source says that. It is a
+      fact about what the element DOES, which is the only kind of fact this file
+      is here to hold.
+
+      So the check is the gesture rather than the markup: press seven and there
+      must be six, with the seventh refused out loud, the chosen ones drawn
+      differently from the rest, and the sentence about the limit arriving only
+      once the limit is reached.
+
+      It puts the pane back before it returns. A check that left six languages
+      chosen would be a check that changed what every check after it measured,
+      which is the same silent lie `goTo` throws about.
+    */
+    await goTo(page, 'machine')
+    await page.run(
+      `(() => { const t = document.querySelectorAll('#nav-groups .tab')[1]; if (t) t.click(); return true })()`,
+    )
+    await settle(page)
+    const pills = `document.querySelectorAll('#machine-pane .pills button[aria-pressed]')`
+    const chosenNow = `[...${pills}].filter((b) => b.getAttribute('aria-pressed') === 'true').length`
+    const limitNote = `[...document.querySelectorAll('#machine-pane p.note')].some((p) => p.textContent.includes('is the limit'))`
+    const shape = await page.run(`(() => {
+      const group = document.querySelector('#machine-pane .pills');
+      return {
+        named: group === null ? null : group.getAttribute('role') + ' ' + String(group.getAttribute('aria-label')),
+        pills: ${pills}.length,
+        selects: document.querySelectorAll('#machine-pane select').length,
+        limit: ${limitNote},
+      };
+    })()`)
+    if (shape.named === null || shape.pills === 0) {
+      bad('languages', 'the hearing pane draws no group of pressable languages')
+      return
+    }
+    if (shape.selects > 0) {
+      bad(
+        'languages',
+        'a <select> is back on the hearing pane — one plain click in a list box clears every other choice, and this pane saves on change',
+      )
+      return
+    }
+    if (shape.limit) {
+      bad('languages', 'the sentence about the limit is drawn with nothing chosen')
+      return
+    }
+    const press = async (which, want) => {
+      await page.run(
+        `(() => { const b = ${pills}[${String(which)}]; if (b) b.click(); return true })()`,
+      )
+      await until(
+        page,
+        `${chosenNow} === ${String(want)}`,
+        `the pane to settle at ${String(want)} chosen`,
+      )
+    }
+    for (let which = 0; which < 6; which += 1) await press(which, which + 1)
+    // The seventh is refused, so nothing is saved and nothing redraws — there is
+    // no condition to wait for, only a frame to let the message land in.
+    await page.run(`(() => { const b = ${pills}[6]; if (b) b.click(); return true })()`)
+    await settle(page)
+    const after = await page.run(`(() => {
+      const all = [...${pills}];
+      const on = all.filter((b) => b.getAttribute('aria-pressed') === 'true');
+      const off = all.filter((b) => b.getAttribute('aria-pressed') !== 'true');
+      const drawn = (b) => { const s = getComputedStyle(b); return s.backgroundColor + ' on ' + s.color; };
+      return {
+        chosen: on.map((b) => b.textContent.trim()),
+        marked: on.length === 0 ? '' : drawn(on[0]),
+        plain: off.length === 0 ? '' : drawn(off[0]),
+        hint: (document.querySelector('#machine-pane .hint') || {}).textContent || '',
+        limit: ${limitNote},
+        said: (document.getElementById('status') || {}).textContent || '',
+      };
+    })()`)
+    const why =
+      after.chosen.length !== 6
+        ? `pressing seven left ${String(after.chosen.length)} chosen: ${JSON.stringify(after.chosen)}`
+        : after.marked === after.plain
+          ? `a chosen language is drawn exactly like an unchosen one (${after.marked})`
+          : !after.said.includes('at most')
+            ? `the seventh was refused without saying so: ${JSON.stringify(after.said.trim())}`
+            : !after.hint.includes('6 chosen')
+              ? `the count beside the heading does not say what it counts: ${JSON.stringify(after.hint)}`
+              : !after.limit
+                ? 'nothing on the pane says what to do now that the limit is reached'
+                : null
+    if (why !== null) {
+      bad('languages', why)
+      return
+    }
+    for (let which = 5; which >= 0; which -= 1) await press(which, which)
+    const back = await page.run(`({ chosen: ${chosenNow}, limit: ${limitNote} })`)
+    if (back.chosen !== 0 || back.limit) {
+      bad('languages', 'a language could not be given back: ' + JSON.stringify(back))
+      return
+    }
+    ok(
+      'languages',
+      `${String(shape.pills)} on screen, ${String(after.chosen.length)} taken and the seventh refused, each one given back`,
+    )
+  })
+
   await step('field-widths', async () => {
     /* --- one width for every single-line field ----------------------------- */
     /*
