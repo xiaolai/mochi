@@ -658,9 +658,18 @@
         display: flex;
         flex-direction: column;
       }
+      /*
+        THE GUTTERS ARE THE PADDING, and they are equal.
+
+        24 top and 32 either side, which is what closes the width: her page is
+        rail 232 + (32 + 760 + 32) + apparatus 224 = 1280. It was 26/22/32/40 —
+        four different numbers, none of them the same on the two sides, so the
+        column was not centred in its own track and the arithmetic could not be
+        checked against anything.
+      */
       .reading {
         gap: 26px;
-        padding: 26px var(--s5) var(--s6) var(--s7);
+        padding: 24px var(--s6) var(--s6);
       }
       /*
         The machine's rows carry their own rhythm — `padding: 12px 0` and a rule
@@ -2552,13 +2561,15 @@
       */
       .transcript {
         /*
-          A measure, centred. A transcript set to the full width of a 900px
-          column is a line long enough to lose your place in — the artifact
-          holds it to 78ch and centres it, which is what every other document
-          in this window is already doing by having a narrower column.
+          NO measure of its own. V7: "everything in a column fills the column;
+          the column width IS the cap."
+
+          This held 78ch and centred itself inside its track, which is a second
+          measure inside a column that already has one — and the two disagreed,
+          because `--reading` next door said 66ch. v2 settles it by sizing the
+          TRACK: the transcript column is 616, which is the 600px measure plus
+          its own padding, so there is nothing left for a max-width to do.
         */
-        max-width: 78ch;
-        margin: 0 auto;
         display: flex;
         flex-direction: column;
         gap: var(--s6);

@@ -257,7 +257,13 @@
   --rail-w: 232px;
   --margin-w: 224px;
   --machine-nav-w: 222px;
-  --status-h: 30px;
+  /*
+    44, measured. It was 30, taken from a single `height:30px` in the delivery —
+    which is the design document's own chrome, not a screen. Fourteen of the
+    twenty artboards foot at 44 and four at 56; 44 is the bar, and the four are
+    the screens whose foot carries a row of buttons.
+  */
+  --status-h: 44px;
   /*
     The one thing in the window with a measure of its own.
 
