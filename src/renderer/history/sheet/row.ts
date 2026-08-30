@@ -59,6 +59,56 @@ export function section(title: string, hint: string, ...body: readonly HTMLEleme
   return wrap
 }
 
+/**
+ * A setting, as one row: what it is, the control, and a machine fact beside it.
+ *
+ * Read out of A1, where every setting on her page has this shape — an 82px
+ * label in `--ink-2`, the control taking the rest, and an optional mono note
+ * that is not part of the control. `Her name · [Mochi] · she|he|it`,
+ * `Calls you · [nothing yet] · often left empty`.
+ *
+ * It did not exist. Each section arranged its own label and control, so a label
+ * was a `<span class="inline">` here and a heading there and a bare text node
+ * somewhere else — and the column they were meant to line up in was the one
+ * thing none of them knew about. The 82px is what makes a column of settings
+ * read as a column rather than as a stack of unrelated controls.
+ *
+ * ## The word is a real `<label>`
+ *
+ * A `div` looks identical and says nothing: an input beside one has no
+ * accessible name at all. A `<label for>` also gives the word a click target,
+ * which is free and is what people expect. The id is generated from the row's
+ * own word rather than passed in, because an id chosen at the call site is an id
+ * two call sites can choose the same.
+ *
+ * A chooser is a ROW OF BUTTONS, not one control, so there is nothing for `for`
+ * to point at — `htmlFor` on a group is a promise the DOM cannot keep. It gets
+ * `aria-labelledby` and a group role instead, which is the same claim made in a
+ * way a screen reader can act on.
+ */
+export function settingRow(
+  label: string,
+  control: HTMLElement,
+  /** A machine fact about the setting — never an instruction, never prose. */
+  note?: string,
+): HTMLElement {
+  const row = element('div', 'setting')
+  const word = element('label', 'setting-of', label)
+  const id = `setting-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`
+  const field = control instanceof HTMLInputElement ? control : control.querySelector('input')
+  if (field !== null) {
+    field.id = id
+    word.htmlFor = id
+  } else {
+    word.id = id
+    control.setAttribute('role', 'group')
+    control.setAttribute('aria-labelledby', id)
+  }
+  row.append(word, control)
+  if (note !== undefined) row.append(element('span', 'setting-fact', note))
+  return row
+}
+
 /** A row of buttons where exactly one is current. Used for pronoun and voice. */
 export function chooser(
   className: string,

@@ -2,7 +2,7 @@ import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { PRONOUNS, forPronoun } from '@shared/pronoun'
 import { element } from '../../element'
 import { SAYS } from '../shelf-says'
-import { type ShelfHandlers, chooser, savedField, section } from './row'
+import { type ShelfHandlers, chooser, savedField, section, settingRow } from './row'
 
 /**
  * Who she is: her name, the words she takes, and what she calls you.
@@ -61,59 +61,29 @@ export function whoSection(
     },
   })
 
-  const rows = element('div', 'who-rows')
-  rows.append(
-    labelled(forPronoun(SAYS.herName, view.pronoun), name),
-    labelled(
-      forPronoun(SAYS.herWords, view.pronoun),
-      chooser(
-        'switchers',
-        PRONOUNS.map((one) => ({ value: one, label: one })),
-        worn.pronoun,
-        (value) => {
-          handlers.save({ id: worn.id, pronoun: value })
-        },
-      ),
+  /*
+    TWO ROWS, not three — the artboard puts the pronoun chooser on the SAME line
+    as the name, because which words she takes is a property of the name rather
+    than a question of its own. `Calls you` carries a mono fact after it, which
+    is a fact about the setting and not an instruction, so it is not a `.note`.
+  */
+  const named = element('div', 'setting-pair')
+  named.append(
+    name,
+    chooser(
+      'switchers',
+      PRONOUNS.map((one) => ({ value: one, label: one })),
+      worn.pronoun,
+      (value) => {
+        handlers.save({ id: worn.id, pronoun: value })
+      },
     ),
-    labelled('Calls you', called),
   )
 
   return section(
     forPronoun(SAYS.whoHead, view.pronoun),
     forPronoun(SAYS.whoHint, view.pronoun),
-    rows,
+    settingRow(forPronoun(SAYS.herName, view.pronoun), named),
+    settingRow('Calls you', called, 'often left empty'),
   )
-}
-
-/**
- * A field under the word for what it is — and the word is a real `<label>`.
- *
- * It was a `div`, which looks identical and says nothing: the input had no
- * accessible name at all, so a screen reader met an unlabelled text box on the
- * one screen whose whole subject is naming her. A `<label for>` also gives the
- * word a click target, which is free and is what people expect.
- *
- * The id is generated from the row's own word rather than passed in, because an
- * id chosen at the call site is an id two call sites can choose the same.
- */
-function labelled(what: string, control: HTMLElement): HTMLElement {
-  const row = element('div', 'who-row')
-  const label = element('label', 'who-label', what)
-  const id = `who-${what.toLowerCase().replace(/[^a-z]+/g, '-')}`
-  /*
-    A chooser is a ROW OF BUTTONS, not one control, so there is nothing for
-    `for` to point at — `htmlFor` on a group is a promise the DOM cannot keep.
-    It gets `aria-labelledby` and a group role instead, which is the same claim
-    made in the way a screen reader can act on.
-  */
-  if (control instanceof HTMLInputElement) {
-    control.id = id
-    label.htmlFor = id
-  } else {
-    label.id = id
-    control.setAttribute('role', 'group')
-    control.setAttribute('aria-labelledby', id)
-  }
-  row.append(label, control)
-  return row
 }

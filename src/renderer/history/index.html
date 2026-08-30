@@ -612,35 +612,6 @@
       }
 
       /*
-        WHO SHE IS, as rows of a label over a control.
-
-        These were three controls loose in the masthead — a name field, a pronoun
-        chooser and a "calls you" box — joined by a middot and read left to
-        right. That works for facts and not for controls: a row of three things
-        you can change, with no word saying which is which, has to be operated to
-        be understood.
-      */
-      .who-rows {
-        display: flex;
-        flex-direction: column;
-        gap: var(--s4);
-      }
-
-      .who-row {
-        display: flex;
-        flex-direction: column;
-        gap: var(--s1);
-      }
-
-      .who-label {
-        font-family: var(--sans);
-        font-size: var(--t-label);
-        letter-spacing: var(--track-2);
-        text-transform: uppercase;
-        color: var(--ink-3);
-      }
-
-      /*
         Said to a screen reader and to nobody else.
 
         The attention dot is a shape, and a shape is not a sentence. `panes.ts`
@@ -2123,19 +2094,33 @@
 
         Inside the control 20px, outside it 40px: see `.who-facts`.
       */
+      /*
+        A TRACK, and the chosen one is filled.
+
+        The artboard draws every one-of-several chooser the same way: a sunken
+        pill holding the options, 3px of padding, and the current one as an
+        INK-filled pill with paper text. It was a bare row of buttons whose
+        current one took a grey fill — which is the LIST's treatment, not the
+        chooser's, and made "she / he / it" read as three things you could
+        select rather than one setting with three positions.
+      */
       .switchers {
         display: inline-flex;
-        align-items: baseline;
+        align-items: center;
         gap: 0;
+        padding: 3px;
+        border-radius: var(--r-pill);
+        background: var(--paper-3);
       }
       .switchers button {
-        padding: var(--s1) 10px;
+        padding: 5px 13px;
         border: 0;
-        border-radius: var(--r-part);
+        border-radius: var(--r-pill);
         background: transparent;
         font-family: var(--sans);
-        font-size: var(--t-data);
-        color: var(--ink-3);
+        font-size: var(--t-ui-2);
+        font-weight: var(--w-medium);
+        color: var(--ink-2);
         cursor: pointer;
       }
       .switchers button:hover:not([aria-current='true']) {
@@ -2157,9 +2142,9 @@
         deep enough and nothing computed at runtime for a check to have to chase.
       */
       .switchers button[aria-current='true'] {
-        background: var(--chosen-2);
-        color: var(--ink);
-        font-weight: var(--w-semibold);
+        background: var(--ink);
+        color: var(--paper);
+        font-weight: var(--w-medium);
       }
       .pills {
         display: flex;
@@ -2507,10 +2492,24 @@
         because this container is what the column's gap would have governed if
         the sheet were not wrapped.
       */
+      /*
+        ONE RHYTHM, and it is flat.
+
+        Read out of A1 rather than chosen: her page is a single column at
+        `gap: 22px` in which a heading, the rows it heads and the next heading
+        are all SIBLINGS at the same distance. There is no tighter relationship
+        between a heading and its own content — the uppercase and the mono hint
+        do that work, so the space does not have to.
+
+        It was 26 between sections and 12 inside them, which is two rhythms and
+        neither is the delivery's. The section keeps its box for grouping and
+        semantics; both gaps are now the one number, so the box changes nothing
+        about where anything sits.
+      */
       .sheet {
         display: flex;
         flex-direction: column;
-        gap: 26px;
+        gap: var(--s5);
       }
       /*
         A section: a caps heading, a hint in mono beside it, and whatever
@@ -2539,7 +2538,7 @@
       .section {
         display: flex;
         flex-direction: column;
-        gap: var(--s3);
+        gap: var(--s5);
       }
       /* Nothing below the last one to divide it from. */
       /* The column's own padding ends the list; a section adds nothing. */
@@ -2551,10 +2550,69 @@
         it. The gap between one section and the next is the column's, so this
         adds none of its own.
       */
+      /*
+        The heading and its hint on ONE row, 12 apart — the artboard's
+        `display:flex; gap:12px`, where the caps label and the mono fact sit
+        beside each other rather than stacked.
+      */
+      /*
+        A SETTING, as one row — the shape every field on her page has in A1.
+
+        The label is a fixed 82px so a column of settings lines up on one edge;
+        the control takes what is left; the mono fact sits after it and is not
+        part of the control. Baseline-aligned, because a 14px label beside a
+        13.5px field centred on its box sits a pixel high and reads as loose.
+      */
+      .setting {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s3);
+      }
+
+      .setting-of {
+        flex: none;
+        width: 82px;
+        font-family: var(--sans);
+        font-size: var(--t-body);
+        color: var(--ink-2);
+      }
+
+      .setting > input[type='text'],
+      .setting > input[type='search'],
+      .setting > select {
+        flex: 1;
+        min-width: 0;
+        max-width: none;
+      }
+
+      /* The fact, never the instruction. Prose about a setting goes under the
+         row as a `.note`; this is for "often left empty" and "ten · lands on her
+         next wake". */
+      /* The name and the words she takes, on one line — A1 draws them together. */
+      .setting-pair {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: var(--s3);
+      }
+
+      .setting-pair > input[type='text'] {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .setting-fact {
+        flex: none;
+        font-family: var(--mono);
+        font-size: var(--t-data-2);
+        color: var(--ink-3);
+      }
+
       .section-head {
         display: flex;
         align-items: baseline;
-        gap: var(--s4);
+        gap: var(--s3);
       }
       .section .hint {
         font-family: var(--mono);
