@@ -21,6 +21,8 @@ const SHELF = source('history', 'shelf.ts')
 const MAIN = source('history', 'main.ts')
 const MEMORY = source('history', 'sheet', 'memory.ts')
 const COMPANION = source('companion', 'face.ts')
+const LOOKING = source('settings', 'pane', 'looking.ts')
+const STATUS = source('history', 'status.ts')
 
 describe('C3 · the panes that edit a document use the rule', () => {
   it('is reached for by the catalogued prompts', () => {
@@ -111,5 +113,37 @@ describe('C2 / C5 · the expression set decides what she wears', () => {
     // 'surprised' is allowed is two answers to one question, and the literal is
     // the one that would keep working after the permission said no.
     expect(COMPANION).not.toMatch(/emotion: 'surprised'/)
+  })
+})
+
+describe('B1b · the readiness card asks the rule, and stops drawing a boolean', () => {
+  it('is reached for by the pane', () => {
+    expect(LOOKING).toContain("from '../../rules/readiness'")
+    expect(LOOKING).toContain('readinessOf({')
+  })
+
+  it('keeps no second opinion about what "ready" means', () => {
+    // `const ready = codex.readiness === 'ready'` was a boolean over nine
+    // states, and the two that say NOTHING EITHER WAY were drawn as "cannot".
+    expect(LOOKING).not.toMatch(/readiness === 'ready'/)
+  })
+
+  it('only says she cannot look things up when that is known', () => {
+    // Not `if (!ready)`. An unknown is not a fault, and this is the sentence
+    // where the difference is most expensive.
+    expect(LOOKING).toContain("drawn.certainty === 'unusable'")
+  })
+})
+
+describe('the receipt is the rule’s sentence, and it stays', () => {
+  it('is reached for by the status bar', () => {
+    expect(STATUS).toContain("from '../rules/said'")
+    expect(STATUS).toContain('said(write)')
+  })
+
+  it('has no timer left to take it away', () => {
+    // A live region announces when its content changes, and a reader is still
+    // moving through the page when that happens.
+    expect(STATUS).not.toMatch(/setTimeout/)
   })
 })

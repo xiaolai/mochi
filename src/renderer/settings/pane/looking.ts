@@ -11,6 +11,7 @@ import { element } from '../../element'
 import { type Pane, type PaneHandlers } from '../pane'
 import { CODEX_SAYS, REMEDY_SAYS } from '@shared/delegation'
 import { type SettingsCodex, type SettingsView } from '@shared/ipc'
+import { readinessOf, type Certainty, type ReadinessAction } from '../../rules/readiness'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
 import { field, options } from '../pane'
@@ -160,15 +161,26 @@ export const LOOKING: Pane = {
   id: 'looking',
   label: 'Looking things up',
   /*
-    Seven states rather than two, and the dot is on for six of them.
+    The dot means SOMEBODY SHOULD LOOK, which is not the same as "something is
+    off" — `panes.ts` states that rule and this is the group it was written for.
 
-    It read `codexFound`, which is the first of three questions — installed,
-    runs, login usable by us — and the one that fails least often. A machine
-    whose Codex token went stale a fortnight ago answered `true` here and drew
-    no dot at all, and the first anybody heard of it was her failing to speak.
+    Asked of `rules/readiness.ts` rather than compared here, so the nav and the
+    card cannot disagree about the same machine. It read `codexFound` once, which
+    is the first of three questions and the one that fails least often: a machine
+    whose token went stale a fortnight ago answered `true` and drew no dot, and
+    the first anybody heard of it was her failing to speak.
+
+    Anything not KNOWN USABLE gets one. That deliberately includes the two
+    unknowns — a check that never came back is exactly a thing somebody should
+    look at — and deliberately excludes `too-old`, which runs: it offers an
+    update rather than presenting as her declining to help, and the dot is spent
+    on silent failures.
+
+    `checking: false`, because this is a standing property of the machine and the
+    nav must not flicker for the two seconds a probe is out.
   */
   attention: (view) =>
-    view.lookup.codex.readiness === 'ready'
+    readinessOf({ readiness: view.lookup.codex.readiness, checking: false }).certainty === 'usable'
       ? null
       : `${CODEX_SAYS[view.lookup.codex.readiness]} ${forPronoun(SAYS.noCli, view.pronoun)}`,
   render(view, handlers) {
@@ -244,8 +256,23 @@ function codexBlock(
   pronoun: SettingsView['pronoun'],
   handlers: PaneHandlers,
 ): HTMLElement {
-  const ready = codex.readiness === 'ready'
-  const box = element('div', ready ? 'codex' : 'codex bad')
+  /*
+    ASKED, not derived here — B1b.
+
+    `readiness === 'ready'` is a boolean over nine states, and the card drew two
+    of them: green or not-green. Two of the nine say NOTHING EITHER WAY — a check
+    still running, and one that never came back — and drawing either as
+    not-green tells somebody to reinstall a working tool after a network blip,
+    which is the advice `CODEX_SAYS['timed-out']` already refuses to give in
+    words while the light contradicted it in shape.
+
+    `certainty` is the third state the mark needed: filled when she can, hollow
+    when she cannot, dashed when nobody knows.
+  */
+  const drawn = readinessOf({ readiness: codex.readiness, checking })
+  // `bad` only when it IS bad. An unknown is not a fault, and a card outlined
+  // as one is the same wrong claim as the light being off.
+  const box = element('div', drawn.certainty === 'unusable' ? 'codex bad' : 'codex')
 
   /*
     ONE line: a light, what is true, and the button, in that order.
@@ -264,10 +291,10 @@ function codexBlock(
     second announcement of the same fact is noise.
   */
   const head = element('div', 'codex-head')
-  const light = element('span', ready ? 'light on' : 'light')
+  const light = element('span', `light ${MARK[drawn.certainty]}`)
   light.setAttribute('aria-hidden', 'true')
 
-  const again = element('button', 'btn', 'Check again')
+  const again = element('button', 'btn', ACTION_SAYS[drawn.action])
   again.type = 'button'
   head.append(light, element('span', 'codex-said', CODEX_SAYS[codex.readiness]), again)
   box.append(head)
@@ -278,9 +305,15 @@ function codexBlock(
     // instruction somebody follows.
     box.append(element('p', 'note', REMEDY_SAYS[codex.remedy]))
   }
-  if (!ready) {
-    // The consequence FOR HER, which is the only pronoun-bearing sentence here
-    // — everything above is about a binary and a sign-in on this machine.
+  /*
+    The consequence FOR HER, and only when there IS one.
+
+    It was `if (!ready)`, which put "she cannot look anything up" under a check
+    that had not come back — a claim about her made from an absence of
+    information. `unknown` is not `unusable`, and this is the sentence where the
+    difference is most expensive.
+  */
+  if (drawn.certainty === 'unusable') {
     box.append(element('p', 'note', forPronoun(SAYS.noCliLong, pronoun)))
   }
 
@@ -300,7 +333,6 @@ function codexBlock(
     it.
   */
   again.disabled = checking
-  if (checking) again.textContent = 'Checking…'
   again.addEventListener('click', () => {
     if (checking) return
     checking = true
@@ -322,4 +354,33 @@ function codexBlock(
     )
   })
   return box
+}
+
+/**
+ * The shape the mark takes, per certainty.
+ *
+ * Three, not two. A filled dot means she can, a hollow one means she cannot, and
+ * a dashed ring means nobody knows — which is the state a boolean had no way to
+ * draw and therefore drew as "cannot".
+ */
+const MARK: Readonly<Record<Certainty, string>> = {
+  usable: 'on',
+  unusable: 'off',
+  unknown: 'unknown',
+}
+
+/**
+ * What the one button says, per action.
+ *
+ * The words are here rather than in `rules/readiness.ts` for the reason
+ * `delegation.ts` gives about `Remedy`: a key travels, a sentence belongs beside
+ * the control that shows it. An instruction, never a diagnosis.
+ */
+const ACTION_SAYS: Readonly<Record<ReadinessAction, string>> = {
+  'check-again': 'Check again',
+  'open-a-terminal': 'Open a terminal',
+  'how-to-install': 'How to install it',
+  'sign-in-again': 'Sign in again',
+  'update-it': 'Update it',
+  'try-again': 'Try again',
 }
