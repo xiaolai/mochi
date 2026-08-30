@@ -82,7 +82,6 @@ import {
   subjectEl,
   spreadEl,
   marginPermitsEl,
-  marginTalkEl,
 } from './elements'
 import { receipt, say } from './status'
 import { element } from '../element'
@@ -551,7 +550,11 @@ function renderTalkMargin(turns: readonly HistoryTurn[], tools: readonly ToolUse
   if (cut > 0) lines.push(`${String(cut)} interrupted`)
 
   const used = [...new Set(tools.map((one) => one.name))]
-  marginTalkEl.replaceChildren(
+  /*
+    Rendered into the transcript's head rather than into the margin. Same blocks,
+    same function, one destination — the margin is not on this page.
+  */
+  talkFacts.replaceChildren(
     ...marginColumn(
       marginBlock(forPronoun(SAYS.marginTalkHead, her), marginFacts(...lines)),
       marginBlock(forPronoun(SAYS.marginAbout, her), forPronoun(SAYS.marginNoSummary, her)),
@@ -669,7 +672,6 @@ function showPlace(next: Place): void {
   marginHersEl.hidden = place !== 'cast'
   talkEl.hidden = place !== 'archive'
   listEl.hidden = place !== 'archive'
-  marginTalkEl.hidden = place !== 'archive'
   permitsEl.hidden = place !== 'permits'
   wakeEl.hidden = place !== 'permits'
   marginPermitsEl.hidden = place !== 'permits'
@@ -1260,7 +1262,21 @@ async function show(token: string, term: string): Promise<void> {
     }
   }
 
-  talkEl.replaceChildren(transcript)
+  /*
+    THE TRANSCRIPT'S FACTS SIT ON THE TRANSCRIPT — A3.
+
+    They were a block in the margin, which the archive does not have: that page
+    spends its side column on the list of conversations, and 232 + 368 + 224
+    leaves 456 for a transcript holding a 600px measure. So the apparatus had
+    nowhere to be, and as a third child of a two-column grid it wrapped onto a
+    row of its own underneath.
+
+    Above the turns rather than beside them, which is where the delivery draws
+    it: "13:00 · 4 turns · 3 min · no capabilities used" is a head for the thing
+    below it, and a head is not apparatus about a page — it is the page's own
+    first line.
+  */
+  talkEl.replaceChildren(talkFacts, transcript)
   talkEl.scrollTop = 0
 }
 
@@ -2091,6 +2107,14 @@ function renderMachine(): void {
     toolsEl.replaceChildren(card)
   }
 }
+
+/**
+ * The open transcript's own facts, above its turns.
+ *
+ * Built once and re-filled, like every other pane in this window: a fresh
+ * element per render would drop the scroll position of the pane it sits in.
+ */
+const talkFacts = element('div', 'talk-facts')
 
 /* ---- wiring -------------------------------------------------------------- */
 

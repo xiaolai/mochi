@@ -110,7 +110,5 @@ export const permitsEl = need('permits', HTMLElement)
 /** The margin's three bodies, one per view. */
 export const marginHersEl = need('margin-hers', HTMLElement)
 
-export const marginTalkEl = need('margin-talk', HTMLElement)
-
 /** View III's margin: the capability descriptions, which are not editable. */
 export const marginPermitsEl = need('margin-permits', HTMLElement)

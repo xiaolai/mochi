@@ -550,6 +550,22 @@
         color: var(--ink-3);
       }
 
+      /*
+        The transcript's own facts, above its turns.
+
+        A row rather than a stacked column: in the margin these were three blocks
+        down a 224px strip, and on a 616px transcript the same three sit on one
+        line — which is what the delivery draws and what makes them read as a
+        head rather than as a sidebar that lost its side.
+      */
+      .talk-facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s5);
+        padding-bottom: var(--s4);
+        border-bottom: var(--s-px) solid var(--rule);
+      }
+
       .kept {
         display: flex;
         flex-direction: column;
@@ -813,6 +829,17 @@
         grid-template-columns: var(--list-w) minmax(0, 1fr);
       }
       /*
+        And no apparatus column at all on this page.
+
+        Without this the aside is a third child of a two-column grid and wraps
+        onto an implicit row underneath the two it was meant to sit beside — a
+        failure that clips nothing and passes every width check, which is why it
+        is stated rather than left to the track count.
+      */
+      .spread.three > .margin {
+        display: none;
+      }
+      /*
         AT THE FLOOR the apparatus column goes and the list narrows.
 
         1120 = 232 + 328 + (32 + 496 + 32), and on her page the reading column
@@ -925,7 +952,6 @@
         body is a column in its own right and has to say so.
       */
       #margin-hers,
-      #margin-talk,
       #margin-permits {
         display: flex;
         flex-direction: column;
@@ -3359,7 +3385,6 @@
               -->
               <aside class="margin" id="margin">
                 <div id="margin-hers" hidden></div>
-                <div id="margin-talk" hidden></div>
                 <!-- The capability descriptions: what she is told she CAN do,
                      which is apparatus about the switches beside it. -->
                 <div id="margin-permits" hidden></div>
