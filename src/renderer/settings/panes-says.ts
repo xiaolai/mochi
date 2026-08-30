@@ -130,6 +130,10 @@ export const SAYS = {
      expensive to bundle is deliberately not bundled. */
   /* B2's heading. "Languages spoken" is a heading about the world; this is a
      heading about her, and it is her listening that the setting changes. */
+  /* B6's heading over the folders. They were loose rows under a sentence, so a
+     reader scanning headings found the destruction below them and nothing above
+     them. */
+  onDisk: { she: 'On disk', he: 'On disk', it: 'On disk' },
   languagesHead: {
     she: 'Languages she listens for',
     he: 'Languages he listens for',

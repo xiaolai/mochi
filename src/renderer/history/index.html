@@ -1888,6 +1888,12 @@
         color: var(--ink-2);
       }
       /* What it stands on: a name and its licence, one pair per row. */
+      /* The folders, as a list rather than as loose rows. Its own container so
+         the section's heading has one child to sit over. */
+      .on-disk {
+        display: flex;
+        flex-direction: column;
+      }
       .built-on {
         display: flex;
         flex-direction: column;

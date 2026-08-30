@@ -102,13 +102,19 @@ export const ON_SCREEN: Pane = {
       handlers.screen({ sleepAfterMinutes: Number(rest.value) })
     })
 
+    /*
+      EACH NOTE INSIDE THE SECTION IT IS ABOUT.
+
+      Three sections and three sentences, and every sentence was a SIBLING of the
+      section it explains — so the column's 26px gap fell between a control and
+      its own note, and the note sat closer to the next heading than to the thing
+      it describes. `looking.ts` had the same shape and it put a sentence about
+      the workspace under "Codex profile".
+    */
     return [
-      field('Halo', halo),
-      element('p', 'note', forPronoun(SAYS.halo, view.pronoun)),
-      field('Shoulder button', chipSwitch),
-      element('p', 'note', forPronoun(SAYS.chip, view.pronoun)),
-      field('Rests', rest),
-      element('p', 'note', forPronoun(SAYS.rests, view.pronoun)),
+      field('Halo', halo, { note: forPronoun(SAYS.halo, view.pronoun) }),
+      field('Shoulder button', chipSwitch, { note: forPronoun(SAYS.chip, view.pronoun) }),
+      field('Rest', rest, { note: forPronoun(SAYS.rests, view.pronoun) }),
     ]
   },
 }

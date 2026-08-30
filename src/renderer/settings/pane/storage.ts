@@ -37,7 +37,7 @@
  * it is left out rather than estimated.
  */
 import { element } from '../../element'
-import { type Pane, type PaneHandlers } from '../pane'
+import { field, type Pane, type PaneHandlers } from '../pane'
 import { type Revealable } from '@shared/ipc'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
@@ -99,11 +99,24 @@ export const STORAGE: Pane = {
       forPronoun(SAYS.everythingOf, view.pronoun),
       element('code', undefined, view.about.userData),
     )
-    return [
-      where,
+    /*
+      THE FOLDERS UNDER A HEADING — B6's "On disk".
+
+      They were loose rows in the pane's column, under a sentence naming the root
+      they sit beneath, so a reader scanning for section headings found the
+      destruction below them and nothing above them. A row with a Show button is
+      a control, and every other control in this window is under a heading that
+      says what the group of them is.
+    */
+    const disk = element('div', 'on-disk')
+    disk.append(
       ...(Object.keys(view.folders) as Revealable[]).map((kind) =>
         folder(kind, view.folders[kind], handlers),
       ),
+    )
+    return [
+      field(forPronoun(SAYS.onDisk, view.pronoun), disk),
+      where,
       // Last, and under everything it acts on. The rows above say what is
       // there; this one is the only way to make them all empty, and reading
       // what it will take before reaching it is the point of the order.
