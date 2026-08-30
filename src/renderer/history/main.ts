@@ -397,6 +397,21 @@ function renderCards(): void {
       showingCharacter = true
       open = null
       looking.moved()
+      /*
+        Pressing a name has to LAND somewhere, and from the machine's page it
+        did not.
+
+        `showPlace` is the only thing that moves between the two pages and this
+        handler never called it. So from the machine, pressing a character drew
+        her sheet into a column that was `hidden`, marked her row current, and
+        left the window showing the machine — the rail is this window's table of
+        contents and one of its entries did nothing.
+
+        Only when the window is not already on one of her views. Switching from
+        one character to another while reading what she has said should stay on
+        what she has said; it is the same view of a different person.
+      */
+      if (!isHers(place)) showPlace('cast')
       // Wearing is what makes the switch real; the sheet follows from the
       // re-read rather than from a local guess about what changed.
       if (shelf !== null && id !== shelf.wornId) return handlers.wear(id)

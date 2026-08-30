@@ -1216,6 +1216,69 @@ async function checks(page, where = '') {
   await page.send('Emulation.setEmulatedMedia', { features: [] })
   await wait(300)
 
+  /* --- the rail is a table of contents, so every entry lands ------------- */
+  /*
+    From the machine's page, pressing a character in the rail did nothing
+    visible. `showPlace` is the only thing that moves between the two pages and
+    the rail's handler never called it, so her sheet was drawn into a column
+    that was `hidden` and the window went on showing the machine.
+
+    Pressed with the pointer rather than called: the handler is the thing under
+    test, and a check that calls the function it is checking would pass on a row
+    that is not wired to it at all.
+  */
+  await page.run(`document.getElementById('rail-machine').click()`)
+  await wait(700)
+  const landed = await page.run(`(() => {
+    const rows = [...document.querySelectorAll('#characters .rail-row')];
+    if (rows.length === 0) return { none: true };
+    const first = rows[0];
+    const name = first.querySelector('.rail-name').textContent.trim();
+    const wasMachine = document.getElementById('page-machine').getClientRects().length > 0;
+    first.click();
+    return { name, wasMachine };
+  })()`)
+  await wait(900)
+  const after = await page.run(`(() => {
+    const hers = document.getElementById('page-hers');
+    const machine = document.getElementById('page-machine');
+    const current = document.querySelector('#characters .rail-row[aria-current="true"] .rail-name');
+    return {
+      hers: hers.getClientRects().length > 0,
+      machine: machine.getClientRects().length > 0,
+      current: current === null ? null : current.textContent.trim(),
+      view: (document.querySelector('#views [aria-current="true"] .view-label') || {}).textContent,
+    };
+  })()`)
+  if (landed.none === true)
+    bad('rail-lands', 'the rail lists no characters, so nothing was pressed')
+  else if (landed.wasMachine !== true)
+    bad('rail-lands', 'the machine page was not showing, so the press proves nothing')
+  else if (!after.hers || after.machine)
+    bad(
+      'rail-lands',
+      'pressing ' +
+        JSON.stringify(landed.name) +
+        ' from the machine page left the window on the machine',
+    )
+  else if (after.current !== landed.name)
+    bad(
+      'rail-lands',
+      'pressing ' +
+        JSON.stringify(landed.name) +
+        ' landed on her page with ' +
+        JSON.stringify(after.current) +
+        ' marked current',
+    )
+  else
+    ok(
+      'rail-lands',
+      'pressing ' +
+        JSON.stringify(landed.name) +
+        ' from the machine page opens ' +
+        JSON.stringify((after.view ?? '').trim()),
+    )
+
   /* --- Rule 6: none of her colour on the machine's page ------------------ */
   /*
     "The machine is not her. It gets its own page, its own mark, and NONE OF HER
