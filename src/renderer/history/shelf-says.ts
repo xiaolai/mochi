@@ -233,6 +233,26 @@ export const SAYS = {
     he: 'his notes and his conversations',
     it: 'its notes and its conversations',
   },
+  /* A8's title for this screen. It was "System prompt", which names the
+     mechanism; the row that opens it, the rail's own vocabulary and the
+     artboard all call it her instruction. */
+  instruction: { she: 'Her instruction', he: 'His instruction', it: 'Its instruction' },
+  /* Beside Save and Abandon, where somebody about to press one is looking.
+     Autosave is the habit every other control on this shelf has taught, so the
+     one that does not has to say so at the control rather than in a paragraph
+     above it. */
+  notAsYouType: {
+    she: 'Not saved as you type. Saving lands on her next wake.',
+    he: 'Not saved as you type. Saving lands on his next wake.',
+    it: 'Not saved as you type. Saving lands on its next wake.',
+  },
+  /* Why the box goes dead for a moment — said before it happens, so the freeze
+     reads as a rule rather than as the window hanging. */
+  whileSaving: {
+    she: 'While a save is in flight, both of these and the text itself are unavailable — there is one document and two writers, and the honest resolution is that one of them waits.',
+    he: 'While a save is in flight, both of these and the text itself are unavailable — there is one document and two writers, and the honest resolution is that one of them waits.',
+    it: 'While a save is in flight, both of these and the text itself are unavailable — there is one document and two writers, and the honest resolution is that one of them waits.',
+  },
   assembled: {
     she: 'Write the prompt; Sent is the exact string she is handed once her character and her notes are folded in; Tools is the rest of what she is told, which is not editable. Saving lands on her next wake.',
     he: 'Write the prompt; Sent is the exact string he is handed once his character and his notes are folded in; Tools is the rest of what he is told, which is not editable. Saving lands on his next wake.',

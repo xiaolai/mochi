@@ -89,7 +89,6 @@ const DOCUMENTS: readonly {
       // `tabs` is gone with the inspector's own two-tab strip: Cast used to
       // carry a "next wake" panel and a "conversations" panel side by side, and
       // the Archive has the whole window now.
-      'panel-wake',
       'q',
       'calendar',
       'list',

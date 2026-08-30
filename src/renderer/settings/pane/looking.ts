@@ -12,6 +12,7 @@ import { type Pane, type PaneHandlers } from '../pane'
 import { CODEX_SAYS, REMEDY_SAYS } from '@shared/delegation'
 import { type SettingsCodex, type SettingsView } from '@shared/ipc'
 import { readinessOf, type Certainty, type ReadinessAction } from '../../rules/readiness'
+import { checkedLabel } from '../../rules/freshness'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
 import { field, options } from '../pane'
@@ -113,48 +114,33 @@ function workspacePicker(view: SettingsView, handlers: PaneHandlers): HTMLElemen
 }
 
 /**
- * Where the Codex profile's own settings file is, and a way to open it.
+ * The way into the profile's own file, beside the field that names it.
  *
- * Null when there is no profile at all: a row about a file for a thing nobody
- * has chosen is a row about nothing.
+ * B1 puts a "Show config" button on the profile's row, and that is a change of
+ * shape rather than of wording: this was a `.folder` block of its own, printed
+ * under every other setting in the group, saying "Settings for it live in
+ * <path>" with a "Show" beside it. So the pane ended with a raw filesystem path
+ * — the longest string on the page — under a heading it had nothing to do with,
+ * and the button that acts on the profile was two settings away from the profile.
+ *
+ * The path itself is gone from the surface. It said where to go, and the button
+ * goes there; a person who wants the path can copy it out of the panel the
+ * button opens. A page that both names a location and offers to open it is
+ * telling somebody to walk somewhere it will drive them.
+ *
+ * Null when there is no file to show — no profile at all, or a profile name for
+ * a file nobody has written yet. A button that reveals nothing looks broken.
  */
-function profileFileRow(view: SettingsView, handlers: PaneHandlers): HTMLElement | null {
-  if (view.lookup.profilePath === null) return null
-  /*
-    The FILE is the thing somebody edits, so it is named — and now reachable.
-
-    "There is a profile, somewhere, called something" is not an instruction
-    anybody can follow, which is why the path was printed. A path printed
-    beside no way of opening it is the same sentence one step further along:
-    it tells somebody where to go and leaves them to get there.
-
-    Two states, because the file may not be there. A profile is a NAME, and
-    nothing guarantees a file was ever written for it — the old line said
-    "settings for it live in" about a path that could be empty, and the
-    button would have done nothing at all.
-  */
-  const row = element('div', 'folder')
-  const left = element('div')
-  const said = element('div')
-  const path = element('code', undefined, view.lookup.profilePath)
-  if (view.lookup.profileExists) {
-    said.append('Settings for it live in ', path)
-  } else {
-    said.append('Nothing is there yet — ', path, ' has not been written.')
-  }
-  left.append(said)
-  row.append(left)
-  if (view.lookup.profileExists) {
-    const open = element('button', 'btn', 'Show')
-    open.type = 'button'
-    // No argument. Main holds the profile name and knows where Codex keeps
-    // its files, so the page never names the path it is displaying.
-    open.addEventListener('click', () => {
-      handlers.showProfile()
-    })
-    row.append(open)
-  }
-  return row
+function showConfig(view: SettingsView, handlers: PaneHandlers): HTMLElement | null {
+  if (view.lookup.profilePath === null || !view.lookup.profileExists) return null
+  const open = element('button', 'btn', 'Show config')
+  open.type = 'button'
+  // No argument. Main holds the profile name and knows where Codex keeps its
+  // files, so the page never names the path it is displaying.
+  open.addEventListener('click', () => {
+    handlers.showProfile()
+  })
+  return open
 }
 
 export const LOOKING: Pane = {
@@ -212,18 +198,39 @@ export const LOOKING: Pane = {
       handlers.lookup({ profile: name === '' ? null : name })
     })
 
-    const parts: Node[] = [
-      field('Workspace', wherever),
+    /*
+      The profile and the way into its file on ONE row — B1's shape, and the
+      picker's shape, so the two settings on this page that name a thing on disk
+      are composed the same way.
+    */
+    const chosen = element('div', 'picker')
+    chosen.append(profile)
+    const config = showConfig(view, handlers)
+    if (config !== null) chosen.append(config)
+
+    /*
+      EACH NOTE UNDER THE SETTING IT IS ABOUT.
+
+      There was one note on this pane, gated on `workspaceIsDefault` — a fact
+      about the WORKSPACE — and appended after the last field, which is the
+      profile. So a sentence about the workspace was drawn under "Codex profile"
+      and read as being about the profile, and the workspace itself, the setting
+      that decides everything she can read, was left with no sentence at all.
+    */
+    return [
+      codexBlock(view.lookup.codex, view.pronoun, handlers),
+      field('Workspace', wherever, {
+        hint: view.lookup.workspaceIsDefault ? 'nobody has chosen one' : '',
+        note: forPronoun(SAYS.workspaceNote, view.pronoun),
+      }),
       field('Web search', search),
-      field('Codex profile', profile),
+      field('Codex profile', chosen, {
+        note:
+          view.lookup.profile === null
+            ? forPronoun(SAYS.profileDefault, view.pronoun)
+            : forPronoun(SAYS.profileChosen, view.pronoun),
+      }),
     ]
-    parts.unshift(codexBlock(view.lookup.codex, view.pronoun, handlers))
-    if (view.lookup.workspaceIsDefault) {
-      parts.push(element('p', 'note', 'Nobody has chosen one, so this is the default.'))
-    }
-    const file = profileFileRow(view, handlers)
-    if (file !== null) parts.push(file)
-    return parts
   },
 }
 
@@ -296,7 +303,23 @@ function codexBlock(
 
   const again = element('button', 'btn', ACTION_SAYS[drawn.action])
   again.type = 'button'
-  head.append(light, element('span', 'codex-said', CODEX_SAYS[codex.readiness]), again)
+  /*
+    WHAT IT IS, then WHEN WE LOOKED — two lines, because they age differently.
+
+    B1 draws "checked 2 minutes ago · v0.148.0" under the sentence, and it is not
+    decoration: the sentence above it is a claim about a machine that can change
+    without this window hearing, so the reader needs to know how old the claim
+    is. A card that says "installed and signed in" with no timestamp is asking to
+    be believed indefinitely.
+
+    The version is the same fact the too-old comparison runs on. Saying it here
+    means somebody can check the comparison rather than trust it.
+  */
+  const said = element('div', 'codex-lines')
+  said.append(element('div', 'codex-said', CODEX_SAYS[codex.readiness]))
+  const when = checkedLabel({ checkedAt: codex.checkedAt, now: Date.now(), version: codex.version })
+  if (when !== null) said.append(element('div', 'codex-when', when))
+  head.append(light, said, again)
   box.append(head)
 
   if (codex.remedy !== null) {

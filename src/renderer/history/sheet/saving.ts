@@ -10,7 +10,7 @@
 
 import { SAYS } from '../shelf-says'
 import { element } from '../../element'
-import { type ShelfHandlers, section } from './row'
+import { type ShelfHandlers, section, settingRow } from './row'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { SIDE_NAMES } from '@shared/persona'
 import { type ByPronoun, forPronoun } from '@shared/pronoun'
@@ -121,14 +121,18 @@ export function bubbleSection(
   side.addEventListener('change', () => {
     handlers.save({ id: worn.id, bubbleSide: side.value })
   })
-  const where = element('div', 'field')
-  where.append(element('label', undefined, 'Which side'), side)
-
   return section(
     'Speech bubble',
     forPronoun(SAYS.bubbleWhen, view.pronoun),
     row,
-    where,
+    /*
+      `settingRow`, not a `.field` of its own — A1 draws this as an 82px label
+      beside the chooser, which is the shape every setting on her page has and
+      the reason that helper exists. It was the last user of the Machine tab's
+      150px label-beside-control grid, so one row on her page was composed by
+      the other page's rule.
+    */
+    settingRow('Which side', side),
     element('p', 'note', forPronoun(SAYS.bubbleSide, view.pronoun)),
   )
 }

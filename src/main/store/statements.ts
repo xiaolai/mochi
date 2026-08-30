@@ -57,8 +57,29 @@ export function prepareAll(db: DatabaseSync) {
       GROUP BY s.id HAVING count(t.id) > 0
       ORDER BY s.started_at DESC LIMIT ?
     `),
+    /*
+      The FIRST THING SAID in each one, as a correlated subquery.
+
+      A3 draws every row in the archive as that line in quotation marks with the
+      clock under it; without it the list is a column of `13:00 · 2 turns · 1
+      min`, which is four facts about a conversation and nothing that identifies
+      it. A subject exists only after a model has run and answered usably, so on
+      an ordinary archive almost every row had nothing but the clock.
+
+      A SUBQUERY, not a second join. This statement already groups by session to
+      count turns, and a second one-to-many through it multiplies the rows before
+      the count runs — the mistake `toolsFor` exists to avoid, made here would
+      report a two-turn conversation as having four.
+
+      Ordered `at, id` to match `turns`, so the line shown in the list is the
+      same line at the top of the transcript. `substr` because a row is one line
+      368px wide and the wire should not carry a whole opening paragraph per
+      conversation to draw eighty characters of it.
+    */
     sessions: db.prepare(`
-      SELECT s.token, s.started_at, s.ended_at, s.subject, count(t.id) AS turns
+      SELECT s.token, s.started_at, s.ended_at, s.subject, count(t.id) AS turns,
+        (SELECT substr(t2.text, 1, 240) FROM turn t2
+          WHERE t2.session_id = s.id ORDER BY t2.at, t2.id LIMIT 1) AS opening
       FROM session s LEFT JOIN turn t ON t.session_id = s.id
       WHERE s.persona_id = ? GROUP BY s.id ORDER BY s.started_at DESC
     `),

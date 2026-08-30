@@ -64,7 +64,14 @@ import { deletePersona, discardWrite, sweepDeletions } from './store/delete-pers
 import { readEdits, restoreBuiltIn } from './store/her-edits'
 import type { PersonaCatalog } from './store/personas'
 import { keepsFor, writePolicy } from './store/policy'
-import { checkPrompt, promptFile, readPrompt, seedPrompt, writePrompt } from './store/prompt'
+import {
+  MAX_PROMPT_CHARS,
+  checkPrompt,
+  promptFile,
+  readPrompt,
+  seedPrompt,
+  writePrompt,
+} from './store/prompt'
 import {
   readResting,
   readWebSearch,
@@ -2455,6 +2462,7 @@ ipcMain.handle('history:list', () => {
         turns: one.turns,
         tools: one.tools,
         subject: one.subject,
+        opening: one.opening,
       })),
   }
 })
@@ -2927,7 +2935,12 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     // The other half of the same answer. Rendered here rather than in the
     // window because the window must not re-derive what goes on the wire.
     toolsSent: renderTools(mayDo.tools),
-    prompt: { text: prompt, path: promptFile(userData), slots: [...PROMPT_SLOTS] },
+    prompt: {
+      text: prompt,
+      path: promptFile(userData),
+      slots: [...PROMPT_SLOTS],
+      limit: MAX_PROMPT_CHARS,
+    },
     note: { text: note, previous: previousNote(userData, worn.id) },
   }
 })

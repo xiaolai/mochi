@@ -187,11 +187,25 @@ describe('the day a conversation is filed under', () => {
     expect(dayLabel(NOW - 30 * DAY, NOW)).toMatch(/\d/)
   })
 
-  it('carries the clock on its own for the rows underneath', () => {
-    const at = new Date(2026, 7, 18, 9, 41).getTime()
-    expect(clockLabel(at)).toBe(
-      new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
-    )
+  it('carries the clock on its own, in twenty-four hours', () => {
+    /*
+      Asserted as a STRING, not against the same locale call the function makes.
+
+      It compared `clockLabel(at)` to `toLocaleTimeString(...)` with the same
+      options — a test that agrees with the implementation by construction and
+      would have passed on "9:41 AM", which is the thing it was there to catch.
+      These stamps are set in a monospaced column so they can be compared down
+      the page, and a meridiem makes that column ragged.
+    */
+    expect(clockLabel(new Date(2026, 7, 18, 9, 41).getTime())).toBe('09:41')
+    expect(clockLabel(new Date(2026, 7, 18, 13, 0).getTime())).toBe('13:00')
+  })
+
+  it('numbers midnight 00, not 24', () => {
+    // `hour12: false` gives h24 in en-GB, which writes midnight as 24:00 — so
+    // the first conversation of a day sorts to the bottom of the column it
+    // begins. `hourCycle: 'h23'` is the request that cannot do that.
+    expect(clockLabel(new Date(2026, 7, 18, 0, 0).getTime())).toBe('00:00')
   })
 })
 

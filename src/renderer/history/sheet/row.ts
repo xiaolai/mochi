@@ -105,7 +105,23 @@ export function settingRow(
   const row = element('div', 'setting')
   const word = element('label', 'setting-of', label)
   const id = `setting-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`
-  const field = control instanceof HTMLInputElement ? control : control.querySelector('input')
+  /*
+    ANY labelable control, not just an input.
+
+    This looked for `HTMLInputElement` only, so a `<select>` — "Which side", the
+    one control on her page that is one — fell to the group branch and was given
+    `role="group"` with `aria-labelledby`. That is a promise the DOM cannot keep:
+    a select is a single control, and announcing it as a group of one leaves a
+    screen reader describing a container where there is a chooser. The group
+    branch is for a ROW OF BUTTONS, which is the only thing `for` cannot point at.
+  */
+  const labelable = 'input, select, textarea'
+  const field =
+    control instanceof HTMLInputElement ||
+    control instanceof HTMLSelectElement ||
+    control instanceof HTMLTextAreaElement
+      ? control
+      : control.querySelector<HTMLElement>(labelable)
   if (field !== null) {
     field.id = id
     word.htmlFor = id

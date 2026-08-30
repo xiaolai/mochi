@@ -168,6 +168,25 @@ export const SAYS = {
     design are left in the interface, and one of them had gone false anyway,
     still saying her colour retints a window that no longer takes a hue.
   */
+  /* A7's apparatus column: who the grants apply to, how many are withheld, and
+     when a change to one takes effect. */
+  permitsForHead: { she: 'In force for', he: 'In force for', it: 'In force for' },
+  permitsForWhom: {
+    she: 'the worn character · the live one',
+    he: 'the worn character · the live one',
+    it: 'the worn character · the live one',
+  },
+  permitsWithheldHead: { she: 'Withheld', he: 'Withheld', it: 'Withheld' },
+  permitsWhenHead: {
+    she: 'Sent at her next wake',
+    he: 'Sent at his next wake',
+    it: 'Sent at its next wake',
+  },
+  permitsWhen: {
+    she: 'off takes effect at once',
+    he: 'off takes effect at once',
+    it: 'off takes effect at once',
+  },
   marginNow: { she: 'Right now', he: 'Right now', it: 'Right now' },
   marginAsleep: { she: 'asleep', he: 'asleep', it: 'asleep' },
   marginLastAwake: { she: 'Last awake', he: 'Last awake', it: 'Last awake' },

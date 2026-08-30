@@ -32,7 +32,7 @@ function settled(): SettingsView {
       profile: null,
       profilePath: null,
       profileExists: false,
-      codex: { readiness: 'ready', remedy: null, version: null },
+      codex: { readiness: 'ready', remedy: null, version: null, checkedAt: null },
     },
     hearing: {
       languages: [],
@@ -172,7 +172,10 @@ describe('the dot, and what it is for', () => {
       const view = settled()
       const unhappy: SettingsView = {
         ...view,
-        lookup: { ...view.lookup, codex: { readiness, remedy: 'login', version: null } },
+        lookup: {
+          ...view.lookup,
+          codex: { readiness, remedy: 'login', version: null, checkedAt: null },
+        },
       }
       const looking = PANES.find((one) => one.id === 'looking')
       expect(looking?.attention(unhappy)).toContain('Codex')

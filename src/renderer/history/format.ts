@@ -135,9 +135,33 @@ export function dayLabel(at: number, now: number): string {
   })
 }
 
-/** The time of day on its own, for a row under a day heading. */
+/**
+ * The time of day on its own, for a row under a day heading.
+ *
+ * TWENTY-FOUR HOUR, whatever the locale's habit is, and that is a decision about
+ * this column rather than about the reader. These stamps are set in JetBrains
+ * Mono so a list of them lines up and can be compared down the page; `01:00 PM`
+ * is eight characters against `13:00`'s five, so a locale that prefers it turns
+ * an aligned column into a ragged one. Every artboard that draws a time —
+ * A3's rows, A2b's "13:02", A8's "22:04" — draws it this way.
+ *
+ * The DATE is left to the locale, because the order of day and month is a real
+ * regional difference and nothing about a fixed-width column decides it.
+ */
 export function clockLabel(at: number): string {
-  return new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  /*
+    `hourCycle: 'h23'`, not `hour12: false`.
+
+    They are not the same request. `hour12: false` selects whichever 24-hour
+    cycle the locale prefers, and en-GB prefers h24 — which numbers midnight as
+    24:00, so the first conversation of a day sorted to the bottom of a column
+    it starts. h23 is 00 through 23 and says so.
+  */
+  return new Date(at).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
 }
 
 /**

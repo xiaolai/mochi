@@ -74,7 +74,6 @@ import {
   troublesBodyEl,
   troublesDrawerEl,
   troublesLabelEl,
-  wakeEl,
   pageHersEl,
   pageMachineEl,
   railMachineEl,
@@ -499,29 +498,66 @@ function renderPermits(): void {
     empty(permitsEl, forPronoun(SAYS.readingPermits, saying()))
     return
   }
-  const drawn = [...MAY_DO.render(machine, machineHandlers)]
   /*
-    Split on the pane's own heading rather than restructuring it.
+    THE WHOLE PANE, and nothing else on the screen.
 
-    `panes.ts` is imported unchanged and its tests still describe what it
-    returns; the heading is where "what you permit" stops and "what she is told
-    she can do" starts, and it is already there because the pane always drew
-    both.
+    Two things used to be taken off it. The pane's output was split at its first
+    heading and the tail went to the margin, so the CAPABILITY DESCRIPTIONS —
+    the largest body of prose here — were rendered in a 224px strip. And the
+    assembled instruction was drawn underneath, inline, which is a second full
+    editor for a document that already has a screen of its own.
+
+    A7 draws neither. It is two sections of reading column and a margin of four
+    facts, and the instruction lives on A8, one press away from her page.
   */
-  const at = drawn.findIndex((node) => node instanceof HTMLHeadingElement)
-  permitsEl.replaceChildren(...(at === -1 ? drawn : drawn.slice(0, at)))
+  permitsEl.replaceChildren(...MAY_DO.render(machine, machineHandlers))
   /*
-    The capability descriptions are apparatus and go in the margin; the
-    assembled instruction is the THING ITSELF and goes in the reading column.
+    FACTS, like every other apparatus column.
 
-    Both were in the margin, which is 236px — so her instructions, the largest
-    body of prose in this window, were rendered in a column narrower than the
-    sentence you are reading. The margin's own definition is what settles it:
-    "where a thing is stored, when it was last used, whose recommendation it is.
-    Never the thing itself."
+    Who the grants are in force for, how many are withheld, and how long the
+    instruction she gets at her next wake is. The last of those is the pointer
+    at A8: it is the one number about that document worth carrying here, and it
+    is apparatus rather than the thing itself — which is exactly the rule the
+    inline editor was breaking.
   */
-  marginPermitsEl.replaceChildren(...(at === -1 ? [] : drawn.slice(at)))
-  wakeEl.replaceChildren(...(shelf === null ? [] : assembledPanel(shelf, handlers)))
+  const grants = machine.grants
+  const withheld = grants.filter((one) => !one.allowed).length
+  const lines = shelf === null ? null : shelf.assembled.split('\n').length
+  marginPermitsEl.replaceChildren(
+    ...marginColumn(
+      marginBlock(
+        forPronoun(SAYS.permitsForHead, saying()),
+        marginFacts(wornName() ?? forPronoun(SAYS.permitsForWhom, saying())),
+      ),
+      marginBlock(
+        forPronoun(SAYS.permitsWithheldHead, saying()),
+        marginFacts(`${String(withheld)} of ${String(grants.length)}`),
+      ),
+      marginBlock(
+        forPronoun(SAYS.permitsWhenHead, saying()),
+        marginFacts(
+          lines === null
+            ? forPronoun(SAYS.permitsWhen, saying())
+            : `${String(lines)} line${lines === 1 ? '' : 's'}`,
+        ),
+      ),
+    ),
+  )
+}
+
+/**
+ * Who the grants are in force for, named — A7's "mochi · the live one".
+ *
+ * The margin said "the worn character · the live one", which is a description of
+ * where to look rather than an answer. This column exists to say which thing a
+ * screen is about, and on a window that can wear any of several characters the
+ * name is the entire fact.
+ *
+ * Null before the first read answers, when there is no name to give.
+ */
+function wornName(): string | null {
+  const worn = shelf?.characters.find((one) => one.id === shelf?.wornId)
+  return worn === undefined ? null : `${worn.name} · the live one`
 }
 
 /**
@@ -725,7 +761,6 @@ function showPlace(next: Place): void {
   talkEl.hidden = place !== 'archive'
   listEl.hidden = place !== 'archive'
   permitsEl.hidden = place !== 'permits'
-  wakeEl.hidden = place !== 'permits'
   marginPermitsEl.hidden = place !== 'permits'
 
   // Search and the day strip belong to what she has said and to nothing else.
@@ -875,11 +910,6 @@ function renderPlaces(): void {
     button.tabIndex = here ? 0 : -1
   }
   railMachineEl.setAttribute('aria-current', String(place === 'machine'))
-}
-
-function renderWake(): void {
-  if (shelf === null) return
-  wakeEl.replaceChildren(...assembledPanel(shelf, handlers))
 }
 
 /* ---- doing things -------------------------------------------------------- */
@@ -1072,7 +1102,6 @@ async function readShelf(): Promise<void> {
    */
   const unreadable = applyAccent(document.documentElement, view.face)
   renderCards()
-  renderWake()
   if (unreadable.length > 0) {
     say(`That character's colour is not readable, so the built-in is used.`, true)
   }
@@ -1081,17 +1110,25 @@ async function readShelf(): Promise<void> {
 /* ---- the conversations --------------------------------------------------- */
 
 /**
- * One row in the archive: when it was, and what it was made of.
+ * One row in the archive: WHAT WAS SAID, and when.
  *
- * ONE line, not two. The day is the heading above a run of these, so the row
- * says the clock and the facts — `09:41 · 14 turns · 7 min` — where it used to
- * repeat "Today" on every entry under a list that was already in date order.
+ * ## The line comes first now
  *
- * The artifact draws a second line under it with a subject: "the three files,
- * and what moved this morning". Nothing writes one. A conversation is stored as
- * its turns and nothing summarises them, so a subject here would either be an
- * invention or the first line of the transcript wearing a title's clothes. It
- * is left out rather than faked, and `plan-v2.md` W5 carries what it would take.
+ * This was the clock and the facts — `09:41 · 14 turns · 7 min` — with a subject
+ * under it when one existed. A subject is written by a model call after a
+ * conversation ends, so on an ordinary archive it exists almost nowhere, and the
+ * list was a column of clocks: four true facts per row and nothing that says
+ * which conversation it is. Somebody looking for the one about the deploy had to
+ * open them.
+ *
+ * A3 inverts it. The first thing said is the row's line, IN QUOTATION MARKS, and
+ * the clock and the facts go under it in mono. The old note here said a first
+ * line would be "the first line of the transcript wearing a title's clothes" —
+ * and that is exactly what the quotation marks answer. A quoted line is a
+ * quotation; only an unquoted one claims to be a summary. Nothing is invented:
+ * every character on that line was said.
+ *
+ * A real subject still wins, and is drawn unquoted, because it IS a summary.
  */
 function row(
   label: string,
@@ -1122,6 +1159,14 @@ function row(
    * whether the second is the one they meant.
    */
   subject: string | null,
+  /**
+   * The first thing said in it, drawn when there is no subject.
+   *
+   * Separate from `subject` rather than resolved by the caller, because the two
+   * are drawn differently — quotation marks on one and not the other — and a
+   * caller that collapsed them would have to carry which kind it had passed.
+   */
+  opening: string | null,
 ): HTMLButtonElement {
   const button = document.createElement('button')
   button.className = picking.chosen().includes(token) ? 'entry picked' : 'entry'
@@ -1147,14 +1192,25 @@ function row(
   } else {
     for (const fact of detail) when.append(fact)
   }
-  button.append(when)
 
+  /*
+    THE LINE, ABOVE THE CLOCK — A3's order, and the reason is which of the two a
+    person is scanning for. Appended first; `when` follows it.
+  */
   if (subject !== null) {
     const line = document.createElement('div')
-    line.className = 'subject'
+    line.className = 'said-of'
     line.textContent = subject
     button.append(line)
+  } else if (opening !== null) {
+    const line = document.createElement('div')
+    line.className = 'said-of quoted'
+    // Curly quotes, and the text between them untouched. `textContent`, so an
+    // opening line that is itself full of punctuation is drawn, not parsed.
+    line.textContent = `\u201c${opening}\u201d`
+    button.append(line)
   }
+  button.append(when)
 
   if (snippet !== null) {
     const line = document.createElement('div')
@@ -1648,6 +1704,7 @@ function renderList(now: number): void {
         one.token,
         null,
         one.subject,
+        one.opening,
       ),
     ),
   )
@@ -1706,6 +1763,10 @@ function renderHits(hits: readonly HitGroup[], term: string): void {
           // From the conversation list the window already holds. A hit carries
           // the matched turn, not the conversation it is in.
           conversations.find((one) => one.token === hit.token)?.subject ?? null,
+          // A hit already shows the matched turn, so quoting the opening line
+          // above it would put two quotations on one row saying different
+          // things. The subject is a summary and does not collide; this does.
+          null,
         ),
       )
     }
@@ -1784,8 +1845,17 @@ async function readConversations(): Promise<void> {
     // the archive and this machine are the other two — and the tray's single
     // item names the application for the same reason.
     document.title = `Mochi · ${name ?? answer.persona}`
+    /*
+      WHAT THE NUMBER COUNTS, said in the number's own line — A3's "4
+      conversations this month".
+
+      The archive is filtered to one month by the strip above it, so a bare "4
+      conversations" beside a list showing May is a claim about the whole
+      archive that happens to be a claim about May. The two are only the same
+      number by accident, and the accident is invisible.
+    */
     const many = conversations.length
-    countEl.textContent = `${String(many)} ${many === 1 ? 'conversation' : 'conversations'}`
+    countEl.textContent = `${String(many)} ${many === 1 ? 'conversation' : 'conversations'} this month`
     /*
       A live query WINS over the calendar.
 
@@ -2231,12 +2301,25 @@ function deeperScreen(shelf: ShelfView, handlers: ShelfHandlers): readonly HTMLE
     deeperInto = null
     openCharacter()
   })
+  if (deeperInto === 'instruction') {
+    /*
+      A8, which had no screen: the row called "Her instruction" opened a section
+      headed "Who she is" holding her style and her two spoken moments, while
+      the assembled document — the thing that phrase names — was drawn inline at
+      the foot of the permits page, where A7 draws nothing of the kind.
+
+      Both, in A8's order. The panel is the screen the artboard draws; the
+      moments are the two fields it does not, and they are the same subject —
+      what she is told — so this is the only row they belong under.
+    */
+    const panel = element('div', 'wake')
+    panel.append(...assembledPanel(shelf, handlers))
+    return [back, panel, promptSection(shelf, worn, handlers)]
+  }
   const screen =
     deeperInto === 'faces'
       ? expressionsSection(shelf, worn, handlers)
-      : deeperInto === 'notes'
-        ? memorySection(shelf, handlers)
-        : promptSection(shelf, worn, handlers)
+      : memorySection(shelf, handlers)
   return [back, screen]
 }
 

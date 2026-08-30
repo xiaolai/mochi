@@ -722,7 +722,7 @@ describe('a class the frame writes is not also one the renderer writes', () => {
  * A class built in more than one file is styled without an ancestor.
  *
  * The fourth rule in this file, and the one with the most instances. A class
- * whose only rule is `#panel-wake .row` or `.grant .switch` is styled in the one
+ * whose only rule is `.wake .row` or `.grant .switch` is styled in the one
  * place its author was looking at and unstyled everywhere else — and unstyled is
  * not blank, it is the browser's defaults, which is a `<div>` that is a block
  * when the file that made it assumed a flex row.
@@ -730,7 +730,7 @@ describe('a class the frame writes is not also one the renderer writes', () => {
  *   `.note`    forty-four uses, one rule: `.section .note`. Everywhere outside
  *              a settings row it was unmeasured body text in the operating
  *              face.
- *   `.row`     four files, one rule: `#panel-wake .row`, which set
+ *   `.row`     four files, one rule: `.wake .row`, which set
  *              `align-items: center` on something still `display: block`. So
  *              the rule did nothing, the `.grow` spacer inside it did nothing,
  *              and Save and Reset touched edge to edge under all twenty-seven

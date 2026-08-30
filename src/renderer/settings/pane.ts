@@ -6,6 +6,7 @@
  * vocabulary. Leaving those in `panes.ts` would have made every pane import
  * the file that imports it.
  */
+import { section } from '../history/sheet/row'
 import { element } from '../element'
 import {
   type ChosenWorkspace,
@@ -79,11 +80,33 @@ export interface Pane {
   readonly render: (view: SettingsView, handlers: PaneHandlers) => readonly Node[]
 }
 
-export function field(label: string, control: HTMLElement): HTMLElement {
-  const row = element('div', 'field')
-  const name = element('label', undefined, label)
-  row.append(name, control)
-  return row
+/**
+ * A setting on the machine's page: a caps heading, the control, and a note.
+ *
+ * THE SAME SECTION HER PAGE USES, which is the whole change. This built a
+ * two-column grid — a 150px label beside the control, vertically centred — and
+ * that shape appears nowhere in B1, B2, B4 or B7. Every one of them draws a
+ * setting as an uppercase 11px heading with the control UNDER it and a sentence
+ * under that, which is `section()` exactly. So the two pages of one window were
+ * composed by two different rules, and the machine's was the v1 one.
+ *
+ * The note is part of the section rather than a sibling pushed on at the end.
+ * `looking.ts` had one `<p>` gated on the workspace being the default and
+ * appended after the LAST field, so a sentence about the workspace was drawn
+ * under "Codex profile" and read as being about the profile.
+ *
+ * `hint` is the mono fact beside the heading — B2's "3 of 3", B4's "after 10
+ * min". Empty when there is none; `sectionHead` draws an empty span, which
+ * occupies nothing.
+ */
+export function field(
+  label: string,
+  control: HTMLElement,
+  extra?: { readonly hint?: string; readonly note?: string },
+): HTMLElement {
+  const body: HTMLElement[] = [control]
+  if (extra?.note !== undefined) body.push(element('p', 'note', extra.note))
+  return section(label, extra?.hint ?? '', ...body)
 }
 
 /**

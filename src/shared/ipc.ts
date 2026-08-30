@@ -804,6 +804,17 @@ export interface SettingsCodex {
    * false. See `CONFINEMENT_MEASURED_AGAINST`.
    */
   readonly version: string | null
+  /**
+   * When the check that produced this last finished, or null before the first
+   * one does.
+   *
+   * On the wire because the answer is CACHED: `checkCodex` spawns two child
+   * processes, so it runs at launch and when the button is pressed, and never
+   * on a redraw. Everything above is therefore a claim about the machine as it
+   * was at this instant, and a card that states it without saying when is
+   * asking to be believed indefinitely. B1 draws the age; see `freshness.ts`.
+   */
+  readonly checkedAt: number | null
 }
 
 /**

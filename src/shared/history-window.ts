@@ -57,6 +57,14 @@ export interface HistoryConversation {
    * string that means nothing.
    */
   readonly subject: string | null
+  /**
+   * The first thing said in it, or null when nothing was.
+   *
+   * The archive's row is titled by this when there is no subject, which is the
+   * ordinary case — A3 draws every row that way, in quotation marks, so it
+   * reads as the quotation it is rather than as a summary nothing wrote.
+   */
+  readonly opening: string | null
 }
 
 /** One capability, and how many times it was called in one conversation. */
@@ -223,6 +231,19 @@ export interface ShelfView {
     readonly path: string
     /** Which tokens move a piece. Sent, so the hint cannot list a stale one. */
     readonly slots: readonly string[]
+    /**
+     * The most characters main will store, so the box can show its own ceiling.
+     *
+     * A8 draws the count as "318 / 400 characters" and A2b draws her notes the
+     * same way, which is the shape a limited box takes. Without it the editor
+     * accepted any length and the ceiling was discovered by having a save
+     * refused — after the writing, which is the one moment it is expensive.
+     *
+     * On the wire rather than restated in the renderer: `MAX_PROMPT_CHARS` is
+     * main's rule about main's file, and a second copy here is a number that
+     * can go stale while still looking authoritative.
+     */
+    readonly limit: number
   }
   readonly note: SettingsNote
 }

@@ -643,8 +643,13 @@ describe('rebinding one global key', () => {
  * in, because probing spawns child processes with a deadline each and this runs
  * on every redraw of the window.
  */
-const READY = { readiness: 'ready', remedy: null, version: null } as const
-const MISSING = { readiness: 'not-installed', remedy: 'install', version: null } as const
+const READY = { readiness: 'ready', remedy: null, version: null, checkedAt: null } as const
+const MISSING = {
+  readiness: 'not-installed',
+  remedy: 'install',
+  version: null,
+  checkedAt: null,
+} as const
 
 /**
  * Which side her words sit on, now that it is HERS.

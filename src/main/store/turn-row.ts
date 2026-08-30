@@ -79,6 +79,19 @@ export interface Session {
    * for both, so the column never holds a string that means nothing.
    */
   readonly subject: string | null
+  /**
+   * The first thing said in it, or null when nothing was.
+   *
+   * What the archive shows when there is no subject, which is most of the time.
+   * It is not a title and is not drawn as one — A3 puts it in quotation marks
+   * precisely so it reads as a quotation: the line is somebody's actual words,
+   * and dressing them as a summary would be the invention this deliberately is
+   * not making.
+   *
+   * Null for a conversation with no turns, which is a real state — she can be
+   * woken and put back to sleep without a word.
+   */
+  readonly opening: string | null
 }
 
 /** One capability, and how many times it was called in one conversation. */

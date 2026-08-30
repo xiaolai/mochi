@@ -46,9 +46,20 @@ let codexPath: string | null = null
  */
 let codexStatus: CodexStatus | null = null
 
+/**
+ * When the check that set `codexStatus` finished.
+ *
+ * Beside the status rather than inside it: `CodexStatus` is what the probe
+ * found, and this is when we asked — the second is a fact about this process,
+ * not about the machine, and `status.ts` is pure of clocks on purpose.
+ */
+let codexCheckedAt: number | null = null
+
 /** The last answer, reduced to what a renderer may hear. See `SettingsCodex`. */
 export function codexForWindow(): SettingsCodex {
-  if (codexStatus === null) return { readiness: 'timed-out', remedy: 'retry', version: null }
+  if (codexStatus === null) {
+    return { readiness: 'timed-out', remedy: 'retry', version: null, checkedAt: null }
+  }
   return {
     readiness: readinessOf(codexStatus),
     remedy: remedyFor(codexStatus),
@@ -65,6 +76,9 @@ export function codexForWindow(): SettingsCodex {
       measurement" unanswerable rather than false.
     */
     version: 'version' in codexStatus ? codexStatus.version : null,
+    // A timestamp, not a duration: the renderer redraws on its own schedule and
+    // has to be able to say how old this is at the moment it draws.
+    checkedAt: codexCheckedAt,
   }
 }
 
@@ -88,6 +102,7 @@ export async function checkCodexNow(): Promise<SettingsCodex> {
     home: app.getPath('home'),
   })
   codexStatus = status
+  codexCheckedAt = Date.now()
   // From the check that RAN it, not from a second search. There were two
   // answers to "where is Codex" and only this one knows the file is executable.
   codexPath = pathOf(status)

@@ -632,6 +632,13 @@ function buildTranscripts(db: DatabaseSync, path: string): Transcripts {
         // rather than `null` on some drivers, so both become null — the one
         // answer the rest of the app is written against.
         subject: typeof row['subject'] === 'string' ? row['subject'] : null,
+        // Same two-states-into-one as `subject`: a conversation with no turns
+        // reads null, and an empty first turn — she was cut off before a word
+        // survived — must not become an empty quotation on the row.
+        opening:
+          typeof row['opening'] === 'string' && row['opening'].trim() !== ''
+            ? row['opening']
+            : null,
         // EMPTY, never absent. Most conversations call nothing, and a caller
         // that had to tell "none" from "not loaded" would get it wrong once.
         tools: byToken.get(token) ?? [],

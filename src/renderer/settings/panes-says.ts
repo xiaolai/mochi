@@ -22,12 +22,13 @@ export const SAYS = {
     withheld it everywhere. The switches are the same; what changed is who they
     are about, and a pane that does not say that is a pane that misleads.
   */
-  mayDoHead: { she: 'What you permit', he: 'What you permit', it: 'What you permit' },
-  mayDoWhose: {
-    she: 'These are for the character she is wearing. Each one has her own.',
-    he: 'These are for the character he is wearing. Each one has his own.',
-    it: 'These are for the character it is wearing. Each one has its own.',
+  grantInForce: { she: 'in force now', he: 'in force now', it: 'in force now' },
+  grantAtWake: {
+    she: 'applies from her next wake',
+    he: 'applies from his next wake',
+    it: 'applies from its next wake',
   },
+  mayDoHead: { she: 'What you permit', he: 'What you permit', it: 'What you permit' },
   atOnce: {
     she:
       'Turning one off takes effect at once, and she is told — she will say she can no longer ' +
@@ -121,6 +122,34 @@ export const SAYS = {
   /* The hint inside the empty workspace field. Unreachable in practice — the
      workspace always resolves to at least the default — and it keeps the box's
      edge while it is empty, which is what `:placeholder-shown` reads. */
+  /* B1's sentence under the workspace picker. It says the LIMIT, not the
+     purpose: "the one folder" and "nothing above it" are the two facts a person
+     needs to predict what a lookup will answer, and neither was on the page. */
+  workspaceNote: {
+    she: 'The one folder she may read. Nothing above it is reachable.',
+    he: 'The one folder he may read. Nothing above it is reachable.',
+    it: 'The one folder it may read. Nothing above it is reachable.',
+  },
+  /*
+    Under the profile field when nobody has chosen one.
+
+    The second sentence is B1's and it is a WARNING, not a description: read-only
+    confines what Codex may write, and a profile's own MCP servers are outside
+    that confinement. Somebody about to type a profile name here should know
+    that before they type it, not after.
+  */
+  profileDefault: {
+    she: 'Nobody has chosen one, so this is the default. A profile can carry its own MCP servers, which read-only does not confine.',
+    he: 'Nobody has chosen one, so this is the default. A profile can carry its own MCP servers, which read-only does not confine.',
+    it: 'Nobody has chosen one, so this is the default. A profile can carry its own MCP servers, which read-only does not confine.',
+  },
+  /* The same warning, once a profile IS chosen — which is when it matters most,
+     and when the sentence above stops being true. */
+  profileChosen: {
+    she: 'A profile can carry its own MCP servers, which read-only does not confine.',
+    he: 'A profile can carry its own MCP servers, which read-only does not confine.',
+    it: 'A profile can carry its own MCP servers, which read-only does not confine.',
+  },
   workspacePlaceholder: {
     she: 'a folder she may read',
     he: 'a folder he may read',
@@ -144,16 +173,26 @@ export const SAYS = {
     be changed, which is `prompts.ts`'s own complaint about the state before
     that pane existed, one pane along.
   */
+  /*
+    A7's sentence, which answers a different question than the one this used to.
+
+    It opened "Not fixed." — two words that read as an unresolved defect before
+    they read as "these words are not immutable", which is the opposite meaning
+    and the one somebody reaches first on a page about permissions. A7 leads
+    with the fact that explains why the block below is so long, and puts the
+    editability in the heading's hint, where it is four words instead of a
+    clause.
+  */
   toolWording: {
     she:
-      'Not fixed. Every description here can be rewritten under "What she is told", and what ' +
-      'you write is what she is sent.',
+      'The largest body of text she is given. You can read all of it; the wording lives under ' +
+      '"What she is told".',
     he:
-      'Not fixed. Every description here can be rewritten under "What he is told", and what ' +
-      'you write is what he is sent.',
+      'The largest body of text he is given. You can read all of it; the wording lives under ' +
+      '"What he is told".',
     it:
-      'Not fixed. Every description here can be rewritten under "What it is told", and what ' +
-      'you write is what it is sent.',
+      'The largest body of text it is given. You can read all of it; the wording lives under ' +
+      '"What it is told".',
   },
   noCli: {
     she: 'The Codex CLI could not be found, so she cannot look anything up.',

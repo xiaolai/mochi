@@ -175,7 +175,12 @@ function wakeTabs(parts: {
   readonly panes: Readonly<Record<WakePane, HTMLElement>>
   readonly actions: HTMLElement
   readonly count: HTMLElement
-  readonly sizes: () => { readonly sent: number; readonly tools: number; readonly draft: number }
+  readonly sizes: () => {
+    readonly sent: number
+    readonly tools: number
+    readonly draft: number
+    readonly limit: number
+  }
 }): { readonly element: HTMLElement; readonly draw: () => void } {
   const strip = element('div', 'switchers wake-tabs')
   let showing: WakePane = 'sent'
@@ -210,7 +215,11 @@ function wakeTabs(parts: {
 export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readonly HTMLElement[] {
   const head = element('div', 'row')
   const count = element('span', 'meta')
-  head.append(element('h3', undefined, 'System prompt'), element('span', 'grow'), count)
+  head.append(
+    element('h3', undefined, forPronoun(SAYS.instruction, view.pronoun)),
+    element('span', 'grow'),
+    count,
+  )
 
   const editor = element('textarea', 'wake-edit')
   editor.value = view.prompt.text
@@ -249,10 +258,25 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
   */
   const save = element('button', 'btn primary', 'Save')
   save.type = 'button'
-  const cancel = element('button', 'btn', 'Cancel')
+  /*
+    ABANDON, not Cancel — A8's word, and the more truthful one.
+
+    "Cancel" is what a dialogue says, and it reads as backing out of the screen
+    rather than out of the edit: pressing it here keeps you exactly where you
+    are and throws away what you typed. Abandon says which of the two it does.
+  */
+  const cancel = element('button', 'btn', 'Abandon')
   cancel.type = 'button'
   const actions = element('div', 'row wake-actions')
-  actions.append(save, cancel)
+  /*
+    The rule about saving sits ON the row with the buttons.
+
+    Every other control on this shelf writes on `change`, so somebody arriving
+    here has been taught that leaving a field is enough. The one control that
+    breaks that habit has to say so where the hand is going, not in the
+    paragraph above the box.
+  */
+  actions.append(save, cancel, element('span', 'note', forPronoun(SAYS.notAsYouType, view.pronoun)))
 
   const { element: tabs, draw } = wakeTabs({
     panes: { sent, tools: toolsBox, write: editor },
@@ -262,6 +286,7 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
       sent: view.assembled.length,
       tools: view.toolsSent.length,
       draft: editor.value.length,
+      limit: view.prompt.limit,
     }),
   })
 
@@ -286,6 +311,7 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
       sent: view.assembled.length,
       tools: view.toolsSent.length,
       draft: editor.value.length,
+      limit: view.prompt.limit,
     })
   }
   save.disabled = true
@@ -327,7 +353,18 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
   where.append(element('code', undefined, view.prompt.path))
 
   draw()
-  return [head, note, where, sent, toolsBox, editor, actions]
+  return [
+    head,
+    note,
+    where,
+    sent,
+    toolsBox,
+    editor,
+    actions,
+    // Said before the box goes dead, so the freeze reads as a rule rather than
+    // as the window hanging. See `editing.ts` for the lock it describes.
+    element('p', 'note', forPronoun(SAYS.whileSaving, view.pronoun)),
+  ]
 }
 
 /**

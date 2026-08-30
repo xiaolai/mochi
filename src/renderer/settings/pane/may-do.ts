@@ -14,15 +14,30 @@ import { GRANT_SPECS } from '@shared/grants'
 import { type GrantUse } from '@shared/ipc'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
-function lastUsedLabel(use: GrantUse): string {
-  if (use.kind === 'not-recorded') return 'Use is not recorded'
-  if (use.kind === 'never') return 'Never used'
-  return `Last used ${new Date(use.at).toLocaleString([], {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })}`
+/**
+ * When it was last used, and when a change to it takes effect.
+ *
+ * TWO facts on one line, because A7 draws them that way and they answer the two
+ * questions a switch raises: has this been doing anything, and if I move it,
+ * when does that matter. "use is not recorded · applies from her next wake",
+ * "last used 14 May · 13:01", "never used · in force now".
+ *
+ * Sentence case, because it is a machine fact rather than a label — it was
+ * "Use is not recorded", which reads as a heading for something.
+ */
+function lastUsedLabel(use: GrantUse, when: string): string {
+  const used =
+    use.kind === 'not-recorded'
+      ? 'use is not recorded'
+      : use.kind === 'never'
+        ? 'never used'
+        : `last used ${new Date(use.at).toLocaleString([], {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}`
+  return `${used} · ${when}`
 }
 
 /** 5b's four standing grants, and everything she is told she can do. */
@@ -48,13 +63,53 @@ export const MAY_DO: Pane = {
       allowed.addEventListener('change', () => {
         handlers.grant({ id: grant.id, allowed: allowed.checked })
       })
-      const label = element('label', undefined, 'Allowed')
+      /*
+        THE WORD SAYS THE STATE, and it said "Allowed" whatever the state was.
+
+        A withheld grant rendered an off switch with "Allowed" beside it — so the
+        only text on the row contradicted the only mark on it, and the reader who
+        cannot see the knob's position was told the opposite of the truth.
+
+        "开关一律配一个词。标记带的意思必须也以文字存在,给不看它的人" — every switch
+        carries a word, and the meaning the mark carries must also exist as text
+        for somebody who does not see it. A word that does not move with the mark
+        is worse than no word: it is a second signal that disagrees.
+      */
+      const label = element('label', 'switch-word', grant.allowed ? 'Allowed' : 'Withheld')
+      allowed.addEventListener('change', () => {
+        label.textContent = allowed.checked ? 'Allowed' : 'Withheld'
+      })
       label.htmlFor = allowed.id
       const wrap = element('div', 'switch')
       wrap.append(allowed, label)
 
+      /*
+        WHEN IT BITES, which differs per grant and is not decoration.
+
+        Turning one off takes effect at once and she is told; turning one ON is
+        part of what she is handed at a wake. A row that says only "last used"
+        leaves somebody to guess which, and the guess that costs something is
+        believing a withheld tool is still reachable.
+
+        SO AN ALLOWED ONE APPLIES FROM HER NEXT WAKE and a withheld one is in
+        force now — which is what A7 draws, and the opposite of what this said.
+        The comment above was already right; the ternary under it was inverted,
+        so every row on the screen carried the reassurance meant for the other
+        state: a tool somebody had just switched on claimed to be reachable
+        immediately, and one they had just switched off claimed it would take
+        until she woke.
+
+        IN THE LEFT COLUMN, under the description — A7 draws all three lines
+        about the capability in one stack and puts only the word and the switch
+        on the right. It was appended under the switch, which made a sentence
+        about when a tool last ran read as a caption for the control, right-
+        aligned in a 120px column against text set left in a 600px one.
+      */
+      const bites = forPronoun(grant.allowed ? SAYS.grantAtWake : SAYS.grantInForce, view.pronoun)
+      left.append(element('div', 'used', lastUsedLabel(grant.lastUsed, bites)))
+
       const right = element('div', 'right')
-      right.append(wrap, element('div', 'used', lastUsedLabel(grant.lastUsed)))
+      right.append(wrap)
       row.append(left, right)
       return row
     })
@@ -71,22 +126,33 @@ export const MAY_DO: Pane = {
       `sectionHead` rather than `section`, because the rows are already siblings
       in the pane's column and wrapping them would nest a column inside a column
       for nothing.
-    */
-    const permits = sectionHead(
-      forPronoun(SAYS.mayDoHead, view.pronoun),
-      `${String(view.grants.filter((one) => one.allowed).length)} of ${String(view.grants.length)} allowed`,
-    )
 
-    // Above the switches, not below them: whose answer this is has to be read
-    // before they are operated, not after.
-    const whose = element('p', 'note', forPronoun(SAYS.mayDoWhose, view.pronoun))
+      BARE, with no count beside it. It carried "3 of 3 allowed" and had a
+      sentence under it saying whose grants these are — both of which the
+      apparatus column now states, as "Withheld · 1 of 3" and "In force for ·
+      mochi · the live one". A7 puts each of those in exactly one place, and a
+      count restated two inches apart is a count that can be seen to disagree
+      with itself while a save is in flight.
+    */
+    const permits = sectionHead(forPronoun(SAYS.mayDoHead, view.pronoun), '')
+
     const note = element('p', 'note', forPronoun(SAYS.atOnce, view.pronoun))
 
-    const heading = element('h3', undefined, forPronoun(SAYS.told, view.pronoun))
+    /*
+      The heading over the tool list, with the two facts A7 hangs on it: HOW
+      MANY there are, and that this is not where they are edited.
+
+      It was a bare `h3`, so the one thing somebody is most likely to try here —
+      rewriting a description they disagree with — had no answer until they had
+      tried it. "not editable here" is four words and it is the whole answer.
+    */
+    const heading = sectionHead(
+      forPronoun(SAYS.told, view.pronoun),
+      `${String(view.capabilities.length)} · not editable here`,
+    )
     if (view.capabilities.length === 0) {
       return [
         permits,
-        whose,
         ...rows,
         note,
         heading,
@@ -95,7 +161,6 @@ export const MAY_DO: Pane = {
     }
     return [
       permits,
-      whose,
       ...rows,
       note,
       heading,
