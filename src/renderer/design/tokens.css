@@ -520,7 +520,7 @@ input[type='search'],
 textarea,
 select {
   max-width: var(--field-max);
-  padding: var(--s2) var(--s3);
+  padding: 9px 15px;
   border: 0;
   border-radius: var(--r-card);
   /*
@@ -563,6 +563,70 @@ select:hover {
 input[type='text']:placeholder-shown,
 input[type='search']:placeholder-shown {
   color: var(--ink-3);
+}
+
+/*
+ * A SWITCH, and it is a switch rather than a checkbox.
+ *
+ * The user agent draws a 13px square with a tick. The delivery draws a 42x25
+ * track with a 19px knob — and the difference is not decoration: a tick means
+ * "chosen from several", a knob that slides means "on or off", and this window
+ * had nine of the second kind wearing the first.
+ *
+ * ## The word beside it is not optional
+ *
+ * "开关一律配一个词" — every switch carries a word. A knob's position is a mark,
+ * and a mark's meaning has to exist as text for somebody who does not see it.
+ * The callers supply that word; what this rule guarantees is that the mark is
+ * unambiguous for everybody else, which is why the knob MOVES rather than only
+ * changing colour. A track that recolours is a state one reader in twelve
+ * cannot read.
+ *
+ * `appearance: none` takes the native control away, so everything below has to
+ * be drawn — including the focus ring, which is why the generic
+ * `:focus-visible` still applies and is not opted out of here.
+ */
+input[type='checkbox'] {
+  appearance: none;
+  flex: none;
+  width: 42px;
+  height: 25px;
+  margin: 0;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--rule);
+  cursor: pointer;
+}
+
+/*
+ * The knob. `paper` in both states, so what moves is the POSITION — the track
+ * darkening is the second signal, not the only one.
+ */
+input[type='checkbox']::before {
+  content: '';
+  display: block;
+  width: 19px;
+  height: 19px;
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  /* Transform rather than a margin, so the knob cannot reflow the row it is in
+     — and `--duration` is zeroed under reduced motion by the block at the foot
+     of this file. */
+  transition: transform var(--duration-fast);
+}
+
+input[type='checkbox']:checked {
+  background: var(--ink);
+}
+
+input[type='checkbox']:checked::before {
+  transform: translateX(17px);
+}
+
+input[type='checkbox']:disabled {
+  background: var(--chosen-2);
+  cursor: default;
 }
 
 /*

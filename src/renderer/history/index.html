@@ -1018,14 +1018,25 @@
         font-size: var(--t-data);
         line-height: var(--leading);
       }
+      /*
+        THE APPARATUS COLUMN, at the artboard's own measurements.
+
+        224 wide, 24 and 22 of padding, and the same 22px rhythm as the page
+        beside it — one rhythm in the window rather than one per column. It sat
+        on `--paper-2` with 26/26/32/22 of padding, which is four numbers and a
+        second surface for a column whose job is to recede.
+
+        No fill at all now: the hairline is what separates it, which is the rule
+        the whole window runs on. A pane that recedes by being a different colour
+        AND by having a rule is saying it twice.
+      */
       .margin {
         border-left: var(--s-px) solid var(--rule);
-        background: var(--paper-2);
-        padding: 26px 26px var(--s6) var(--s5);
+        padding: 24px 22px;
         overflow-y: auto;
         display: flex;
         flex-direction: column;
-        gap: 18px;
+        gap: var(--s5);
       }
       /*
         The margin's bodies carry the column's gap.
@@ -1041,28 +1052,36 @@
         flex-direction: column;
         gap: 18px;
       }
+      /*
+        A LABEL AND ITS FACT, tight — 4px, because the pair is one thing and the
+        22px between pairs is what separates them from the next.
+      */
       .margin-block {
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: var(--s1);
       }
       .margin-head {
         margin: 0;
         font-family: var(--sans);
-        font-size: var(--t-label);
+        font-size: var(--t-label-2);
         font-weight: var(--w-medium);
-        letter-spacing: var(--track-wide);
+        letter-spacing: 0.1em;
         text-transform: uppercase;
         color: var(--ink-3);
         max-width: none;
       }
+      /*
+        The fact takes full ink. It is the answer — "asleep", "14 May · 13:04",
+        "built-in · no file" — and the label above it is the quiet half.
+      */
       .margin-facts {
         display: flex;
         flex-direction: column;
         gap: var(--s0);
         font-family: var(--mono);
-        font-size: var(--t-data-2);
-        color: var(--ink-2);
+        font-size: var(--t-data);
+        color: var(--ink);
       }
       .margin-rule {
         height: var(--s-px);
@@ -3398,40 +3417,65 @@
       .grow {
         flex: 1;
       }
+      /*
+        THE FOOT, at the artboard's own numbers: 44 tall, 32 in from each edge.
+
+        32 because that is the window's gutter — the receipt begins where the
+        column above it begins, and a bar inset by a different number reads as a
+        separate surface rather than as the foot of this one. It was 18 both
+        ways, which lined up with nothing.
+
+        No fill. The hairline above it is what separates it, the same as the
+        apparatus column beside it — a surface that recedes by colour AND by a
+        rule says it twice.
+      */
       .status {
         height: var(--status-h);
         flex: none;
         display: flex;
         align-items: center;
-        /*
-          18px, which is the delivery's gap between the words at the foot of
-          "what she has said" — and its padding on this bar, so the space
-          between two of them is the space between the last one and the edge.
-          At 8px, five underlined words read as one underlined run.
-        */
-        gap: 18px;
-        padding: 0 18px;
-        background: var(--paper-2);
+        justify-content: space-between;
+        gap: var(--s5);
+        padding: 0 var(--s6);
         border-top: var(--s-px) solid var(--rule);
       }
       /*
-        The status bar is apparatus, so it takes the apparatus face.
+        THE RECEIPT IS A SENTENCE, and it is set like one.
 
-        It was Sora at 11.5px in `--ink-2` — the treatment for something you
-        operate. Nothing here is operated: it says what just happened and
-        whether anything is wrong. The delivery sets the whole bar in DM Mono at
-        10.5px in `--ink-3`.
+        Both halves of this bar were mono at 10.5 in `--ink-3`, on the reading
+        that a status bar is apparatus. Half of that is right: the right-hand
+        side — the problem count — IS apparatus and stays mono.
+
+        The left half is not. "Saved — ballad lands on her next wake." is a
+        sentence somebody reads once, and the artboard sets it in Outfit at 13px
+        in full ink, with a 5px mark before it. Mono at 10.5 in the third ink is
+        the treatment for a path, and it made the one line in the window that
+        reports what you just did the quietest thing on the screen.
       */
       #said {
         margin: 0;
         display: flex;
         align-items: center;
-        gap: var(--s2);
+        gap: 9px;
         min-width: 0;
-        font-family: var(--mono);
-        font-size: var(--t-micro);
-        color: var(--ink-3);
+        font-family: var(--sans);
+        font-size: var(--t-ui);
+        color: var(--ink);
         max-width: none;
+      }
+
+      /*
+        The mark before it. Not a decoration and not a severity — it is what
+        makes a sentence appearing in an empty bar read as new rather than as
+        something that was always there.
+      */
+      #said::before {
+        content: '';
+        flex: none;
+        width: 5px;
+        height: 5px;
+        border-radius: var(--r-pill);
+        background: currentColor;
       }
       #said-what {
         overflow: hidden;
