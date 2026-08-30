@@ -88,6 +88,8 @@ export const viewsEl = need('views', HTMLElement)
 
 /** Her face and her name, above the views. */
 export const subjectEl = need('subject', HTMLElement)
+/** The body's column track, which differs per view. See `.spread` in the sheet. */
+export const spreadEl = need('spread', HTMLElement)
 
 /** What the view on screen needs in its head: search, and the day strip. */
 export const viewHeadEl = need('view-head', HTMLElement)

@@ -55,6 +55,8 @@ const DOCUMENTS: readonly {
     // Both halves: the character cards and the conversations that were here
     // first, plus the strip every write says what happened in.
     ids: [
+      // The body's column track, which is laid out differently per view.
+      'spread',
       // The archive's deletion controls and the surface that confirms them.
       'pick',
       'pick-off',

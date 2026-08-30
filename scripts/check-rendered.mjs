@@ -770,7 +770,7 @@ async function checks(page, where = '') {
 
   /* --- A2: picking a day filters, it does not scroll --------------------- */
   const filtered = await page.run(`(() => {
-    const list = document.querySelector('#reading .list');
+    const list = document.querySelector('#list');
     const before = { rows: list.querySelectorAll('.entry').length, top: list.scrollTop };
     const days = [...document.querySelectorAll('button.day.has')];
     const other = days.find((d) => d.getAttribute('aria-current') !== 'true');
@@ -780,7 +780,7 @@ async function checks(page, where = '') {
   })()`)
   await wait(700)
   const afterPick = await page.run(`(() => {
-    const list = document.querySelector('#reading .list');
+    const list = document.querySelector('#list');
     return { rows: list.querySelectorAll('.entry').length, top: list.scrollTop,
              head: (list.querySelector('.picked .what') || {}).textContent || '' };
   })()`)
@@ -960,7 +960,7 @@ async function checks(page, where = '') {
       buttons,
       says: (dialog.querySelector('h2') || {}).textContent || '',
       pressed,
-      rowsBefore: document.querySelectorAll('#reading .entry').length,
+      rowsBefore: document.querySelectorAll('#list .entry').length,
     };
   })()`)
   if (opened.why) {
@@ -997,7 +997,7 @@ async function checks(page, where = '') {
     })
     await wait(500)
     const after = await page.run(`({ open: document.querySelectorAll('dialog[open]').length,
-                                     rows: document.querySelectorAll('#reading .entry').length })`)
+                                     rows: document.querySelectorAll('#list .entry').length })`)
     if (after.open !== 0) bad('D2', 'Escape did not close the confirmation')
     else if (after.rows !== opened.rowsBefore)
       bad(
@@ -1013,7 +1013,7 @@ async function checks(page, where = '') {
 
   /* --- D4: no single conversation is deletable in one gesture ------------ */
   const perRow = await page.run(`(() => {
-    const rows = [...document.querySelectorAll('#reading .entry')];
+    const rows = [...document.querySelectorAll('#list .entry')];
     const armed = rows.filter((r) => [...r.querySelectorAll('button, [role=button]')]
       .some((c) => /delete|forget|remove|✕|×/i.test(c.textContent + (c.getAttribute('aria-label') || ''))));
     return { rows: rows.length, armed: armed.length };
@@ -1024,7 +1024,7 @@ async function checks(page, where = '') {
 
   /* --- A6: copying takes the original text, not what is on screen ------- */
   const copied = await page.run(`(() => {
-    const entry = document.querySelector('#reading .entry');
+    const entry = document.querySelector('#list .entry');
     if (!entry) return { why: 'no conversation to open' };
     entry.click();
     return { opened: true };
@@ -1256,7 +1256,20 @@ async function checks(page, where = '') {
       return getComputedStyle(document.documentElement).backgroundColor || 'rgb(255,255,255)';
     };
     const bad = [];
-    for (const el of document.querySelectorAll('#reading *, #reading *, #page-machine *')) {
+    /*
+      \`#list\` is named because it LEFT \`#reading\`.
+
+      The day's conversations used to be stacked inside the reading column, so
+      \`#reading *\` reached them. The archive draws them as a track of their own
+      now, and without this line every conversation row — the largest body of
+      text on that page — would have quietly stopped being contrast-checked while
+      the gate went on reporting green.
+
+      The duplicate \`#reading *\` that stood here is gone. It selected the same
+      elements twice and \`querySelectorAll\` returns them once, so it never did
+      anything except suggest somebody had meant to name a second place.
+    */
+    for (const el of document.querySelectorAll('#reading *, #list *, #page-machine *')) {
       if (el.getClientRects().length === 0) continue;
       const text = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim().length > 0);
       if (!text) continue;
@@ -1633,7 +1646,7 @@ async function layoutChecks(page, where = '') {
   const clipped = await page.run(`(() => {
     const room = document.documentElement.clientWidth;
     const out = [];
-    for (const el of document.querySelectorAll('#reading *, #reading *, #page-machine *')) {
+    for (const el of document.querySelectorAll('#reading *, #list *, #page-machine *')) {
       if (el.getClientRects().length === 0) continue;
       // Each element's own box: asking the document for scrollWidth is answered
       // by the containing block, and a pane with layout containment answers the

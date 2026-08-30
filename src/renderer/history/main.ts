@@ -78,6 +78,7 @@ import {
   permitsEl,
   marginHersEl,
   subjectEl,
+  spreadEl,
   marginPermitsEl,
   marginTalkEl,
 } from './elements'
@@ -647,6 +648,12 @@ function showPlace(next: Place): void {
     One class, because the sizes belong to the sheet and the view belongs here.
   */
   subjectEl.classList.toggle('subject-large', place === 'cast')
+  /*
+    The archive is the one page with three columns competing, so it is the one
+    page whose body is laid out differently — the list becomes a track and the
+    apparatus column gives up its place to it. See `.spread.three`.
+  */
+  spreadEl.classList.toggle('three', place === 'archive')
   // Redrawn, not rescaled: her face is a canvas and it has to be rendered at
   // the size it is shown.
   renderSubject()

@@ -716,12 +716,58 @@
         margin for apparatus." Nothing to the right of the rule is a thing you
         came to read.
       */
+      /*
+        THREE arrangements, one per page, and each one closes at 1280.
+
+          her page   rail 232 + (32 + 760 + 32) + apparatus 224 = 1280
+          archive    rail 232 + list 368 + (32 + 616 + 32)      = 1280
+          machine    rail 232 + nav 222 + (32 + 760 + 32)       ≈ 1280
+
+        Her page and the machine's have the same body width by different
+        arithmetic, which is the delivery's own point: the pane is 760 wherever
+        exactly one side column exists, and the archive is narrower because it
+        has two.
+      */
       .spread,
       .machine-spread {
         flex: 1;
         min-height: 0;
         display: grid;
         grid-template-columns: minmax(0, 1fr) var(--margin-w);
+      }
+      /*
+        The archive trades the apparatus column for the list.
+
+        Not both: the delivery draws no apparatus on this page, and the reason is
+        arithmetic rather than taste — 232 + 368 + 224 leaves 456 for a transcript
+        that holds a 600px measure. What the margin would have said here is on
+        the transcript's own head instead.
+      */
+      .spread.three {
+        grid-template-columns: var(--list-w) minmax(0, 1fr);
+      }
+      /*
+        AT THE FLOOR the apparatus column goes and the list narrows.
+
+        1120 = 232 + 328 + (32 + 496 + 32), and on her page the reading column
+        simply takes the width back. Collapsing rather than scaling, because a
+        224px column of mono facts at 60% of its width is not a smaller version
+        of itself — it is the same facts wrapped onto three lines each.
+
+        The threshold is the DEFAULT size rather than a number between: the
+        artboards draw the apparatus column at 1280 and the floor drawing does
+        not have it, so those are the two arrangements that were designed.
+      */
+      @media (max-width: 1279px) {
+        .spread {
+          grid-template-columns: minmax(0, 1fr) 0;
+        }
+        .spread > .margin {
+          display: none;
+        }
+        .spread.three {
+          grid-template-columns: var(--list-narrow-w) minmax(0, 1fr);
+        }
       }
       .machine-spread {
         grid-template-columns: var(--machine-nav-w) minmax(0, 1fr) var(--margin-w);
@@ -1657,6 +1703,11 @@
       .list {
         display: flex;
         flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 24px var(--s5);
+        border-right: var(--s-px) solid var(--rule);
       }
       /* The day being read, and how many are on it. */
       .picked {
@@ -3198,7 +3249,22 @@
                 <p class="day-head" id="count" hidden></p>
               </div>
             </header>
-            <div class="spread">
+            <div class="spread" id="spread">
+              <!--
+                THE DAY'S CONVERSATIONS, in a column of their own.
+
+                They were stacked above the transcript inside the reading
+                column, on the argument that "a transcript above the thing that
+                chose it reads as two unrelated columns". That is true of a
+                stack and the delivery answers it differently: side by side, the
+                list is how you choose and the transcript is what you chose, and
+                neither has to scroll past the other to be reached.
+
+                It is a sibling of `.reading` rather than a child so it can BE a
+                track — the archive is the one page with three columns competing,
+                and 232 + 368 + (32 + 616 + 32) is what closes at 1280.
+              -->
+              <div class="list" id="list" hidden></div>
               <!--
                 One reading column, three possible bodies — one per view. They
                 are separate elements rather than one that is rebuilt, so a
@@ -3208,10 +3274,6 @@
               -->
               <div class="reading" id="reading">
                 <div id="pane" hidden></div>
-                <!-- The day's conversations come BEFORE the one being read:
-                     the list is how you choose, and a transcript above the
-                     thing that chose it reads as two unrelated columns. -->
-                <div class="list" id="list" hidden></div>
                 <div class="talk" id="talk" hidden></div>
                 <div id="permits" hidden></div>
                 <!--

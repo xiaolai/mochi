@@ -257,6 +257,12 @@
   --rail-w: 232px;
   --margin-w: 224px;
   --machine-nav-w: 222px;
+  --list-w: 368px;
+  /*
+    The list at the floor. It narrows rather than collapsing, because it is how
+    you choose which transcript to read and the page has nothing without it.
+  */
+  --list-narrow-w: 328px;
   /*
     44, measured. It was 30, taken from a single `height:30px` in the delivery —
     which is the design document's own chrome, not a screen. Fourteen of the
