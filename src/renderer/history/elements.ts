@@ -88,6 +88,9 @@ export const viewsEl = need('views', HTMLElement)
 
 /** Her face and her name, above the views. */
 export const subjectEl = need('subject', HTMLElement)
+/** The problems drawer, and the part of it the report is written into. */
+export const troublesDrawerEl = need('troubles-drawer', HTMLElement)
+export const troublesBodyEl = need('troubles-body', HTMLElement)
 /** The body's column track, which differs per view. See `.spread` in the sheet. */
 export const spreadEl = need('spread', HTMLElement)
 

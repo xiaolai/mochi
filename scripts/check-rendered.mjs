@@ -464,7 +464,7 @@ async function audit(page) {
     `span.light` stays for its own reason: the ring around a lit status light is
     what makes an 8px dot read as a light rather than as a bullet.
   */
-  const ALLOWED = ['span.light', 'dialog#sure', 'div#troubles', 'div#month-pick']
+  const ALLOWED = ['span.light', 'dialog#sure', 'div#troubles-drawer', 'div#month-pick']
 
   console.log('\n  ─── the sweep ───────────────────────────────────────────────')
   for (const theme of ['light', 'dark']) {

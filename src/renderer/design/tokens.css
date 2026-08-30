@@ -233,11 +233,12 @@
     Measured out of the artboards: four elements carry the small lift and three
     carry the top-layer one. Nothing else in twenty screens has a shadow.
 
-    Only the small one is declared here — `--lift-top` arrives with the first of
-    those three surfaces. A token declared ahead of its consumer is what this
-    file's own check exists to catch.
+    `--lift-top` has one consumer so far — the problems drawer. The confirm
+    sheet and the month picker are the other two the rule admits; when they take
+    it, the rendered gate's allow-list already names all three by id.
   */
   --lift-small: 0 1px 2px rgb(0 0 0 / 14%);
+  --lift-top: light-dark(0 24px 60px rgb(0 0 0 / 28%), 0 24px 60px rgb(0 0 0 / 55%));
 
   /* ---- the frame, in the delivery's own numbers --------------------------
    *

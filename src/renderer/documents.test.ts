@@ -57,6 +57,9 @@ const DOCUMENTS: readonly {
     ids: [
       // The body's column track, which is laid out differently per view.
       'spread',
+      // What has gone wrong, and the part of the drawer it is written into.
+      'troubles-drawer',
+      'troubles-body',
       // The archive's deletion controls and the surface that confirms them.
       'pick',
       'pick-off',

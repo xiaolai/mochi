@@ -68,6 +68,8 @@ import {
   talkEl,
   toolsEl,
   troublesEl,
+  troublesBodyEl,
+  troublesDrawerEl,
   troublesLabelEl,
   wakeEl,
   pageHersEl,
@@ -1730,10 +1732,17 @@ async function readConversations(): Promise<void> {
  * and a permanent tab onto an empty surface is one people learn to skip.
  */
 function renderProblems(problems: readonly HistoryProblem[]): void {
-  open = null
-  showingCharacter = false
-  looking.moved()
-  renderCards()
+  /*
+    IT RISES, it does not navigate.
+
+    This used to set `open = null`, clear the character, re-render the cards and
+    switch to the archive — because the report was painted into that view's
+    transcript pane. So asking what had gone wrong cost you whatever you were
+    looking at, and answering a question about the window moved the window.
+
+    The drawer is in the top layer over whatever page is open, which is where a
+    thing reachable from every page belongs.
+  */
   troublesEl.setAttribute('aria-current', 'true')
 
   const page = document.createElement('div')
@@ -1751,8 +1760,7 @@ function renderProblems(problems: readonly HistoryProblem[]): void {
     */
     lead.textContent = forPronoun(SAYS.noTroubles, saying())
     page.append(lead)
-    talkEl.replaceChildren(page)
-    talkEl.scrollTop = 0
+    showTroubles(page)
     return
   }
 
@@ -1785,8 +1793,22 @@ function renderProblems(problems: readonly HistoryProblem[]): void {
     }
     page.append(block)
   }
-  talkEl.replaceChildren(page)
-  talkEl.scrollTop = 0
+  showTroubles(page)
+}
+
+/**
+ * Put the report in the drawer and open it.
+ *
+ * `showPopover` is idempotent only in one direction — calling it on an open
+ * popover throws — so the state is asked rather than assumed. The window
+ * re-reads its problem count whenever it comes back to the front, and that
+ * re-read repaints an open drawer in place rather than closing and reopening
+ * it under somebody's pointer.
+ */
+function showTroubles(page: HTMLElement): void {
+  troublesBodyEl.replaceChildren(page)
+  troublesBodyEl.scrollTop = 0
+  if (!troublesDrawerEl.matches(':popover-open')) troublesDrawerEl.showPopover()
 }
 
 /**

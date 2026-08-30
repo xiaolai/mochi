@@ -484,6 +484,59 @@
         color: var(--ink-3);
       }
 
+      /*
+        THE PROBLEMS DRAWER, in the top layer over whatever page is open.
+
+        One of the three surfaces v2 allows a shadow on, and the reason is the
+        rule rather than the look: it floats above the page rather than sitting
+        in it, so a hairline would put it in the same plane as the thing it
+        covers. The rendered gate's allow-list names this id.
+
+        Anchored to the foot, because that is where the control that opens it
+        is — a drawer that rose from the middle would be a dialog wearing a
+        different word.
+      */
+      #troubles-drawer {
+        position: fixed;
+        left: var(--s6);
+        right: var(--s6);
+        bottom: calc(var(--status-h) + var(--s2));
+        max-height: 60vh;
+        margin: 0;
+        padding: var(--s5) var(--s6);
+        border: var(--s-px) solid var(--rule);
+        border-radius: var(--r-panel);
+        background: var(--paper);
+        box-shadow: var(--lift-top);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: var(--s3);
+      }
+
+      #troubles-head {
+        margin: 0;
+        font-family: var(--sans);
+        font-size: var(--t-h3);
+        font-weight: var(--w-medium);
+        color: var(--ink);
+      }
+
+      #troubles-body {
+        min-height: 0;
+        overflow-y: auto;
+      }
+
+      /* The foot: what this surface is, in the face reserved for machine facts.
+         It is the one line here that is true whether or not anything is wrong. */
+      .note-mono {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: var(--t-micro);
+        line-height: var(--leading);
+        color: var(--ink-3);
+      }
+
       .kept {
         display: flex;
         flex-direction: column;
@@ -3359,6 +3412,29 @@
           <span class="dot"></span><span id="troubles-label"></span>
         </button>
       </div>
+    </div>
+
+    <!--
+      WHAT HAS GONE WRONG, as a drawer from the status bar.
+
+      It used to be painted into the archive's transcript pane, which meant
+      reading it cost you your place: the button is in the strip along the
+      bottom and visible from all three views, but the surface it wrote to lives
+      inside one of them, so pressing it navigated somewhere else to say
+      something about here.
+
+      A `popover` rather than a panel, for the two things the user agent gives
+      free and correctly: Escape closes it, and it is in the top layer, so it
+      cannot be trapped under the pane it rises from. `tokens.css` already holds
+      the rule that a closed one is not on screen whatever an author writes.
+    -->
+    <div id="troubles-drawer" popover="auto" aria-labelledby="troubles-head">
+      <h2 id="troubles-head">What has gone wrong</h2>
+      <div id="troubles-body"></div>
+      <p class="note-mono">
+        normally empty &#183; these happen during use, not at launch &#183; re-checked when this
+        window comes back to the front
+      </p>
     </div>
 
     <!--
