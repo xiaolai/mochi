@@ -1038,28 +1038,21 @@ async function checks(page, where = '') {
     )
   else ok('editable', 'all ' + editable.seen + ' editable things say so at rest')
 
-  /* --- C5: seeing a mood and permitting it are separate controls --------- */
-  const moods = await page.run(`(() => {
-    const tiles = [...document.querySelectorAll('#reading .mood')];
-    if (tiles.length === 0) return { why: 'no mood tiles were drawn' };
-    const wrapped = tiles.filter((t) => [...t.querySelectorAll('label')].some((l) => l.querySelector('button, label')));
-    const confusable = tiles.filter((t) => {
-      const see = t.querySelector('.mood-try, button');
-      const allow = t.querySelector('input[type=checkbox]');
-      return !see || !allow || see.contains(allow);
-    });
-    return { tiles: tiles.length, wrapped: wrapped.length, confusable: confusable.length };
-  })()`)
-  if (moods.why) bad('C5', moods.why)
-  else if (moods.wrapped > 0)
-    bad(
-      'C5',
-      moods.wrapped +
-        ' mood tiles nest a control inside a label — invalid, and it swallows the click',
-    )
-  else if (moods.confusable > 0)
-    bad('C5', moods.confusable + ' mood tiles make seeing and permitting the same gesture')
-  else ok('C5', 'seeing a mood and permitting it are separate in all ' + moods.tiles + ' tiles')
+  /*
+    C5 stood here: "seeing a mood and permitting it are two separate actions and
+    must never be confusable".
+
+    There are no mood tiles. Nothing in this application ever consulted a
+    character's expression set to decide what she wears, so the switch changed
+    one sentence in her instructions and nothing else — the whole section is
+    gone and every character has all eight. A rule with no subject cannot be
+    checked, and pretending otherwise is how a suite comes to be full of green
+    that means nothing.
+
+    The RULE is not wrong and it is recorded in `rebuild-contract.md`. If a
+    control ever offers looking-at and permitting side by side again, this is
+    the check it needs.
+  */
 
   /* --- contrast: the floors the app enforces at runtime ------------------ */
   /*

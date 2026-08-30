@@ -1,7 +1,6 @@
 import { looksEmpty, oneLine } from './text'
 import { type Persona, type Prompts, type SpokenMoment } from './persona'
 import { promptsFor, type PromptSpec } from './prompts'
-import { EMOTIONS } from './avatar'
 
 /**
  * What she is TOLD -- the system prompt, assembled.
@@ -162,12 +161,26 @@ function piecesFor(
       the honest alternative is removing `persona.faces` entirely, which is a
       product decision recorded in `dev-docs/plan-0.1.md` W2.
     */
-    faces:
-      persona.faces.length === EMOTIONS.length
-        ? ''
-        : persona.faces.length === 0
-          ? '# Your face\nYou wear one face and cannot change it. Say what you mean in words.'
-          : `# Faces you may use\n${persona.faces.join(' · ')}`,
+    /*
+      NOTHING. Every character has every expression.
+
+      This section described `persona.faces`, and the comment above records why
+      it was already almost pointless: nothing in the application consults that
+      list to decide what she wears — the two built-in reactions in
+      `companion/face.ts` do not, and the tool that once did went on 2026-08-26
+      after 275 sessions without a call. It only told her what she had.
+
+      Now it does not tell her that either, because it is no longer a fact that
+      can differ: the control that set it is gone from the window and every
+      character has all eight. A sentence in her instructions naming a
+      restriction nobody can impose is a sentence the model has to reconcile
+      with a world where it is not true.
+
+      The stored field is left where it is rather than migrated out. It is inert
+      — nothing reads it — and removing it from the format is a version bump on
+      every manifest on disk to delete a value that costs nothing to ignore.
+    */
+    faces: '',
   }
 }
 

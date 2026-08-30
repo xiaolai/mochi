@@ -151,7 +151,6 @@ export function listPersonas(
         // express it is how it gets overwritten with the other half.
         greeting: persona.greeting.instruction,
         farewell: persona.farewell.instruction,
-        faces: persona.faces,
       }))
       /*
       A REAL comparator, where this returned 1 for two equal names.

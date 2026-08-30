@@ -8,7 +8,6 @@ import { colourSection } from './sheet/colour'
 import { PRONOUN_CAPS, faceTile } from './sheet/face-tile'
 import { fileSection } from './sheet/file'
 import { memorySection } from './sheet/memory'
-import { moodSection } from './sheet/mood'
 import { promptSection } from './sheet/prompt'
 import { type ShelfHandlers } from './sheet/row'
 import { bubbleSection, savingSection } from './sheet/saving'
@@ -180,9 +179,21 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
   }
 
   page.append(
+    /*
+      MOODS are not here any more.
+
+      They were eight tiles with a switch each, deciding which expressions a
+      character "claims". Nothing in this application ever consulted that list
+      to decide what she wears — see `instructions.ts` — so the switch changed
+      one sentence in her instructions and nothing else, and every character now
+      has all eight.
+
+      The tiles also let somebody SEE each expression on her, which was worth
+      having on its own and goes with them. Recorded rather than glossed: it is
+      §5 of the brief, and it is a choice about product rather than a tidy-up.
+    */
     colourSection(view, worn, handlers),
     sizeSection(view, worn, handlers),
-    moodSection(view, worn, handlers),
     voiceSection(view, worn, handlers),
     bubbleSection(view, worn, handlers),
     savingSection(view, worn, handlers),

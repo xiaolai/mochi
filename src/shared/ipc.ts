@@ -659,8 +659,20 @@ export interface SettingsPersona {
   /** What she should convey on waking, and on going back to sleep. */
   readonly greeting: string
   readonly farewell: string
-  /** Which of her eight faces this character uses, in `EMOTIONS` order. */
-  readonly faces: readonly Emotion[]
+  /*
+    `faces` was here: which of the eight expressions a character claimed.
+
+    No window reads it any more. The control that set it is gone — nothing in
+    this application ever consulted the list to decide what she wears, so the
+    switch changed one sentence in her instructions and nothing else — and every
+    character has all eight. `nothing-written-goes-unread.test.ts` is what
+    required this line to go with the reader: a field main computes and sends on
+    every read, that nobody opens, is a fact the wire cannot be held to.
+
+    `Persona.faces` stays on disk. It is inert, and removing it from the format
+    is a version bump on every manifest to delete a value that costs nothing to
+    ignore.
+  */
   /** Her own answer about how big she is drawn, or null to accept her face's. */
   readonly size: number | null
 }
@@ -1198,7 +1210,6 @@ export type VoiceReport =
   | { readonly kind: 'note'; readonly text: string }
 
 import type { CodexReadiness, Remedy } from './delegation'
-import type { Emotion } from './avatar'
 import type { FaceSpec } from './avatar-spec'
 import type { Pronoun } from './pronoun'
 import type { ThemeId } from './theme'

@@ -216,7 +216,8 @@
   --rule: light-dark(#e0d5cb, #352d26);
   --rule-2: light-dark(#c8b9ac, #4b4038);
   --hair: light-dark(#e0d5cb, #352d26);
-  --hair-soft: light-dark(#f2ece6, #1e1915);
+  /* `--hair-soft` went with the mood tiles: it was the dimmed hover on a face
+     a character was not permitted, and no character is unpermitted now. */
   --hair-desk: inset 0 0 0 1px light-dark(#e0d5cb, #352d26);
 
   /* ---- chosen is a bar and a word ----------------------------------------

@@ -1595,23 +1595,6 @@
         color: var(--ink-brand);
         font-weight: var(--w-semibold);
       }
-      /* The moods grid: eight tiles, each with the switch that decides it. */
-      .moods {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-        gap: var(--s3);
-      }
-      .mood {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: var(--s1);
-        padding: var(--s4) var(--s3);
-        border: var(--s-px) solid var(--rule);
-        border-radius: var(--r3);
-        background: var(--paper-2);
-        text-align: center;
-      }
       /*
         The face is a control now: click it to see that expression on her.
 
@@ -1624,54 +1607,9 @@
         faces, which is the wrong subject: the drawing is what somebody came to
         this grid to look at.
       */
-      .mood-try {
-        display: block;
-        padding: var(--s1);
-        border: 0;
-        border-radius: var(--r3);
-        background: transparent;
-        color: inherit;
-        font: inherit;
-        cursor: default;
-      }
-      .mood-try:hover {
-        background: var(--paper-hover);
-      }
       /* Dimmed with the tile it sits in, so a face she may not use does not
          advertise itself more loudly than one she may. Still clickable — being
          able to look at one before enabling it is the point. */
-      .mood.off .mood-try:hover {
-        background: var(--hair-soft);
-      }
-      .mood.off {
-        border-style: dashed;
-        background: transparent;
-      }
-      .mood.off .tile {
-        opacity: 0.4;
-      }
-      .mood .name {
-        font-family: var(--narrow);
-        font-size: var(--t-label);
-        font-weight: var(--w-bold);
-        letter-spacing: var(--track-2);
-        text-transform: uppercase;
-      }
-      .mood .when {
-        font-size: var(--t-data);
-        color: var(--ink-3);
-        min-height: 2.4em;
-      }
-      .mood .allow {
-        display: flex;
-        align-items: center;
-        gap: var(--s2);
-        font-family: var(--narrow);
-        font-size: var(--t-nano);
-        letter-spacing: var(--track-2);
-        text-transform: uppercase;
-        color: var(--ink-3);
-      }
 
       /* ---- what she will be told, down the right --------------------------- */
       /*
