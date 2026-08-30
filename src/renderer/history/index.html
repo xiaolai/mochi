@@ -948,12 +948,11 @@
       #q:focus-visible {
         outline: none;
       }
+      /* The outer ring alone, like every other field — the pill is a filled well
+         and an ink edge on its own boundary is that boundary drawn twice. */
       .finding:focus-within {
         outline: var(--s-px) solid var(--ink);
         outline-offset: 3px;
-        box-shadow:
-          0 0 0 var(--s-px) var(--ink),
-          0 0 0 3px var(--paper);
       }
       /*
         The three views, as a sub-navigation under her name.
@@ -3179,12 +3178,29 @@
         color: var(--ink-2);
       }
 
+      /*
+        ONE WIDTH for every single-line field on this page.
+
+        This said `max-width: none`, at (0,2,1), which beat the 420 cap at
+        (0,1,1) — and it reaches only the DIRECT children of `.setting`. Her name
+        is nested one level deeper, inside `.setting-pair` with the she/he/it
+        switchers, so it escaped the override and took the cap while the two
+        fields beside it did not. Three fields in one column at 420, 548 and 666,
+        and the reason was which of them happened to share a row.
+
+        A1 does draw them at different widths, because each row has different
+        siblings — an 82px label, then a pill, or a mono hint, or nothing. That
+        is what a `flex: 1` gives you and it is not what a column of fields should
+        look like: the right-hand edge is the thing a reader lines up on, and
+        three fields that end in three places read as three unrelated controls.
+        V7 already names 420 as the width of a single-line input; this lets it
+        apply.
+      */
       .setting > input[type='text'],
       .setting > input[type='search'],
       .setting > select {
         flex: 1;
         min-width: 0;
-        max-width: none;
       }
 
       /* The fact, never the instruction. Prose about a setting goes under the

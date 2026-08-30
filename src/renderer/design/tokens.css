@@ -781,11 +781,36 @@ input[type='checkbox']:disabled {
 }
 
 /*
+ * A FIELD TAKES THE OUTER RING ONLY.
+ *
+ * The sandwich is three layers and the innermost is an ink edge drawn at the
+ * control's own boundary. That is what makes a bare button findable — it has no
+ * edge of its own. A field is the opposite case: it is a filled well
+ * (`--paper-3`, `border: 0`), so the inner ring lands exactly on the fill's
+ * boundary and reads as the well's outline doubled, with a hairline of paper
+ * trapped between two dark lines.
+ *
+ * So fields keep the outline and drop both shadows. The 3px offset is unchanged,
+ * and the gap it leaves shows `--paper` — the sheet behind the field — which is
+ * what the painted gap was for. One ring, clear of the control, on every ground
+ * a field appears on in this window.
+ *
+ * `outline` is untouched, so this is not an opt-out: `stylesheets.test.ts`'s
+ * rule about a control refusing the ring does not apply and must not start to.
+ */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  box-shadow: none;
+}
+
+/*
  * WHAT IT COSTS IN ROOM, written down so the first keyboard pass over the day
  * strip is not a surprise.
  *
  * The sandwich paints 4px OUTSIDE the border box: 1px edge, 2px of paper, 1px
- * ring. Every container that holds a focusable control has to have that much
+ * ring. A field paints 4px too — the outline sits at the same offset — it just
+ * has nothing inside it. Every container that holds a focusable control has to have that much
  * slack or the ring lands on a neighbour. `.groups` has 12px of padding and
  * `.reading` has 32, so both are clear. The day strip is not: 25px cells at a
  * 1px gap means the paper gap of a focused day covers part of the two days

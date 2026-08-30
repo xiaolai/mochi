@@ -1343,6 +1343,44 @@ async function checks(page, where = '') {
     else ok('strip-holds', `the days hold still across ${JSON.stringify(held.names)}`)
   })
 
+  await step('field-widths', async () => {
+    /* --- one width for every single-line field ----------------------------- */
+    /*
+      Three fields in one column came out 420, 548 and 666, and the reason was
+      which of them happened to share a row: `.setting > input` carried
+      `max-width: none` at (0,2,1), which beat V7's 420 cap at (0,1,1) and
+      reached only the DIRECT children — so her name, nested a level deeper
+      inside `.setting-pair`, took the cap while the two beside it did not.
+
+      A1 does draw them at different widths, because each row has different
+      siblings. That is what `flex: 1` gives you and it is not what a column of
+      fields should look like: the right-hand edge is what a reader lines up on,
+      and three fields ending in three places read as three unrelated controls.
+
+      Measured on the WIDTHS rather than on the rule, because the defect was one
+      selector out-specifying another and both were present and correct-looking.
+    */
+    await goTo(page, 'cast')
+    const fields = await page.run(`(() => {
+      const seen = [...document.querySelectorAll('#pane input[type=text], #pane select')]
+        .filter((e) => e.getClientRects().length > 0)
+        .map((e) => ({ id: e.id || e.className, w: Math.round(e.getBoundingClientRect().width) }));
+      return { seen, widths: [...new Set(seen.map((o) => o.w))] };
+    })()`)
+    if (fields.seen.length < 3)
+      bad(
+        'field-widths',
+        `only ${String(fields.seen.length)} fields on her page, so nothing was compared`,
+      )
+    else if (fields.widths.length > 1)
+      bad('field-widths', 'her single-line fields are ' + JSON.stringify(fields.seen))
+    else
+      ok(
+        'field-widths',
+        `all ${String(fields.seen.length)} single-line fields on her page are ${String(fields.widths[0])} wide`,
+      )
+  })
+
   await step('A1-months', async () => {
     /* --- a month with nothing in it is not a button either ----------------- */
     /*
