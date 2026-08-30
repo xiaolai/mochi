@@ -28,8 +28,6 @@ export const talkEl = need('talk', HTMLElement)
 
 export const navEl = need('nav-groups', HTMLElement)
 
-export const toolsEl = need('machine-tools', HTMLElement)
-
 export const machineEl = need('machine-pane', HTMLElement)
 
 export const queryEl = need('q', HTMLInputElement)

@@ -30,7 +30,7 @@ import {
   openingDay,
 } from './month'
 import { assembledPanel, characterSheet, type PromptState } from './shelf'
-import { expressionsSection } from './sheet/expressions'
+import { drawnHeight, expressionsSection } from './sheet/expressions'
 import { memorySection } from './sheet/memory'
 import { promptSection } from './sheet/prompt'
 import { characterRows } from './parts/rail'
@@ -72,7 +72,6 @@ import {
   sureWhyEl,
   sureYesEl,
   talkEl,
-  toolsEl,
   troublesEl,
   troublesBodyEl,
   troublesDrawerEl,
@@ -719,7 +718,15 @@ function deeperMargin(words: Pronoun, worn: ShelfCharacter | undefined): readonl
     ]
   }
   if (deeperInto === 'faces') {
-    const size = worn?.size ?? null
+    /*
+      HER DRAWN HEIGHT, from the same function the tiles use.
+
+      This printed `worn.size` with `px` after it, and `worn.size` is a
+      PERCENTAGE — so at the default the column read "100px · her desktop size"
+      about a figure actually drawn at 118. A2c prints 118 for exactly this
+      character at exactly this setting, which is what gave the mistake away.
+    */
+    const tall = worn === undefined ? null : drawnHeight(worn)
     /*
       FOUR blocks, which is what A2c draws: how many exist, how many she may
       use, what she is wearing, and how big she is drawn.
@@ -753,9 +760,9 @@ function deeperMargin(words: Pronoun, worn: ShelfCharacter | undefined): readonl
         // Her own size is a real answer and not a missing one — the slider on
         // A1 has a button that puts it back to exactly this.
         marginFacts(
-          size === null
+          tall === null
             ? forPronoun(SAYS.drawnAtOwn, words)
-            : `${String(size)}px · ${forPronoun(SAYS.drawnAtOwn, words)}`,
+            : `${String(tall)}px · ${forPronoun(SAYS.drawnAtOwn, words)}`,
         ),
       ),
     ]
@@ -2459,7 +2466,6 @@ async function loadMachine(): Promise<void> {
     */
     machine = null
     navEl.replaceChildren()
-    toolsEl.replaceChildren()
     empty(machineEl, `Could not read the settings: ${String(error)}`)
     return
   }
@@ -2488,34 +2494,25 @@ function renderMachine(): void {
   const drawn = [...showing.render(view, machineHandlers)]
 
   /*
-    The tool list moves out of the scroll and into its own column.
+    THE WHOLE PANE, and there is no second column to split it into.
 
-    `panes.ts` returns one flat list with the capabilities after the grants and
-    a heading between them, which put the thing the grants are ABOUT below the
-    fold — when a withheld grant is exactly what removes a row from it. Split on
-    that heading rather than restructuring the pane: `panes.ts` is imported by
-    this window unchanged, and its own tests still describe what it returns.
-  */
-  const at = drawn.findIndex((node) => node instanceof HTMLHeadingElement)
-  const body = at === -1 ? drawn : drawn.slice(0, at)
-  const tools = at === -1 ? [] : drawn.slice(at)
-  /*
-    NO title over the body.
+    This took the pane's output and cut it at the first top-level heading, body
+    to the reading column and tail to an aside. Nothing in `settings/pane/`
+    returns a top-level heading: `sectionHead` wraps its `h3` in
+    `div.section-head`, `prompts.ts` puts its inside a `div.row`, and `MAY_DO` —
+    the other pane the old comment named — is not in `PANES` at all any more,
+    because the delivery moved it to her view III. So `at` was always -1, `tools`
+    was always empty, the aside was always empty, and the `:has()` rule that
+    collapses the track always matched.
 
-    The nav names the open group and highlights it; a 28px heading twenty pixels
-    to its right said the same four words again, which is the artifact's own
-    arrangement being ignored — it names the group once, in the nav, and starts
-    the body with the section that is actually in it.
+    Deleted rather than repaired, and the difference matters: B1 to B7 draw no
+    apparatus column, and the capability texts the split existed to lift are in
+    A7's reading column now. The trap in leaving it was that the day any pane DID
+    return a heading, 224px of `--margin-w` would appear on the machine page and
+    the pane would drop from 760 to about 538 — an arrangement nothing draws,
+    breaking the arithmetic stated ten lines above the grid rule.
   */
-  machineEl.replaceChildren(...body)
-  if (tools.length === 0) {
-    toolsEl.replaceChildren()
-  } else {
-    const card = document.createElement('div')
-    card.className = 'tool-card'
-    card.append(...tools)
-    toolsEl.replaceChildren(card)
-  }
+  machineEl.replaceChildren(...drawn)
 }
 
 /**

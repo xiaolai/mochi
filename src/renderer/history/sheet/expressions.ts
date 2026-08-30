@@ -1,4 +1,6 @@
 import { EMOTIONS, type Emotion } from '@shared/avatar'
+import { layoutFor } from '@shared/avatar-layout'
+import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { forPronoun } from '@shared/pronoun'
 import { element } from '../../element'
@@ -72,7 +74,23 @@ export function expressionsSection(
       character with no file on disk gets the dashed placeholder here too, eight
       times, which is the honest answer and says so once per tile.
     */
-    tile.append(faceTile(worn.face, Math.round(worn.size ?? 100), emotion))
+    /*
+      HER DRAWN HEIGHT, not her size setting — those are different units.
+
+      `worn.size` is the PERCENTAGE the slider on A1 writes: `clampSizePercent`,
+      stored as a percent of `BASE_UNIT_SCALE`. `faceTile`'s second argument is a
+      CSS PIXEL BOX — it sizes the canvas and fits her inside it. So the number
+      100 meant "100% of her base size" on one side of this call and "100 pixels"
+      on the other, and the tiles came out about 15% small at the default and
+      wrong by a growing margin either side of it: 60 against a real 71 at 60%,
+      200 against 236 at 200%.
+
+      §3.5 is the only reason this screen exists — see every expression AT THE
+      SIZE SHE APPEARS — so the one claim it makes was the one thing off.
+      `layoutFor` is the function that answers what that size actually is, and
+      it is the same one the rig lays her out with.
+    */
+    tile.append(faceTile(worn.face, drawnHeight(worn), emotion))
     tile.append(element('div', 'face-name', NAMES[emotion]))
     tile.append(element('p', 'face-when', WHEN[emotion]))
 
@@ -137,4 +155,22 @@ const WHEN: Readonly<Record<Emotion, string>> = {
   surprised: 'cut off mid-sentence, and on waking',
   thinking: 'looking something up',
   sleepy: 'resting, or about to',
+}
+
+/**
+ * How tall she is actually drawn, in CSS pixels, at the size she is set to.
+ *
+ * Shared by the tiles and by A2c's apparatus column, which printed the same
+ * percentage with `px` after it — one derivation, so the picture and the number
+ * beside it cannot disagree about her.
+ *
+ * `MOCHI` when she has no face of her own: the tile is a dashed placeholder in
+ * that case and never drawn, but the box it reserves still has to be the size
+ * the others are, or the grid steps.
+ */
+export function drawnHeight(worn: {
+  readonly face: FaceSpec | undefined
+  readonly size: number | null
+}): number {
+  return layoutFor(worn.face ?? MOCHI, worn.size ?? 100).height
 }

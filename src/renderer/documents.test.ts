@@ -125,7 +125,6 @@ const DOCUMENTS: readonly {
       'margin-permits',
       'nav-groups',
       'machine-pane',
-      'machine-tools',
     ],
   },
 ]

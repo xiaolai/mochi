@@ -1211,19 +1211,31 @@ async function checks(page, where = '') {
 
   await step('one-row', async () => {
     /* --- the month and the days are one row -------------------------------- */
+    /*
+      CENTRES, not tops, and the two CONTROLS rather than one control and a
+      child of the other.
+
+      It compared the top of the month label with the top of a day numeral,
+      which was a fair proxy while both were bare text on one baseline. They are
+      not: the month is a 78px slot with its own padding and a day is a 25px disc
+      with the numeral centred inside it, so their tops differ by construction
+      and the check failed on a layout that is correct. Two boxes of different
+      heights sit on one row when their centres agree — which is what the words
+      "one row" meant all along, and a month genuinely floated above the days
+      still fails it.
+    */
     const oneRow = await page.run(`(() => {
     const month = document.querySelector('.daystrip .month');
-    const numeral = document.querySelector('.strip .day-n');
-    if (!month || !numeral) return { why: 'the day strip has no month or no days' };
-    const a = month.getBoundingClientRect();
-    const b = numeral.getBoundingClientRect();
-    return { month: Math.round(a.top), numeral: Math.round(b.top) };
+    const day = document.querySelector('.strip .day');
+    if (!month || !day) return { why: 'the day strip has no month or no days' };
+    const mid = (el) => { const r = el.getBoundingClientRect(); return Math.round(r.top + r.height / 2) };
+    return { month: mid(month), numeral: mid(day) };
   })()`)
     if (oneRow.why) bad('one-row', oneRow.why)
     else if (Math.abs(oneRow.month - oneRow.numeral) > 4)
       bad(
         'one-row',
-        'the month and the days are on different lines: ' +
+        'the month and the days are on different lines, centre to centre: ' +
           oneRow.month +
           ' against ' +
           oneRow.numeral +

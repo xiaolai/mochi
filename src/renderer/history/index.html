@@ -1077,8 +1077,11 @@
           grid-template-columns: var(--list-narrow-w) minmax(0, 1fr);
         }
       }
+      /* TWO tracks: the nav and the pane. `232 + 222 + (32 + 760 + 32) ≈ 1280`
+         is what the delivery draws, and the third track was the thing that
+         would have broken it. */
       .machine-spread {
-        grid-template-columns: var(--machine-nav-w) minmax(0, 1fr) var(--margin-w);
+        grid-template-columns: var(--machine-nav-w) minmax(0, 1fr);
       }
       .reading,
       .machine-pane {
@@ -1587,16 +1590,35 @@
         accessibility tree that refuse the press rather than a missing click
         handler — contract A1.
       */
+      /*
+        A 25px DISC, because the picked state has to have something to fill.
+
+        The cell had no width, no height and no radius, so the only difference
+        between "today" and "this day is filtering the two columns below" was a
+        4px dot going to full opacity and 1.4× — and a day with nothing on it has
+        no dot at all, so on a today with nothing said, the two states were
+        pixel-identical. A3 draws the picked day as an ink disc with a white
+        numeral, which is the strongest fill in the window, spent on the one
+        control whose state decides what the rest of the page shows.
+
+        The comment under `.day .dot` diagnoses the same failure one state over —
+        a numeral moving 4.63:1 to 4.94:1, "which nobody can see". This was that,
+        one step further along.
+      */
       .day {
         display: flex;
         flex-direction: column;
         align-items: center;
+        justify-content: center;
         gap: var(--s1);
-        padding: 0 0 var(--s1);
+        width: 25px;
+        height: 25px;
+        justify-self: center;
+        padding: 0;
         border: 0;
+        border-radius: var(--r-pill);
         background: transparent;
         color: var(--ink-3);
-        cursor: pointer;
       }
       .day:disabled {
         color: var(--ink-off);
@@ -1640,13 +1662,24 @@
         background: var(--ink);
         opacity: 0.55;
       }
+      /*
+        THE FILL is the picked state — A3's ink disc, white numeral.
+
+        It was the same two declarations `today` already sets, plus a dot that
+        grows. Two states cannot be told apart by a mark that one of them may not
+        have.
+      */
+      .day[aria-current='true'] {
+        background: var(--ink);
+      }
       .day[aria-current='true'] .day-n {
-        color: var(--ink);
+        color: var(--paper);
         font-weight: var(--w-medium);
       }
+      /* Reversed out with the numeral, or it disappears into the fill. */
       .day[aria-current='true'] .dot {
+        background: var(--paper);
         opacity: 1;
-        transform: scale(1.4);
       }
       /*
         How much is in the archive, in the foot beside the problem count.
@@ -1677,56 +1710,20 @@
         that COLLAPSES the third track, which is contract M2 and tested.
       */
       /*
-        NO EMPTY THIRD COLUMN.
+        `.machine-tools` and its collapse rule stood here.
 
-        Two of the seven panes emit a tool list -- `may do` and `prompts`, the
-        ones whose `h3` `main.ts` splits the render on. The other five leave the
-        aside empty, and the track was 320px regardless: `Hearing you`,
-        `On screen`, `Keys`, `Looking things up` and `About` each gave up 320px
-        of a pane to a column with nothing in it. That is what made their fields
-        stop short of the window with dead space to the right.
+        A third grid track for a tool column, zeroed by
+        `:not(:has(> .machine-tools > .tool-card))` whenever the aside was empty
+        — which was every render of every group. `renderMachine` filled it by
+        splitting a pane at its first top-level heading and no pane in
+        `settings/pane/` returns one, so the card was never built and the
+        `:has()` always matched.
 
-        `:has` rather than a class `main.ts` toggles, because the sheet can ask
-        the question the renderer has ALREADY answered by building the card or
-        not. A toggled class is a second copy of that fact, and a second copy
-        can disagree -- which is the failure this window has had three times
-        from class names alone.
-
-        The aside leaves the flow as well as the track being zeroed.
-        `.machine-tools` carries padding, and padding on a zero-width track
-        still draws: the column would be gone and a sliver of it would remain.
-
-        The cost is a reflow when moving between a pane with tools and one
-        without. That is the right way round -- five panes are full width, and
-        two shift once on arrival.
+        Deleted with the split. B1 to B7 draw no apparatus column and A7 keeps
+        the capability texts in its reading column, so there is nothing for the
+        track to hold; leaving it meant that the day a pane did return a heading,
+        224px would appear here and the pane would drop from 760 to about 538.
       */
-      .machine-spread:not(:has(> .machine-tools > .tool-card)) {
-        grid-template-columns: var(--machine-nav-w) minmax(0, 1fr) 0;
-      }
-      .machine-spread:not(:has(> .machine-tools > .tool-card)) > .machine-tools {
-        display: none;
-      }
-      /* The tool list, beside the grants that decide which rows it has. */
-      .machine-tools {
-        min-height: 0;
-        overflow-y: auto;
-        padding: var(--s5) var(--s6) var(--s6) 0;
-      }
-      /*
-        NOT `.card`, which in this window means a CHARACTER card.
-        
-        It was, for one build. `.card .name` sets `--t-h3` for a character's
-        name, so every tool name rendered at 21px and `recall_conversations`
-        wrapped mid-word. Measured, not noticed: 21px where 13 was asked for.
-        The third collision this window has had from a generic class name, and
-        the reason `stylesheets.test.ts` checks the ones the renderer creates.
-      */
-      .machine-tools > .tool-card {
-        background: var(--paper-2);
-        border: var(--s-px) solid var(--rule);
-        border-radius: var(--r-card);
-        padding: var(--s5);
-      }
       /*
         The groups fill the column, so the footer under them sits at the bottom.
       */
@@ -4157,12 +4154,6 @@
             <div class="machine-spread">
               <nav class="groups" id="nav-groups" aria-label="Groups"></nav>
               <div class="machine-pane" id="machine-pane"></div>
-              <!-- Both classes, and it needs both: `margin` is what it IS on the
-                   page, `machine-tools` is what the M2 collapse rule selects.
-                   With only the first, `:has(> .machine-tools > .tool-card)`
-                   never matched and the column collapsed on every pane —
-                   including the two that have something to put in it. -->
-              <aside class="margin machine-tools" id="machine-tools"></aside>
             </div>
           </section>
           <!--
