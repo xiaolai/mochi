@@ -66,7 +66,9 @@
         padding: var(--s0) var(--s3);
         border-radius: var(--r-pill);
         background: var(--paper);
-        box-shadow: var(--lift-1);
+        /* It sits over an unknown desktop, so it carries its own weight. This
+           was `--lift-1`, which is `none`: the chip has never had an edge. */
+        box-shadow: var(--lift-small);
         color: var(--ink-2);
         font: var(--t-micro) / 1.4 var(--sans);
         text-align: center;

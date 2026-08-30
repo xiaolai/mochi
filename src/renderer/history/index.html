@@ -69,7 +69,7 @@
       .note {
         margin: 0;
         max-width: 62ch;
-        font-family: var(--serif);
+        font-family: var(--sans);
         font-size: var(--t-sm);
         line-height: var(--leading-long);
         color: var(--ink-2);
@@ -129,7 +129,7 @@
         a sentence warning about what you typed is not one of those.
       */
       .note.bad {
-        color: var(--warn-ink);
+        color: var(--ink-2);
       }
       /*
         A button takes the page's face.
@@ -248,9 +248,8 @@
         align-items: center;
         gap: 11px;
         width: 100%;
-        padding: 9px 18px 9px 21px;
+        padding: 9px 18px;
         border: 0;
-        border-left: var(--chosen-bar) solid transparent;
         background: transparent;
         color: inherit;
         font: inherit;
@@ -261,14 +260,15 @@
         background: var(--paper);
       }
       .rail-row[aria-current='true'] {
-        background: var(--paper);
-        border-left-color: var(--her);
-        padding-left: 18px;
+        background: var(--chosen);
       }
-      /* Rule 6: the machine gets none of her colour, so its bar is ink. */
-      .rail-machine[aria-current='true'] {
-        border-left-color: var(--ink-2);
-      }
+      /*
+        Rule 6 — "the machine gets none of her colour" — is now true of every row
+        rather than arranged for this one. v2 spends no hue on chrome at all, so
+        the machine's chosen row and a character's are the same one step of grey,
+        and there is nothing left to make an exception of. The rule is satisfied
+        by the palette rather than by a selector somebody has to remember.
+      */
       .rail-row .tile {
         flex: none;
       }
@@ -295,12 +295,12 @@
           the element in the first place.
         */
         border: var(--s-px) dashed var(--rule-2);
-        border-radius: var(--r-control);
+        border-radius: var(--r-part);
       }
       /* The same admission at the subject's size. */
       .who-band.faceless .tile {
         border: var(--s-px) dashed var(--rule-2);
-        border-radius: var(--r-control);
+        border-radius: var(--r-part);
       }
       .rail-titles {
         display: flex;
@@ -314,7 +314,7 @@
         min-width: 0;
       }
       .rail-name {
-        font-family: var(--serif);
+        font-family: var(--sans);
         font-size: var(--t-sm);
         color: var(--ink);
         overflow: hidden;
@@ -453,7 +453,7 @@
       */
       .subject-large .who-name {
         font-size: var(--t-title);
-        letter-spacing: -0.025em;
+        letter-spacing: var(--track-tight);
       }
       /*
         A RULED LINE, not a box.
@@ -491,7 +491,7 @@
         border: 0;
         border-radius: 0;
         background: transparent;
-        font-family: var(--serif);
+        font-family: var(--sans);
         font-size: var(--t-body);
         color: var(--ink);
       }
@@ -538,7 +538,6 @@
         gap: 7px;
         padding: 0 0 9px;
         border: 0;
-        border-bottom: var(--chosen-underline) solid transparent;
         background: transparent;
         color: inherit;
         text-align: left;
@@ -551,13 +550,13 @@
         color: var(--ink-3);
       }
       .view-label {
-        font-family: var(--serif);
+        font-family: var(--sans);
         font-size: var(--t-h3);
         color: var(--ink-3);
         white-space: nowrap;
       }
       .view[aria-current='true'] {
-        border-bottom-color: var(--her);
+        background: var(--paper);
       }
       .view[aria-current='true'] .view-label,
       .view[aria-current='true'] .view-numeral {
@@ -756,13 +755,13 @@
         align-items: center;
         justify-content: center;
         border: var(--s-px) solid var(--rule-2);
-        border-radius: var(--r-control);
+        border-radius: var(--r-part);
         color: var(--ink-3);
         font-size: var(--t-h2);
       }
       .machine-titles h1 {
         margin: 0;
-        font-family: var(--serif);
+        font-family: var(--sans);
         font-size: var(--t-h1);
         font-weight: var(--w-regular);
         color: var(--ink);
@@ -863,7 +862,7 @@
         margin: 0;
         padding: var(--s3);
         border: var(--s-px) solid var(--rule-2);
-        border-radius: var(--r-control);
+        border-radius: var(--r-part);
         background: var(--paper);
         box-shadow: none;
         flex-direction: column;
@@ -911,7 +910,7 @@
       .month-one {
         padding: var(--s1) var(--s2);
         border: var(--s-px) solid transparent;
-        border-radius: var(--r-control);
+        border-radius: var(--r-part);
         background: transparent;
         font-family: var(--sans);
         font-size: var(--t-cap);
@@ -923,9 +922,9 @@
         color: var(--ink);
       }
       .month-one[aria-current='true'] {
-        background: var(--her-wash);
+        background: var(--chosen-2);
         border-color: var(--her);
-        color: var(--ink-brand);
+        color: var(--ink);
         font-weight: var(--w-semibold);
       }
       .daystrip .step {
@@ -1088,7 +1087,7 @@
       .machine-tools > .tool-card {
         background: var(--paper-2);
         border: var(--s-px) solid var(--rule);
-        border-radius: var(--r3);
+        border-radius: var(--r-card);
         padding: var(--s5);
       }
       /*
@@ -1132,7 +1131,7 @@
         border-radius: 0;
         background: transparent;
         color: var(--ink-2);
-        font-family: var(--serif);
+        font-family: var(--sans);
         font-size: var(--t-sm);
         cursor: pointer;
       }
@@ -1166,7 +1165,7 @@
         width: 7px;
         height: 7px;
         border-radius: var(--r-pill);
-        background: var(--warn-line);
+        background: var(--rule-2);
         margin-left: auto;
         flex: none;
       }
@@ -1189,12 +1188,12 @@
         gap: var(--s2);
         padding: var(--s4) var(--s5);
         border: var(--s-px) solid var(--rule);
-        border-radius: var(--r3);
+        border-radius: var(--r-card);
         background: var(--paper-2);
       }
       .codex.bad {
-        border-color: var(--warn-line);
-        background: var(--warn-bg);
+        border-color: var(--rule-2);
+        background: var(--paper-3);
       }
       /*
         The light, the state, and the button — one line, in that order.
@@ -1216,7 +1215,7 @@
         color: var(--ink-2);
       }
       .codex.bad .codex-said {
-        color: var(--warn-ink);
+        color: var(--ink-2);
         font-weight: var(--w-semibold);
       }
       .codex-head .btn {
@@ -1240,19 +1239,19 @@
         height: var(--s3);
         flex: none;
         border-radius: var(--r-pill);
-        background: var(--warn-line);
+        background: var(--rule-2);
       }
       .light.on {
-        background: var(--ok);
-        box-shadow: 0 0 0 3px var(--ok-wash);
+        background: var(--ink);
+        box-shadow: 0 0 0 3px var(--chosen-2);
       }
       .codex .note {
         margin: 0;
       }
       /* A destructive button that has been armed and wants a second press. */
       .btn.arming {
-        color: var(--red);
-        border-color: var(--red);
+        color: var(--ink);
+        border-color: var(--ink);
       }
       /* Her size: a slider and the number it is showing. */
       .size-row {
@@ -1308,7 +1307,7 @@
         border: var(--s0) solid var(--paper);
       }
       .size-slider:hover::-webkit-slider-thumb {
-        background: var(--her-line);
+        background: var(--ink);
       }
       .size-reading {
         color: var(--ink-2);
@@ -1366,7 +1365,7 @@
       .cap .name {
         font-family: var(--mono);
         font-size: var(--t-sm);
-        color: var(--gold);
+        color: var(--ink-2);
       }
       .folder {
         display: flex;
@@ -1419,7 +1418,7 @@
       }
       .folder .refused {
         font-size: var(--t-data);
-        color: var(--red);
+        color: var(--ink);
       }
       .keys-right {
         display: flex;
@@ -1473,7 +1472,7 @@
         border-bottom: var(--s-px) solid var(--rule);
       }
       .picked .what {
-        font-family: var(--serif);
+        font-family: var(--sans);
         font-size: var(--t-h3);
         color: var(--ink);
       }
@@ -1490,7 +1489,6 @@
         padding: 9px 0;
         border: 0;
         border-bottom: var(--s-px) solid var(--rule);
-        border-left: var(--chosen-bar) solid transparent;
         padding-left: var(--s3);
         background: transparent;
         color: inherit;
@@ -1520,8 +1518,7 @@
         color: var(--ink-2);
       }
       .entry[aria-current='true'] {
-        background: var(--her-wash);
-        border-left-color: var(--her);
+        background: var(--chosen-2);
       }
       .entry .when {
         display: flex;
@@ -1672,7 +1669,7 @@
       .switchers button {
         padding: var(--s1) 10px;
         border: 0;
-        border-radius: var(--r-control);
+        border-radius: var(--r-part);
         background: transparent;
         font-family: var(--sans);
         font-size: var(--t-data);
@@ -1695,8 +1692,8 @@
         wrong until a character was made.
       */
       .switchers button[aria-current='true'] {
-        background: var(--her-wash);
-        color: var(--ink-brand);
+        background: var(--chosen-2);
+        color: var(--ink);
         font-weight: var(--w-semibold);
       }
       .pills {
@@ -1716,7 +1713,7 @@
         display: grid;
         place-items: center;
         border: var(--s-px) solid transparent;
-        border-radius: var(--r-control);
+        border-radius: var(--r-part);
         background: transparent;
         padding: 0;
         cursor: pointer;
@@ -1735,7 +1732,7 @@
         close to no colour at all.
       */
       .theme[aria-current='true'] {
-        background: var(--her-wash);
+        background: var(--chosen-2);
         border-color: var(--her);
       }
       /*
@@ -1756,7 +1753,7 @@
         gap: var(--s2);
         padding: var(--s1) 10px;
         border: 0;
-        border-radius: var(--r-control);
+        border-radius: var(--r-part);
         background: transparent;
         color: var(--ink-3);
         font-family: var(--sans);
@@ -1789,9 +1786,9 @@
         color: var(--ink);
       }
       .pills button[aria-current='true'] {
-        background: var(--her-wash);
+        background: var(--chosen-2);
         /* The word takes `--ink-brand`; see the switchers above for why. */
-        color: var(--ink-brand);
+        color: var(--ink);
         font-weight: var(--w-semibold);
       }
       /*
@@ -2175,7 +2172,7 @@
         /*
           NO `font: inherit` in this block.
 
-          It was here, three lines under `font-family: var(--serif)`, and a
+          It was here, three lines under `font-family: var(--sans)`, and a
           shorthand resets every longhand it does not name — so her name took
           the body's Sora and the serif declaration above it did nothing. The
           largest thing on the page, and the one thing this design calls the
@@ -2185,7 +2182,7 @@
           the shorthand wipes a `select`'s chevron. A shorthand after a longhand
           is not an override anybody reads as one.
         */
-        font-family: var(--serif);
+        font-family: var(--sans);
         font-size: var(--t-h1);
         font-weight: var(--w-semibold);
         letter-spacing: -0.02em;
@@ -2354,7 +2351,7 @@
         margin: 0;
         padding: var(--s4);
         border: var(--s-px) solid var(--rule);
-        border-radius: var(--r2);
+        border-radius: var(--r-part);
         background: var(--paper);
         color: inherit;
         font-family: var(--mono);
@@ -2514,7 +2511,7 @@
         gap: var(--s1);
         padding: var(--s0) var(--s3);
         border-radius: var(--r-pill);
-        background: var(--her-wash);
+        background: var(--chosen-2);
         font-family: var(--mono);
         font-size: var(--t-data);
         color: var(--ink-2);
@@ -2573,7 +2570,7 @@
       .run.faceless .tile {
         width: 28px;
         height: 28px;
-        border: var(--s-px) dashed var(--warn-line);
+        border: var(--s-px) dashed var(--rule-2);
         border-radius: var(--r-pill);
       }
       .said {
@@ -2594,7 +2591,7 @@
         align-items: flex-end;
       }
       .who {
-        font-family: var(--narrow);
+        font-family: var(--sans);
         font-size: var(--t-label);
         font-weight: var(--w-semibold);
         letter-spacing: var(--track);
@@ -2603,7 +2600,7 @@
         margin-bottom: var(--s0);
       }
       .run.her .who {
-        color: var(--ink-brand);
+        color: var(--ink);
       }
       /*
         Her side is HER colour, which is the design's second semantic rule doing
@@ -2616,7 +2613,7 @@
         position: relative;
         padding: var(--s3) var(--s4);
         border: var(--s-px) solid var(--rule);
-        border-radius: var(--r4);
+        border-radius: var(--r-card);
         background: var(--paper-2);
         font-size: var(--t-body);
         white-space: pre-wrap;
@@ -2660,9 +2657,13 @@
         */
         border-radius: var(--r-pill);
         background: inherit;
-        box-shadow:
-          var(--lift-0),
-          0 0 0 1px var(--rule);
+        /*
+          One shadow, not two. This was `var(--lift-0), 0 0 0 1px var(--rule)`,
+          and `--lift-0` is `none` — which is legal ONLY as the whole value, so
+          the entire declaration was invalid and dropped. The ring the comment
+          above argues for has never been drawn in this window.
+        */
+        box-shadow: 0 0 0 1px var(--rule);
         color: var(--ink-3);
         cursor: default;
         opacity: 0;
@@ -2687,45 +2688,41 @@
         stroke-linejoin: round;
       }
       .run.her .bubble {
-        background: var(--her-wash);
+        background: var(--chosen-2);
         border-color: transparent;
-        color: var(--ink-brand);
+        color: var(--ink);
       }
       /* The corner nearest the speaker is tightened. That is the whole tail. */
       .run.her .said > .bubble:last-of-type {
-        border-bottom-left-radius: var(--r1);
+        border-bottom-left-radius: var(--r-part);
       }
       .run.you .said > .bubble:last-of-type {
-        border-bottom-right-radius: var(--r1);
+        border-bottom-right-radius: var(--r-part);
       }
       .cut {
         margin-top: var(--s0);
-        font-family: var(--narrow);
+        font-family: var(--sans);
         font-size: var(--t-label);
-        color: var(--warn-ink);
+        color: var(--ink-2);
       }
 
       /* ---- the problem list, which is a report rather than a conversation --- */
       .report {
         background: var(--paper-2);
         border: var(--s-px) solid var(--rule);
-        border-radius: var(--r3);
+        border-radius: var(--r-card);
         padding: var(--s6);
-      }
-      .problem p,
-      .lead {
-        max-width: var(--reading);
       }
       .problem {
         margin: 0 0 var(--s5);
       }
       .problem .where {
-        font-family: var(--narrow);
+        font-family: var(--sans);
         font-size: var(--t-label);
         font-weight: var(--w-semibold);
         letter-spacing: var(--track);
         text-transform: uppercase;
-        color: var(--red);
+        color: var(--ink);
       }
       .problem p {
         margin: var(--s0) 0 0;
@@ -2844,16 +2841,16 @@
         flex: none;
         padding: var(--s0) var(--s2);
         border: var(--s-px) solid transparent;
-        border-radius: var(--r-control);
+        border-radius: var(--r-part);
         background: transparent;
         font-family: var(--mono);
         font-size: var(--t-micro);
-        color: var(--live);
+        color: var(--ink);
         cursor: pointer;
       }
       .warn:hover {
-        border-color: var(--live-line);
-        background: var(--live-bg);
+        border-color: var(--rule-2);
+        background: var(--paper-3);
       }
       .warn .dot {
         width: 6px;
@@ -2863,7 +2860,7 @@
       }
       /* Nothing wrong, and it says so rather than showing nothing. */
       .warn.quiet {
-        color: var(--live-off);
+        color: var(--ink-3);
       }
       /*
         What this page can do, at the foot of it — as WORDS.
@@ -2903,12 +2900,12 @@
       /* The one that destroys something. Coloured and underlined in the same
          weight as the others — it is not louder, it is only red. */
       .foot-do.bad {
-        color: var(--red);
-        border-bottom-color: color-mix(in oklab, var(--red) 40%, var(--rule));
+        color: var(--ink);
+        border-bottom-color: color-mix(in oklab, var(--ink) 40%, var(--rule));
       }
       .foot-do.bad:hover:not(:disabled) {
-        color: var(--red);
-        border-bottom-color: var(--red);
+        color: var(--ink);
+        border-bottom-color: var(--ink);
       }
       /* Nothing is selected yet, so there is nothing to delete. The word stays
          where it is rather than appearing when the first row is ticked. */

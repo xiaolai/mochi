@@ -1,39 +1,54 @@
 /*
  * The design language of the shell.
  *
- * Ported from `dev-docs/design-system/Mochi Window.dc.html`, the design team's
- * delivery against `dev-docs/window-brief.md`. `STRUCTURE.md` beside it records
- * the document's layout, read out of its DOM rather than off the screenshots.
+ * Ported from `dev-docs/design-system-v2/`, the design team's v2 delivery
+ * against `dev-docs/window-brief.md`. `wiring-v2.md` beside it is the handoff.
  * Their values are kept exactly, with ONE deliberate exception recorded below,
- * and the ratios in the comments here were measured with this repository's own
- * arithmetic rather than copied from the delivery.
+ * and every ratio in the comments here was measured with this repository's own
+ * arithmetic (`accent.ts`'s `contrast`) rather than copied from the delivery —
+ * which matters, because two of the delivery's stated ratios are wrong.
  *
  * ## The one change to what was delivered
  *
- * `--ink-3` is darker in light and lighter in dark than the delivery. As drawn
- * it measured 3.89 / 3.57 / 3.18 / 3.59 against page, margin, sunken and her
- * wash in light, and 4.72 / 4.41 / 4.03 / 3.49 in dark — below the 4.5:1 floor
- * this app enforces, on every light surface and three of four dark. It is the
- * apparatus colour, so that is every time, count, path and filename in the
- * window. The delivery states ratios for `hers`, `destroy` and `attend` and
- * none for the neutral inks, which is where it went unchecked.
+ * `--ink-3` is `#5f5f66` in light where the delivery draws `#63636b`. It is the
+ * apparatus colour — every time, count, path and filename in the window — and
+ * `#63636b` measures **4.35:1 on `--chosen`** (`#dcdce0`, the selected row in
+ * the rail), below the 4.5 floor this app enforces. The delivery avoids it BY
+ * HAND, writing `#55555c` on the two selected rows it happens to draw; a token
+ * handed to every row cannot do that, so the token takes the darker value.
+ * `#5f5f66` is the lightest value that clears on every ground it can land on
+ * (4.63:1 worst), and it is 1.5% of lightness from what was drawn.
+ *
+ * This is the same correction, on the same token, for the same reason as v1.
+ * An apparatus colour is the one that lands on every surface, so it is the one
+ * that goes unchecked.
+ *
+ * ## Two of the delivery's stated numbers do not measure
+ *
+ * The bubble document states the dimmed "not yet said" text at 4.9:1; it is
+ * **4.57:1** (`#75757d` on white). Still clear of the floor, so the value
+ * stands and the claim does not. The self-audit states the halo at ~4.6:1 on
+ * `#ececed`; measured 4.70. Neither changes a decision — they are recorded so
+ * the next person measures rather than quotes.
  *
  * ## The shape of it
  *
- * "The window is one document per character, not a settings surface she appears
- * in. Its structure is a printed page: a subject, a reading column, and a margin
- * for apparatus. The machine gets its own page, because it is not about her."
+ * "The window carries no hue. Her colour appears on her face and the halo above
+ * it, and nowhere else." Everything else is neutral grey — which is what makes
+ * "chosen is never carried by colour alone" true by construction rather than by
+ * discipline: one step of grey is a step of LIGHTNESS.
  *
- * Three faces, three jobs, and the job picks the face: Literata sets anything
- * you read, Sora anything you operate, DM Mono anything machine-shaped.
+ * Two faces, three jobs collapsed into two: Outfit sets anything you read or
+ * operate, layered by weight; JetBrains Mono sets machine shapes only — times,
+ * counts, paths, keys, filenames. Never a sentence.
  */
 
 @font-face {
-  font-family: 'Literata';
+  font-family: 'Outfit';
   font-style: normal;
-  font-weight: 300 700;
+  font-weight: 300 600;
   font-display: swap;
-  src: url('./fonts/literata-latin-ext.woff2') format('woff2');
+  src: url('./fonts/outfit-latin-ext.woff2') format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
@@ -41,22 +56,22 @@
 }
 
 @font-face {
-  font-family: 'Literata';
+  font-family: 'Outfit';
   font-style: normal;
-  font-weight: 300 700;
+  font-weight: 300 600;
   font-display: swap;
-  src: url('./fonts/literata-latin.woff2') format('woff2');
+  src: url('./fonts/outfit-latin.woff2') format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Sora';
+  font-family: 'JetBrains Mono';
   font-style: normal;
-  font-weight: 400 600;
+  font-weight: 400 500;
   font-display: swap;
-  src: url('./fonts/sora-latin-ext.woff2') format('woff2');
+  src: url('./fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
@@ -64,57 +79,11 @@
 }
 
 @font-face {
-  font-family: 'Sora';
+  font-family: 'JetBrains Mono';
   font-style: normal;
-  font-weight: 400 600;
+  font-weight: 400 500;
   font-display: swap;
-  src: url('./fonts/sora-latin.woff2') format('woff2');
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: 'DM Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('./fonts/dm-mono-400-latin-ext.woff2') format('woff2');
-  unicode-range:
-    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
-    U+A720-A7FF;
-}
-
-@font-face {
-  font-family: 'DM Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('./fonts/dm-mono-400-latin.woff2') format('woff2');
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: 'DM Mono';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('./fonts/dm-mono-500-latin-ext.woff2') format('woff2');
-  unicode-range:
-    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
-    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
-    U+A720-A7FF;
-}
-
-@font-face {
-  font-family: 'DM Mono';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('./fonts/dm-mono-500-latin.woff2') format('woff2');
+  src: url('./fonts/jetbrains-mono-latin.woff2') format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -126,154 +95,234 @@
    * Without it every one of those pairs silently answers with its light half.
    */
   color-scheme: light dark;
-  /* Her colour on checkboxes and radios, taken deep enough to carry white. */
-  accent-color: var(--her-line);
+  /*
+    `--ink`, not her colour.
 
-  /* ---- surfaces: warm paper, warm ink ------------------------------------
+    A checkbox or radio is a CONTROL, and v2 spends no hue on controls. This was
+    `--her-line` while her colour carried the chrome; leaving it there would put
+    the one exception to "the window carries no hue" on the most ordinary widget
+    in the window.
+  */
+  accent-color: var(--ink);
+
+  /* ---- surfaces: neutral grey, no warmth ---------------------------------
    *
-   * The delivery's one big move, and the reverse of what this file held before:
-   * the old palette was deliberately cool. Three surfaces and no more — the
-   * page you read, the margin apparatus sits in, and a sunken well.
+   * The delivery's big move and the reverse of v1's: that palette was warm
+   * paper. Three surfaces and no more — the page you read, a raised chrome
+   * plane, and a sunken well for fields and the rail.
+   *
+   * The dark half is derived from the ONE dark screen in the delivery (C3) by
+   * pairing it element for element against the same screen in light (A3). Where
+   * the delivery drew no dark counterpart the value is derived here and said to
+   * be derived; nothing below is guessed silently.
    */
-  --paper: light-dark(#faf6f3, #16120f);
-  --paper-2: light-dark(#f2ece6, #1e1915);
-  --paper-3: light-dark(#e8dfd7, #272119);
+  --paper: light-dark(#ffffff, #08080a);
+  --paper-2: light-dark(#fafafa, #111114);
+  --paper-3: light-dark(#f4f4f5, #16161a);
   /* "One hover surface, and it is not the sunken one." */
-  --paper-hover: light-dark(#f2ece6, #1e1915);
-  --desk: light-dark(#e8dfd7, #16120f);
+  --paper-hover: light-dark(#f4f4f5, #16161a);
+
+  /* ---- chosen is one step of grey, and never a bar ------------------------
+   *
+   * v1 drew a 3px ink bar plus a fill. v2 removes the bar: "填充加深一档,
+   * 不画左侧条". A step of LIGHTNESS is not a hue, so "a state must not depend
+   * on colour alone" holds by construction rather than by anybody remembering
+   * it — which is why `--chosen-bar` and `--chosen-underline` are gone rather
+   * than set to zero.
+   *
+   * Two rungs because the ground differs: the rail is sunken, the lists are on
+   * the page. "灰底上 #dcdce0, 白底上 #ebebed."
+   */
+  --chosen: light-dark(#dcdce0, #2b2b31);
+  --chosen-2: light-dark(#ebebed, #26262c);
 
   /* ---- ink ---------------------------------------------------------------
    *
-   * Worst case against any surface above:
-   *   --ink     12.52:1 light (sunken)   11.45:1 dark (her wash)
-   *   --ink-2    5.96:1 light (sunken)    6.06:1 dark (her wash)
-   *   --ink-3    4.66:1 light (sunken)    5.02:1 dark (her wash)
+   * Worst case over every ground above, measured:
+   *   --ink       14.47:1 light   13.48:1 dark
+   *   --ink-2      4.94:1 light    5.75:1 dark
+   *   --ink-3      4.63:1 light    5.10:1 dark   (see the header)
+   *
+   * `--ink-2` and `--ink-3` sit close together on purpose. In a two-face system
+   * the difference between a sentence and a filename is carried by the FACE,
+   * not by the value, so these two are one step apart rather than three.
    */
-  --ink: light-dark(#241e1a, #f0e9e3);
-  --ink-2: light-dark(#5a5049, #b6aaa0);
-  --ink-3: light-dark(#6a6057, #a79a8f);
-  --ink-desk: light-dark(#5a5049, #b6aaa0);
+  --ink: light-dark(#0a0a0b, #fafafa);
+  --ink-2: light-dark(#5b5b60, #a5a5ac);
+  --ink-3: light-dark(#5f5f66, #9b9ba3);
 
-  /* ---- her ---------------------------------------------------------------
+  /* ---- the ink that is BELOW the floor, on purpose -----------------------
    *
-   * One accent, and it is hers. `accent.ts` replaces these at runtime with the
-   * worn character's hue and refuses one that cannot reach the floor, so these
-   * are the built-in's values and the fallback in the same breath.
+   * It says: THIS IS NOT SOMETHING YOU CAN ACT ON. WCAG 1.4.3 exempts an
+   * inactive control for exactly this reason, and raising it to 4.5:1 would make
+   * an unpressable thing look pressable — which is contract rule A1 read from
+   * the other direction.
    *
-   * NOT used anywhere on the machine page. "The machine is not her. It gets its
-   * own page, its own mark, and none of her colour."
+   *   --ink-off    2.06:1 light   2.93:1 dark   on `--paper`
+   *
+   * Anything wearing it MUST also carry `disabled` or `aria-disabled`, or it is
+   * indistinguishable from a low-contrast mistake and the rendered gate is right
+   * to fail it. The gate's exemption is keyed on the attribute, not on
+   * the colour, for that reason.
+   *
+   * The dark half is derived, not drawn: the delivery's one dark screen has no
+   * disabled control on it. It holds the same relationship to the dark page
+   * that the light half holds to the light one.
+   *
+   * `--ink-empty`, for a day in the month strip with nothing on it, is the same
+   * idea and arrives with the strip that draws it.
+   */
+  --ink-off: light-dark(#b4b4bb, #5a5a62);
+
+  /* ---- her, and she is the only colour -----------------------------------
+   *
+   * "窗口交出色相之后,她成了屏幕上唯一有颜色的东西" — once the window gives up
+   * hue, she is the only coloured thing on screen, and her colour appears on
+   * her FACE and the HALO above it and nowhere else. Both are marks, not text,
+   * so the floor is 3.0 rather than 4.5. Measured worst case over every ground:
+   * 4.05:1 light, 6.53:1 dark — clear of the mark floor with room.
+   *
+   * The two halves are NOT interchangeable. `#7fbe9b` on a light ground is
+   * 1.8:1, and the halo is the microphone indicator: the delivery's own audit
+   * put drawing it in the wrong half at the top of the list, because it turns a
+   * safety indicator into decoration. `halo.ts` says the same thing from the
+   * code's side.
+   *
+   * `accent.ts` replaces these at runtime with the worn character's hue, so
+   * these are the built-in's values and the fallback in the same breath.
    */
   --her: light-dark(#3e7355, #7fbe9b);
-  --her-line: light-dark(#4e7f65, #7ba890);
-  --her-hover: light-dark(#4e7f65, #7ba890);
-  --her-ink: #ffffff;
-  --her-wash: light-dark(#e6f0e9, #1e3128);
+  /*
+    Her rig's own colours, read out of here by `resolve.ts` and drawn on canvas.
+    They do not flip by scheme: her face is the same colour on a light desktop
+    and a dark one — "她的脸两套配色里都不变色".
+  */
   --her-deep: light-dark(#3e7355, #4e7f65);
   --her-deep-ink: #ffffff;
   --her-veil: light-dark(rgb(62 115 85 / 10%), rgb(127 190 155 / 14%));
-  --ink-brand: light-dark(#3e7355, #7fbe9b);
-  /*
-    `--chrome-wash` was here: a neutral fill for a chosen thing, distinct from
-    her wash. Nothing draws it any more, and that is the point — every chosen
-    state in this window is her colour now, learned once, where it used to be a
-    grey fill in the cast list, a gold fill in the archive and a wash in the
-    swatches. A token for a second way of saying chosen is a second meaning
-    waiting to be given to it.
-  */
 
-  /* ---- two status families, and no more ---------------------------------- */
-  --red: light-dark(#a33529, #e8a69c);
-  --red-bg: light-dark(#f6e7e4, #2e1c11);
+  /* ---- the one colour that is not hers and not grey -----------------------
+   *
+   * The unread-problems dot on her bubble, and only there. It is not themed and
+   * not neutral: it means "read me", it is drawn over an unknown desktop rather
+   * than over this palette, and a red that politely adapts to its surroundings
+   * loses that argument. `bubble.ts` carries the reasoning.
+   *
+   * The window itself has no red, no amber and no blue. v2 is monochrome, so a
+   * problem is said in words and a mark, not in a hue — which is also why
+   * `--red`, `--warn-*`, `--ok*`, `--live*` and `--gold` are gone rather than
+   * restated: every one of them had exactly one consumer, and that consumer now
+   * says the same thing in grey.
+   */
   --alarm: light-dark(#a33529, #e8a69c);
-  --warn-ink: light-dark(#8a6510, #e3cd77);
-  --warn-bg: light-dark(#f7efdc, #2b250d);
-  --warn-line: light-dark(#c8b9ac, #4b4038);
+
+  /* ---- rules, and the two shadows that are allowed ------------------------
+   *
+   * A hairline divides; it does not lift. `--rule-2` is the heavier one and it
+   * is what an ordinary (outlined) button wears.
+   */
+  --rule: light-dark(#e6e6e8, #1f1f24);
+  --rule-2: light-dark(#d4d4d8, #35353c);
   /*
-    Gold is `--warn-ink` under another name, and only the ink is still drawn.
+    v1's rule was "hairlines, not shadows", full stop. v2 narrows it rather than
+    abandoning it: a shadow only on a surface in the TOP LAYER — the confirm
+    sheet, the problems drawer, the month picker. Three surfaces, and the
+    rendered gate's allow-list names exactly those three so the next unplanned
+    shadow still reports.
 
-    `--gold-wash` was the fill behind a CHOSEN conversation, in a second copy of
-    the list's rules that shadowed the delivered ones — a chosen row is her
-    colour everywhere in this window, and spending an attention colour on an
-    ordinary selection is how it came to mean four different things. The fill
-    and its ink went with that rule.
+    Measured out of the artboards: four elements carry the small lift and three
+    carry the top-layer one. Nothing else in twenty screens has a shadow.
+
+    Only the small one is declared here — `--lift-top` arrives with the first of
+    those three surfaces. A token declared ahead of its consumer is what this
+    file's own check exists to catch.
   */
-  --gold: light-dark(#8a6510, #e3cd77);
-  --ok: light-dark(#1f6b41, #7fbe9b);
-  --ok-wash: light-dark(#e6f0e9, #1e3128);
-  /* The blue family.  went with the filled pill it was for: the
-     problem count is a word and a dot on the page, not a chip with white text. */
-  --live: light-dark(#2f6fb5, #8db8d4);
-  --live-line: light-dark(#2f6fb5, #8db8d4);
-  --live-bg: light-dark(#e6eef7, #16242d);
-  --live-off: light-dark(#6a6057, #a79a8f);
-
-  /* ---- rules do the grouping ---------------------------------------------
-   *
-   * "Rules do the grouping. Boxes are reserved for the two things that need
-   * one: a control and a warning." These carry the structure that borders and
-   * shadows used to, which is why `--lift-*` below is nearly all `none`.
-   */
-  --rule: light-dark(#e0d5cb, #352d26);
-  --rule-2: light-dark(#c8b9ac, #4b4038);
-  --hair: light-dark(#e0d5cb, #352d26);
-  /* `--hair-soft` went with the mood tiles: it was the dimmed hover on a face
-     a character was not permitted, and no character is unpermitted now. */
-  --hair-desk: inset 0 0 0 1px light-dark(#e0d5cb, #352d26);
-
-  /* ---- chosen is a bar and a word ----------------------------------------
-   *
-   * "Her hue may be unreadable; the state must not depend on it." The rail's
-   * bar is 3px and the sub-nav's underline is 2px; both are paid back out of
-   * the unchosen item's padding so nothing shifts when the choice moves.
-   */
-  --chosen-bar: 3px;
-  --chosen-underline: 2px;
+  --lift-small: 0 1px 2px rgb(0 0 0 / 14%);
 
   /* ---- the frame, in the delivery's own numbers --------------------------
    *
-   * No `--topbar-h`: there is no strip across the top. The delivery draws one
-   * at 38px and this window does not have it, because the facts it carried are
-   * the operating system title bar's, the tray's and her halo's. A token for a
-   * thing that is not drawn is a rung nobody plays.
+   * Derived rather than chosen, and the derivation closes at the default size:
+   *   her page      232 + 32 + 760 + 32 + 224 = 1280
+   *   the machine   232 + 32 + 760 + 32 + 222 = 1278 (+ two 1px borders)
+   *   the archive   232 + 368 + 32 + 616 + 32 = 1280
+   *
+   * The delivery states this three ways and only this one sums: `wiring-v2.md`
+   * §3 and the all-pages doc both write "抄本 600 + 32×2", which is 1264, and
+   * `窗口尺寸` divides the same 680 as "600 + 40×2". The artboards draw a 616
+   * pane inside 32px gutters, so that is what is built.
+   *
+   * The three column widths and the gutter arrive with the layout that spends
+   * them; only the three the window already draws are declared here.
    */
-  --rail-w: 210px;
-  --margin-w: 236px;
-  --machine-nav-w: 232px;
-  --status-h: 34px;
+  --rail-w: 232px;
+  --margin-w: 224px;
+  --machine-nav-w: 222px;
+  --status-h: 30px;
+  /*
+    The one thing in the window with a measure of its own.
+
+    "列里的东西一律填满列" — everything in a column fills the column, and the
+    column width IS the cap. The two exceptions the delivery names are a
+    single-line input (past ~420px there is no more content to show) and a
+    centred empty state. `--reading` is gone: a second measure inside a column
+    that already has one is how a 760px pane came to hold a 66ch line.
+  */
+  --field-max: 420px;
 
   /* ---- her halo, on her own window --------------------------------------- */
   --ring-w: 66px;
   --ring-h: 16px;
   --ring-tilt: -12deg;
-  --ring-thinking: rgb(250 246 243 / 62%);
-  --ring-asleep: rgb(250 246 243 / 42%);
+  --ring-thinking: rgb(250 250 250 / 62%);
+  --ring-asleep: rgb(250 250 250 / 42%);
 
-  /* ---- three faces, three jobs -------------------------------------------
+  /* ---- her bubble, over an unknown desktop -------------------------------
+   *
+   * Not the window's surfaces: the bubble sits on somebody's wallpaper, so it
+   * carries its own opaque paper and its own edge. Dark is `#0f0f11` — LIGHTER
+   * than the window's `#08080a`, deliberately, because it floats on a desktop
+   * and needs a little weight of its own.
+   *
+   *   ink on paper      19.79:1 light   18.34:1 dark
+   *   ahead on paper     4.57:1 light    5.66:1 dark
+   */
+
+  /* ---- two faces, two jobs ----------------------------------------------
    *
    * The CJK fallbacks come from the operating system: a character called
    * せんせい has to render on the first launch, and bundling a CJK face would be
    * tens of megabytes to replace what macOS already ships.
+   *
+   * There is no `--serif` and no `--narrow`. Three faces became two, and the
+   * job that used to pick a face now picks a WEIGHT.
    */
-  --serif: 'Literata', ui-serif, Georgia, 'Songti SC', 'Hiragino Mincho ProN', serif;
-  --sans: 'Sora', system-ui, 'PingFang SC', 'Hiragino Sans', sans-serif;
-  --narrow: 'Sora', system-ui, 'PingFang SC', 'Hiragino Sans', sans-serif;
-  --mono: 'DM Mono', 'Sarasa Mono SC', 'Sarasa Mono J', ui-monospace, Menlo, monospace;
+  --sans: 'Outfit', system-ui, 'PingFang SC', 'Hiragino Sans', sans-serif;
+  --mono: 'JetBrains Mono', 'Sarasa Mono SC', 'Sarasa Mono J', ui-monospace, Menlo, monospace;
 
-  /* Literata: her name, her words, section titles, every sentence of prose. */
-  --t-title: 46px;
+  /*
+    Outfit: everything you read or operate.
+
+    Read out of the twenty artboards rather than chosen — every size below is
+    one the delivery actually draws. Six one-off heading sizes (24, 22, 20, 19,
+    17, 16, one use each) are folded onto the two rungs `--t-h2` and `--t-h3`:
+    the delivery never declared a type scale, so systematising it is work it
+    left undone, and six sizes within 8px of each other are drift rather than
+    hierarchy. Nothing moves by more than 2px.
+  */
+  --t-title: 34px;
   --t-h1: 30px;
-  --t-h2: 21px;
+  --t-h2: 22px;
   --t-h3: 19px;
-  --t-lead: 15.5px;
+  --t-lead: 15px;
   --t-body: 14px;
-  --t-sm: 13px;
-  /* Sora: buttons, labels, controls, state words. Never prose, never her name. */
+  --t-sm: 13.5px;
   --t-ui: 13px;
   --t-ui-2: 12.5px;
-  --t-cap: 11.5px;
-  --t-label: 9.5px;
-  /* DM Mono: times, counts, paths, keys, filenames. "Never larger than the
-     thing it annotates" — which is why 12px is the ceiling. */
+  --t-cap: 12px;
+  --t-label: 11px;
+  /* JetBrains Mono: times, counts, paths, keys, filenames. "Never larger than
+     the thing it annotates" — which is why 12px is the ceiling, and why the
+     one 13px mono in the artboards is not a rung. */
   --t-data: 12px;
   --t-data-2: 11px;
   --t-micro: 10.5px;
@@ -282,16 +331,23 @@
   --track: 0.14em;
   --track-2: 0.08em;
   --track-wide: 0.16em;
-  --track-tight: -0.015em;
+  --track-tight: -0.025em;
   --w-regular: 400;
   --w-medium: 500;
   --w-semibold: 600;
-  /* `--w-bold` went with her name: it was set there under a `font: inherit`
-     that had already thrown the weight away, and nothing else asks for 700. */
   --leading: 1.5;
-  --leading-long: 1.6;
+  --leading-long: 1.65;
 
-  /* ---- rhythm: 4 · 8 · 12 · 16 · 22 · 30 · 40 ---------------------------- */
+  /* ---- rhythm: 4 · 8 · 12 · 16 · 22 · 32 · 40 ----------------------------
+   *
+   * A spine, not a whitelist — the artboards also use 6, 7, 10, 13, 14, 15, 18,
+   * 20, 24 and 26, and forcing every one of those onto a rung would put a lie
+   * in this file. What the ladder is for is the SAME relationship spaced two
+   * ways in two places, which is the thing that actually reads as sloppy.
+   *
+   * `--s6` is 32 rather than v1's 30: it is the gutter either side of every
+   * content pane, and the single most-drawn distance in the delivery.
+   */
   --s-px: 1px;
   --s0: 2px;
   --s1: 4px;
@@ -299,164 +355,131 @@
   --s3: 12px;
   --s4: 16px;
   --s5: 22px;
-  --s6: 30px;
+  --s6: 32px;
   --s7: 40px;
-  /*
-    `--s8` was 72px, and it was spent on one thing: the last section of her
-    sheet padding itself away from the foot of the column. That padding is gone
-    with the rest of the sections' — the column's own `padding-bottom` ends the
-    list — and a rung nobody plays is what this file's own check exists to
-    catch. The ladder is the delivery's: 4 · 8 · 12 · 16 · 22 · 30 · 40.
-  */
 
-  /* ---- shape: 3px on anything you operate, 0 elsewhere, 6px on the window -
+  /* ---- shape: 8 / 14 / 22 / round ----------------------------------------
    *
-   * There is no `--r0`. "0 everywhere else" is the default, and a rung nothing
-   * plays is what this scale's own check exists to catch.
+   * "圆来自控件,不来自方框" — the roundness comes from the controls, not from
+   * boxes. Named for the job rather than numbered, because `--r1` through
+   * `--r5` in v1 were five names for two values and nobody could tell which to
+   * reach for.
+   *
+   * The artboards also draw 18, 9, 6 and 3px. Every one of those is INSIDE a
+   * mark — the machine's glyph in the rail, the placeholder for a character
+   * with no face — which is artwork, not a rung. Component geometry is not a
+   * scale step; that is the same argument this file's own check already makes
+   * for lengths.
    */
-  --r-control: 3px;
-  --r-window: 6px;
-  --r1: var(--r-control);
-  --r2: var(--r-control);
-  --r3: var(--r-window);
-  --r4: var(--r-window);
-  --r5: var(--r-window);
+  --r-part: 8px;
+  --r-card: 14px;
+  --r-panel: 22px;
   --r-pill: 999px;
-
-  /* ---- hairlines, not shadows -------------------------------------------- */
-  --lift-0: none;
-  --lift-1: none;
-  --lift-2: none;
-  --lift-window: 0 18px 48px rgb(22 18 15 / 22%);
 
   --duration-fast: 120ms;
   --duration: 220ms;
-  /* One reading measure. */
-  --reading: 66ch;
 }
 
 /*
- * The first component in this file: a button.
+ * ONE BUTTON SET, and the shape of it says what it does.
  *
- * It was an underline for a while, on a study that asked which treatment stops
- * you noticing that the labels are different lengths -- the real message tables
- * run 2.7ch to 13.0ch, "Wear" beside "Put the built-in back as she ships". The
- * study's finding was sound and its conclusion was too strong: what makes a row
- * of boxes read as ragged is unequal WIDTH, and a width floor fixes that without
- * giving up the box.
+ *   solid    commits          filled `--ink`, label `--paper`
+ *   outlined ordinary         `--paper` on a `--rule-2` hairline
+ *   dashed   destroys         the same box, dashed, and NO colour
+ *   pale     cannot be pressed now
  *
- * The box is back because the design artifact draws boxes, and a bare underlined
- * label is a weaker affordance than the thing it replaced -- "Delete Loki" as
- * underlined text beside two other underlined texts reads as a list of links,
- * not as three buttons one of which is destructive.
+ * ## Destructive carries no colour, and that is the argument
  *
- * A button keeps its box at rest and a FIELD does not -- see the field component
- * below, which is what tells the two apart now. The paragraph that stood here
- * said the opposite ("inputs keep their own box"), and that arrangement is what
- * produced a settings column with a boxed text field above an unboxed dropdown
- * above another boxed text field, all three doing the same kind of job.
+ * v1 drew this one in `--red`, outlined, on the reasoning that a filled red
+ * button is the most attention-grabbing thing on a surface and that is exactly
+ * wrong for an action nobody should be drawn towards. v2 agrees with the
+ * reasoning and goes one further: it has to be findable and legible, not
+ * inviting, and a dashed edge says "this one is different" where red says
+ * "press me". Red also spends the window's one exception to monochrome on the
+ * thing that least deserves it.
+ *
+ * ## Round, because anything you can press is round
+ *
+ * 999px is by far the most-drawn radius in the delivery — 192 of 294. A button
+ * is the clearest case of "a thing you press", so it takes the pill.
  */
 button.btn {
   min-height: var(--s6);
   /* The floor. Under it, "Wear" and "Put the built-in back" are two boxes of
-     different lengths and the row reads as ragged — which was the study's real
+     different lengths and the row reads as ragged — which was v1's study's real
      finding, and it is solved by a width floor rather than by removing the box. */
   min-width: calc(9ch + 28px);
-  padding: var(--s1) var(--s4);
-  border: var(--s-px) solid var(--rule);
-  border-radius: var(--r2);
+  padding: var(--s2) var(--s4);
+  border: var(--s-px) solid var(--rule-2);
+  border-radius: var(--r-pill);
   background: var(--paper);
   color: var(--ink);
   font: inherit;
-  font-size: var(--t-sm);
+  font-size: var(--t-ui);
   cursor: default;
 }
 button.btn:hover:not(:disabled) {
   border-color: var(--ink-3);
 }
+/*
+  Pale, and it says so in the accessibility tree as well as in the palette.
+
+  `--ink-off` is deliberately under the contrast floor, and the rendered gate
+  exempts a control that is `disabled` or `aria-disabled` for that reason. A
+  button that is pale WITHOUT the attribute is not exempt, and the gate is right
+  to fail it: from the outside there is no telling it from a mistake.
+*/
 button.btn:disabled {
-  color: var(--ink-3);
+  color: var(--ink-off);
+  border-color: var(--rule);
   background: transparent;
 }
-/*
-  The one that destroys something.
-
-  Outlined rather than filled, and that is deliberate: a filled red button is
-  the most attention-grabbing thing on a surface, which is exactly wrong for an
-  action nobody should be drawn towards. It has to be findable and legible, not
-  inviting. The fill arrives only on hover, once the pointer is already on it.
-*/
+/* The one that commits. Solid, and the only filled control in the window. */
+button.btn.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+  font-weight: var(--w-medium);
+}
+button.btn.primary:hover:not(:disabled) {
+  background: var(--ink-2);
+  border-color: var(--ink-2);
+}
+button.btn.primary:disabled {
+  background: var(--chosen-2);
+  border-color: var(--chosen-2);
+  color: var(--ink-off);
+}
+/* The one that destroys. Dashed, and no colour at all. */
 button.btn.bad {
-  color: var(--red);
-  border-color: color-mix(in oklab, var(--red) 40%, var(--rule));
+  border-style: dashed;
+  border-color: var(--ink-3);
 }
 button.btn.bad:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--red) 12%, var(--paper));
-  border-color: var(--red);
-}
-button.btn.bad:disabled {
-  color: var(--ink-3);
-  border-color: var(--rule);
-}
-/* The one that commits something. Her colour, filled, as the artifact draws it. */
-button.btn.primary {
-  background: var(--her-wash);
-  border-color: var(--her);
-  color: var(--ink-brand);
-  font-weight: var(--w-semibold);
-}
-/* Armed to destroy. The second press is the one that does it. */
-button.btn.arming {
-  background: var(--red-bg);
-  border-color: var(--red);
-  color: var(--red);
-  font-weight: var(--w-semibold);
+  border-color: var(--ink);
 }
 
 /*
- * The second component: a field, and it says it is one.
+ * A FIELD: sunken, and no edge at all.
  *
- * ## Three states, and the delivery gives all three
+ * "字段:灰底,无描边" — the fill is what says a field is a field, where v1 used
+ * a rule under it. This settles a defect v1 wrote down and could not fix
+ * cleanly: an empty field there got a box and a filled one did not, so the
+ * first character typed shifted the text 9px sideways under the caret. One
+ * treatment for both states, so nothing moves.
  *
- *   with a value   border-bottom 1px --rule-2 · padding 3px 0
- *   empty          border 1px --rule-2 · radius 3px · padding 4px 8px · --ink-3
- *   being edited   border-bottom 1.5px --her · padding 3px 0 · background --her-wash
- *
- * "A field with a value keeps only its RULE. An empty one gets a box, because
- * there is nothing else to look at."
- *
- * ## What was here, and why it was wrong
- *
- * The previous rule made a field with a value COMPLETELY transparent — no
- * border, no fill, nothing — on the argument that "a column of grey dropdown
- * chrome is the single biggest reason this window read as a form where the
- * artifact reads as a document". That argument is right about boxes and it was
- * applied to the wrong thing: the delivery's answer to the same problem is to
- * take the box away and KEEP THE LINE, which is what says the text can be typed
- * in. Transparent-at-rest meant nothing on this window looked editable at all —
- * her name, what she calls you, the folder she may read, all of them plain text
- * that happened to accept a caret.
- *
- * "Quiet" and "invisible" are not the same claim, and only one of them was
- * drawn.
- *
- * ## The horizontal shift is the delivery's, and it is real
- *
- * An empty field is 8px of padding and a border inside its box; one with a
- * value has neither. So the first character typed into an empty field moves the
- * text 9px left, under the caret. That is what the three specimens draw and it
- * is followed rather than quietly corrected — but it is written down here, so
- * whoever finds it irritating knows it was a decision and knows which number
- * to change.
+ * It also makes the rendered gate's `editable` check pass on its `filled`
+ * branch rather than on a border, which is the branch that actually means
+ * "this looks like somewhere you can type".
  */
 input[type='text'],
 input[type='search'],
+textarea,
 select {
-  padding: 3px 0;
+  max-width: var(--field-max);
+  padding: var(--s2) var(--s3);
   border: 0;
-  /* A RULE, always. This is the line that says a field is a field. */
-  border-bottom: var(--s-px) solid var(--rule-2);
-  border-radius: 0;
+  border-radius: var(--r-card);
   /*
    * `background-color`, NEVER the `background` shorthand.
    *
@@ -465,90 +488,77 @@ select {
    * `background:` erases the arrow for exactly as long as the pointer is over
    * the control, which is the one moment somebody is looking at it.
    */
-  background-color: transparent;
+  background-color: var(--paper-3);
   color: inherit;
   font: inherit;
-  font-size: var(--t-sm);
+  font-size: var(--t-ui);
   user-select: text;
+}
+/*
+  A multi-line field is a panel, not a control: the delivery draws her
+  instructions and every prompt in a 22px box.
+*/
+textarea {
+  max-width: none;
+  border-radius: var(--r-panel);
+  line-height: var(--leading-long);
 }
 input[type='text']:hover,
 input[type='search']:hover,
+textarea:hover,
 select:hover {
-  border-bottom-color: var(--ink-3);
+  background-color: var(--chosen-2);
 }
 /*
- * An EMPTY field gets a box, because there is nothing else to look at.
- *
- * The rule above rests on there being something to read: a field with a value
- * still shows the value and its line says it is a field. One showing only a
- * placeholder has a line under a grey word, which reads as a caption.
- *
- * `:placeholder-shown` rather than a class somebody remembers to add, which is
- * how the next empty field comes to be missing it. The cost is that a field
- * with no `placeholder` attribute can never match, so every one-line field in
- * these windows carries a placeholder — and it should anyway, since an empty
- * box with no word in it does not say what it is for either.
- */
+  An empty field says what it is for in words, not in a box.
+
+  v1 gave one a border because "there is nothing else to look at". With a fill
+  there is: the field is visible at rest whether or not it holds anything, so
+  the placeholder only has to carry the meaning, and it does that in `--ink-3`
+  rather than by changing the shape of the control.
+*/
 input[type='text']:placeholder-shown,
 input[type='search']:placeholder-shown {
-  padding: var(--s1) var(--s2);
-  border: var(--s-px) solid var(--rule-2);
-  border-radius: var(--r-control);
   color: var(--ink-3);
-}
-/*
- * BEING EDITED: her colour under it, and her wash behind it.
- *
- * Her colour here and `--ink` for the generic ring is not an inconsistency.
- * The ring answers "where is the keyboard" on controls that have no other way
- * to say it; a field being edited has a caret in it and a fill behind it, and
- * the delivery draws that fill in her wash. `outline: none` is safe for the
- * same reason, and the border and background in this very block are what
- * `stylesheets.test.ts` requires beside it.
- *
- * Last, so it beats the hover and the empty rules above at equal specificity.
- */
-input[type='text']:focus,
-input[type='search']:focus,
-select:focus {
-  outline: none;
-  padding: 3px 0;
-  border: 0;
-  border-bottom: 1.5px solid var(--her);
-  border-radius: 0;
-  background-color: var(--her-wash);
 }
 
 /*
- * THE FOCUS RING, and it is this application's rather than the operating
- * system's.
+ * THE FOCUS RING: the control's own edge, and nothing outside it.
  *
- * ## There was no rule at all
+ * ## One control, one edge
  *
- * Three comments in this repository describe "the gold `:focus-visible`
- * outline" and reason carefully about not doubling it with a field's own
- * hairline. No rule anywhere defined one. What was being reasoned about was the
- * BROWSER'S default ring, which follows the system accent colour — so the
- * colour of focus in this window was whatever the person had picked in System
- * Settings, its shape was a rounded rectangle whatever the control, and none of
- * it had been measured against anything.
+ * v1 drew 2px of `--ink` with a 2px offset — a second ring floating clear of
+ * the control. v2 collapses it: "控件自己的边变成 2px 黑,就这一下。不在外面套第
+ * 二圈,也没有间隙 — 一个控件一条边."
+ *
+ * `outline-offset: -2px` is how that is drawn without moving anything. The
+ * delivery's own text says to pay for the heavier edge out of the control's
+ * padding, which a generic rule cannot do — it does not know any control's
+ * padding. Drawing the outline INSIDE the border box gets the same picture (a
+ * 2px edge at the control's own edge, no gap, no second ring) and cannot shift
+ * a layout, which the padding version can and would, once, in whichever control
+ * somebody forgot.
+ *
+ * ## The delivery defines this four different ways
+ *
+ * The system page says a 2px edge with no gap. `HerHead` draws 1px. The
+ * self-audit's addendum describes 1px + a 2px gap + a 1px outer ring. The
+ * artboards draw it as a shadow, `0 0 0 1.5px`. This is the delivery's own
+ * headline defect — one state, more than one definition — surviving into the
+ * shipped zip in the one place it is hardest to see. The system page is the
+ * spec by its own rule ("一个状态只有一处定义"), so 2px is what is built.
  *
  * ## `--ink`, not her colour
  *
- * Focus and chosen are different questions — where the keyboard is, and what is
- * selected — and this window already spends her colour on the second. A ring in
- * the same hue makes a focused row and a chosen row the same picture. `--ink`
- * is the text colour, so it is the one value in the palette guaranteed legible
- * on every surface here: 12.52:1 at worst.
+ * "焦点用中性黑,不用她的色:'键盘在哪'和'选中了什么'是两个问题." Focus and
+ * chosen are different questions, and v2 does not spend hue on either.
  *
  * `:focus-visible` rather than `:focus`, so a pointer click does not ring the
- * control it just pressed. Fields do not take it — they have a caret, a rule in
- * her colour and a wash, which is the delivery's own answer and a better one
- * for a control you are typing into.
+ * control it just pressed.
  */
 :focus-visible {
   outline: var(--s0) solid var(--ink);
-  outline-offset: var(--s0);
+  outline-offset: calc(-1 * var(--s0));
 }
 
 /*
