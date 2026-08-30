@@ -33,10 +33,17 @@ function root(): HTMLElement & { readonly written: Map<string, string> } {
   } as unknown as HTMLElement & { readonly written: Map<string, string> }
 }
 
-/** A hue that cannot carry readable text on its own surface. */
+/** A face whose own features cannot be seen on its own body. */
 function unreadable(): FaceSpec {
-  // Pale yellow: the classic failure, and the reason this check exists at all.
-  return { ...MOCHI, colBody: '#ffffcc' }
+  // Pale yellow, with an ink a shade off it. `colInk` is what draws her eyes and
+  // her mouth, so this is a character with no face — the one contrast failure
+  // that survives the window giving up her hue.
+  //
+  // It used to be `colBody: '#ffffcc'` alone, which failed because pale yellow
+  // cannot carry white text. Nothing puts white text on her any more, and a
+  // fixture that no longer fails would have made three tests here pass while
+  // measuring nothing.
+  return { ...MOCHI, colBody: '#ffffcc', colInk: '#f2f2bb' }
 }
 
 describe('putting her colour on the document', () => {

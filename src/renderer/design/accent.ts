@@ -83,43 +83,45 @@ export function contrast(a: Rgb, b: Rgb): number {
 }
 
 const NEAR_BLACK: Rgb = { r: 20, g: 26, b: 23 }
-const NEAR_WHITE: Rgb = { r: 252, g: 253, b: 252 }
-const PURE_BLACK: Rgb = { r: 0, g: 0, b: 0 }
-const PURE_WHITE: Rgb = { r: 255, g: 255, b: 255 }
 
 /** WCAG AA for body text. */
 export const AA_BODY = 4.5
-
 /**
- * Ink that can actually be read on a given background.
+ * The floor for a MARK, and it is the only one her colour has to clear now.
  *
- * CHOSEN by measurement rather than fixed to white. Her body is a light green:
- * white text on it lands near 1.8:1, which is illegible and is exactly what a
- * hardcoded `AccentColorText` would have produced on a button filled with her
- * colour.
+ * v1 spent her hue on the window — selected rows, primary buttons, her words as
+ * text — so 4.5 was right: all of those are text or carry it. v2 takes the hue
+ * out of the chrome entirely. Her colour survives in exactly two places, her
+ * FACE and the halo above it, and both are marks.
  *
- * Two pairs rather than one, because a single pair cannot cover the space. The
- * softened pair reads better and handles nearly every real palette; a saturated
- * mid-tone defeats it, and pure black and white are the only pair whose worst
- * case still clears AA. The test sweeps the whole cube, so this is a property
- * rather than a claim.
+ * Judging a mark at the text floor is not caution, it is a wrong answer: it
+ * rejects hues that are perfectly legible for what they are actually used for.
+ * The design says so in as many words, and it is right.
  */
-export function readableInk(background: Rgb): Rgb {
-  const better = (a: Rgb, b: Rgb): Rgb =>
-    contrast(background, a) >= contrast(background, b) ? a : b
+export const AA_MARK = 3.0
 
-  // The softened pair first, because pure black on a coloured button is harsh
-  // and this is the case almost every real palette lands in.
-  const soft = better(NEAR_BLACK, NEAR_WHITE)
-  if (contrast(background, soft) >= AA_BODY) return soft
+/*
+  Two page colours were declared here, to measure her face against. They went
+  when the pairing that used them did — see `contrastFailures`. A constant kept
+  for a check that no longer exists is the same defect as a token kept for a
+  rule that no longer exists.
+*/
 
-  // A saturated mid-tone -- a vivid purple, say -- is too dark for the soft
-  // white and too light for the soft black, and lands near 4.16. Pure black
-  // and white are the only pair that can carry it: the mathematical worst case
-  // against them is 4.58, just clear of AA. Softness is the thing that gives
-  // way here, never the threshold.
-  return better(PURE_BLACK, PURE_WHITE)
-}
+/*
+  `readableInk` was here — ink chosen by measurement so a label on a button
+  FILLED with her colour stayed readable, sweeping the whole colour cube to
+  prove it. Nothing fills anything with her colour any more: v2 spends no hue on
+  controls, and `--her-ink` went with `--her-wash` and `--ink-brand`.
+
+  Removed rather than kept for later. It was reachable only from its own tests,
+  which is a producer with no consumer wearing a coat of green — and the
+  argument it encodes is not lost, it is in this comment and in the git history
+  the moment anybody puts a label back on her colour.
+
+  `NEAR_WHITE`, `PURE_BLACK` and `PURE_WHITE` went with it — the two pure ones
+  existed only for its saturated-mid-tone fallback. `NEAR_BLACK` stays: it is the
+  last-resort fallback when a face's colours cannot be parsed at all.
+*/
 
 export function toHex({ r, g, b }: Rgb): string {
   const part = (value: number): string =>
@@ -163,7 +165,6 @@ export function accentVariables(face: FaceSpec): Readonly<Record<string, string>
   // her palette that no test compares against the first is stale the moment she
   // is retuned -- and this file's whole argument is that there is one source.
   const base = parseHex(face.colBody) ?? parseHex(MOCHI.colBody) ?? NEAR_BLACK
-  const ink = parseHex(face.colInk) ?? NEAR_BLACK
   return {
     // Her fill and its label do NOT vary by scheme: she is one colour whatever
     // the OS is set to, and the label is measured against HER rather than
@@ -215,23 +216,20 @@ export function accentVariables(face: FaceSpec): Readonly<Record<string, string>
      * rediscover it.
      */
     '--her': toHex(base),
-    '--her-hover': toHex(shade(base, -0.12)),
-    '--her-ink': toHex(readableInk(base)),
-    // These two DO vary, because they are read against the page.
-    //
-    // A wash is her colour barely there — which on paper means a pale tint and
-    // on a dark page means a dark one. Emitting a single pale value left the
-    // dark scheme with a near-white band, and anything written on it measured
-    // about 1:1. Same for her colour as TEXT: `colInk` is a dark green designed
-    // to read on paper, so on a dark page it disappears.
-    //
-    // `light-dark()` is composed here rather than declared in the sheet because
-    // both sides are derived from her, and the sheet cannot see her. The dark
-    // counterpart of her ink comes from her BODY rather than from `colInk` —
-    // the format has no "light ink" field, and lightening the one colour she
-    // definitely has keeps the role hers.
-    '--her-wash': pair(shade(base, 0.82), shade(base, -0.68)),
-    '--ink-brand': pair(ink, shade(base, 0.25)),
+    /*
+      FOUR properties, down from eight.
+
+      `--her-hover`, `--her-ink`, `--her-wash` and `--ink-brand` went with the
+      window's hue. Every one of them existed so her colour could paint chrome —
+      a hover state, a label on her fill, a selected row's wash, her colour as
+      text — and v2 has none of those: "her colour appears on her face and the
+      halo above it, and nowhere else".
+
+      They are removed rather than left emitting into the void. A custom
+      property written onto the document that no sheet declares and nothing
+      reads is a producer with no consumer, and this repository has a test named
+      for how expensive that is.
+    */
     /*
       Her hue deep enough to carry WHITE, and the same value in both schemes.
       
@@ -270,10 +268,12 @@ function deep(base: Rgb): Rgb {
   return shade(base, -0.42)
 }
 
-/** A `light-dark()` value, so one custom property covers both schemes. */
-function pair(light: Rgb, dark: Rgb): string {
-  return `light-dark(${toHex(light)}, ${toHex(dark)})`
-}
+/*
+  `pair` was here — a `light-dark()` composer, for the two properties that were
+  read against the page. Both went with the window's hue: what is left of her
+  colour is her face and the halo, and neither is read against this palette. A
+  helper with no caller is the same defect as a token with no consumer.
+*/
 
 /**
  * Is every pairing this palette produces actually readable?
@@ -294,29 +294,36 @@ export function contrastFailures(face: FaceSpec): readonly string[] {
   if (base === null || ink === null) return ['the colours could not be read']
 
   const failures: string[] = []
-  const check = (what: string, a: Rgb, b: Rgb): void => {
+  const check = (what: string, a: Rgb, b: Rgb, floor: number): void => {
     const ratio = contrast(a, b)
-    if (ratio < AA_BODY) failures.push(`${what} (${ratio.toFixed(2)}:1)`)
+    if (ratio < floor) failures.push(`${what} (${ratio.toFixed(2)}:1)`)
   }
 
-  // The same pairings the theme test sweeps, and the same threshold. Two
-  // different answers to "is this readable" would make one of them a lie.
-  check('her colour behind its own label', base, readableInk(base))
   /*
-    White on her deepened colour — the FOURTH pairing, added when the palette
-    started putting her under white text.
-    
-    Without it a persona could ship an open tab, a commit button and a checked
-    box that nobody can read, and every existing check would still pass: the
-    three below all ask about her colour as TEXT, and this is the one place she
-    is the SURFACE. The worst built-in is moss at 5.64:1; the floor is 4.50.
+    THREE pairings, and all four of the old ones are gone — not loosened.
+
+    They asked whether her colour worked as chrome: as a fill under an
+    automatic label, as a surface under white text, and as TEXT on her own wash
+    in each scheme. v2 draws none of those. A check whose subject has been
+    deleted does not fail, it passes forever, and a suite full of that is the
+    thing `rebuild-contract.md` marks rules **moot** to avoid.
+
+    What is left is ONE pairing: her features have to read on her body.
+
+    A second was drafted and measured its way out — her body colour against the
+    two page colours, on the reasoning that her face now has to be findable in
+    the rail and the masthead. Her own built-in is `#a5d8bd` on white: **1.91:1**,
+    and the palest of the eight themes is 2.74. A check that rejects the
+    shipping character is not a floor the palette is failing, it is the wrong
+    question: her face is a DRAWN FIGURE with an outline, shading and dark
+    features, not a flat swatch, so its legibility is internal to it and does not
+    live in the fill.
+
+    The halo is the other place her colour survives, and it cannot be checked
+    here at all — it is drawn over an unknown desktop. That is handled by
+    construction instead: `halo.ts` gives the ring a dark outer stroke for
+    exactly this reason, and says so.
   */
-  check('white on her colour', { r: 255, g: 255, b: 255 }, deep(base))
-  for (const [name, page] of [
-    ['on paper', shade(base, 0.82)],
-    ['on a dark page', shade(base, -0.68)],
-  ] as const) {
-    check(`her colour as text ${name}`, name === 'on paper' ? ink : shade(base, 0.25), page)
-  }
+  check('her features on her body', ink, base, AA_MARK)
   return failures
 }

@@ -558,14 +558,16 @@ export function showHistoryWindow(): BrowserWindow {
   }
 
   /**
-   * 1440 x 900, from the handoff — clamped to whatever display this is.
+   * 1280 x 800, from the v2 delivery — clamped to whatever display this is.
    *
-   * The design assumes a large always-open window and the layout needs the
-   * width: a 1fr/380px body with a row of 236px cards above it. But 1440 is
-   * wider than the work area on a 13" laptop, and macOS answers a too-large
-   * window by SHRINKING it at creation — the same behaviour her own window
-   * works around — which would silently produce a size nobody chose. Asking for
-   * what fits is the honest version of the same outcome.
+   * Clamped for the same reason the old 1440 was: macOS answers a too-large
+   * window by SHRINKING it at creation — the same behaviour her own window works
+   * around — which would silently produce a size nobody chose. Asking for what
+   * fits is the honest version of the same outcome.
+   *
+   * It matters much less now. 1440 x 900 was wider than a 13" work area and
+   * taller than one; 1280 x 800 was picked against that exact machine, so the
+   * clamp is a guard rather than the usual path.
    */
   const stored = readShelfPlace(app.getPath('userData'))
   /*
@@ -599,9 +601,22 @@ export function showHistoryWindow(): BrowserWindow {
    * for an ordinary window is exactly "keep it on a display that exists" — the
    * overhang argument that makes hers different does not apply here.
    */
+  /*
+    1280 x 800, derived rather than chosen.
+
+    The archive is the page with three columns competing, and it closes exactly:
+    rail 232 + list 368 + gutter 32 + transcript 616 + gutter 32 = 1280. Height
+    800 fits the 13" default scaling with about 60px spare — 1470x956 less a
+    25px menu bar and roughly 70 of Dock.
+
+    It was 1440 x 900, and both halves were wrong for this layout. At 1440 the
+    transcript column is 136px wider than the 600px measure it holds, which is
+    the "no fixed column holding 700px of nothing" finding from the other side.
+    At 900 tall the window does not fit a 13" screen at all.
+  */
   const size =
     stored === null
-      ? { width: Math.min(1440, work.width), height: Math.min(900, work.height) }
+      ? { width: Math.min(1280, work.width), height: Math.min(800, work.height) }
       : {
           // Still clamped to the display. A window restored from a 27" monitor
           // onto a laptop would otherwise be created too large and silently
@@ -627,20 +642,23 @@ export function showHistoryWindow(): BrowserWindow {
       What the delivered layout actually needs, rather than a number inherited
       from an arrangement that no longer exists.
 
-      The old floor was 900×560, chosen for a three-tab window whose panes each
-      had the whole width. The frame now spends a fixed 210px on the rail and a
-      fixed 236px on the margin on every page, and the machine's page spends a
-      further 232px on its group list — 678px before a single word of the
-      reading column. At 900 that column is 222px wide, which is not a column.
+      Two floors ago this was 900×560, chosen for a three-tab window whose panes
+      each had the whole width. Then 1100×700, for a frame that spent a fixed
+      210 on the rail and a fixed 236 on the margin on every page.
 
-      1100×700 leaves the machine's pane 422px and her reading column 654px, and
-      the design is drawn at 1240×840 — so this is a floor somebody can work at,
-      not the size anybody should choose. `window-brief.md` §6 already said the
-      old number "was chosen for an arrangement that no longer exists and is not
-      a fixed requirement"; this is that sentence being acted on.
+      1120×680 is the v2 delivery's, and it is derived the same way the default
+      is: rail 232 + list 328 + gutter 32 + transcript 520 + gutter 32 = 1120,
+      with the reading measure falling back to 520 and the apparatus column
+      collapsed. Narrower than that and the rail would have to collapse too,
+      which is a different design rather than a smaller one.
+
+      The height floor goes DOWN, 700 to 680, and that is deliberate rather than
+      careless: six of the twenty-one screens are already taller than 800 and
+      scroll at the default size, so the floor is not what decides whether
+      anything is reachable.
     */
-    minWidth: 1100,
-    minHeight: 700,
+    minWidth: 1120,
+    minHeight: 680,
     // Shown from the start — see `bringForward` for why waiting for the first
     // paint never returns here. The colour is what `ready-to-show` was for.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1d1a' : '#f7f6f1',

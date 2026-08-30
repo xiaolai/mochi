@@ -395,26 +395,48 @@ async function firstHour(page) {
  * The checks below are the ones worth failing a build over. This is the other
  * kind: it walks every visible element on every page in both themes and reports
  * every value that is not in the design system — a typeface that is not one of
- * the three, a size that is not a rung of the scale, a radius that is not 0, 3
- * or 6, a shadow at all, a colour that is not a token.
+ * the two, a size that is not a rung of the scale, a radius that is not 8, 14,
+ * 22 or round, a shadow anywhere but the top layer, a colour that is not a
+ * token.
  *
  * It reports rather than fails, because a sweep is how you find out what to
  * check, and a list of forty deviations is not a gate.
  */
 async function audit(page) {
-  const SIZES = [46, 30, 21, 19, 15.5, 14, 13, 12.5, 12, 11.5, 11, 10.5, 10, 9.5]
-  const FACES = ['Literata', 'Sora', 'DM Mono']
-  const RADII = ['0px', '3px', '6px', '999px']
   /*
-    The one shadow this window is allowed, and why.
+    The v2 system, and every value below was read OUT of the twenty artboards
+    rather than transcribed from the handoff.
 
-    "Hairlines, not shadows" is about structure — an edge is a rule, a surface
-    does not lift. The ring around a lit status light is neither: it is what
-    makes an 8px dot of colour read as a light rather than as a bullet, and
-    `.light` argues for it where it is drawn. Named here so it stops being
-    reported, and so the next shadow still is.
+    That matters, because the handoff's own proposed list is wrong in both
+    directions. It offers 34 and 26, which no artboard draws — 34 belongs to the
+    shared masthead component and 26 to the design document's own headings — and
+    it omits 11.5, 16, 17, 20 and 24, every one of which IS drawn. Shipped as
+    written it would have reported five real sizes as deviations and quietly
+    accepted two that are not in the product.
+
+    The six one-off heading sizes (24, 22, 20, 19, 17, 16 — one use each) are
+    listed here as the two rungs they were folded onto, matching `tokens.css`.
   */
-  const ALLOWED = ['span.light']
+  const SIZES = [34, 30, 22, 19, 15, 14.5, 14, 13.5, 13, 12.5, 12, 11, 10.5, 10]
+  const FACES = ['Outfit', 'JetBrains Mono']
+  const RADII = ['0px', '8px', '14px', '22px', '999px']
+  /*
+    The shadows this window is allowed, and why each one.
+
+    "Hairlines, not shadows" was v1's rule, full stop. v2 NARROWS it rather than
+    abandoning it: a shadow only on a surface in the TOP LAYER — something that
+    floats above the page rather than sitting in it. Three surfaces qualify, and
+    they are named individually here rather than exempted as a class.
+
+    A blanket exemption was the obvious alternative and it is the wrong one. The
+    whole value of this list is that the next unplanned shadow still reports; a
+    rule saying "shadows are fine on floating things" makes every element that
+    somebody decides is floating fine too.
+
+    `span.light` stays for its own reason: the ring around a lit status light is
+    what makes an 8px dot read as a light rather than as a bullet.
+  */
+  const ALLOWED = ['span.light', 'dialog#sure', 'div#troubles', 'div#month-pick']
 
   console.log('\n  ─── the sweep ───────────────────────────────────────────────')
   for (const theme of ['light', 'dark']) {
@@ -1182,6 +1204,15 @@ async function checks(page, where = '') {
       if (!text) continue;
       const style = getComputedStyle(el);
       if (style.visibility === 'hidden' || Number(style.opacity) < 0.5) continue;
+      // Inactive controls are exempt, and WCAG 1.4.3 says so in as many words.
+      // Raising one to 4.5:1 would make a thing that CANNOT be pressed look like
+      // one that can, which is contract rule A1 read backwards — the same lie as
+      // a day with nothing on it drawn as a button.
+      //
+      // Keyed on the ATTRIBUTE, never on the colour. A pale control carrying
+      // neither \`disabled\` nor \`aria-disabled\` is indistinguishable from a
+      // low-contrast mistake, and this gate is right to fail it.
+      if (el.closest('[disabled], [aria-disabled="true"]')) continue;
       const size = parseFloat(style.fontSize);
       const heavy = Number(style.fontWeight) >= 700;
       const floor = size >= 24 || (size >= 18.66 && heavy) ? 3 : 4.5;
@@ -1715,19 +1746,24 @@ async function main() {
 
       Every layout failure this gate has caught was a width failure, and the
       opening size on a large display is the one width at which nothing is
-      tight. `window.ts` enforces 1100×700; a check that never sees it is a
+      tight. `window.ts` enforces 1120×680; a check that never sees it is a
       check that passes on the developer's monitor.
+
+      The floor moved with the v2 delivery, and this is where it earns its keep:
+      at 1120 the apparatus column collapses and the conversation list drops from
+      368 to 328, so the floor is a DIFFERENT layout rather than a squeezed one.
+      A gate that only ever measured the default would never see it.
     */
     await checks(page)
     await layoutChecks(page)
     await page.send('Emulation.setDeviceMetricsOverride', {
-      width: 1100,
-      height: 700,
+      width: 1120,
+      height: 680,
       deviceScaleFactor: 0,
       mobile: false,
     })
     await wait(800)
-    await layoutChecks(page, 'at the 1100px floor')
+    await layoutChecks(page, 'at the 1120px floor')
     await page.send('Emulation.clearDeviceMetricsOverride')
 
     page.close()

@@ -7,7 +7,6 @@ import {
   contrastFailures,
   luminance,
   parseHex,
-  readableInk,
   shade,
   toHex,
 } from './accent'
@@ -60,52 +59,25 @@ describe('luminance and contrast', () => {
   })
 })
 
-describe('readableInk', () => {
-  it('gives her own green a legible ink', () => {
-    // The defect this function exists to prevent: the first settings sheet used
-    // AccentColorText, which is white, on a button filled with her colour --
-    // about 1.8:1, which is unreadable.
-    const her = parseHex(MOCHI.colBody)
-    expect(her).not.toBeNull()
-    if (her === null) return
-    expect(contrast(her, white)).toBeLessThan(3)
-    expect(contrast(her, readableInk(her))).toBeGreaterThan(4.5)
-  })
-
-  it('clears WCAG AA on any colour the avatar format permits', () => {
-    // Swept rather than spot-checked. A user designs this colour in the tuner,
-    // and the bounds allow any hex at all -- so "the accent is readable" has to
-    // hold across the whole space, not just for the shipped green.
-    let worst = { ratio: Number.POSITIVE_INFINITY, colour: '' }
-    for (let r = 0; r <= 255; r += 15) {
-      for (let g = 0; g <= 255; g += 15) {
-        for (let b = 0; b <= 255; b += 15) {
-          const colour = { r, g, b }
-          const ratio = contrast(colour, readableInk(colour))
-          if (ratio < worst.ratio) worst = { ratio, colour: toHex(colour) }
-        }
-      }
-    }
-    // 4.5:1 is AA for body text. The worst case is a mid-grey, where neither
-    // near-black nor near-white is comfortable; if this ever fails the answer
-    // is a darker/lighter ink pair, not a lower threshold.
-    expect(worst.ratio, `worst background ${worst.colour}`).toBeGreaterThan(4.5)
-  })
-})
-
 describe('accentVariables', () => {
   it('derives every property the token sheet declares', () => {
     const vars = accentVariables(MOCHI)
-    // Her fill and its label are one colour in both schemes; the two that are
-    // read against the PAGE are `light-dark()` pairs. See accentVariables.
-    for (const name of ['--her', '--her-hover', '--her-ink']) {
+    // FOUR, down from eight. She is one colour whatever the OS is set to, so
+    // none of them is a `light-dark()` pair any more: the two that were read
+    // against the page went with the window's hue.
+    for (const name of ['--her', '--her-deep', '--her-deep-ink']) {
       expect(vars[name], name).toMatch(/^#[0-9a-f]{6}$/)
     }
     // Her colour as a film, for the halo's interior. Alpha, so neither shape.
     expect(vars['--her-veil'], '--her-veil').toMatch(/^rgb\(\d+ \d+ \d+ \/ \d+%\)$/)
-    for (const name of ['--her-wash', '--ink-brand']) {
-      expect(vars[name], name).toMatch(/^light-dark\(#[0-9a-f]{6}, #[0-9a-f]{6}\)$/)
-    }
+    // And nothing else: a property written onto the document that no sheet
+    // declares and nothing reads is a producer with no consumer.
+    expect(Object.keys(vars).sort()).toEqual([
+      '--her',
+      '--her-deep',
+      '--her-deep-ink',
+      '--her-veil',
+    ])
   })
 
   it('follows her when her palette is retuned', () => {
@@ -130,18 +102,11 @@ describe('accentVariables', () => {
     const broken = { ...MOCHI, colBody: 'not-a-colour' } as FaceSpec
     expect(accentVariables(broken)['--her']).toBe(MOCHI.colBody.toLowerCase())
   })
-  it('keeps the hover shade distinct from the base', () => {
-    // A hover state identical to the resting state is a hover state that does
-    // not exist, and nothing else would notice.
-    const vars = accentVariables(MOCHI)
-    expect(vars['--her-hover']).not.toBe(vars['--her'])
-  })
-
   it('is defined for the extremes of the colour bounds', () => {
     expect(FACE_BOUNDS.eyeGlint.min).toBe(0)
     for (const colour of ['#000000', '#ffffff']) {
       const vars = accentVariables({ ...MOCHI, colBody: colour })
-      expect(vars['--her-ink']).toMatch(/^#[0-9a-f]{6}$/)
+      expect(vars['--her-deep']).toMatch(/^#[0-9a-f]{6}$/)
     }
   })
 })
@@ -177,10 +142,13 @@ describe('white on her colour, which is the pairing the palette added', () => {
     expect(contrastFailures(MOCHI)).toEqual([])
   })
 
-  it('refuses a hue that is fine as text and hopeless under white', () => {
-    // A pale yellow: dark ink on it reads perfectly; white on it does not.
-    const pale = { ...MOCHI, colBody: '#f7f3a0', colInk: '#3a3810', colShade: '#e2dd8a' }
-    expect(contrastFailures(pale).join(' ')).toContain('white on her colour')
+  it('refuses a face whose own features vanish into its body', () => {
+    // The pairing that survives v2. Her ink draws her eyes and her mouth, so a
+    // face that fails this is a character with no expression at all — which is
+    // worse than an unreadable label, and the only thing left for this check to
+    // be about now that her colour has been taken out of the chrome.
+    const faceless = { ...MOCHI, colBody: '#f7f3a0', colInk: '#efe89a', colShade: '#e2dd8a' }
+    expect(contrastFailures(faceless).join(' ')).toContain('her features on her body')
   })
 
   it('is what the eight-theme sweep now covers too', () => {

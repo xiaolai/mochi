@@ -11,14 +11,7 @@ import {
   isThemeId,
   paletteFor,
 } from './theme'
-import {
-  AA_BODY,
-  contrast,
-  contrastFailures,
-  parseHex,
-  readableInk,
-  shade,
-} from '../renderer/design/accent'
+import { AA_MARK, contrast, contrastFailures, parseHex } from '../renderer/design/accent'
 
 const rgb = (hex: string) => {
   const parsed = parseHex(hex)
@@ -85,39 +78,41 @@ describe('the derivation', () => {
   })
 })
 
-describe('every theme gives the interface a legible accent', () => {
+describe('every theme gives her a face you can read', () => {
   /**
    * The design asks for each palette "with the interface accent it derives and
-   * the measured contrast ratio". This is that, enforced rather than
-   * documented: the accent, the wash and her-colour-as-text are all computed
-   * from `colBody` at runtime, so shipping a theme is shipping an interface,
-   * and a pretty colour that makes a link unreadable is a defect the picker
-   * would otherwise hand to the user.
+   * the measured contrast ratio". That question has shrunk, and it is worth
+   * saying why rather than quietly deleting four of the five checks.
+   *
+   * v1 spent her hue on the interface — a wash behind a selected row, her
+   * colour as a link, white on her fill — so shipping a theme really was
+   * shipping an interface, and a pretty colour could make a link unreadable.
+   * v2 takes the hue out of the chrome entirely: "her colour appears on her
+   * face and the halo above it, and nowhere else". Four of these five pairings
+   * no longer exist to be measured.
+   *
+   * What is left is the one that always mattered most and was never the reason
+   * this block existed: her ink is what draws her eyes and her mouth, and a
+   * theme where it disappears into her body is a character with no face.
    */
-  const PAPER = { light: '#f4f1ea', dark: '#1a1b14' } as const
-
-  it('clears AA on every surface it lands on, in both schemes', () => {
+  it('keeps her features legible on her own body, in every theme', () => {
     const failures: string[] = []
     for (const id of THEME_IDS) {
       const palette = paletteFor(id)
-      const body = rgb(palette.colBody)
-      const ink = rgb(palette.colInk)
-
-      // Exactly what `accentVariables` derives. Restated here rather than
-      // imported so this fails if the derivation changes shape without anyone
-      // re-checking the themes against it.
-      const checks: readonly [string, number][] = [
-        ['label on her fill', contrast(readableInk(body), body)],
-        ['her ink on light paper', contrast(ink, rgb(PAPER.light))],
-        ['her ink on her light wash', contrast(ink, shade(body, 0.82))],
-        ['light ink on dark paper', contrast(shade(body, 0.25), rgb(PAPER.dark))],
-        ['light ink on her dark wash', contrast(shade(body, 0.25), shade(body, -0.68))],
-      ]
-      for (const [what, ratio] of checks) {
-        if (ratio < AA_BODY) failures.push(`${id}: ${what} = ${ratio.toFixed(2)}`)
-      }
+      // Restated rather than imported, so this fails if the derivation changes
+      // shape without anyone re-checking the themes against it.
+      const ratio = contrast(rgb(palette.colInk), rgb(palette.colBody))
+      if (ratio < AA_MARK) failures.push(`${id}: her features on her body = ${ratio.toFixed(2)}`)
     }
     expect(failures, failures.join('\n')).toEqual([])
+  })
+
+  it('is what `contrastFailures` would say about each of them', () => {
+    // The coupling, asserted rather than assumed: a pairing added to the
+    // function and not here would be a check that only ever ran on strangers.
+    for (const id of THEME_IDS) {
+      expect(contrastFailures({ ...MOCHI, ...paletteFor(id) }), id).toEqual([])
+    }
   })
 })
 
