@@ -85,9 +85,35 @@ export function whoSection(
   )
 }
 
-/** A field under the word for what it is. The delivery's own arrangement. */
+/**
+ * A field under the word for what it is — and the word is a real `<label>`.
+ *
+ * It was a `div`, which looks identical and says nothing: the input had no
+ * accessible name at all, so a screen reader met an unlabelled text box on the
+ * one screen whose whole subject is naming her. A `<label for>` also gives the
+ * word a click target, which is free and is what people expect.
+ *
+ * The id is generated from the row's own word rather than passed in, because an
+ * id chosen at the call site is an id two call sites can choose the same.
+ */
 function labelled(what: string, control: HTMLElement): HTMLElement {
   const row = element('div', 'who-row')
-  row.append(element('div', 'who-label', what), control)
+  const label = element('label', 'who-label', what)
+  const id = `who-${what.toLowerCase().replace(/[^a-z]+/g, '-')}`
+  /*
+    A chooser is a ROW OF BUTTONS, not one control, so there is nothing for
+    `for` to point at — `htmlFor` on a group is a promise the DOM cannot keep.
+    It gets `aria-labelledby` and a group role instead, which is the same claim
+    made in the way a screen reader can act on.
+  */
+  if (control instanceof HTMLInputElement) {
+    control.id = id
+    label.htmlFor = id
+  } else {
+    label.id = id
+    control.setAttribute('role', 'group')
+    control.setAttribute('aria-labelledby', id)
+  }
+  row.append(label, control)
   return row
 }

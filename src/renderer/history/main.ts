@@ -1,4 +1,4 @@
-import type { MochiSettingsApi, SettingsView, SettingsWrite } from '@shared/ipc'
+import type { MochiSettingsApi, PersonaChange, SettingsView, SettingsWrite } from '@shared/ipc'
 import type {
   HistoryConversation,
   HistoryHit,
@@ -849,7 +849,25 @@ const handlers: ShelfHandlers = {
     void write(() => window.mochiHistory.wear(id), forPronoun(SAYS.worn, saying()))
   },
   save: (change) => {
-    void write(() => window.mochiHistory.saveCharacter(change), forPronoun(SAYS.saved, saying()))
+    /*
+      WHICH field changed, so the receipt can be about it.
+
+      Every character write came through here and said "Saved." — one sentence
+      for a voice that lands at a wake that has not happened, a rename that moves
+      a name in three places, and a switch whose whole effect is elsewhere.
+      `rules/said.ts` has a sentence for the ones worth a line and nothing for
+      the rest; this is what lets it be asked.
+
+      The change carries exactly one field in practice — each control saves its
+      own — so the first key IS the kind. `voice` is the one that also needs the
+      value, because the sentence names it.
+    */
+    const [kind] = Object.keys(change).filter((one) => one !== 'id')
+    void write(
+      () => window.mochiHistory.saveCharacter(change),
+      forPronoun(SAYS.saved, saying()),
+      kind === undefined ? undefined : { kind, value: describe(change, kind) },
+    )
   },
   tryFace: (face) => {
     /*
@@ -2115,6 +2133,23 @@ function renderMachine(): void {
  * element per render would drop the scroll position of the pane it sits in.
  */
 const talkFacts = element('div', 'talk-facts')
+
+/**
+ * The part of a change a receipt names, when it names one.
+ *
+ * Only a few sentences take a value — the voice, the new name — and the rest are
+ * about the fact that something landed somewhere you cannot see. A string is
+ * always returned rather than sometimes; `said` ignores it for kinds whose
+ * sentence has no slot.
+ */
+function describe(change: PersonaChange, kind: string): string {
+  // Through `unknown`, because `PersonaChange` is a closed shape and TypeScript
+  // is right that it does not overlap an open record. The lookup is by a key
+  // taken from the same object a line earlier, so the widening is safe and the
+  // narrowing back to `string` is what makes it honest.
+  const value = (change as unknown as Readonly<Record<string, unknown>>)[kind]
+  return typeof value === 'string' ? value : ''
+}
 
 /* ---- wiring -------------------------------------------------------------- */
 

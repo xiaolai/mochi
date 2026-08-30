@@ -61,44 +61,28 @@ describe('every state the wire can carry has somewhere to go', () => {
   })
 })
 
-describe('older than this build was made against', () => {
-  it('is usable, and still offers the update', () => {
-    // She can look things up with it. What is unestablished is the read-only
-    // confinement, which is a caveat in the sentence rather than a reason to
-    // draw a working tool as broken.
-    const drawn = readinessOf(probe({ version: '0.121.0', builtAgainst: '0.148.0' }))
-    expect(drawn.state).toBe('too-old')
-    expect(drawn.certainty).toBe('usable')
-    expect(drawn.action).toBe('update-it')
-  })
+/*
+  The `too-old` suite was here — six cases about version comparison.
 
-  it('is not old when it is the same or newer', () => {
-    for (const version of ['0.148.0', '0.149.0', '1.0.0', 'v0.148.0']) {
-      expect(readinessOf(probe({ version, builtAgainst: '0.148.0' })).state, version).toBe('ready')
+  It went with the state, and the state went because the fact it needs does not
+  exist: nothing records which Codex version this build's read-only confinement
+  was measured against, so there was no second operand. The tests passed against
+  a `builtAgainst` the tests themselves supplied, which is the shape of a check
+  that can only ever agree with itself.
+*/
+
+describe('the states it answers', () => {
+  it('offers no action nobody can take', () => {
+    // Every action has a control behind it in `looking.ts`'s `ACTION_SAYS`. An
+    // action added here without one is a button with no words.
+    for (const readiness of CODEX_READINESS) {
+      expect([
+        'check-again',
+        'open-a-terminal',
+        'how-to-install',
+        'sign-in-again',
+        'try-again',
+      ]).toContain(readinessOf(probe({ readiness })).action)
     }
-  })
-
-  it('compares numerically, not as text', () => {
-    // '0.9.0' > '0.10.0' as strings, and the answer would be backwards.
-    expect(readinessOf(probe({ version: '0.9.0', builtAgainst: '0.10.0' })).state).toBe('too-old')
-    expect(readinessOf(probe({ version: '0.10.0', builtAgainst: '0.9.0' })).state).toBe('ready')
-  })
-
-  it('says nothing about a version it cannot parse', () => {
-    // An unknown is not an "old". Telling somebody to update something that may
-    // already be current is the same class of wrong advice as "reinstall it".
-    for (const version of ['unknown version', '', 'nightly-2026-08-30']) {
-      expect(readinessOf(probe({ version, builtAgainst: '0.148.0' })).state, version).toBe('ready')
-    }
-    expect(readinessOf(probe({ version: '0.1.0', builtAgainst: null })).state).toBe('ready')
-  })
-
-  it('only asks the question when the tool is otherwise ready', () => {
-    // A version comparison on a machine with no Codex on it is an answer to a
-    // question nobody asked.
-    expect(
-      readinessOf(probe({ readiness: 'not-installed', version: '0.1.0', builtAgainst: '9.9' }))
-        .state,
-    ).toBe('not-installed')
   })
 })

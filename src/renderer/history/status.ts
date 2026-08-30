@@ -43,12 +43,25 @@ import { said, type Write } from '../rules/said'
  */
 export function hush(): void {
   saidEl.hidden = true
+  saidShutEl.hidden = true
   saidWhatEl.textContent = ''
   saidWhatEl.title = ''
 }
 
 export function say(text: string, bad = false): void {
   saidEl.classList.toggle('bad', bad)
+  /*
+    THE WAY OUT, revealed with the line it dismisses.
+
+    The button ships `hidden` and nothing ever unhid it. That was survivable
+    while the line timed out after ten seconds — the timer was the way out, and
+    the button was decoration nobody could reach. Making the receipt permanent
+    turned it into the only way out, and it was still hidden.
+
+    Which is the shape of the whole change: removing the timer moved the weight
+    onto a control that had never had to work.
+  */
+  saidShutEl.hidden = false
   saidEl.hidden = false
   saidWhatEl.textContent = text
   // The drawer is one line tall, so a long message is ellipsed — and a message

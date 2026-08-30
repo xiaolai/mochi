@@ -107,6 +107,28 @@ export type CodexReadiness = (typeof CODEX_READINESS)[number]
  * Codex login, which is the subscription her voice already runs on — so every
  * answer here is about that one sign-in. See `voice/credential.ts`.
  */
+/**
+ * The Codex version this build's workspace confinement was measured against.
+ *
+ * Not a minimum and not a preference — a PROVENANCE. `ask.ts` passes
+ * `-c project_doc_fallback_filenames=[]` on every lookup, and the whole safety
+ * of also handing somebody a `-p <profile>` rests on `-c` replacing a profile's
+ * value rather than merging with it. That is a BEHAVIOUR of the CLI rather than
+ * a documented contract, so it was measured rather than assumed:
+ * `scripts/verify-codex-precedence.sh` records 2026-08-19, codex-cli 0.148.0.
+ *
+ * An older CLI still runs and she can still look things up with it. What is not
+ * established on it is the confinement, because the measurement was taken on
+ * this version — which is why the card that reports it offers an update rather
+ * than drawing a working tool as broken.
+ *
+ * It lives here rather than in the script because two things now need it: the
+ * gate that re-measures after an upgrade, and the pane that tells somebody their
+ * CLI predates the measurement. Two copies of a number whose whole job is to be
+ * the date of an experiment would be two experiments.
+ */
+export const CONFINEMENT_MEASURED_AGAINST = '0.148.0'
+
 export const REMEDIES = ['install', 'reinstall', 'login', 'retry'] as const
 export type Remedy = (typeof REMEDIES)[number]
 

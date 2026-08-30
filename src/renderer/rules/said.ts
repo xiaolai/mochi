@@ -52,8 +52,6 @@ export interface Write {
 const WORTH_SAYING: Readonly<Record<string, (value: string) => string>> = {
   // Lands at a wake that has not happened yet, so nothing on screen shows it.
   voice: (value) => `Saved — ${value} lands on her next wake.`,
-  prompt: () => 'Saved. It is sent at her next wake.',
-  instruction: () => 'Saved. It is sent at her next wake.',
   // The file changed and the pane did not: her note is a document, and removing
   // a line from it leaves the rest looking exactly as it did.
   'note-undone': (value) => `Undone — ${value} is gone.`,
@@ -61,9 +59,22 @@ const WORTH_SAYING: Readonly<Record<string, (value: string) => string>> = {
   // A rename moves a name in three places at once, and the rail is the only one
   // on screen — so the receipt is what says the other two followed.
   name: (value) => `Renamed to ${value}.`,
-  // Takes effect at once and she is TOLD, which is the half nothing shows.
-  grant: (value) => `${value} — she is told at once, and will say she can no longer do it.`,
-  expression: (value) => `${value} — she will not be told she has it.`,
+  /*
+    KEYED BY THE FIELD, because that is what the caller can know.
+
+    `expression` was the key here and no change ever carries one — the switch
+    saves `faces`, so the formatter could not have fired even once. A table keyed
+    on a name somebody chose rather than on the name the data uses is a lookup
+    that always misses, silently, which is the same shape as the CSS class that
+    was renamed and left one call site behind.
+
+    `grant` and `instruction` are gone rather than renamed. Grants are written on
+    the machine's page through `writeMachine`, which has its own sentence and its
+    own queue; her instruction goes through `handlers.prompt`, which already says
+    what happens and says it better than a table could — it distinguishes an
+    emptied prompt from a saved one.
+  */
+  faces: () => 'Saved. She is told what she has at her next wake.',
 }
 
 /**

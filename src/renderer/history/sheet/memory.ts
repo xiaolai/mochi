@@ -113,10 +113,24 @@ export function memorySection(view: ShelfView, handlers: ShelfHandlers): HTMLEle
           : 'restores the previous version'
     wrap.append(element('p', 'note', `Only the most recent change can be undone — this ${what}.`))
   }
-  // Into the section's own head, beside the hint, which is where the delivery
-  // puts the two buttons — a second row of controls under the heading would
-  // read as belonging to the note rather than to the section.
-  const head = wrap.querySelector('.head')
-  head?.append(element('span', 'grow'), undo, forget)
+  /*
+    Into the section's own head, beside the hint — and it THROWS if it is not
+    there.
+
+    This read `.head` and appended with `head?.append(...)`. `section()` builds
+    `.section-head`; the class was renamed when nine of these headings turned out
+    to be carrying a page header's padding, and this call site was missed. So the
+    optional chain shrugged and BOTH BUTTONS have never been in the document —
+    no error, no empty box, just a section with no controls, which looks exactly
+    like a section that is not meant to have any.
+
+    A missing head is now a crash rather than a shrug. This window is assembled
+    from one document, so an element that is not there is a mistake in the
+    document and not a state to survive — the same argument `need()` makes for
+    every handle in `elements.ts`.
+  */
+  const head = wrap.querySelector('.section-head')
+  if (head === null) throw new Error('a section with no head cannot carry its controls')
+  head.append(element('span', 'grow'), undo, forget)
   return wrap
 }

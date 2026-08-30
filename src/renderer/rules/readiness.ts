@@ -1,4 +1,4 @@
-import { type CodexReadiness } from '@shared/delegation'
+import { CONFINEMENT_MEASURED_AGAINST, type CodexReadiness } from '@shared/delegation'
 
 /**
  * How ready the external tool is, as a CARD rather than as a boolean.
@@ -20,21 +20,26 @@ import { type CodexReadiness } from '@shared/delegation'
  * mark beside the sentence is filled when she can, hollow when she cannot, and
  * dashed when nobody knows.
  *
- * ## Nine, not the seven the design draws
+ * ## Nine, where the design draws seven
  *
- * The delivery's B1b draws seven cards and it is undercounting, because it was
- * drawn against the screens rather than against the wire. `CodexReadiness`
- * carries two more that a person has to be able to act on:
+ * The delivery's B1b draws seven cards. This answers eight, and the difference
+ * runs both ways.
+ *
+ * It UNDERCOUNTS by two, because it was drawn against the screens rather than
+ * against the wire. `CodexReadiness` carries two states a person has to be able
+ * to act on:
  *
  * - `unusable` — it is installed and it would not run. Not "not installed";
  *   the remedy is different and so is the sentence.
  * - `unreadable` — signed in, and the credential could not be read.
  *
  * Folding either into one of the seven would put a wrong instruction on screen,
- * which is the defect this module exists to prevent, one layer up. The two the
- * design adds and the wire cannot carry — `checking` and `too-old` — are here
- * too, because neither is a probe result: one is "a probe is in flight" and the
- * other is a comparison against what this build was made for.
+ * which is the defect this module exists to prevent, one layer up.
+ *
+ * It also OVERCOUNTS by nothing: the two the design draws that the wire cannot
+ * carry are both here. Neither is a probe result — `checking` is "a probe is in
+ * flight", which beats whatever the last one said, and `too-old` is a comparison
+ * against the version the confinement was measured on.
  */
 
 /** Whether she can look anything up, and whether we know. */
@@ -72,33 +77,43 @@ export interface Probe {
   readonly readiness: CodexReadiness
   /** A check is in flight right now. */
   readonly checking: boolean
-  /** What is installed, and what this build was made against. */
+  /** What is installed, when the probe found out. Absent before the first check. */
   readonly version?: string | null
-  readonly builtAgainst?: string | null
 }
 
 /**
- * Older than what this build was measured against.
+ * Older than the version the confinement was measured on.
  *
- * String comparison on dotted numbers, because that is the shape Codex reports
- * and this only has to answer "is it behind", not order a release history. A
- * version it cannot parse is NOT reported as old: an unparseable version is an
- * unknown, and the honest answer to an unknown is to say nothing rather than to
- * tell somebody to update something that may already be current.
+ * Numeric, not lexical: `'0.9.0' > '0.10.0'` as text and the answer would be
+ * backwards. A version this cannot parse is NOT reported as old — an unknown is
+ * an unknown, and telling somebody to update something that may already be
+ * current is the same class of wrong advice as telling them to reinstall a
+ * working tool.
+ *
+ * ## This state was deleted once, wrongly
+ *
+ * On the reasoning that nothing recorded which version the read-only
+ * confinement was measured against, so there was no second operand and building
+ * the state would mean inventing the number.
+ *
+ * The number was not missing. `verify-codex-precedence.sh` opens by recording
+ * it — 2026-08-19, codex-cli 0.148.0 — because measuring that behaviour is the
+ * entire purpose of that script. It was looked for as a TypeScript constant and
+ * not found, which is a search that answers a different question than the one
+ * asked. `CONFINEMENT_MEASURED_AGAINST` is now the one place it lives.
  */
-function behind(version: string | null | undefined, built: string | null | undefined): boolean {
-  if (typeof version !== 'string' || typeof built !== 'string') return false
+function behind(version: string | null | undefined): boolean {
+  if (typeof version !== 'string') return false
   const parts = (text: string): number[] | null => {
     const found = /^v?(\d+(?:\.\d+)*)$/.exec(text.trim())
-    if (found === null) return null
-    return (found[1] ?? '').split('.').map(Number)
+    return found === null ? null : (found[1] ?? '').split('.').map(Number)
   }
   const here = parts(version)
-  const there = parts(built)
-  if (here === null || there === null) return false
-  for (let at = 0; at < Math.max(here.length, there.length); at += 1) {
+  const measured = parts(CONFINEMENT_MEASURED_AGAINST)
+  if (here === null || measured === null) return false
+  for (let at = 0; at < Math.max(here.length, measured.length); at += 1) {
     const a = here[at] ?? 0
-    const b = there[at] ?? 0
+    const b = measured[at] ?? 0
     if (a !== b) return a < b
   }
   return false
@@ -114,13 +129,12 @@ export function readinessOf(probe: Probe): Readiness {
       /*
         Usable, and still offering something.
 
-        An older CLI runs and she can look things up with it — so the mark is
-        filled and the certainty is `usable`. What is NOT established is the
-        read-only confinement, which was measured against the newer one; that is
-        a caveat in the sentence rather than a reason to draw a working tool as
-        broken.
+        An older CLI runs and she can look things up with it, so the mark is
+        filled. What is NOT established on it is the confinement — the
+        measurement was taken on a newer one — and that is a caveat in the
+        sentence rather than a reason to draw a working tool as broken.
       */
-      return behind(probe.version, probe.builtAgainst)
+      return behind(probe.version)
         ? { state: 'too-old', certainty: 'usable', action: 'update-it' }
         : { state: 'ready', certainty: 'usable', action: 'check-again' }
     case 'logged-out':

@@ -595,6 +595,27 @@
         color: var(--ink-3);
       }
 
+      /*
+        Said to a screen reader and to nobody else.
+
+        The attention dot is a shape, and a shape is not a sentence. `panes.ts`
+        already knows WHY a group wants attention — "the Codex CLI could not be
+        found on this machine" — and that reason was being thrown away at the
+        point of drawing, so the nav told a sighted reader something and a screen
+        reader nothing.
+
+        Clipped rather than `display: none`, which would take it out of the
+        accessibility tree along with the layout.
+      */
+      .said-quietly {
+        position: absolute;
+        width: var(--s-px);
+        height: var(--s-px);
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+
       .kept {
         display: flex;
         flex-direction: column;

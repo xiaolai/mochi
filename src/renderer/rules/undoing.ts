@@ -35,15 +35,15 @@ export interface Note {
 export interface Undoing {
   /** Whether the control is offered at all. */
   readonly offered: boolean
-  /**
-   * What the note becomes if it is pressed, or `null` when it is not offered.
-   *
-   * The VALUE rather than a signal to go and look it up, so the caller cannot
-   * arrive at a different answer than the one that decided to offer the
-   * control. Those two coming apart is how a control comes to do something
-   * other than what it said.
-   */
-  readonly becomes: string | null
+  /*
+    `becomes` was here — the value the note would return to.
+
+    Nothing consumed it. The renderer asks main to restore, and main holds the
+    previous version; handing the renderer a copy to compare against would be a
+    second answer to a question only one process can answer, and the one that is
+    stale is the one on screen. A field computed on every call and read by
+    nobody is what this repository's own checks exist to find.
+  */
   /**
    * How many lines the note loses, for the sentence beside the control.
    *
@@ -60,10 +60,6 @@ function linesIn(text: string): number {
 }
 
 export function undoing(note: Note): Undoing {
-  if (note.previous === null) return { offered: false, becomes: null, lines: 0 }
-  return {
-    offered: true,
-    becomes: note.previous,
-    lines: linesIn(note.text) - linesIn(note.previous),
-  }
+  if (note.previous === null) return { offered: false, lines: 0 }
+  return { offered: true, lines: linesIn(note.text) - linesIn(note.previous) }
 }

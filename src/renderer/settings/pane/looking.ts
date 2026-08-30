@@ -269,7 +269,7 @@ function codexBlock(
     `certainty` is the third state the mark needed: filled when she can, hollow
     when she cannot, dashed when nobody knows.
   */
-  const drawn = readinessOf({ readiness: codex.readiness, checking })
+  const drawn = readinessOf({ readiness: codex.readiness, checking, version: codex.version })
   // `bad` only when it IS bad. An unknown is not a fault, and a card outlined
   // as one is the same wrong claim as the light being off.
   const box = element('div', drawn.certainty === 'unusable' ? 'codex bad' : 'codex')

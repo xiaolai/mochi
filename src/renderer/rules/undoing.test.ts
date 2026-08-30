@@ -3,32 +3,28 @@ import { undoing } from './undoing'
 
 describe('one step back, not a history', () => {
   it('is not offered when nothing has ever been rewritten', () => {
-    expect(undoing({ text: 'a line', previous: null })).toEqual({
-      offered: false,
-      becomes: null,
-      lines: 0,
-    })
+    expect(undoing({ text: 'a line', previous: null })).toEqual({ offered: false, lines: 0 })
   })
 
   it('is offered when there is a previous version', () => {
-    const back = undoing({ text: 'one\ntwo', previous: 'one' })
-    expect(back.offered).toBe(true)
-    expect(back.becomes).toBe('one')
+    expect(undoing({ text: 'one\ntwo', previous: 'one' }).offered).toBe(true)
   })
 
   it('treats an EMPTY previous note as a real one', () => {
     // `null` and `''` are different answers. Collapsing them makes the FIRST
     // rewrite the one that cannot be undone — which is exactly the rewrite
     // somebody most wants back, because it arrived without being asked for.
-    const back = undoing({ text: 'she wrote this by herself', previous: '' })
-    expect(back.offered).toBe(true)
-    expect(back.becomes).toBe('')
+    expect(undoing({ text: 'she wrote this by herself', previous: '' }).offered).toBe(true)
   })
 
-  it('hands back the value rather than a signal to go and look', () => {
-    // The caller must not be able to arrive at a different answer than the one
-    // that decided to offer the control.
-    expect(undoing({ text: 'now', previous: 'before' }).becomes).toBe('before')
+  it('says nothing about WHAT the note becomes', () => {
+    // Deliberate. Main holds the previous version and does the restoring; a copy
+    // here would be a second answer to a question only one process can answer,
+    // and the stale one is the one on screen.
+    expect(Object.keys(undoing({ text: 'now', previous: 'before' })).sort()).toEqual([
+      'lines',
+      'offered',
+    ])
   })
 })
 

@@ -792,6 +792,18 @@ export interface SettingsCodex {
   readonly readiness: CodexReadiness
   /** Keyed for `REMEDY_SAYS`, and null exactly when nothing is wrong. */
   readonly remedy: Remedy | null
+  /**
+   * What is installed, or null when there is nothing to report.
+   *
+   * The version and NOT the path. `CodexStatus` carries a resolved binary path
+   * and the directories that were searched — a search path is a home directory,
+   * which is a username — and none of that belongs on a wire the renderer reads.
+   *
+   * Null for `not-installed` and for a check that never came back, which is what
+   * makes "older than the measurement was taken on" unanswerable rather than
+   * false. See `CONFINEMENT_MEASURED_AGAINST`.
+   */
+  readonly version: string | null
 }
 
 /**

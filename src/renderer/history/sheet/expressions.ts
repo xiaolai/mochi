@@ -44,6 +44,23 @@ export function expressionsSection(
   worn: ShelfCharacter,
   handlers: ShelfHandlers,
 ): HTMLElement {
+  /*
+    ONE SET, MUTATED — contract C2, and the audit caught me claiming this
+    without doing it.
+
+    The comment here said the set was read "at the moment of the change rather
+    than closing over a snapshot". It was not: `worn` IS the snapshot, captured
+    when the pane was built, and writes are QUEUED — so the pane is not rebuilt
+    until the first write lands, and a second click during that window computes
+    from the same stale list. Turning `happy` on and then `sad` on writes a list
+    with `sad` and without `happy`, which is the exact failure C2 names.
+
+    A local set, seeded once from what is stored and mutated in place, is what
+    the rule has always asked for. It is authoritative only until the re-read
+    replaces this pane, which is the right lifetime: after that the next pane
+    seeds from what main actually holds.
+  */
+  const allowed = new Set<Emotion>(worn.faces)
   const grid = element('div', 'faces')
 
   for (const emotion of EMOTIONS) {
@@ -62,27 +79,18 @@ export function expressionsSection(
     const allow = element('input')
     allow.type = 'checkbox'
     allow.id = `allow-${emotion}`
-    allow.checked = permitted(worn.faces, emotion)
-    allow.addEventListener('change', () => {
-      /*
-        The WHOLE set, mutated from what is stored — contract C2.
-
-        Turning `happy` on and then `sad` on both computed from the set this pane
-        was DRAWN with, so the second write carried a list with `sad` in it and
-        `happy` missing. Reading `worn.faces` at the moment of the change rather
-        than closing over a snapshot is the whole of the fix; the pane is rebuilt
-        from what main holds after each write, so the next click reads the value
-        the last one produced.
-      */
-      const next = allow.checked
-        ? [...worn.faces, emotion].filter((one, at, all) => all.indexOf(one) === at)
-        : worn.faces.filter((one) => one !== emotion)
-      // In `EMOTIONS` order, always. The manifest is read by people, and a list
-      // whose order records the sequence somebody clicked in is noise on disk.
-      handlers.save({ id: worn.id, faces: EMOTIONS.filter((one) => next.includes(one)) })
-    })
+    allow.checked = permitted([...allowed], emotion)
     const label = element('label', 'face-allow', allow.checked ? 'Allowed' : 'Withheld')
     label.htmlFor = allow.id
+    allow.addEventListener('change', () => {
+      // Mutated, not copied — see the set above.
+      if (allow.checked) allowed.add(emotion)
+      else allowed.delete(emotion)
+      label.textContent = allow.checked ? 'Allowed' : 'Withheld'
+      // In `EMOTIONS` order, always. The manifest is read by people, and a list
+      // whose order records the sequence somebody clicked in is noise on disk.
+      handlers.save({ id: worn.id, faces: EMOTIONS.filter((one) => allowed.has(one)) })
+    })
     const row = element('div', 'row')
     row.append(allow, label)
     tile.append(row)

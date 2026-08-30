@@ -58,7 +58,21 @@ export function machineNav(
       attention" says there is something wrong without saying where, so it costs
       a hunt through seven groups to act on.
     */
-    if (one.attention(view) !== null) button.append(element('span', 'dot'))
+    /*
+      The mark CARRIES the sentence, rather than discarding it.
+
+      `attention` answers a reason — "the Codex CLI could not be found on this
+      machine. She cannot look anything up." — and the dot threw it away, so a
+      screen reader met a decorative span and the nav said, to that reader,
+      exactly nothing. The two are one fact and are drawn as one element.
+    */
+    const why = one.attention(view)
+    if (why !== null) {
+      const dot = element('span', 'dot')
+      dot.title = why
+      dot.append(element('span', 'said-quietly', why))
+      button.append(dot)
+    }
     button.addEventListener('click', () => {
       onOpen(one.id)
     })

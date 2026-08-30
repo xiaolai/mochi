@@ -48,8 +48,24 @@ let codexStatus: CodexStatus | null = null
 
 /** The last answer, reduced to what a renderer may hear. See `SettingsCodex`. */
 export function codexForWindow(): SettingsCodex {
-  if (codexStatus === null) return { readiness: 'timed-out', remedy: 'retry' }
-  return { readiness: readinessOf(codexStatus), remedy: remedyFor(codexStatus) }
+  if (codexStatus === null) return { readiness: 'timed-out', remedy: 'retry', version: null }
+  return {
+    readiness: readinessOf(codexStatus),
+    remedy: remedyFor(codexStatus),
+    /*
+      The VERSION, and only the version.
+
+      `CodexStatus` also carries a resolved binary path and the directories that
+      were searched — a search path is a home directory, which is a username —
+      and `delegation.ts` is explicit that none of that belongs on a wire the
+      renderer reads. A version string is a version string.
+
+      `not-installed` and `timed-out` have no version to report, and null is the
+      honest answer rather than a guess: it is what makes "older than the
+      measurement" unanswerable rather than false.
+    */
+    version: 'version' in codexStatus ? codexStatus.version : null,
+  }
 }
 
 /**
