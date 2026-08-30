@@ -1143,6 +1143,21 @@
         padding: var(--s5) var(--s6);
       }
       /*
+        A section on the MACHINE's page is tighter than one on hers.
+
+        B1 through B7 put `margin-bottom: 12px` under every heading and
+        `margin: 10px 0 0` above every note. Her page is flat — A1 is one column
+        of siblings at 22, heading and row alike — so the same `section()` builds
+        both and only one of them wanted 22 inside it. The machine's read as
+        three loose parts with no group holding them.
+
+        12 for both joints rather than 12 and 10: the two pixels are below
+        noticing and the alternative is a negative margin on the note.
+      */
+      .machine-pane .section {
+        gap: var(--s3);
+      }
+      /*
         One catalogued prompt: a title, what it is for, the text, and the two
         controls that write it.
 

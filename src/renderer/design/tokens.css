@@ -550,6 +550,38 @@ button.btn:hover:not(:disabled) {
   button that is pale WITHOUT the attribute is not exempt, and the gate is right
   to fail it: from the outside there is no telling it from a mistake.
 */
+/*
+ * NO SCROLLBAR, in either window.
+ *
+ * Ten containers in the shell can scroll and every one drew a bar.
+ *
+ * NOT because it costs width — that was the first reason written here and it is
+ * false on this platform. macOS draws overlay scrollbars, which take nothing out
+ * of the content box; a check measuring `offsetWidth - clientWidth` passed
+ * identically with this rule and without it, which is what exposed the claim.
+ *
+ * No artboard in the delivery draws one. The bubble document is explicit about
+ * why — "滚动条是'在气泡里读完一段'的家具,而气泡不干这个", a scrollbar is furniture for
+ * reading a passage through — and replaces it with a 24px fade. The window
+ * answers the same question with a COUNT where it matters: B3 draws "24 more
+ * below" under twenty-seven prompts, which says how much is left rather than
+ * roughly where you are.
+ *
+ * So it is a decision about appearance, and it stands on the delivery rather
+ * than on arithmetic.
+ *
+ * Scrolling is untouched. This hides the indicator, not the overflow: the wheel,
+ * the trackpad, Page Down, Home, End and the arrow keys all behave as before, and
+ * a container is still `overflow-y: auto` so it still scrolls.
+ *
+ * On `*` rather than on the ten, deliberately. A container that starts
+ * overflowing tomorrow should not grow a bar nobody drew — this is the one rule
+ * where naming the elements would mean revisiting it every time one is added.
+ */
+* {
+  scrollbar-width: none;
+}
+
 button.btn:disabled {
   color: var(--ink-off);
   border-color: var(--rule);

@@ -1405,6 +1405,54 @@ async function checks(page, where = '') {
     else ok('focus-hugs', `all ${String(rings.length)} fields ring their own edge, once`)
   })
 
+  await step('no-scrollbars', async () => {
+    /* --- no container draws a scrollbar ------------------------------------ */
+    /*
+      Asserted on the computed `scrollbar-width`, and the first version of this
+      check was not — it measured `offsetWidth - clientWidth`, on the reasoning
+      that a classic bar takes fifteen pixels out of the content box. It passed
+      identically with the rule in and with the rule removed, which is how the
+      reasoning turned out to be wrong: macOS draws OVERLAY scrollbars, so they
+      never took any width and there was nothing for that measurement to see.
+
+      The honest reason for hiding them is the one the delivery gives rather than
+      one about arithmetic: no artboard draws a scrollbar, and the bubble
+      document says why in general — "滚动条是'在气泡里读完一段'的家具", furniture for
+      reading a passage through — replacing it with a fade, while B3 answers the
+      same question with "24 more below". That is a decision about appearance,
+      and a check on appearance is what can hold it.
+
+      Measured on containers that OVERFLOW, so it is asserting about bars that
+      would otherwise be drawn rather than about ones that never appear.
+    */
+    await goTo(page, 'machine')
+    await page.run(
+      `(() => { const t = document.querySelectorAll('#nav-groups .tab')[2]; if (t) t.click(); return true })()`,
+    )
+    await settle(page)
+    const bars = await page.run(`(() => {
+      const name = (e) => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '.' + String(e.className).split(' ')[0]);
+      const out = { overflowing: [], showing: [] };
+      for (const e of document.querySelectorAll('*')) {
+        const cs = getComputedStyle(e);
+        if (!/auto|scroll/.test(cs.overflowY + cs.overflowX)) continue;
+        if (e.scrollHeight <= e.clientHeight) continue;
+        out.overflowing.push(name(e));
+        if (cs.scrollbarWidth !== 'none') out.showing.push(name(e) + ' is ' + cs.scrollbarWidth);
+      }
+      return out;
+    })()`)
+    if (bars.overflowing.length === 0)
+      bad('no-scrollbars', 'nothing on that page overflows, so no scrollbar could have been drawn')
+    else if (bars.showing.length > 0)
+      bad('no-scrollbars', 'a container still draws one: ' + JSON.stringify(bars.showing))
+    else
+      ok(
+        'no-scrollbars',
+        `${String(bars.overflowing.length)} container(s) overflow and none draws a bar`,
+      )
+  })
+
   await step('field-widths', async () => {
     /* --- one width for every single-line field ----------------------------- */
     /*
