@@ -52,6 +52,36 @@ const ROOT = process.cwd()
 
 /* ---- talking to the window ---------------------------------------------- */
 
+/**
+ * Go to one of the four places, and SAY SO when it is not there.
+ *
+ * This was `if (t) { … }`, written out five times. A guard that shrugs is
+ * exactly the wrong default here, and the failure mode is the quiet one this
+ * file warns about elsewhere: `querySelectorAll` finds nothing wrong on a page
+ * that never opened, so a missed click does not fail — it makes every check
+ * after it measure the page that was ALREADY showing and report it as clean.
+ * Four places sweep as one, in both themes, and the output is indistinguishable
+ * from a pass.
+ *
+ * The ids are built in `main.ts` from `VIEWS` in `tabs.ts` — `tab-for-cast`,
+ * `tab-for-archive`, `tab-for-permits` — and the machine is reached from the
+ * rail instead. Renaming a view id is what breaks this, which is why it shouts
+ * rather than skipping: a rename is cheap to make and expensive to notice.
+ */
+async function goTo(page, place) {
+  const id = place === 'machine' ? 'rail-machine' : `tab-for-${place}`
+  const reached = await page.run(
+    `(() => { const t = document.getElementById('${id}'); if (!t) return false;` +
+      ` t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); return true; })()`,
+  )
+  if (reached !== true) {
+    throw new Error(
+      `cannot reach "${place}": #${id} is not in the document. Every check after ` +
+        `this one would have measured whichever page was already showing and passed.`,
+    )
+  }
+}
+
 async function listTargets() {
   const answer = await fetch(`http://127.0.0.1:${PORT}/json/list`)
   return answer.json()
@@ -351,9 +381,7 @@ function setClipboard(text) {
 async function firstHour(page) {
   console.log('\n  ─── the first hour: one character, nothing said ─────────────')
   for (const place of ['cast', 'archive', 'permits', 'machine']) {
-    await page.run(
-      `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
-    )
+    await goTo(page, place)
     await wait(700)
     const said = await page.run(`(() => {
       const words = (el) => (el && el.getClientRects().length > 0 ? el.textContent.replace(/\\s+/g, ' ').trim() : null);
@@ -444,9 +472,7 @@ async function audit(page) {
       features: [{ name: 'prefers-color-scheme', value: theme }],
     })
     for (const place of ['cast', 'archive', 'permits', 'machine']) {
-      await page.run(
-        `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
-      )
+      await goTo(page, place)
       await wait(600)
       const found = await page.run(`(() => {
         const out = { faces: {}, sizes: {}, radii: {}, shadows: {}, colours: {} };
@@ -524,9 +550,7 @@ async function audit(page) {
 async function breathing(page) {
   console.log('\n  ─── breathing room ──────────────────────────────────────────')
   for (const place of ['cast', 'archive', 'permits', 'machine']) {
-    await page.run(
-      `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
-    )
+    await goTo(page, place)
     await wait(700)
     const rooms = await page.run(`(() => {
       const name = (e) => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') +
@@ -584,9 +608,7 @@ async function controls(page) {
   console.log('\n  ─── controls ────────────────────────────────────────────────')
   const seen = new Map()
   for (const place of ['cast', 'archive', 'permits', 'machine']) {
-    await page.run(
-      `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
-    )
+    await goTo(page, place)
     await wait(650)
     const found = await page.run(`(() => {
       const out = [];
@@ -683,9 +705,7 @@ async function photograph(page) {
   const into = join(ROOT, 'dev-docs', 'shots')
   mkdirSync(into, { recursive: true })
   for (const place of ['cast', 'archive', 'permits', 'machine']) {
-    await page.run(
-      `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
-    )
+    await goTo(page, place)
     await wait(900)
     const showing = await page.run(
       `[...document.querySelectorAll('.view')].find((v) => v.getAttribute('aria-current') === 'true')?.textContent ?? (document.getElementById('page-machine').hidden ? 'none' : 'machine')`,
@@ -1338,7 +1358,7 @@ async function checks(page, where = '') {
     when the fix is deleted is not a check.
   */
   const groups = await page.run(`document.querySelectorAll('#nav-groups .tab').length`)
-  const rule6 = { colours: 0, hit: [], away: false, groups }
+  const rule6 = { colours: 0, hit: [], away: false, missing: undefined, groups }
   for (let g = 0; g < groups; g += 1) {
     await page.run(
       `(() => { const t = document.querySelectorAll('#nav-groups .tab')[${String(g)}]; if (t) t.click(); })()`,
@@ -1354,17 +1374,43 @@ async function checks(page, where = '') {
     )
     await wait(160)
     const round = await page.run(`(() => {
+      /*
+        THE PROBE SITS INSIDE A SENTINEL, and that is not fussiness.
+
+        A custom property that does not exist makes \`color: var(--gone)\` invalid
+        at computed-value time, and \`color\` is inherited — so it computes to
+        whatever it inherited rather than to nothing. Probing a token that has
+        been renamed therefore does not fail: it quietly puts the page's ORDINARY
+        INK into the set of "her colours", and every sentence on the machine page
+        is then reported as drawn in her hue.
+
+        That is not hypothetical. This check listed five tokens, three of which
+        (\`--her-hover\`, \`--her-wash\`, \`--ink-brand\`) went when the window gave
+        up her hue, and the next run reported 188 hits — all of them ordinary
+        text, all attributed to \`--her-hover\`.
+
+        It is the same defect \`design-values.test.ts\` exists for, in the one file
+        that test does not read. So the probe inherits a colour nothing else uses,
+        and a token that resolves to it is REPORTED MISSING rather than believed.
+      */
+      const SENTINEL = 'rgb(1, 2, 3)';
+      const holder = document.createElement('div');
+      holder.style.position = 'fixed';
+      holder.style.left = '-9999px';
+      holder.style.color = SENTINEL;
       const probe = document.createElement('span');
-      probe.style.position = 'fixed';
-      probe.style.left = '-9999px';
-      document.body.append(probe);
+      holder.append(probe);
+      document.body.append(holder);
       const hers = new Map();
-      for (const name of ['--her', '--her-hover', '--her-wash', '--her-deep', '--ink-brand']) {
+      const missing = [];
+      for (const name of ['--her', '--her-deep', '--her-veil']) {
         probe.style.color = 'var(' + name + ')';
         const value = getComputedStyle(probe).color;
+        if (value === SENTINEL) { missing.push(name); continue; }
         if (!hers.has(value)) hers.set(value, name);
       }
-      probe.remove();
+      holder.remove();
+      if (missing.length > 0) return { missing };
       const page = document.getElementById('page-machine');
       if (page === null || page.getClientRects().length === 0) return { away: true };
       const group = document.querySelector('#nav-groups .tab[aria-current="true"]');
@@ -1384,13 +1430,22 @@ async function checks(page, where = '') {
       }
       return { colours: hers.size, hit: [...new Set(hit)] };
     })()`)
-    if (round.away === true) rule6.away = true
+    if (round.missing !== undefined) rule6.missing = round.missing
+    else if (round.away === true) rule6.away = true
     else {
       rule6.colours = round.colours
       for (const one of round.hit) if (!rule6.hit.includes(one)) rule6.hit.push(one)
     }
   }
-  if (rule6.away === true) bad('rule-6', 'the machine page is not showing, so nothing was measured')
+  if (rule6.missing !== undefined)
+    bad(
+      'rule-6',
+      'these are not tokens any more, so this check was measuring nothing: ' +
+        JSON.stringify(rule6.missing) +
+        '. Update the list to what her colour is actually spent on.',
+    )
+  else if (rule6.away === true)
+    bad('rule-6', 'the machine page is not showing, so nothing was measured')
   else if (rule6.hit.length > 0)
     bad(
       'rule-6',
