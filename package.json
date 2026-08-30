@@ -31,8 +31,8 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.test.json",
     "lint": "oxlint --type-aware",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "prettier --write --cache .",
+    "format:check": "prettier --check --cache .",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "verify:rendered": "pnpm build && node scripts/check-rendered.mjs",
     "rendered": "node scripts/check-rendered.mjs"
