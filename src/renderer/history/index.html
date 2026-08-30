@@ -45,6 +45,20 @@
       p {
         margin: 0;
       }
+      /*
+        A button takes the page's face.
+
+        The user agent gives one its own — Arial here — and several buttons in
+        this window were on it: the numbered views, the month arrows, the day
+        cells. It never showed, because each of them puts its text in a child
+        span that names a face. That is luck, not a rule: the first button that
+        puts text directly in itself gets Arial, and nothing about it looks
+        wrong.
+      */
+      button {
+        font-family: inherit;
+        font-size: inherit;
+      }
 
       #app {
         display: flex;
@@ -254,7 +268,7 @@
         gap: 14px;
         padding: var(--s4) 18px 0;
       }
-      .rail-make .btn {
+      .rail-word {
         min-height: 0;
         min-width: 0;
         padding: 0 0 var(--s-px);
@@ -267,11 +281,11 @@
         font-weight: var(--w-regular);
         color: var(--ink-2);
       }
-      .rail-make .btn:hover:not(:disabled) {
+      .rail-word:hover:not(:disabled) {
         color: var(--ink);
         border-bottom-color: var(--ink-3);
       }
-      .rail-make .btn:disabled {
+      .rail-word:disabled {
         color: var(--ink-3);
         border-bottom-color: var(--rule);
       }
@@ -1541,21 +1555,26 @@
         border-color: var(--her);
       }
       /*
-        Hairlines, not shadows — and 3px, not a capsule.
+        THE SAME SHAPE AS THE PRONOUN, because it is the same question.
 
-        These drew their edge as `box-shadow: inset 0 0 0 1px`, which is a
-        hairline wearing a shadow's clothes: the system says "Hairlines, not
-        shadows" and "Radius 3px on anything you operate", and this was neither.
+        These had a 1px border where `.switchers` has none — two controls that
+        both mean "this one, not that one", drawn differently, on the same page.
+        A person should learn what chosen means once; learning it twice is the
+        defect §4 of the brief records, and it had four expressions at one point.
+
+        The delivery states this pattern once, on the pronoun: bare words,
+        `padding: 4px 10px`, and the chosen one taking her wash at `radius 3px`.
+        So that is what a chooser looks like here, whatever it is choosing.
       */
       .pills button {
         display: inline-flex;
         align-items: center;
         gap: var(--s2);
         padding: var(--s1) 10px;
-        border: var(--s-px) solid var(--rule-2);
+        border: 0;
         border-radius: var(--r-control);
         background: transparent;
-        color: var(--ink-2);
+        color: var(--ink-3);
         font-family: var(--sans);
         font-size: var(--t-data);
         cursor: pointer;
@@ -1584,13 +1603,11 @@
         display: inline-block;
         vertical-align: middle;
       }
-      .pills button:hover {
-        border-color: var(--ink-3);
+      .pills button:hover:not([aria-current='true']) {
         color: var(--ink);
       }
       .pills button[aria-current='true'] {
         background: var(--her-wash);
-        border-color: var(--her);
         /* The word takes `--ink-brand`; see the switchers above for why. */
         color: var(--ink-brand);
         font-weight: var(--w-semibold);
@@ -1991,6 +2008,19 @@
       input[type='text'].who-name {
         /* 30px, 600, -0.02em, line-height 1 — the delivery's own numbers for
            her name. It is the largest thing on the page and it is a serif. */
+        /*
+          NO `font: inherit` in this block.
+
+          It was here, three lines under `font-family: var(--serif)`, and a
+          shorthand resets every longhand it does not name — so her name took
+          the body's Sora and the serif declaration above it did nothing. The
+          largest thing on the page, and the one thing this design calls the
+          subject, was set in the face reserved for what you OPERATE.
+
+          The same shape this sheet already warns about for `background`, where
+          the shorthand wipes a `select`'s chevron. A shorthand after a longhand
+          is not an override anybody reads as one.
+        */
         font-family: var(--serif);
         font-size: var(--t-h1);
         font-weight: var(--w-semibold);
@@ -2032,9 +2062,6 @@
         border-radius: 0;
         background: transparent;
         color: inherit;
-        font: inherit;
-        font-size: var(--t-h1);
-        font-weight: var(--w-bold);
         letter-spacing: var(--track-tight);
       }
       /*

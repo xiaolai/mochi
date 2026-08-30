@@ -549,6 +549,102 @@ async function breathing(page) {
   console.log('  ─────────────────────────────────────────────────────────────\n')
 }
 
+/**
+ * Every control, grouped by kind, so the ones that disagree say so.
+ *
+ * A whitelist of allowed values cannot find this: each of these treatments is
+ * defensible on its own, and the defect is that two controls doing the same
+ * JOB look different. So this groups by tag and type, prints the distinct
+ * treatments inside each group, and lets a group with more than one be the
+ * finding.
+ */
+async function controls(page) {
+  console.log('\n  ─── controls ────────────────────────────────────────────────')
+  const seen = new Map()
+  for (const place of ['cast', 'archive', 'permits', 'machine']) {
+    await page.run(
+      `(() => { const t = document.getElementById('${place}' === 'machine' ? 'rail-machine' : 'tab-for-${place}'); if (t) { t.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); t.click(); } })()`,
+    )
+    await wait(650)
+    const found = await page.run(`(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('button, input, select, textarea')) {
+        if (el.getClientRects().length === 0) continue;
+        const s = getComputedStyle(el);
+        const kind = el.tagName.toLowerCase() + (el.type && el.tagName === 'INPUT' ? '[' + el.type + ']' : '');
+        const edge = [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].join('/');
+        const look = [
+          'font ' + s.fontFamily.split(',')[0].replace(/["']/g, '') + ' ' + s.fontSize,
+          'pad ' + s.padding,
+          'edge ' + edge + ' ' + s.borderTopStyle + ' ' + s.borderBottomColor,
+          'radius ' + s.borderRadius,
+          'fill ' + s.backgroundColor,
+        ].join(' · ');
+        /*
+          The state is part of the key.
+
+          Without it a disabled button and an enabled one read as two treatments
+          of the same control — a disabled .btn drops its fill on purpose —
+          and the report cried wolf about the one thing it exists to find.
+        */
+        const state = (el.disabled ? ' disabled' : '') + (el.getAttribute('aria-current') === 'true' ? ' current' : '');
+        /*
+          Grouped by CLASS, not by tag.
+
+          Every button in this window is a button and they are meant to differ —
+          a rail row is not a day cell is not a pill. Reporting them together
+          said "13 different treatments" about a window that is working. The
+          finding worth having is one CLASS wearing two treatments in the same
+          state, which is a thing nobody chose.
+        */
+        const cls = el.className ? el.className.trim().split(/\\s+/).join('.') : (el.id ? '#' + el.id : kind);
+        out.push({ kind: cls + state, cls: kind, look });
+      }
+      return out;
+    })()`)
+    for (const one of found) {
+      if (!seen.has(one.kind)) seen.set(one.kind, new Map())
+      const looks = seen.get(one.kind)
+      if (!looks.has(one.look)) looks.set(one.look, new Set())
+      looks.get(one.look).add(one.cls)
+    }
+  }
+  /*
+    A SIZE is a variant; an edge is a disagreement.
+
+    Two controls at 12px and 10px with the same colours, radius and absence of
+    border are one shape used twice — the prompt panel's tabs are the pronoun
+    control a size down, because they share a line with a heading, and that is
+    written where they are drawn. Two controls where one has a border and the
+    other does not are two answers to one question, which is what this exists to
+    find. So the size and padding are stripped before the comparison, and the
+    variants are printed under their own heading rather than counted as faults.
+  */
+  const shape = (look) => look.replace(/font [^·]+· pad [^·]+· /, '')
+  let odd = 0
+  let variants = 0
+  for (const [kind, looks] of [...seen].sort((a, b) => a[0].localeCompare(b[0]))) {
+    if (looks.size < 2) continue
+    const shapes = new Set([...looks.keys()].map(shape))
+    if (shapes.size < 2) {
+      variants += 1
+      console.log(`  ${kind}  ${String(looks.size)} sizes of one shape`)
+      for (const look of looks.keys())
+        console.log(`      ${look.split(' · ').slice(0, 2).join(' · ')}`)
+      continue
+    }
+    odd += 1
+    console.log(`  ${kind}  ${String(looks.size)} TREATMENTS`)
+    for (const [look, who] of looks) console.log(`      ${[...who].join(' ')}  ${look}`)
+  }
+  console.log(
+    odd === 0
+      ? `  no control disagrees with itself · ${String(seen.size)} kinds, ${String(variants)} with a size variant`
+      : `  ${String(odd)} of ${String(seen.size)} kinds disagree with themselves`,
+  )
+  console.log('  ─────────────────────────────────────────────────────────────\n')
+}
+
 /* ---- looking at it ------------------------------------------------------ */
 
 /**
@@ -1348,6 +1444,7 @@ async function main() {
     }
     if (process.argv.includes('--audit')) await audit(page)
     if (process.argv.includes('--space')) await breathing(page)
+    if (process.argv.includes('--controls')) await controls(page)
     if (process.argv.includes('--rail')) {
       await page.run(`document.getElementById('rail-machine').click()`)
       await wait(700)

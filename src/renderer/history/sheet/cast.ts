@@ -59,7 +59,15 @@ export function castActions(view: ShelfView, handlers: ShelfHandlers): readonly 
   }
 
   const word = (label: string, act: () => void): HTMLButtonElement => {
-    const button = element('button', 'btn', label)
+    /*
+      `rail-word`, not `btn`.
+
+      `.btn` is a bordered, filled control with a 3px radius, and these are two
+      underlined words in a column of names. Wearing the same class made one
+      name mean two treatments, which is the thing `--controls` reports and the
+      thing this stylesheet has been bitten by seven times under other names.
+    */
+    const button = element('button', 'rail-word', label)
     button.type = 'button'
     button.addEventListener('click', () => {
       once(act)

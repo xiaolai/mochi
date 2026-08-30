@@ -286,7 +286,8 @@
   --w-regular: 400;
   --w-medium: 500;
   --w-semibold: 600;
-  --w-bold: 700;
+  /* `--w-bold` went with her name: it was set there under a `font: inherit`
+     that had already thrown the weight away, and nothing else asks for 700. */
   --leading: 1.5;
   --leading-long: 1.6;
 
