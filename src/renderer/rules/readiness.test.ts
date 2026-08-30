@@ -71,6 +71,47 @@ describe('every state the wire can carry has somewhere to go', () => {
   that can only ever agree with itself.
 */
 
+describe('older than the version the confinement was measured on', () => {
+  it('reads the version out of what the CLI actually prints', () => {
+    // `codex --version` prints `codex-cli 0.151.0` and `askVersion` sends the
+    // whole trimmed line. An anchored pattern rejects that and the state becomes
+    // unreachable on every real machine — which is exactly how it shipped.
+    expect(readinessOf(probe({ version: 'codex-cli 0.121.0' })).state).toBe('too-old')
+    expect(readinessOf(probe({ version: 'codex-cli 0.151.0' })).state).toBe('ready')
+  })
+
+  it('still reads a bare number', () => {
+    expect(readinessOf(probe({ version: '0.121.0' })).state).toBe('too-old')
+    expect(readinessOf(probe({ version: '0.148.0' })).state).toBe('ready')
+  })
+
+  it('compares numerically, not as text', () => {
+    // '0.9.0' > '0.10.0' as strings, and the answer would be backwards.
+    expect(readinessOf(probe({ version: 'codex-cli 0.9.0' })).state).toBe('too-old')
+    expect(readinessOf(probe({ version: 'codex-cli 1.0.0' })).state).toBe('ready')
+  })
+
+  it('says nothing about a version it cannot find a number in', () => {
+    // `askVersion` falls back to this exact string when the CLI answers nothing.
+    for (const version of ['unknown version', '', null]) {
+      expect(readinessOf(probe({ version })).state, String(version)).toBe('ready')
+    }
+  })
+
+  it('is usable, and still offers the update', () => {
+    // She can look things up with it. What is unestablished is the confinement.
+    const drawn = readinessOf(probe({ version: 'codex-cli 0.121.0' }))
+    expect(drawn.certainty).toBe('usable')
+    expect(drawn.action).toBe('update-it')
+  })
+
+  it('only asks the question when the tool is otherwise ready', () => {
+    expect(
+      readinessOf(probe({ readiness: 'not-installed', version: 'codex-cli 0.1.0' })).state,
+    ).toBe('not-installed')
+  })
+})
+
 describe('the states it answers', () => {
   it('offers no action nobody can take', () => {
     // Every action has a control behind it in `looking.ts`'s `ACTION_SAYS`. An

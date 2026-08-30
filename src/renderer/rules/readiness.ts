@@ -104,8 +104,21 @@ export interface Probe {
  */
 function behind(version: string | null | undefined): boolean {
   if (typeof version !== 'string') return false
+  /*
+    FOUND inside the string, not matched against the whole of it.
+
+    `codex --version` prints `codex-cli 0.151.0`, and `askVersion` hands the
+    whole trimmed line to the wire. An anchored pattern rejects that, `behind`
+    answers false for every real machine, and `too-old` is unreachable — which
+    is how this shipped once already, after being removed for a reason that
+    turned out to be wrong and then rebuilt with a check that could not fire.
+
+    It was written anchored and tested with bare numbers I supplied myself,
+    which is a test that can only ever agree with the code. `codex-cli 0.151.0`
+    is in the suite now because it is what this machine actually prints.
+  */
   const parts = (text: string): number[] | null => {
-    const found = /^v?(\d+(?:\.\d+)*)$/.exec(text.trim())
+    const found = /(\d+(?:\.\d+)+)/.exec(text)
     return found === null ? null : (found[1] ?? '').split('.').map(Number)
   }
   const here = parts(version)
