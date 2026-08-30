@@ -81,7 +81,7 @@ import {
   marginPermitsEl,
   marginTalkEl,
 } from './elements'
-import { say } from './status'
+import { receipt, say } from './status'
 import { element } from '../element'
 import { empty, facts, iconButton, marked } from './bits'
 import { freshness } from './freshness'
@@ -327,6 +327,7 @@ async function deleteThem(about: Doomed): Promise<void> {
     await write(
       () => window.mochiHistory.memory({ kind: 'clear', id: about.id }),
       forPronoun(SAYS.keptErased, saying()),
+      { kind: 'note-cleared' },
     )
     return
   }
@@ -893,6 +894,7 @@ const handlers: ShelfHandlers = {
     void write(
       () => window.mochiHistory.memory(action),
       action.kind === 'restore' ? 'Put back as it was.' : 'Forgotten.',
+      { kind: action.kind === 'restore' ? 'note-undone' : 'note-cleared', value: 'the last line' },
     )
   },
   askToErase: (id) => {
@@ -926,11 +928,24 @@ const handlers: ShelfHandlers = {
 /** The shelf's queue. Same argument as `machineWrites`; see `rules/writes.ts`. */
 const shelfWrites = writes()
 
-async function write(act: () => Promise<SettingsWrite>, done: string): Promise<void> {
+/**
+ * `kind` is what `rules/said.ts` knows a write by.
+ *
+ * Given one, the RULE decides the sentence and the caller's `done` is the
+ * fallback for a kind it has no opinion about. Two places writing the same
+ * receipt is how a voice change came to be announced one way here and another
+ * way on the machine's page.
+ */
+async function write(
+  act: () => Promise<SettingsWrite>,
+  done: string,
+  said?: { readonly kind: string; readonly value?: string },
+): Promise<void> {
   await shelfWrites.add(async () => {
     try {
       const result = await act()
-      say(result.ok ? done : result.why, !result.ok)
+      const sentence = said === undefined ? done : (receipt({ ...said, ok: true }) ?? done)
+      say(result.ok ? sentence : result.why, !result.ok)
     } catch (error: unknown) {
       say(String(error), true)
     }

@@ -6,6 +6,7 @@
  * otherwise need to remember to cancel the previous message's timer.
  */
 import { saidEl, saidShutEl, saidWhatEl } from './elements'
+import { said, type Write } from '../rules/said'
 /**
  * Say what happened. Silence after a write reads as the write not landing.
  *
@@ -13,15 +14,22 @@ import { saidEl, saidShutEl, saidWhatEl } from './elements'
  * handoff's structural rule, and it stops a character rename reporting itself
  * inside a control marked "Export…".
  *
- * ## It goes away
+ * ## IT STAYS, and this reverses a decision
  *
- * It used to stay until the next write replaced it, so the last thing you did
- * sat over the window for the rest of the session — and a message about a
- * character you have since switched away from is worse than no message.
+ * It timed out after ten seconds, on the argument that "a message about a
+ * character you have since switched away from is worse than no message". That
+ * argument is real and it is outweighed.
  *
- * Ten seconds, and the same ten for a failure. A failure that vanished with
- * nothing behind it would be a different argument, but everything reported here
- * as bad is ALSO in the problems strip, which does not time out.
+ * A live region announces when its content changes. A screen reader user is
+ * still moving through the page when that happens, and by the time they reach
+ * the bar the one sentence saying what their change did has been replaced by
+ * nothing — so the timeout costs exactly the people who most need the line, and
+ * saves everybody else a strip of chrome.
+ *
+ * The stale-message objection is answered rather than dismissed: a receipt is
+ * replaced by the next change, and the dismiss button is still here. What is
+ * left on screen is the last thing that happened, which is stale-looking and
+ * TRUE — where an empty bar after a write is neither.
  *
  * ## `hidden`, not empty
  *
@@ -33,20 +41,13 @@ import { saidEl, saidShutEl, saidWhatEl } from './elements'
  * when its content changes is not announced, so setting the words first and
  * revealing after is a message a screen reader never hears.
  */
-const SAID_FOR_MS = 10_000
-
-let saidTimer: number | null = null
-
 export function hush(): void {
-  if (saidTimer !== null) clearTimeout(saidTimer)
-  saidTimer = null
   saidEl.hidden = true
   saidWhatEl.textContent = ''
   saidWhatEl.title = ''
 }
 
 export function say(text: string, bad = false): void {
-  if (saidTimer !== null) clearTimeout(saidTimer)
   saidEl.classList.toggle('bad', bad)
   saidEl.hidden = false
   saidWhatEl.textContent = text
@@ -55,7 +56,22 @@ export function say(text: string, bad = false): void {
   // tooltip carries the rest; the live region still announces the whole thing,
   // because that reads `textContent` rather than what is painted.
   saidWhatEl.title = text
-  saidTimer = window.setTimeout(hush, SAID_FOR_MS)
+}
+
+/**
+ * The receipt for a completed write, if it earns one.
+ *
+ * `rules/said.ts` decides whether it does — most writes are their own receipt,
+ * because the control moved and saying so underneath repeats what is already on
+ * screen. What earns a line is a write whose EFFECT is somewhere else: a voice
+ * that lands at a wake that has not happened, a note removed from a file.
+ *
+ * Silence here is a decision, not a gap. A bar that fills with restatements of
+ * controls that already moved is a bar people stop reading, and then the one
+ * line that mattered goes unread with the rest.
+ */
+export function receipt(write: Write): string | null {
+  return said(write)
 }
 
 saidShutEl.addEventListener('click', hush)
