@@ -339,12 +339,14 @@
   --t-h2: 22px;
   --t-h3: 19px;
   --t-lead: 15px;
+  --t-read: 14.5px;
   --t-body: 14px;
   --t-sm: 13.5px;
   --t-ui: 13px;
   --t-ui-2: 12.5px;
   --t-cap: 12px;
   --t-label: 11px;
+  --t-label-2: 10.5px;
   /* JetBrains Mono: times, counts, paths, keys, filenames. "Never larger than
      the thing it annotates" — which is why 12px is the ceiling, and why the
      one 13px mono in the artboards is not a rung. */

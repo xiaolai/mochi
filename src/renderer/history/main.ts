@@ -8,13 +8,7 @@ import type {
   ShelfView,
   ToolUse,
 } from '@shared/history-window'
-import {
-  DEFAULT_PRONOUN,
-  forPronoun,
-  label as paneLabel,
-  type ByPronoun,
-  type Pronoun,
-} from '@shared/pronoun'
+import { DEFAULT_PRONOUN, forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
 import { applyAccent } from '../design/apply-accent'
 import { MAY_DO } from '../settings/pane/may-do'
 import { PANES } from '../settings/panes'
@@ -32,7 +26,10 @@ import {
   countByDay,
   openingDay,
 } from './month'
-import { assembledPanel, characterCards, characterSheet, characterSubject } from './shelf'
+import { assembledPanel, characterSheet } from './shelf'
+import { characterRows } from './parts/rail'
+import { characterSubject } from './parts/masthead'
+import { machineNav } from './parts/machine-nav'
 import { castActions } from './sheet/cast'
 import { faceTile } from './sheet/face-tile'
 import { type ShelfHandlers } from './sheet/row'
@@ -393,7 +390,7 @@ const looking = latest()
 function renderCards(): void {
   if (shelf === null) return
   charactersEl.replaceChildren(
-    ...characterCards(shelf, showingCharacter ? shelf.wornId : null, (id) => {
+    ...characterRows(shelf, showingCharacter ? shelf.wornId : null, (id) => {
       showingCharacter = true
       open = null
       looking.moved()
@@ -1968,55 +1965,12 @@ function renderMachine(): void {
   const view = machine
   if (view === null) return
   navEl.replaceChildren(
-    ...PANES.map((one, at) => {
-      const button = document.createElement('button')
-      button.className = 'tab'
-      button.type = 'button'
-      button.setAttribute('aria-current', String(one.id === openGroup))
-      /*
-        Numbered, as the delivery draws them.
-
-        Not decoration: a column of six sentences with no other structure is a
-        list you have to read to count, and the numeral is what lets somebody
-        say "the third one" — which is how people refer to a settings group they
-        are half-remembering. `aria-hidden`, because a screen reader already
-        announces position in a list and would otherwise say it twice.
-      */
-      const numeral = document.createElement('span')
-      numeral.className = 'tab-n'
-      numeral.textContent = String(at + 1)
-      numeral.setAttribute('aria-hidden', 'true')
-      const label = document.createElement('span')
-      label.textContent = paneLabel(one.label, view.pronoun)
-      button.append(numeral, label)
-      // A dot means somebody should look, not that something is off — see
-      // `panes.ts`. A withheld grant is a decision and never wears one.
-      if (one.attention(view) !== null) {
-        const dot = document.createElement('span')
-        dot.className = 'dot'
-        button.append(dot)
-      }
-      button.addEventListener('click', () => {
-        openGroup = one.id
-        renderMachine()
-        machineEl.scrollTop = 0
-      })
-      return button
+    ...machineNav(view, openGroup, (id) => {
+      openGroup = id
+      renderMachine()
+      machineEl.scrollTop = 0
     }),
   )
-  /*
-    What this whole tab is for, under the six groups.
-
-    The artifact puts it there and it earns its place: the Cast tab and this one
-    both hold switches about her, and the difference between them — who she IS
-    versus what is true whoever is worn — is `plan-shell.md`'s split, which
-    nothing on screen said out loud. It is the sentence that stops somebody
-    looking for her voice in here.
-  */
-  const foot = document.createElement('p')
-  foot.className = 'nav-foot'
-  foot.textContent = forPronoun(SAYS.machineIsFor, view.pronoun)
-  navEl.append(foot)
 
   const showing = PANES.find((one) => one.id === openGroup)
   if (showing === undefined) {

@@ -5,14 +5,12 @@ import { element } from '../element'
 import { editing } from '../rules/editing'
 import { SAYS } from './shelf-says'
 import { colourSection } from './sheet/colour'
-import { PRONOUN_CAPS, faceTile } from './sheet/face-tile'
 import { fileSection } from './sheet/file'
 import { memorySection } from './sheet/memory'
 import { promptSection } from './sheet/prompt'
 import { type ShelfHandlers } from './sheet/row'
 import { bubbleSection, savingSection } from './sheet/saving'
 import { voiceSection } from './sheet/voice'
-import { whoBand } from './sheet/who'
 import { sizeSection } from './sheet/size'
 import { wakeCount } from './wake-count'
 
@@ -59,76 +57,16 @@ import { wakeCount } from './wake-count'
  * safe; evaluating it is not.
  */
 
-/**
- * The cast, down the left.
- *
- * Clicking one WEARS her, which is the handoff's own interaction: the sections
- * re-read and the assembled prompt re-renders. A wake opens a new session, so
- * nothing has to be torn down — switching is a different string on the next
- * wake, and the window says so.
- *
- * It is also what keeps the transcript channels honest. They read whoever is
- * worn, decided in main; a row that merely SELECTED somebody would mean the
- * conversations pane had to name a persona to a query, which is exactly the
- * property this window's allowlist exists to keep.
- *
- * A COLUMN, not a row of cards across the top. The row spent the widest part of
- * the window on the characters you are not editing and pushed the one you are
- * into a narrow strip beneath; a list holds as many as you like in the space
- * four cards needed.
- */
-export function characterCards(
-  view: ShelfView,
-  openId: string | null,
-  onOpen: (id: string) => void,
-): readonly HTMLElement[] {
-  return view.characters.map((one) => {
-    /*
-      A RAIL ROW, not a card.
+/*
+  `characterCards` was here, and it is `parts/rail.ts` now.
 
-      The characters were a column of cards in the Cast tab, so the list of who
-      exists was only visible from one of three places. It is the window's table
-      of contents now and it never goes away — a list you have to navigate to in
-      order to find out what you could navigate to is not a table of contents.
-
-      The chosen row takes a 3px bar in her colour and pays it back out of its
-      own left padding, so every name starts on the same vertical line whether
-      or not it is chosen. See `.rail-row` in the sheet.
-    */
-    const row = element('button', 'rail-row')
-    row.type = 'button'
-    row.setAttribute('aria-current', String(one.id === openId))
-    row.append(faceTile(one.face, 22))
-    // Said out loud rather than shown as an identical row of built-in mochis.
-    if (one.face === undefined) row.classList.add('faceless')
-
-    const titles = element('div', 'rail-titles')
-    titles.append(element('div', 'rail-name', one.name))
-    /*
-      WORN, or which words she takes and which voice she speaks in.
-
-      The worn character says so in words rather than only by a mark, because
-      "worn now" is the one fact on this row somebody is looking for and a tick
-      in the corner is a mark you have to already know how to read. The others
-      get the two facts that tell two characters apart once the face has.
-    */
-    titles.append(
-      element(
-        'div',
-        'rail-worn',
-        one.id === view.wornId
-          ? 'worn now'
-          : `${PRONOUN_CAPS[one.pronoun] ?? one.pronoun} · ${one.voice}`,
-      ),
-    )
-    row.append(titles)
-
-    row.addEventListener('click', () => {
-      onOpen(one.id)
-    })
-    return row
-  })
-}
+  This file also builds the whole character sheet — her colour, her voice, her
+  prompt, her memory — so it was 414 lines doing two unrelated jobs, and a change
+  to the rail meant opening the file that owns her identity. The v2 delivery
+  draws the rail, the masthead and the machine's nav as three shared components
+  and records that its own artboards drifted in exactly the places where they
+  were not three. Three components in the design are three modules here.
+*/
 
 /**
  * The open character, as `Mochi Next.dc.html` draws her.
@@ -149,26 +87,6 @@ export function characterCards(
  * It lives under the list now — see `castActions`, which the column draws as
  * its footer, the way the drawer is the window's.
  */
-/**
- * Her face and her name, which are the page's SUBJECT rather than its first
- * section.
- *
- * It used to be the first block of the reading column, which put the thing the
- * page is about inside the scrolling list of its properties — so her name
- * scrolled away and the column above it read as belonging to nobody. The
- * delivered design gives the subject its own row above the views, and the views
- * name the parts of it: I Who she is, II What she has said, III What she may do
- * only mean anything under a subject that says who "she" is.
- */
-export function characterSubject(
-  view: ShelfView,
-  handlers: ShelfHandlers,
-  px?: number,
-): HTMLElement | null {
-  const worn = view.characters.find((one) => one.id === view.wornId)
-  if (worn === undefined) return null
-  return whoBand(view, worn, handlers, px)
-}
 
 export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLElement {
   const worn = view.characters.find((one) => one.id === view.wornId)

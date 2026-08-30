@@ -195,9 +195,22 @@
         flex: none;
         display: flex;
         flex-direction: column;
-        background: var(--paper-2);
+        /*
+          SUNKEN, not raised. "Chrome recedes, content advances" survives v2
+          intact; what changes is which surface is the recessed one. The rail is
+          `--paper-3` and the page it sits beside is `--paper`, so the recession
+          is a step down rather than the step up `--paper-2` used to make.
+        */
+        background: var(--paper-3);
         border-right: var(--s-px) solid var(--rule);
-        padding-top: var(--s4);
+        /*
+          Padded on the sides now, because the rows are rounded.
+
+          A 14px corner against the rail's own edge reads as a mistake rather
+          than as a shape — the fill has to have somewhere to end. 12 either
+          side is what the component is drawn with.
+        */
+        padding: var(--s4) var(--s3) 14px;
         overflow-y: auto;
       }
       /* "Two characters" — a heading, and the only one in the rail. */
@@ -248,8 +261,12 @@
         align-items: center;
         gap: 11px;
         width: 100%;
-        padding: 9px 18px;
+        padding: 10px var(--s3);
+        margin-bottom: var(--s0);
         border: 0;
+        /* Cards and fields. The row IS the card here — there is no box around
+           it, so the roundness is what says one row is one thing. */
+        border-radius: var(--r-card);
         background: transparent;
         color: inherit;
         font: inherit;
@@ -315,21 +332,34 @@
       }
       .rail-name {
         font-family: var(--sans);
-        font-size: var(--t-sm);
+        font-size: var(--t-read);
+        font-weight: var(--w-medium);
+        line-height: 1.3;
         color: var(--ink);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      /*
+        The second line under a name, and it is MONO now.
+
+        "she · ballad" is two machine facts about a character, which is exactly
+        what the second face is for. It was Sora at 11px in small caps — the
+        treatment for something you operate, on something you only read.
+
+        ONE ink on every ground. The delivery writes `#55555c` on a chosen row
+        and `#63636b` elsewhere, which a token handed to every row cannot do;
+        `--ink-3` is the value that clears 4.5:1 on both, so the distinction
+        costs nothing and the rule stays one rule.
+      */
       .rail-worn,
       .rail-stat {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-family: var(--sans);
-        font-size: var(--t-label);
-        letter-spacing: var(--track-2);
-        text-transform: uppercase;
+        font-family: var(--mono);
+        font-size: var(--t-micro);
+        margin-top: var(--s-px);
         color: var(--ink-3);
       }
       /*
@@ -384,6 +414,28 @@
         background: var(--rule);
         margin: var(--s4) 18px var(--s2);
       }
+      /*
+        WORN, as a pill on the row it is true of.
+
+        It was a word in the same slot as "SHE · BALLAD", so one element carried
+        two different kinds of claim and the reader had to notice which. A pill
+        is this vocabulary's shape for a small standing label, and it sits on
+        `--paper` because the row under it is `--chosen` — the one place in the
+        window where a lighter fill is the raised one.
+      */
+      .rail-mark {
+        flex: none;
+        padding: 3px var(--s2);
+        border-radius: var(--r-pill);
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: var(--t-label-2);
+        font-weight: var(--w-medium);
+        letter-spacing: var(--track-2);
+        text-transform: uppercase;
+      }
+
       .rail-machine {
         justify-content: space-between;
       }
@@ -439,8 +491,8 @@
       */
       .subject-row {
         display: flex;
-        align-items: center;
-        gap: 18px;
+        align-items: flex-start;
+        gap: var(--s6);
         padding-bottom: var(--s5);
       }
       .subject-of {
@@ -464,14 +516,24 @@
         a placeholder saying what it searches. It was a bordered input on a row
         of its own, which is two of that sentence's rules broken at once.
       */
+      /*
+        A PILL, not a ruled line.
+
+        Search is the one field on the masthead, and v2's field treatment is a
+        fill with no edge at all — the fill is what says a field is a field, and
+        a rule under it was the v1 answer to the same question. Round because
+        every pressable and typable thing in this vocabulary is round.
+      */
       .finding {
         display: flex;
         align-items: center;
-        gap: var(--s2);
-        width: 300px;
+        gap: 11px;
+        width: 320px;
         flex: none;
-        padding: 0 var(--s0) 5px;
-        border-bottom: var(--s-px) solid var(--rule-2);
+        padding: 10px 18px;
+        border: 0;
+        border-radius: var(--r-pill);
+        background: var(--paper-3);
       }
       .finding-mark {
         font-family: var(--mono);
@@ -1119,20 +1181,27 @@
         excludes. The rule between them does the grouping and the numeral does
         the counting.
       */
+      /*
+        A GROUP IN THE MACHINE'S NAV, and it is the rail's row in miniature.
+
+        The rules between them are gone. v2 groups by space and by one step of
+        grey, so a list of seven items separated by six hairlines was six marks
+        doing what the gap already does — and the hairlines fought the rounded
+        fill of the chosen one, which cannot sit on a line it also crosses.
+      */
       .tab {
         display: flex;
-        align-items: baseline;
-        gap: 10px;
+        align-items: center;
+        gap: var(--s3);
         width: 100%;
         text-align: left;
-        padding: 7px 0;
+        padding: 10px 14px;
         border: 0;
-        border-top: var(--s-px) solid var(--rule);
-        border-radius: 0;
+        border-radius: var(--r-card);
         background: transparent;
         color: var(--ink-2);
         font-family: var(--sans);
-        font-size: var(--t-sm);
+        font-size: var(--t-body);
         cursor: pointer;
       }
       /* The first has nothing above it to be separated from. */
@@ -1140,14 +1209,27 @@
         border-top: 0;
       }
       .tab-n {
+        flex: none;
+        /* A fixed column, so seven single digits line their labels up. Without
+           it a "1" and a "7" are different widths and the names step sideways
+           down the list. */
+        width: 9px;
         font-family: var(--mono);
-        font-size: var(--t-nano);
+        font-size: var(--t-label);
         color: var(--ink-3);
+      }
+
+      /* Takes the slack, so the attention dot sits at the far end of the row
+         rather than against the last letter of a name. */
+      .tab-label {
+        flex: 1;
+        min-width: 0;
       }
       .tab:hover {
         color: var(--ink);
       }
       .tab[aria-current='true'] {
+        background: var(--chosen-2);
         color: var(--ink);
         font-weight: var(--w-medium);
       }

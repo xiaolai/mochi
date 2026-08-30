@@ -1,17 +1,28 @@
 /**
- * What every section of her sheet is built from: a heading, and a row of
- * choices where exactly one is current.
+ * The masthead: whose page this is.
  *
- * Below the sections rather than beside them. `shelf.ts` holds the ORDER the
- * sections appear in and imports each one; each one needs this vocabulary, so
- * leaving it in `shelf.ts` would have made every section import the file that
- * imports it.
+ * ## Why it is `parts/` and not `sheet/`
+ *
+ * It was `sheet/who.ts`, and it is not a section of her sheet — it is the band
+ * ABOVE the sheet, present on all three of her views and answering the question
+ * the numbered views only mean anything under: who "she" is. The file held one
+ * export and 105 of its 164 lines were it, so the directory was the only thing
+ * claiming otherwise.
+ *
+ * The v2 delivery draws it as `HerHead`, one of three shared components, and
+ * records that its own artboards drifted in exactly the places where those three
+ * were re-drawn per screen instead of shared. Three components in the design are
+ * three modules here — see `parts/rail.ts` for the same argument.
+ *
+ * The header that used to sit here described `sheet/row.ts` and had followed
+ * this file around; it is gone rather than moved, because `row.ts` already
+ * carries it.
  */
 
 import { SAYS } from '../shelf-says'
 import { element } from '../../element'
-import { faceTile } from './face-tile'
-import { type ShelfHandlers, chooser } from './row'
+import { faceTile } from '../sheet/face-tile'
+import { type ShelfHandlers, chooser } from '../sheet/row'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { PRONOUNS, forPronoun } from '@shared/pronoun'
 /**
@@ -57,7 +68,7 @@ function savedField(options: {
   return field
 }
 
-export function whoBand(
+function masthead(
   view: ShelfView,
   worn: ShelfCharacter,
   handlers: ShelfHandlers,
@@ -161,4 +172,25 @@ export function whoBand(
   of.append(name, facts)
   band.append(of)
   return band
+}
+
+/**
+ * Her face and her name, which are the page's SUBJECT rather than its first
+ * section.
+ *
+ * It used to be the first block of the reading column, which put the thing the
+ * page is about inside the scrolling list of its properties — so her name
+ * scrolled away and the column above it read as belonging to nobody. The
+ * delivered design gives the subject its own row above the views, and the views
+ * name the parts of it: I Who she is, II What she has said, III What she may do
+ * only mean anything under a subject that says who "she" is.
+ */
+export function characterSubject(
+  view: ShelfView,
+  handlers: ShelfHandlers,
+  px?: number,
+): HTMLElement | null {
+  const worn = view.characters.find((one) => one.id === view.wornId)
+  if (worn === undefined) return null
+  return masthead(view, worn, handlers, px)
 }
