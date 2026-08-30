@@ -948,9 +948,55 @@
         align-items: center;
         gap: var(--s3);
       }
+      /*
+        A SOLID bar, drawn here rather than by the browser.
+
+        It had no rule at all: only a width, with the track, the fill and the
+        thumb all whatever Chromium happens to give — which is a hairline with
+        a hollow look and a thumb sized for a form. This window draws every
+        other control it has; a slider is not an exception because styling one
+        is fiddly.
+
+        The join is a gradient reading `--along`, which `size.ts` writes on every
+        `input`. Chromium can fill the left half of a native range on its own,
+        through `accent-color` — and stops the moment `appearance: none` makes
+        the track stylable at all, which is the trade this makes: control of
+        both halves, at the cost of computing the join.
+      */
       .size-slider {
+        /*
+          Declared here so it is a property of the control rather than a name
+          the sheet hopes somebody sets — `size.ts` writes it on every `input`,
+          and 100% is what a slider that has never moved should look like.
+        */
+        --along: 100%;
         flex: 1 1 auto;
         min-width: 0;
+        appearance: none;
+        height: var(--s2);
+        border-radius: var(--r-pill);
+        background: linear-gradient(
+          to right,
+          var(--her) 0 var(--along),
+          var(--paper-3) var(--along) 100%
+        );
+        cursor: pointer;
+      }
+      .size-slider::-webkit-slider-thumb {
+        appearance: none;
+        width: var(--s4);
+        height: var(--s4);
+        border-radius: var(--r-pill);
+        background: var(--her);
+        /*
+          A ring in the page's own colour, so the thumb reads as sitting ON the
+          bar rather than as a bulge in it — and so it is still findable where
+          it stops, at either end, when the fill behind it is the same hue.
+        */
+        border: var(--s0) solid var(--paper);
+      }
+      .size-slider:hover::-webkit-slider-thumb {
+        background: var(--her-line);
       }
       .size-reading {
         color: var(--ink-2);

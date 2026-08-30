@@ -298,7 +298,6 @@ describe('the vocabulary that is declared and not yet spoken', () => {
     '--ink-desk': 'nothing paints the desktop',
     '--hair-desk': 'nothing paints the desktop',
     // Families with a rung spare.
-    '--paper-3': 'a third surface no layer needs yet',
     '--gold-ink': 'gold is on its way out; only --gold and --gold-wash are still drawn',
     '--hair': 'hairlines are drawn as a border in --rule rather than as a shadow',
     '--lift-2': 'no surface lifts this far',

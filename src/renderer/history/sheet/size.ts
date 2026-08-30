@@ -84,10 +84,32 @@ export function sizeSection(
   // assignment above, these two now cannot disagree.
   const reading = element('span', 'size-reading', `${slider.value}%`)
 
+  /*
+    HOW FAR ALONG, as a number the sheet can paint with.
+
+    The track is drawn here rather than left to the browser — see `.size-slider`
+    — and a two-tone bar needs to know where the join is. There is no CSS that
+    answers "how far along is this range", and the one Chromium pseudo-element
+    that fills the left half disappears the moment `appearance: none` lets us
+    style the track at all. So the value is written back as a percentage and the
+    gradient reads it.
+
+    Set on every `input`, not on `change`: the fill has to follow the thumb
+    while it is being dragged, which is the whole point of it.
+  */
+  const paint = (): void => {
+    const min = Number(slider.min)
+    const span = Number(slider.max) - min
+    const along = span === 0 ? 100 : ((Number(slider.value) - min) / span) * 100
+    slider.style.setProperty('--along', `${String(along)}%`)
+  }
+  paint()
+
   // While DRAGGING, only the reading moves. A save per pointer event would be
   // a manifest write per pixel, and the window resize behind it.
   slider.addEventListener('input', () => {
     reading.textContent = `${slider.value}%`
+    paint()
   })
   slider.addEventListener('change', () => {
     handlers.save({ id: worn.id, size: Number(slider.value) })
