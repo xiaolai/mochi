@@ -176,6 +176,13 @@ export const SAYS = {
   */
   /* The rail's heading over the character list. A label, not a sentence — the
      count beside it is the part that moves. */
+  /* The month picker on a fresh archive: nothing to choose, said rather than
+     drawn as twelve dead buttons with no explanation. */
+  monthNoneKept: {
+    she: 'Nothing has been kept in this year, so none of these opens anything.',
+    he: 'Nothing has been kept in this year, so none of these opens anything.',
+    it: 'Nothing has been kept in this year, so none of these opens anything.',
+  },
   railCast: { she: 'Characters', he: 'Characters', it: 'Characters' },
   talkUsedNothing: {
     she: 'no capabilities used',

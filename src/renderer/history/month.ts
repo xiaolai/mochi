@@ -104,6 +104,36 @@ export function countByDay(
 }
 
 /**
+ * Which months of one year have anything in them, and how many years do.
+ *
+ * C2's picker greys the months with nothing in them and says why: "The rest are
+ * not buttons — choosing one would open an empty column." That is the same rule
+ * the day strip already keeps — "a day with nothing on it is not a button",
+ * which `check-rendered.mjs` enforces as A1 — applied one level up, where it was
+ * not kept at all: every one of the twelve was pressable, so the picker offered
+ * eleven ways to arrive somewhere empty.
+ *
+ * Both answers come from one pass, because they are read together and a second
+ * walk over the same list is a second place for the two to disagree about what
+ * is in it.
+ */
+export function monthsKept(conversations: readonly { readonly startedAt: number }[]): {
+  /** Every `year-month` that has at least one conversation in it. */
+  readonly months: ReadonlySet<string>
+  /** How many distinct years do. */
+  readonly years: number
+} {
+  const months = new Set<string>()
+  const years = new Set<number>()
+  for (const one of conversations) {
+    const when = new Date(one.startedAt)
+    months.add(`${String(when.getFullYear())}-${String(when.getMonth())}`)
+    years.add(when.getFullYear())
+  }
+  return { months, years: years.size }
+}
+
+/**
  * Which day to open on: today, or the last one there is anything on.
  *
  * Today FIRST, because that is what somebody opening the Archive means. The

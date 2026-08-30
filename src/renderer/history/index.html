@@ -1379,17 +1379,57 @@
         dropdown once.
       */
       .month-pick {
+        /*
+          THE ANCHORING COMES FIRST, and it is not optional.
+
+          A popover is in the top layer, so `position: absolute` resolves
+          against the window rather than against whatever it sits inside — the
+          rule above gives the button an `anchor-name` and this binds to it.
+          Rewriting this block to C2's numbers dropped the four declarations
+          that do it, and the picker went back to the left edge of the window.
+          `anchored` caught it, which is the check that exists because it
+          happened once before.
+        */
         position: absolute;
         position-anchor: --month-button;
         inset: auto;
         margin: 0;
-        padding: var(--s3);
+        /*
+          C2's card: 340 wide, a panel radius, 20/22 of padding. It was 12px of
+          padding at the PART radius — the rung for a control — on a surface
+          that holds three of them.
+        */
+        width: 340px;
+        padding: 20px var(--s5);
         border: var(--s-px) solid var(--rule-2);
-        border-radius: var(--r-part);
+        border-radius: var(--r-panel);
         background: var(--paper);
-        box-shadow: none;
+        box-shadow: var(--lift-top);
         flex-direction: column;
+        gap: var(--s4);
+      }
+      /* The year, its label and how much archive there is, on one line. */
+      .month-year-row {
+        display: flex;
+        align-items: center;
         gap: var(--s3);
+      }
+      .month-year-of {
+        font-family: var(--sans);
+        font-size: var(--t-label);
+        font-weight: var(--w-medium);
+        letter-spacing: var(--track-wide);
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .month-year-kept {
+        font-family: var(--mono);
+        font-size: var(--t-data-2);
+        color: var(--ink-3);
+        white-space: nowrap;
+      }
+      .month-note {
+        font-size: var(--t-cap);
       }
       /*
         `display` ONLY when it is open.
@@ -1420,35 +1460,57 @@
         position-try-fallbacks: flip-block;
       }
       .month-year {
-        width: 100%;
+        flex: 1;
+        min-width: 0;
         font-family: var(--mono);
-        font-size: var(--t-data);
-        text-align: center;
+        font-size: var(--t-cap);
       }
       .month-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: var(--s1);
+        /* 6, C2's. It was 4 — the rung below — which read as a block of text
+           rather than as twelve things you choose between. */
+        gap: 6px;
       }
+      /*
+        A PILL, like every other thing in this window you choose between — the
+        voices, the pronouns, the views. It was an 8px-radius box, which is the
+        rung for a field.
+      */
       .month-one {
-        padding: var(--s1) var(--s2);
+        padding: var(--s2) 0;
         border: var(--s-px) solid transparent;
-        border-radius: var(--r-part);
+        border-radius: var(--r-pill);
         background: transparent;
         font-family: var(--sans);
         font-size: var(--t-cap);
-        color: var(--ink-2);
-        cursor: pointer;
+        color: var(--ink);
+        font-weight: var(--w-medium);
+      }
+      /*
+        A month with nothing in it. Pale, and `disabled` in the markup so it is
+        not merely a colour — C2 draws these at `#c4c4c9` and the sentence under
+        the grid says why they do not respond.
+      */
+      .month-one:disabled {
+        color: var(--ink-off);
+        font-weight: var(--w-regular);
+        background: transparent;
+        border-color: transparent;
       }
       .month-one:hover {
         border-color: var(--rule-2);
         color: var(--ink);
       }
+      /* The month being shown: solid ink, reversed out — C2's `#fff on #0a0a0b`.
+         The others that have something in them carry the sunken grey. */
+      .month-one:not(:disabled) {
+        background: var(--paper-3);
+      }
       .month-one[aria-current='true'] {
-        background: var(--chosen-2);
+        background: var(--ink);
         border-color: var(--ink);
-        color: var(--ink);
-        font-weight: var(--w-semibold);
+        color: var(--paper);
       }
       .daystrip .step {
         display: flex;
@@ -3900,56 +3962,20 @@
         color: var(--ink-3);
       }
       /*
-        What this page can do, at the foot of it — as WORDS.
+        `.foot-do` stood here — a fourth vocabulary for a button.
 
-        These five were `.btn`: bordered, 3px radius, 6px of padding top and
-        bottom, one of them red. Four boxed controls and a red one, in a bar
-        34px tall whose whole job is to say what just happened. It read as a
-        toolbar that had fallen into the status line.
+        Five underlined words: no fill, no radius, a 1px bottom border. The
+        delivery has ONE set of pills and says so in its own audit: "一套胶囊:
+        实心=提交,描边=普通,虚线描边=毁灭性。下划线文字按钮全没了" — solid commits,
+        outlined is ordinary, a dashed outline destroys, and underlined text
+        buttons are gone. `button.btn`, `.primary` and `.bad` in `tokens.css`
+        are already exactly those three.
 
-        The delivery draws exactly these three at the foot of "what she has
-        said" and draws them like this: Sora 12px, `--ink-2`, no box, a 1px rule
-        under the word and one pixel of space above it. The destructive one is
-        `--red` over a muted red rule — "destructive is outlined, never filled:
-        findable, legible, not inviting", which for a word means coloured, not
-        boxed.
-
-        A rule under a word is also the only control treatment that fits a
-        34px bar without crowding it: nineteen pixels tall against a button's
-        twenty-nine.
+        This is the second time this defect has been fixed. The rail's New and
+        Duplicate were the same thing, and the same argument applies twice over:
+        an underline is this window's mark for a field you can type in, so every
+        control wearing one that is not a field is claiming to be one.
       */
-      .foot-do {
-        flex: none;
-        border: 0;
-        border-bottom: var(--s-px) solid var(--rule-2);
-        border-radius: 0;
-        background: transparent;
-        padding: 0 0 var(--s-px);
-        font-family: var(--sans);
-        font-size: var(--t-ui-2);
-        color: var(--ink-2);
-        cursor: default;
-      }
-      .foot-do:hover:not(:disabled) {
-        color: var(--ink);
-        border-bottom-color: var(--ink-3);
-      }
-      /* The one that destroys something. Coloured and underlined in the same
-         weight as the others — it is not louder, it is only red. */
-      .foot-do.bad {
-        color: var(--ink);
-        border-bottom-color: color-mix(in oklab, var(--ink) 40%, var(--rule));
-      }
-      .foot-do.bad:hover:not(:disabled) {
-        color: var(--ink);
-        border-bottom-color: var(--ink);
-      }
-      /* Nothing is selected yet, so there is nothing to delete. The word stays
-         where it is rather than appearing when the first row is ticked. */
-      .foot-do:disabled {
-        color: var(--ink-3);
-        border-bottom-color: var(--rule);
-      }
     </style>
   </head>
   <body>
@@ -4149,13 +4175,11 @@
             A3 draws the row in that order: a copy is offered before the thing it
             is a copy of can be destroyed.
           -->
-            <button class="foot-do" id="pick" type="button" hidden>Select&#8230;</button>
-            <button class="foot-do" id="pick-off" type="button" hidden>Cancel</button>
-            <button class="foot-do" id="export" type="button" hidden>Export&#8230;</button>
-            <button class="foot-do bad" id="drop-some" type="button" hidden disabled>Delete</button>
-            <button class="foot-do bad" id="drop-hers" type="button" hidden>
-              Delete all&#8230;
-            </button>
+            <button class="btn" id="pick" type="button" hidden>Select&#8230;</button>
+            <button class="btn" id="pick-off" type="button" hidden>Cancel</button>
+            <button class="btn" id="export" type="button" hidden>Export&#8230;</button>
+            <button class="btn bad" id="drop-some" type="button" hidden disabled>Delete</button>
+            <button class="btn bad" id="drop-hers" type="button" hidden>Delete all&#8230;</button>
             <p id="said" role="status" aria-live="polite">
               <span id="said-what"></span>
               <button id="said-shut" type="button" aria-label="Dismiss" title="Dismiss" hidden>

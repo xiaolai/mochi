@@ -21,6 +21,7 @@ import {
   dayKey,
   monthDays,
   monthNames,
+  monthsKept,
   monthLabel,
   startOfDay,
   stepMonth,
@@ -1675,11 +1676,33 @@ function monthPicker(year: number, month: number): HTMLElement {
   pick.id = 'month-pick'
   pick.setAttribute('popover', '')
 
+  /*
+    THE YEAR, AS A ROW — C2 draws a caps label, the field, and how many years
+    the archive holds.
+
+    The field stood alone with an `aria-label`, so the one control in this
+    popover had no visible name and nothing said whether typing 2019 into it
+    could lead anywhere. "2 years kept" is the fact that answers that, and it is
+    the same shape as every other apparatus note in the window.
+  */
+  const kept = monthsKept(conversations)
+  const yearRow = element('div', 'month-year-row')
+  const yearLabel = element('label', 'month-year-of', 'Year')
   const field = element('input', 'month-year')
   field.type = 'text'
   field.value = String(year)
   field.placeholder = 'year'
-  field.setAttribute('aria-label', 'Year')
+  field.id = 'month-year'
+  yearLabel.htmlFor = field.id
+  yearRow.append(
+    yearLabel,
+    field,
+    element(
+      'span',
+      'month-year-kept',
+      `${String(kept.years)} ${kept.years === 1 ? 'year' : 'years'} kept`,
+    ),
+  )
   const go = (): void => {
     const asked = yearTyped(field.value)
     if (asked === null) {
@@ -1703,10 +1726,27 @@ function monthPicker(year: number, month: number): HTMLElement {
     go()
   })
 
+  /*
+    A MONTH WITH NOTHING IN IT IS NOT A BUTTON — the day strip's rule, one level
+    up, where it was not kept.
+
+    Every one of the twelve was live, so this popover offered eleven ways to
+    arrive at an empty column. That is the failure `renderCalendar` already
+    refuses for DAYS and that `check-rendered.mjs` enforces as A1: "anything
+    offering a period with nothing in it must not appear actionable". C2 draws
+    the empty ones in `#c4c4c9` and says so underneath.
+
+    `disabled`, not just pale. Colour alone is a claim only somebody looking at
+    it can read, and a pointer would still land on it.
+  */
   const grid = element('div', 'month-grid')
+  let live = 0
   for (const [at, name] of monthNames().entries()) {
     const one = element('button', 'month-one', name)
     one.type = 'button'
+    const has = kept.months.has(`${String(year)}-${String(at)}`)
+    if (has) live += 1
+    one.disabled = !has
     one.setAttribute('aria-current', String(at === month))
     one.addEventListener('click', () => {
       const asked = yearTyped(field.value) ?? year
@@ -1718,7 +1758,20 @@ function monthPicker(year: number, month: number): HTMLElement {
     grid.append(one)
   }
 
-  pick.append(field, grid)
+  /*
+    And SAID, not only drawn. C2 puts the sentence under the grid, because a
+    greyed month is only obviously deliberate once something says it was.
+  */
+  const note = element(
+    'p',
+    'note month-note',
+    live === 0
+      ? forPronoun(SAYS.monthNoneKept, saying())
+      : `${String(live)} ${live === 1 ? 'month has' : 'months have'} something in them. ` +
+          `The rest are not buttons — choosing one would open an empty column.`,
+  )
+
+  pick.append(yearRow, grid, note)
   wrap.append(open, pick)
   return wrap
 }

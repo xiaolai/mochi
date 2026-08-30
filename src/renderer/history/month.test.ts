@@ -4,12 +4,13 @@ import {
   dayHeadingLabel,
   dayKey,
   monthDays,
-  monthNames,
-  yearTyped,
   monthLabel,
+  monthNames,
+  monthsKept,
   openingDay,
   startOfDay,
   stepMonth,
+  yearTyped,
 } from './month'
 
 describe('the day an instant belongs to', () => {
@@ -171,5 +172,32 @@ describe('a year somebody typed', () => {
     */
     expect(yearTyped('20')).toBeNull()
     expect(yearTyped('99999')).toBeNull()
+  })
+})
+
+describe('which months have anything in them', () => {
+  const at = (year: number, month: number, day: number): { startedAt: number } => ({
+    startedAt: new Date(year, month, day, 12).getTime(),
+  })
+
+  it('names the months that were talked in, and counts the years', () => {
+    const kept = monthsKept([at(2026, 4, 14), at(2026, 4, 2), at(2026, 2, 9), at(2025, 11, 31)])
+    expect([...kept.months].sort()).toEqual(['2025-11', '2026-2', '2026-4'])
+    expect(kept.years).toBe(2)
+  })
+
+  it('is empty on a fresh archive rather than guessing', () => {
+    // The picker greys every month in this state, which is correct: there is
+    // nowhere in it that is not empty.
+    expect(monthsKept([]).months.size).toBe(0)
+    expect(monthsKept([]).years).toBe(0)
+  })
+
+  it('separates the same month in two different years', () => {
+    // May 2025 having something says nothing about May 2026, and a key that
+    // dropped the year would grey the wrong one.
+    const kept = monthsKept([at(2025, 4, 3)])
+    expect(kept.months.has('2025-4')).toBe(true)
+    expect(kept.months.has('2026-4')).toBe(false)
   })
 })

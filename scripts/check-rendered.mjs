@@ -1232,6 +1232,53 @@ async function checks(page, where = '') {
     else ok('one-row', 'the month sits on the same line as the days it names')
   })
 
+  await step('A1-months', async () => {
+    /* --- a month with nothing in it is not a button either ----------------- */
+    /*
+      A1 one level up. The day strip refuses to make an empty day pressable and
+      this file checks it; the month picker made all twelve live, so it offered
+      eleven ways to arrive at an empty column — the same "anything offering a
+      period with nothing in it must not appear actionable" the day check exists
+      for, unenforced where nobody had looked.
+
+      Measured against the STRIP, not against a count typed in here: the days
+      with dots are the months that have something, so the two surfaces have to
+      agree about the same archive or one of them is lying.
+    */
+    const months = await page.run(`(() => {
+      const open = document.querySelector('.daystrip .month');
+      if (!open) return { why: 'the day strip has no month control' };
+      open.click();
+      const all = [...document.querySelectorAll('.month-one')];
+      if (all.length !== 12) return { why: 'the picker offers ' + all.length + ' months, not 12' };
+      const live = all.filter((b) => !b.disabled).map((b) => b.textContent.trim());
+      const dotted = document.querySelectorAll('.daystrip .day .dot').length;
+      const open_ = document.querySelector('.month-pick');
+      if (open_ && open_.hidePopover) open_.hidePopover();
+      return { live, dotted, note: (document.querySelector('.month-note') || {}).textContent };
+    })()`)
+    if (months.why) bad('A1-months', months.why)
+    else if (months.dotted > 0 && months.live.length === 0)
+      bad('A1-months', 'the strip shows days with something on them and the picker offers no month')
+    else if (months.dotted === 0 && months.live.length > 0)
+      bad(
+        'A1-months',
+        `the strip is empty and the picker still offers ${JSON.stringify(months.live)}`,
+      )
+    else if (months.live.length === 12)
+      bad('A1-months', 'every month is pressable, so eleven of them open an empty column')
+    else if (!months.note)
+      bad(
+        'A1-months',
+        `${months.live.length} of 12 months are live and nothing says why the rest are not`,
+      )
+    else
+      ok(
+        'A1-months',
+        `only the months with something in them are pressable (${JSON.stringify(months.live)}), and it says so`,
+      )
+  })
+
   await step('month', async () => {
     /* --- the month picker opens, takes a year, and moves the strip --------- */
     const picker = await page.run(`(() => {
