@@ -121,3 +121,35 @@ export function openingDay(
   const days = [...counts.keys()].sort((a, b) => b - a)
   return days[0] ?? null
 }
+
+/** The twelve month names, in this machine's own language. */
+export function monthNames(): readonly string[] {
+  return Array.from({ length: 12 }, (_unused, month) =>
+    new Date(2000, month, 1).toLocaleDateString(undefined, { month: 'short' }),
+  )
+}
+
+/**
+ * A year somebody typed, or null when it is not one.
+ *
+ * ## Why it refuses rather than clamps
+ *
+ * A field that silently rounds 20 up to 1970 has answered a question nobody
+ * asked, and the person who typed it is left wondering which of their
+ * keystrokes landed. Refusing leaves the picker where it was, which is a state
+ * they can see.
+ *
+ * The bounds are the archive's, not the calendar's: `2000` because this
+ * application did not exist before it and a conversation cannot predate it, and
+ * a century ahead because a clock set wrongly is a real thing and a window that
+ * cannot be navigated back from it is worse than one that goes too far.
+ */
+export function yearTyped(text: string, now = new Date()): number | null {
+  const trimmed = text.trim()
+  // `Number` on '' is 0 and on '12abc' is NaN; both have to fail, and only the
+  // second does without this.
+  if (trimmed === '' || !/^\d{1,4}$/.test(trimmed)) return null
+  const year = Number(trimmed)
+  if (year < 2000 || year > now.getFullYear() + 100) return null
+  return year
+}

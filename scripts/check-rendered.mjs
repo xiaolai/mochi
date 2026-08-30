@@ -647,6 +647,73 @@ async function checks(page, where = '') {
     )
   else ok('A2', 'picking narrows to that day (' + afterPick.head + ') without scrolling')
 
+  /* --- the month and the days are one row -------------------------------- */
+  const oneRow = await page.run(`(() => {
+    const month = document.querySelector('.daystrip .month');
+    const numeral = document.querySelector('.strip .day-n');
+    if (!month || !numeral) return { why: 'the day strip has no month or no days' };
+    const a = month.getBoundingClientRect();
+    const b = numeral.getBoundingClientRect();
+    return { month: Math.round(a.top), numeral: Math.round(b.top) };
+  })()`)
+  if (oneRow.why) bad('one-row', oneRow.why)
+  else if (Math.abs(oneRow.month - oneRow.numeral) > 4)
+    bad(
+      'one-row',
+      'the month and the days are on different lines: ' +
+        oneRow.month +
+        ' against ' +
+        oneRow.numeral +
+        ' — something is padding one of them',
+    )
+  else ok('one-row', 'the month sits on the same line as the days it names')
+
+  /* --- the month picker opens, takes a year, and moves the strip --------- */
+  const picker = await page.run(`(() => {
+    const open = document.querySelector('.daystrip .month');
+    if (!open) return { why: 'the day strip has no month control' };
+    const was = open.textContent.trim();
+    open.click();
+    const pick = document.getElementById('month-pick');
+    if (!pick || !pick.matches(':popover-open')) return { why: 'pressing the month opened nothing' };
+    const months = pick.querySelectorAll('.month-one').length;
+    const field = pick.querySelector('.month-year');
+    if (!field) return { why: 'the picker takes no year' };
+    // A year the archive cannot hold: it must refuse and stay put.
+    field.value = '20';
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+    const refused = document.querySelector('.daystrip .month').textContent.trim();
+    // And one it can: the strip moves.
+    document.getElementById('month-pick').showPopover();
+    const live = document.querySelector('#month-pick .month-year');
+    live.value = '2024';
+    live.dispatchEvent(new Event('change', { bubbles: true }));
+    const moved = document.querySelector('.daystrip .month').textContent.trim();
+    return { was, months, refused, moved, stillOpen: (document.getElementById('month-pick') || {}).matches?.(':popover-open') ?? false };
+  })()`)
+  await wait(500)
+  if (picker.why) bad('month', picker.why)
+  else if (picker.months !== 12)
+    bad('month', 'the picker offers ' + picker.months + ' months, not 12')
+  else if (picker.refused !== picker.was)
+    bad('month', 'a year the archive cannot hold moved the strip anyway: ' + picker.refused)
+  else if (!/2024/.test(picker.moved))
+    bad('month', 'typing a year did not move the strip: ' + picker.moved)
+  else if (picker.stillOpen) bad('month', 'the picker stayed open over the strip it had just moved')
+  else ok('month', 'opens, refuses "20", moves to ' + picker.moved + ', and closes behind itself')
+
+  // Back where the rest of the checks expect it.
+  await page.run(`(() => {
+    const strip = [...document.querySelectorAll('button.day.has')];
+    if (strip.length === 0) {
+      const back = document.querySelector('.daystrip .step');
+      for (let i = 0; i < 24 && document.querySelectorAll('button.day.has').length === 0; i += 1) {
+        document.querySelectorAll('.daystrip .step')[1].click();
+      }
+    }
+  })()`)
+  await wait(600)
+
   /* --- D2/D3: the confirmation, and the order of what it offers ---------- */
   const opened = await page.run(`(() => {
     // Wherever it lives. The archive-wide deletions are reached from the topbar
@@ -1200,6 +1267,26 @@ async function main() {
         return ['.rail', '.rail-foot', '.rail-rule', '#rail-machine', '.rail-says', '.status', '.frame'].map(of);
       })()`)
       console.log('\n  ' + seen.join('\n  ') + '\n')
+    }
+    if (process.argv.includes('--strip')) {
+      await page.run(`document.getElementById('tab-for-archive').click()`)
+      await wait(700)
+      const seen = await page.run(`(() => {
+        const of = (sel) => {
+          const e = document.querySelector(sel);
+          if (!e) return sel + ': none';
+          const b = e.getBoundingClientRect();
+          return sel + '  x=' + Math.round(b.x) + '  y=' + Math.round(b.y) + '..' + Math.round(b.bottom) + '  h=' + Math.round(b.height);
+        };
+        return ['.daystrip', '.daystrip .head', '.daystrip .month', '.strip', '.strip .day', '.strip .day-n', '#count'].map(of);
+      })()`)
+      console.log('\n  ' + seen.join('\n  ') + '\n')
+    }
+    if (process.argv.includes('--open-month')) {
+      await page.run(`(() => { document.getElementById('tab-for-archive').click(); })()`)
+      await wait(700)
+      await page.run(`document.querySelector('.daystrip .month').click()`)
+      await wait(500)
     }
     if (process.argv.includes('--shot')) await photograph(page)
     /*

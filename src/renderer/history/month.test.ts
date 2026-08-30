@@ -4,6 +4,8 @@ import {
   dayHeadingLabel,
   dayKey,
   monthDays,
+  monthNames,
+  yearTyped,
   monthLabel,
   openingDay,
   startOfDay,
@@ -125,5 +127,49 @@ describe('choosing the day the window opens on', () => {
 
   it('answers null when there is nothing to open', () => {
     expect(openingDay([], now)).toBeNull()
+  })
+})
+
+describe('the twelve months', () => {
+  it('is twelve of them, in order, and none is empty', () => {
+    const names = monthNames()
+    expect(names).toHaveLength(12)
+    expect(new Set(names).size).toBe(12)
+    for (const name of names) expect(name.length).toBeGreaterThan(0)
+  })
+})
+
+describe('a year somebody typed', () => {
+  it('takes a plain four-digit year', () => {
+    expect(yearTyped('2026')).toBe(2026)
+    expect(yearTyped('  2026  ')).toBe(2026)
+  })
+
+  it('refuses what is not a number, rather than guessing at it', () => {
+    // `Number('')` is 0 and `Number('12abc')` is NaN; a picker that accepted
+    // either would jump somewhere nobody asked for.
+    for (const text of ['', '   ', '20x6', '2026-05', '-2026', '2 026', '20.26']) {
+      expect(yearTyped(text), text).toBeNull()
+    }
+  })
+
+  it('refuses a year the archive cannot hold', () => {
+    // Before this application existed, and far enough ahead to cover a clock
+    // set wrongly without becoming a way to get lost.
+    const now = new Date(2026, 0, 1)
+    expect(yearTyped('1999', now)).toBeNull()
+    expect(yearTyped('2000', now)).toBe(2000)
+    expect(yearTyped('2126', now)).toBe(2126)
+    expect(yearTyped('2127', now)).toBeNull()
+  })
+
+  it('REFUSES rather than clamping', () => {
+    /*
+      A field that silently rounds 20 up to 2000 has answered a question nobody
+      asked, and whoever typed it cannot tell which of their keystrokes landed.
+      Null leaves the picker where it was, which is a state they can see.
+    */
+    expect(yearTyped('20')).toBeNull()
+    expect(yearTyped('99999')).toBeNull()
   })
 })

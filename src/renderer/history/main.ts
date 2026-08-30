@@ -24,9 +24,11 @@ import {
   dayHeadingLabel,
   dayKey,
   monthDays,
+  monthNames,
   monthLabel,
   startOfDay,
   stepMonth,
+  yearTyped,
   countByDay,
   openingDay,
 } from './month'
@@ -1228,6 +1230,89 @@ function arrow(direction: 'back' | 'on', label: string, go: () => void): HTMLBut
 }
 
 /**
+ * The month, and a way to reach one that is not next door.
+ *
+ * ## Why a popover and not two more arrows
+ *
+ * The arrows move one month, which is right for "the conversation I am thinking
+ * of was last week". They are hopeless for "some time in 2024" — thirty presses,
+ * each one a re-render. A person who knows roughly when should be able to say
+ * so, and a person who does not should not be made to count.
+ *
+ * ## The native `popover`, not a hand-built menu
+ *
+ * It closes on Escape and on a click outside, it is put in the top layer so it
+ * cannot be clipped by the column it hangs off, and its focus behaviour is the
+ * platform's. Every one of those is a thing this window would otherwise get
+ * wrong once and fix twice — the archive already had a dropdown that could be
+ * clipped by an overflow, and that is where the rule about not hand-building
+ * these comes from.
+ *
+ * ## The year REFUSES rather than clamping
+ *
+ * See `yearTyped`. A field that silently turns 20 into 2000 has answered a
+ * question nobody asked.
+ */
+function monthPicker(year: number, month: number): HTMLElement {
+  const wrap = element('span', 'month-wrap')
+  const open = element('button', 'month', monthLabel(year, month))
+  open.type = 'button'
+  open.setAttribute('popovertarget', 'month-pick')
+  open.setAttribute('aria-label', `${monthLabel(year, month)} — choose another`)
+
+  const pick = element('div', 'month-pick')
+  pick.id = 'month-pick'
+  pick.setAttribute('popover', '')
+
+  const field = element('input', 'month-year')
+  field.type = 'text'
+  field.value = String(year)
+  field.placeholder = 'year'
+  field.setAttribute('aria-label', 'Year')
+  const go = (): void => {
+    const asked = yearTyped(field.value)
+    if (asked === null) {
+      // Put back what is in force, so the field never shows a year the strip
+      // below it is not on.
+      field.value = String(year)
+      say('That is not a year this archive can hold.', true)
+      return
+    }
+    onMonth = { year: asked, month }
+    pick.hidePopover()
+    renderCalendar(Date.now())
+    renderList(Date.now())
+  }
+  field.addEventListener('change', go)
+  field.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key !== 'Enter') return
+    // Taken, or the field's own form-less Enter reloads nothing and the popover
+    // stays open over a strip that has already moved.
+    event.preventDefault()
+    go()
+  })
+
+  const grid = element('div', 'month-grid')
+  for (const [at, name] of monthNames().entries()) {
+    const one = element('button', 'month-one', name)
+    one.type = 'button'
+    one.setAttribute('aria-current', String(at === month))
+    one.addEventListener('click', () => {
+      const asked = yearTyped(field.value) ?? year
+      onMonth = { year: asked, month: at }
+      pick.hidePopover()
+      renderCalendar(Date.now())
+      renderList(Date.now())
+    })
+    grid.append(one)
+  }
+
+  pick.append(field, grid)
+  wrap.append(open, pick)
+  return wrap
+}
+
+/**
  * The month, with a dot on every day something was said.
  *
  * The dot is the reason a calendar beats a date field here: it answers "when
@@ -1245,16 +1330,26 @@ function renderCalendar(now: number): void {
   const today = startOfDay(now)
 
   const head = document.createElement('div')
-  head.className = 'head'
-  const label = document.createElement('div')
-  label.className = 'month'
-  label.textContent = monthLabel(year, month)
+  /*
+    `month-nav`, NOT `head`.
+
+    `.head` is the PAGE header — her subject row and the views — and it carries
+    `padding: 30px 40px 0`. This one is three controls inside the day strip, and
+    it inherited that padding: thirty pixels of it, which is why the month sat a
+    line and a half below the numerals it belongs beside. `.daystrip .head` is
+    more specific and sets no padding, so the page header's won.
+
+    The eighth collision of this shape in this file. Two meanings for one name
+    is the defect; naming the specific thing is the fix, and it is the same
+    answer `.who-band`, `.machine-spread` and `.rail-row` were given.
+  */
+  head.className = 'month-nav'
   head.append(
-    label,
     arrow('back', 'Previous month', () => {
       onMonth = stepMonth(year, month, -1)
       renderCalendar(Date.now())
     }),
+    monthPicker(year, month),
     arrow('on', 'Next month', () => {
       onMonth = stepMonth(year, month, 1)
       renderCalendar(Date.now())

@@ -592,24 +592,109 @@
         week the 14th was. The strip answers the one it does ask — when did we
         talk — and it costs one line instead of six.
       */
+      /*
+        ONE ROW: the month, and the days of it.
+
+        They were on one row already and did not look it — a day cell is a
+        numeral above a dot, so the strip is two lines tall, and `align-items:
+        center` dropped the month to the middle of that while the numerals sat
+        at the top. Aligned to the numerals now, which is the line the eye reads
+        across.
+      */
       .daystrip {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 14px;
         padding: 14px 0 var(--s3);
       }
-      .daystrip .head {
+      .month-nav {
         display: flex;
         align-items: center;
-        gap: var(--s2);
+        gap: var(--s1);
         flex: none;
       }
+      .month-wrap {
+        position: relative;
+        display: inline-flex;
+      }
+      /*
+        The month is a BUTTON, because it opens something.
+
+        It was a `<div>` between two arrows, which is a label; a label that
+        opens a popover is the affordance this window has been bitten by before
+        — the underline is what says it can be pressed.
+      */
       .daystrip .month {
+        padding: 0 0 var(--s-px);
+        border: 0;
+        border-bottom: var(--s-px) solid var(--rule-2);
+        background: transparent;
         font-family: var(--sans);
         font-size: var(--t-cap);
         font-weight: var(--w-medium);
         color: var(--ink-2);
         white-space: nowrap;
+        cursor: pointer;
+      }
+      .daystrip .month:hover {
+        color: var(--ink);
+        border-bottom-color: var(--ink-3);
+      }
+      /*
+        The picker, in the top layer.
+
+        `popover` rather than a positioned menu: Escape and a click outside
+        close it, and the top layer is what stops it being clipped by the
+        column it hangs off — which this window has already had happen to a
+        dropdown once.
+      */
+      .month-pick {
+        position: absolute;
+        inset: auto auto auto 0;
+        margin: 0;
+        padding: var(--s3);
+        border: var(--s-px) solid var(--rule-2);
+        border-radius: var(--r-control);
+        background: var(--paper);
+        box-shadow: none;
+        display: flex;
+        flex-direction: column;
+        gap: var(--s3);
+      }
+      .month-pick:popover-open {
+        /* Under the button it belongs to, not over the days it is choosing. */
+        top: anchor(bottom);
+      }
+      .month-year {
+        width: 100%;
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        text-align: center;
+      }
+      .month-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--s1);
+      }
+      .month-one {
+        padding: var(--s1) var(--s2);
+        border: var(--s-px) solid transparent;
+        border-radius: var(--r-control);
+        background: transparent;
+        font-family: var(--sans);
+        font-size: var(--t-cap);
+        color: var(--ink-2);
+        cursor: pointer;
+      }
+      .month-one:hover {
+        border-color: var(--rule-2);
+        color: var(--ink);
+      }
+      .month-one[aria-current='true'] {
+        background: var(--her-wash);
+        border-color: var(--her);
+        color: var(--ink-brand);
+        font-weight: var(--w-semibold);
       }
       .daystrip .step {
         display: flex;
