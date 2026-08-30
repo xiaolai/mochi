@@ -857,15 +857,6 @@
         min-width: 0;
       }
       /*
-        View I is about HER, so she is the subject at full size: a 104px face
-        and her name at `--t-title`. The other views are about what she said or
-        what she may do, and she is the heading over them at 52 and 30.
-      */
-      .subject-large .who-name {
-        font-size: var(--t-title);
-        letter-spacing: var(--track-tight);
-      }
-      /*
         A RULED LINE, not a box.
 
         "Rules do the grouping. Boxes are reserved for the two things that need
@@ -3140,16 +3131,33 @@
         min-width: 0;
       }
       /*
-        HER NAME, drawn rather than typed — 34px at 500, on a 1.05 line.
+        HER NAME, at HerHead's numbers and at the same numbers on every view.
+
+        The size lived on `.subject-large`, a class `showPlace` put on the
+        subject for view I alone, on the reading that "view I is about HER, so
+        she is the subject at full size… the other views are about what she said
+        or what she may do, and she is the heading over them". That reading
+        belongs to v1, where the masthead really was three different bands.
+
+        What it did in v2: her name was 34px on "Who she is" and 13px — the BODY
+        TEXT SIZE — on the other two. Not a smaller heading, no heading at all;
+        the name of the character every one of those screens is about, set at the
+        size of the sentence explaining a checkbox.
+
+        `masthead.ts` already argues this for the face, in so many words: "ONE
+        SIZE, and no view decides it… The delivery draws one component at one
+        size, which is the point of it being a component." The face was unified
+        to 64 and the name was left behind, so the fix stopped half way and the
+        half that was left is the one carrying the words.
 
         Only the INPUT form of this had a weight and a line-height, so the drawn
-        one — every screen where her name is a heading rather than a field —
-        inherited the body's 400 and the body's 1.5. At 34px that is a 51px line
-        for a 36px word: fifteen pixels of nothing under her name, on a header
-        the sizing document budgets at 152 and which measured 193.
+        one inherited the body's 400 and the body's 1.5 as well. At 34px that is
+        a 51px line for a 36px word.
       */
       .who-name {
+        font-size: var(--t-title);
         font-weight: var(--w-medium);
+        letter-spacing: var(--track-tight);
         line-height: 1.05;
       }
       .who-band .tile {

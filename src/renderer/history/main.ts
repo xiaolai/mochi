@@ -849,15 +849,15 @@ function showPlace(next: Place): void {
     on screen twice, both times because an author `display` outranked the UA's.
   */
   /*
-    Her scale follows the view.
+    `subject-large` stood here.
 
-    On "Who she is" the delivery draws her at 104px with a 46px name; on the
-    other two, 52 and 30. That is not decoration — the first view IS her, so she
-    is the subject at full size, and the other two are about what she said and
-    what she may do, where she is the heading over somebody else's material.
-    One class, because the sizes belong to the sheet and the view belongs here.
+    It put her at "full size" on view I and left the other two smaller, which is
+    v1's masthead — three bands at three scales. `HerHead.dc.html` is ONE
+    component: a 64px face, a 34px name and the three view pills, identical
+    whichever pill is current, and `masthead.ts` already says so for the face.
+    The name was left on the class, so it was 34px here and 13px — the body text
+    size — on the other two views.
   */
-  subjectEl.classList.toggle('subject-large', place === 'cast')
   /*
     A drill-down is about the character this view is about. Leaving the view
     leaves the screen — one that survived would be a page about somebody the

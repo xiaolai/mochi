@@ -1556,6 +1556,69 @@ async function checks(page, where = '') {
         JSON.stringify((after.view ?? '').trim()),
     )
 
+  /* --- the masthead is one component ------------------------------------- */
+  /*
+    Her face and her name are the same size on all three of her views.
+
+    `HerHead.dc.html` is ONE component — a 64px face, a 34px name, and the three
+    view pills — drawn identically whichever pill is current. What was built kept
+    a `subject-large` class that view I alone carried, so her name was 34px on
+    "Who she is" and 13px on the other two. Thirteen is the BODY TEXT SIZE: not a
+    smaller heading, no heading at all, on screens whose whole subject is which
+    character they are about.
+
+    `masthead.ts` had already made this argument for the face and unified it to
+    64. The name was left behind, which is the shape of defect worth a check
+    rather than a comment — half a fix looks exactly like a whole one.
+
+    Measured on the RENDERED font size and the face's box, not on a class:
+    naming the class here would pass the moment somebody adds a second one.
+
+    AND AGAINST THE DELIVERY'S NUMBERS, not only against each other. The first
+    version of this check asserted the three views AGREE, which "all three wrong"
+    satisfies — proved by breaking it: with the size dropped to the body rung it
+    reported "her name is 13px on all three views" and passed. An invariant that
+    holds when the thing it protects is destroyed is not protecting it.
+  */
+  const HEAD_NAME_PX = 34
+  const HEAD_FACE_PX = 64
+  const oneHead = await page.run(`(() => {
+    const seen = [];
+    for (const id of ['tab-for-cast', 'tab-for-archive', 'tab-for-permits']) {
+      const tab = document.getElementById(id);
+      if (tab === null) return { missing: id };
+      tab.click();
+      const name = document.querySelector('#subject .who-name');
+      const face = document.querySelector('#subject .tile');
+      if (name === null || face === null) return { blank: id };
+      seen.push({
+        view: (tab.textContent || '').trim(),
+        px: getComputedStyle(name).fontSize,
+        face: Math.round(face.getBoundingClientRect().width),
+      });
+    }
+    return { seen, sizes: [...new Set(seen.map((o) => o.px))], faces: [...new Set(seen.map((o) => o.face))] };
+  })()`)
+  if (typeof oneHead.missing === 'string') {
+    bad('one-masthead', `no ${oneHead.missing} tab, so the three views were never compared`)
+  } else if (typeof oneHead.blank === 'string') {
+    bad('one-masthead', `the masthead is empty on ${oneHead.blank}`)
+  } else if (oneHead.sizes.length > 1 || oneHead.faces.length > 1) {
+    bad('one-masthead', 'the masthead changes between her views: ' + JSON.stringify(oneHead.seen))
+  } else if (parseFloat(oneHead.sizes[0]) !== HEAD_NAME_PX || oneHead.faces[0] !== HEAD_FACE_PX) {
+    bad(
+      'one-masthead',
+      `the masthead agrees with itself and not with HerHead: name ${oneHead.sizes[0]} and face ` +
+        `${String(oneHead.faces[0])}px, drawn at ${String(HEAD_NAME_PX)}px and ` +
+        `${String(HEAD_FACE_PX)}px`,
+    )
+  } else {
+    ok(
+      'one-masthead',
+      `her name is ${oneHead.sizes[0]} and her face ${String(oneHead.faces[0])}px on all three views`,
+    )
+  }
+
   /* --- the rail's rows line up ------------------------------------------- */
   /*
     A rail row's label sits immediately after its own tile, and every row in the
