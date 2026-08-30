@@ -509,7 +509,7 @@
       */
       #margin-hers,
       #margin-talk,
-      #panel-wake {
+      #margin-permits {
         display: flex;
         flex-direction: column;
         gap: 18px;
@@ -1668,14 +1668,21 @@
         already give. The column's own edge says where this is; a single rule
         says where the assembled string starts.
 
-        Full width by cancelling the column's padding, so the text runs to the
-        same edges the heading above it does.
+        NO NEGATIVE MARGIN any more.
+
+        It cancelled the padding of the 236px sidebar this panel used to live
+        in, so the text ran to that column's edges. The panel is in the reading
+        column now — her instructions are the thing itself, not apparatus — and
+        the same margin pulled the rule above it 30px left of everything else on
+        the page, which reads as a misalignment rather than as full bleed.
+
+        A single rule still says where the assembled string starts; it starts
+        where the sentence above it starts.
       */
       .wake-box {
         flex: 1;
         min-height: var(--wake-floor);
         overflow-y: auto;
-        margin: 0 calc(var(--s6) * -1) 0;
         border-top: var(--s-px) solid var(--rule);
       }
       .wake-box > pre {
@@ -1714,7 +1721,6 @@
           as this one is allowed to get.
         */
         min-height: var(--wake-floor);
-        margin: 0 calc(var(--s6) * -1) 0;
         /*
           The READOUT's inset, not the base rule's.
 
@@ -2744,6 +2750,15 @@
                 <div class="list" id="list" hidden></div>
                 <div class="talk" id="talk" hidden></div>
                 <div id="permits" hidden></div>
+                <!--
+                  What she is TOLD, in the reading column and not in the margin.
+
+                  The margin is "where a thing is stored, when it was last used,
+                  whose recommendation it is. Never the thing itself" — and the
+                  assembled instruction is the thing itself, her words verbatim.
+                  It also does not fit: the margin is 236px and this is prose.
+                -->
+                <div id="panel-wake" hidden></div>
               </div>
               <!--
                 The margin. Apparatus lives here and nothing you came to read
@@ -2753,7 +2768,9 @@
               <aside class="margin" id="margin">
                 <div id="margin-hers" hidden></div>
                 <div id="margin-talk" hidden></div>
-                <div id="panel-wake" hidden></div>
+                <!-- The capability descriptions: what she is told she CAN do,
+                     which is apparatus about the switches beside it. -->
+                <div id="margin-permits" hidden></div>
               </aside>
             </div>
           </section>

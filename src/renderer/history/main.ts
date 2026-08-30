@@ -81,6 +81,7 @@ import {
   permitsEl,
   marginHersEl,
   subjectEl,
+  marginPermitsEl,
   marginTalkEl,
 } from './elements'
 import { say } from './status'
@@ -476,10 +477,18 @@ function renderPermits(): void {
   */
   const at = drawn.findIndex((node) => node instanceof HTMLHeadingElement)
   permitsEl.replaceChildren(...(at === -1 ? drawn : drawn.slice(0, at)))
-  wakeEl.replaceChildren(
-    ...(at === -1 ? [] : drawn.slice(at)),
-    ...(shelf === null ? [] : assembledPanel(shelf, handlers)),
-  )
+  /*
+    The capability descriptions are apparatus and go in the margin; the
+    assembled instruction is the THING ITSELF and goes in the reading column.
+
+    Both were in the margin, which is 236px — so her instructions, the largest
+    body of prose in this window, were rendered in a column narrower than the
+    sentence you are reading. The margin's own definition is what settles it:
+    "where a thing is stored, when it was last used, whose recommendation it is.
+    Never the thing itself."
+  */
+  marginPermitsEl.replaceChildren(...(at === -1 ? [] : drawn.slice(at)))
+  wakeEl.replaceChildren(...(shelf === null ? [] : assembledPanel(shelf, handlers)))
 }
 
 /**
@@ -626,6 +635,7 @@ function showPlace(next: Place): void {
   marginTalkEl.hidden = place !== 'archive'
   permitsEl.hidden = place !== 'permits'
   wakeEl.hidden = place !== 'permits'
+  marginPermitsEl.hidden = place !== 'permits'
 
   // Search and the day strip belong to what she has said and to nothing else.
   // Hidden rather than emptied, so what is typed survives a trip away and back.

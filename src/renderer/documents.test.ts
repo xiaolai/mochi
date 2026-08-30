@@ -120,6 +120,7 @@ const DOCUMENTS: readonly {
       'permits',
       'margin-hers',
       'margin-talk',
+      'margin-permits',
       'nav-groups',
       'machine-pane',
       'machine-tools',
