@@ -470,16 +470,19 @@
 
       .face-name {
         font-family: var(--sans);
-        font-size: var(--t-ui);
+        font-size: var(--t-sm);
         font-weight: var(--w-medium);
         color: var(--ink);
       }
 
+      /* Mono, because "cut off mid-sentence" is the OCCASION she wears it on —
+         a machine fact about the tile above it rather than prose. */
       .face-when {
         margin: 0;
-        font-size: var(--t-cap);
+        font-family: var(--mono);
+        font-size: var(--t-nano);
         line-height: var(--leading);
-        color: var(--ink-3);
+        color: var(--ink-2);
       }
 
       /*
@@ -490,12 +493,12 @@
         says which state the switch is IN rather than what pressing it would do,
         so it reads the same as the switch itself.
       */
+      /* The word every switch carries. Not uppercase: A2c writes "allowed" and
+         "withheld" as words, and small caps make a state read as a label. */
       .face-allow {
         font-family: var(--sans);
-        font-size: var(--t-label);
-        letter-spacing: var(--track-2);
-        text-transform: uppercase;
-        color: var(--ink-3);
+        font-size: var(--t-cap);
+        color: var(--ink);
       }
 
       /*
@@ -632,18 +635,31 @@
         white-space: nowrap;
       }
 
+      /* A2b is two sections, so the screen is a column like any other page. */
+      .kept-screen {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s5);
+      }
+
       .kept {
         display: flex;
         flex-direction: column;
-        gap: var(--s3);
+        gap: 10px;
       }
 
+      /*
+        Her lines, plainly — no rule down the side.
+
+        A2b sets them at 14.5 in full ink, 10 apart, and that is all: they are
+        the largest text on the screen because they are what the screen is FOR.
+        The quoted-block treatment I gave them made four facts look like an
+        excerpt from somewhere else, when the point is that she wrote them here.
+      */
       .kept-line {
         margin: 0;
-        padding-left: var(--s3);
-        border-left: var(--s0) solid var(--rule);
-        font-size: var(--t-body);
-        line-height: var(--leading-long);
+        font-size: var(--t-read);
+        line-height: var(--leading);
         color: var(--ink);
       }
 

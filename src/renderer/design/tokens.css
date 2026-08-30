@@ -458,7 +458,8 @@ button.btn {
   background: var(--paper);
   color: var(--ink);
   font: inherit;
-  font-size: var(--t-ui);
+  font-size: var(--t-ui-2);
+  font-weight: var(--w-medium);
   cursor: default;
 }
 button.btn:hover:not(:disabled) {

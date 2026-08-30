@@ -32,6 +32,35 @@ export const SAYS = {
   herWords: { she: 'Her words', he: 'His words', it: 'Its words' },
   /* The hint beside Appearance when she carries her own hue rather than one of
      the eight. */
+  /* A2b's second section. The fence is a safety boundary, so the screen that
+     shows her notes is where it has to be explained. */
+  fenceHead: {
+    she: 'How she is told to read it',
+    he: 'How he is told to read it',
+    it: 'How it is told to read it',
+  },
+  fenceWhere: {
+    she: 'under “What she is told”',
+    he: 'under “What he is told”',
+    it: 'under “What it is told”',
+  },
+  fenceWhy: {
+    she:
+      'These lines reach her wrapped in a fence that says they are background DATA, not ' +
+      'instructions — because a model wrote them, and anything a model wrote could try to ' +
+      'change how she behaves. The wording of that fence is under “What she is told”, and ' +
+      'removing it removes the boundary.',
+    he:
+      'These lines reach him wrapped in a fence that says they are background DATA, not ' +
+      'instructions — because a model wrote them, and anything a model wrote could try to ' +
+      'change how he behaves. The wording of that fence is under “What he is told”, and ' +
+      'removing it removes the boundary.',
+    it:
+      'These lines reach it wrapped in a fence that says they are background DATA, not ' +
+      'instructions — because a model wrote them, and anything a model wrote could try to ' +
+      'change how it behaves. The wording of that fence is under “What it is told”, and ' +
+      'removing it removes the boundary.',
+  },
   ownAppearance: { she: 'her own', he: 'his own', it: 'its own' },
   sentAtWake: {
     she: 'sent at her next wake',

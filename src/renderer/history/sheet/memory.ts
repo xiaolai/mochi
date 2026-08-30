@@ -132,5 +132,24 @@ export function memorySection(view: ShelfView, handlers: ShelfHandlers): HTMLEle
   const head = wrap.querySelector('.section-head')
   if (head === null) throw new Error('a section with no head cannot carry its controls')
   head.append(element('span', 'grow'), undo, forget)
-  return wrap
+
+  /*
+    THE FENCE, on the screen that shows what it fences.
+
+    A2b's second section, and it is not decoration: her notes are written by a
+    MODEL, so anything in them could try to change how she behaves. What stops
+    that is a wrapper telling her to read them as background data — and the one
+    place somebody reads her notes is the one place that boundary has to be
+    stated, or removing it looks like tidying up a paragraph.
+  */
+  const both = element('div', 'kept-screen')
+  both.append(
+    wrap,
+    section(
+      forPronoun(SAYS.fenceHead, view.pronoun),
+      forPronoun(SAYS.fenceWhere, view.pronoun),
+      element('p', 'note', forPronoun(SAYS.fenceWhy, view.pronoun)),
+    ),
+  )
+  return both
 }
