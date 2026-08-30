@@ -146,6 +146,9 @@ export function listPersonas(
         // the nearest of the eight. See `SettingsPersona.theme`.
         theme: isThemeId(persona.theme) ? persona.theme : null,
         style: persona.style,
+        // Load-bearing again: `companion/face.ts` asks what she may wear before
+        // the waking perk. See `SettingsPersona.faces`.
+        faces: persona.faces,
         // The INSTRUCTION half only. `verbatim` is exact words a manifest author
         // wrote and no control offers it, so sending it to a page that cannot
         // express it is how it gets overwritten with the other half.

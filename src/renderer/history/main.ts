@@ -315,6 +315,21 @@ async function deleteThem(about: Doomed): Promise<void> {
     That is the worst place in the app for silence. Somebody who asked for
     something to be deleted and saw no error will believe it is gone.
   */
+  /*
+    Her NOTES are not conversations, and go through a different door.
+
+    `forget` deletes what was said; this deletes what she wrote down about
+    somebody. They are separate stores with separate lifetimes — the design says
+    so from the other side, in the sentence this confirmation carries: "What was
+    said in your conversations is untouched."
+  */
+  if (about.kind === 'kept') {
+    await write(
+      () => window.mochiHistory.memory({ kind: 'clear', id: about.id }),
+      forPronoun(SAYS.keptErased, saying()),
+    )
+    return
+  }
   let result: Awaited<ReturnType<typeof window.mochiHistory.forget>>
   try {
     result = await window.mochiHistory.forget(
@@ -879,6 +894,11 @@ const handlers: ShelfHandlers = {
       () => window.mochiHistory.memory(action),
       action.kind === 'restore' ? 'Put back as it was.' : 'Forgotten.',
     )
+  },
+  askToErase: (id) => {
+    // The same surface every other destruction in this window uses — contract
+    // D2. This was an armed button, which a double-click defeats.
+    askFirst({ kind: 'kept', id, ...asWords({ kind: 'kept' }) })
   },
   prompt: (text) => {
     void write(

@@ -659,20 +659,29 @@ export interface SettingsPersona {
   /** What she should convey on waking, and on going back to sleep. */
   readonly greeting: string
   readonly farewell: string
-  /*
-    `faces` was here: which of the eight expressions a character claimed.
-
-    No window reads it any more. The control that set it is gone — nothing in
-    this application ever consulted the list to decide what she wears, so the
-    switch changed one sentence in her instructions and nothing else — and every
-    character has all eight. `nothing-written-goes-unread.test.ts` is what
-    required this line to go with the reader: a field main computes and sends on
-    every read, that nobody opens, is a fact the wire cannot be held to.
-
-    `Persona.faces` stays on disk. It is inert, and removing it from the format
-    is a version bump on every manifest to delete a value that costs nothing to
-    ignore.
-  */
+  /**
+   * Which of the eight expressions this character may wear.
+   *
+   * ## It was taken off this wire, and it is back because it does something now
+   *
+   * The comment that stood here recorded why it went: no window read it, the
+   * control that set it was gone, and nothing in this application consulted the
+   * list to decide what she wears — so the switch changed one sentence in her
+   * instructions and nothing else. `nothing-written-goes-unread.test.ts`
+   * required the field to go with its reader, which was right.
+   *
+   * A2c gives it a reader. `companion/face.ts` asks `rules/expressions.ts` what
+   * she may wear before the waking perk, so withholding `surprised` means she
+   * wakes without it — the set decides what is on her face rather than only what
+   * she is told about it. Contract C2 and C5 stop being moot in the same breath.
+   *
+   * The empty set is legal and has to survive: switch all eight off and she is
+   * simply never told she has a face to change. `wearing` falls back to
+   * `neutral` whether or not neutral is permitted, because withholding an
+   * expression withholds a CHANGE, and a character with no face at all is not a
+   * state anything downstream can draw.
+   */
+  readonly faces: readonly Emotion[]
   /** Her own answer about how big she is drawn, or null to accept her face's. */
   readonly size: number | null
 }
@@ -1211,6 +1220,7 @@ export type VoiceReport =
 
 import type { CodexReadiness, Remedy } from './delegation'
 import type { FaceSpec } from './avatar-spec'
+import type { Emotion } from './avatar'
 import type { Pronoun } from './pronoun'
 import type { ThemeId } from './theme'
 
@@ -1228,6 +1238,18 @@ export interface SessionConfig {
    * and a companion that subtitles itself by default has decided for them.
    */
   readonly bubble: boolean
+  /**
+   * Which of the eight expressions she may wear.
+   *
+   * Here as well as on `SettingsPersona`, because the RIG is what has to obey it
+   * and the rig lives in the companion window, which never sees the settings
+   * view. `face.ts` asks `rules/expressions.ts` before the waking perk — so
+   * withholding `surprised` means she wakes without it, which is the whole of
+   * what "the switch controls something" means.
+   *
+   * Empty is legal. `wearing` falls back to `neutral` whatever the set says.
+   */
+  readonly faces: readonly Emotion[]
   /**
    * What to say on waking, as an instruction rather than as words — or **null**
    * when she may not speak first.

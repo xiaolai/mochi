@@ -173,6 +173,13 @@ export const SAYS = {
     he: 'The system prompt is empty. He is still told his character.',
     it: 'The system prompt is empty. It is still told its character.',
   },
+  /* The receipt after the notes are erased. It names what went and what did
+     not, because the confirmation just promised the conversations were safe. */
+  keptErased: {
+    she: 'Erased. Everything she had kept about you is gone.',
+    he: 'Erased. Everything he had kept about you is gone.',
+    it: 'Erased. Everything it had kept about you is gone.',
+  },
   machineIsFor: {
     she: 'Who she is is on her own page. This holds only what is true whoever is worn.',
     he: 'Who he is is on his own page. This holds only what is true whoever is worn.',

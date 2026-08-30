@@ -24,6 +24,16 @@ export interface ShelfHandlers {
   readonly save: (change: PersonaChange) => void
   readonly persona: (action: PersonaAction) => void
   readonly memory: (action: NoteAction) => void
+  /**
+   * Ask before erasing everything she has kept — on a surface of its own.
+   *
+   * Separate from `memory` on purpose. Every other `NoteAction` is a write that
+   * happens; this one OPENS A QUESTION, and the write only follows if it is
+   * answered. Routing it through `memory` would have made the pane the thing
+   * that decides, which is how the arming pattern got in here in the first
+   * place — contract D2.
+   */
+  readonly askToErase: (id: string) => void
   /** Store the system prompt document. Empty is a real answer. */
   readonly prompt: (text: string) => void
   /** Say what happened. Silence after a write reads as the write not landing. */

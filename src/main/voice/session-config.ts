@@ -344,6 +344,8 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
     instructions: mayDo.instructions,
     voice: resolved.persona.voice,
     bubble: resolved.persona.bubble,
+    // What she may wear. `face.ts` consults it before the waking perk.
+    faces: resolved.persona.faces,
     /*
       Null rather than an empty instruction: the renderer must not ask for the
       turn at all, and "say nothing on waking" is a decision made here.

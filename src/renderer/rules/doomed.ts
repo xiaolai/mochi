@@ -36,6 +36,20 @@
 export type Doomed = { readonly asks: string; readonly because: string } & (
   | { readonly kind: 'some'; readonly id: string; readonly tokens: readonly string[] }
   | { readonly kind: 'hers'; readonly id: string; readonly who: string }
+  /*
+    Everything she has written down ABOUT YOU, which is not a conversation.
+
+    A fourth arm rather than a fourth surface. Erasing her notes was the last
+    destruction in this window still done by ARMING a button — click once to
+    turn it into "Really forget it all?", click again to do it — which contract
+    D2 forbids in as many words, and for the reason a double-click demonstrates:
+    both clicks land and the note is gone. It had no Escape either.
+
+    Routing it here gets the three properties the sheet already has and arming
+    structurally cannot: a snapshot taken when the question opens, an answer that
+    can only be given once, and a copy offered before the deletion.
+  */
+  | { readonly kind: 'kept'; readonly id: string }
   | { readonly kind: 'everything' }
 )
 
@@ -122,6 +136,15 @@ export function wordsFor(
     }
   }
   if (about.kind === 'hers') return { asks: said.hers, because: said.hersWhy }
+  if (about.kind === 'kept') {
+    return {
+      asks: 'Erase everything she has kept about you?',
+      because:
+        'Every note she has written about you is removed from this machine. What was said in ' +
+        'your conversations is untouched. This cannot be undone — and neither can the one step ' +
+        'back, which goes with it.',
+    }
+  }
   return {
     asks: 'Delete every conversation, for every character?',
     because:

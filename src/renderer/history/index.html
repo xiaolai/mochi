@@ -423,6 +423,29 @@
         `--paper` because the row under it is `--chosen` — the one place in the
         window where a lighter fill is the raised one.
       */
+      /*
+        What she has kept, one line per thing she recorded.
+
+        A `<pre>` held the whole note as one block — which is what she wrote, but
+        not what it IS: separate facts recorded at separate times, run together
+        into what reads as a paragraph, set in a monospace measure inside a
+        proportional column.
+      */
+      .kept {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s3);
+      }
+
+      .kept-line {
+        margin: 0;
+        padding-left: var(--s3);
+        border-left: var(--s0) solid var(--rule);
+        font-size: var(--t-body);
+        line-height: var(--leading-long);
+        color: var(--ink);
+      }
+
       .rail-mark {
         flex: none;
         padding: 3px var(--s2);
@@ -1339,11 +1362,14 @@
       .codex .note {
         margin: 0;
       }
-      /* A destructive button that has been armed and wants a second press. */
-      .btn.arming {
-        color: var(--ink);
-        border-color: var(--ink);
-      }
+      /*
+        `.btn.arming` was here, and the pattern went with it.
+
+        Click once to turn the label into "Really forget it all?", click again to
+        erase — which contract D2 forbids and a double-click defeats, both clicks
+        landing. It was the last one in the window; erasing her notes goes
+        through the confirmation sheet now, like every other destruction here.
+      */
       /* Her size: a slider and the number it is showing. */
       .size-row {
         display: flex;

@@ -272,6 +272,9 @@ function wearWhatCameBack(next: Session, before: typeof arrived): void {
       text: `the character's colour was refused and the built-in used instead — ${unreadable.join('; ')}`,
     })
   }
+  // Before `wear`, so a session that narrows the set cannot get one perk in at
+  // the old permission on the frame it arrives.
+  face.mayWear(next.faces)
   face.wear(next.face)
   face.showWords(next.bubble)
   // Whatever main could not do while assembling all of the above. Usually none;

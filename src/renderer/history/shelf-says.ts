@@ -119,6 +119,14 @@ export const SAYS = {
   },
   remembers: { she: 'What she remembers', he: 'What he remembers', it: 'What it remembers' },
   wroteThese: { she: 'she wrote these', he: 'he wrote these', it: 'it wrote these' },
+  /* The destructive control on her notes. Named, because "Erase everything" on
+     its own does not say everything of WHAT — and the sheet it opens says the
+     rest. */
+  eraseKept: {
+    she: 'Erase everything she has kept…',
+    he: 'Erase everything he has kept…',
+    it: 'Erase everything it has kept…',
+  },
   noNotes: {
     she: 'She has not written anything down about you yet.',
     he: 'He has not written anything down about you yet.',

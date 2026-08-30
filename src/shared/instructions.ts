@@ -1,6 +1,7 @@
 import { looksEmpty, oneLine } from './text'
 import { type Persona, type Prompts, type SpokenMoment } from './persona'
 import { promptsFor, type PromptSpec } from './prompts'
+import { EMOTIONS, type Emotion } from './avatar'
 
 /**
  * What she is TOLD -- the system prompt, assembled.
@@ -162,25 +163,26 @@ function piecesFor(
       product decision recorded in `dev-docs/plan-0.1.md` W2.
     */
     /*
-      NOTHING. Every character has every expression.
+      WHAT SHE HAS, and it is a fact that can differ again.
 
-      This section described `persona.faces`, and the comment above records why
-      it was already almost pointless: nothing in the application consults that
-      list to decide what she wears — the two built-in reactions in
-      `companion/face.ts` do not, and the tool that once did went on 2026-08-26
-      after 275 sessions without a call. It only told her what she had.
+      This was `''` with a comment explaining why: nothing consulted the list to
+      decide what she wears, the control that set it was gone from the window,
+      every character had all eight, and "a sentence in her instructions naming a
+      restriction nobody can impose is a sentence the model has to reconcile with
+      a world where it is not true." All of that was correct.
 
-      Now it does not tell her that either, because it is no longer a fact that
-      can differ: the control that set it is gone from the window and every
-      character has all eight. A sentence in her instructions naming a
-      restriction nobody can impose is a sentence the model has to reconcile
-      with a world where it is not true.
+      A2c restores the control AND makes it load-bearing: `companion/face.ts`
+      asks `rules/expressions.ts` before the waking perk, so withholding an
+      expression withholds the face rather than only the sentence. The
+      restriction is imposable now, so saying it is honest again.
 
-      The stored field is left where it is rather than migrated out. It is inert
-      — nothing reads it — and removing it from the format is a version bump on
-      every manifest on disk to delete a value that costs nothing to ignore.
+      Silent in the ordinary case, which is the same rule every other optional
+      section here follows — an "everything is available" line costs tokens and
+      says nothing. `toldAbout` also stays silent for an EMPTY set: being told
+      "you have none" invites her to talk about not having them, where the state
+      means she is simply never told she has a face to change.
     */
-    faces: '',
+    faces: narrowed(persona.faces),
   }
 }
 
@@ -552,4 +554,24 @@ function verbatimLine(moment: SpokenMoment): string | null {
   // and an odd one to have sent.
   if (looksEmpty(exact)) return null
   return `Say exactly the contents of the <line> block, word for word, and nothing else. Do not read the tags aloud:\n${fenced('line', exact)}`
+}
+
+/**
+ * The expressions she has, when that is not all of them.
+ *
+ * Inline here rather than imported from `renderer/rules/expressions.ts`, and the
+ * split is real rather than duplication: that module decides what she WEARS and
+ * what a tile shows, both of which happen in the renderer. This decides what she
+ * is TOLD, which is assembled in main. One rule cannot live in both processes,
+ * and a shared module holding two decisions that only ever run in one process
+ * each is a worse shape than two sentences of arithmetic.
+ *
+ * Empty answers empty for the reason the caller records: being told "you have
+ * none" invites her to talk about not having them, where the state means she is
+ * simply never told she has a face to change.
+ */
+function narrowed(faces: readonly Emotion[]): string {
+  if (faces.length === 0) return ''
+  if (EMOTIONS.every((one) => faces.includes(one))) return ''
+  return faces.join(', ')
 }

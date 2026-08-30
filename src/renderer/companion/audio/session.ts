@@ -1,6 +1,7 @@
 import { parseServerFrame } from '@shared/realtime/frames'
 import { transcriptionConfig } from '@shared/transcription'
 import { isPrivateFrame, type SessionConfig } from '@shared/ipc'
+import type { Emotion } from '@shared/avatar'
 import type { FaceSpec } from '@shared/avatar-spec'
 import { createPending, type Spoken } from './pending'
 import { createNudge } from './nudge'
@@ -44,6 +45,8 @@ export interface Session {
   readonly bubble: boolean
   /** How she looks, resolved and validated in main. See `SessionConfig.face`. */
   readonly face: FaceSpec
+  /** Which expressions she may wear. See `SessionConfig.faces`. */
+  readonly faces: readonly Emotion[]
   /** How many things main could not do. See `SessionConfig.problems`. */
   readonly problems: number
   /** Which side of her the bubble was asked to sit on. See `SessionConfig`. */
@@ -868,6 +871,7 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
   return {
     bubble: config.bubble,
     face: config.face,
+    faces: config.faces,
     problems: config.problems,
     bubbleSide: config.bubbleSide,
     asleep: config.asleep,

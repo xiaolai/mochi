@@ -1,6 +1,7 @@
 import { MochiAvatar } from './rig/mochi'
 import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
-import type { Emotion } from '@shared/avatar'
+import { EMOTIONS, type Emotion } from '@shared/avatar'
+import { RESTING, wearing } from '../rules/expressions'
 import type { HaloWhen } from '@shared/ipc'
 import { advanceEnvelope, rms, DEFAULT_ENVELOPE, SILENT } from './rig/envelope'
 import { createRepose, type Ambient } from './repose'
@@ -90,6 +91,15 @@ export interface Face {
    * Nothing here reads a file — the renderer is the process with the least
    * authority and user content is read exactly once, upstream.
    */
+  /**
+   * Which expressions she may wear.
+   *
+   * Separate from `wear`, because they arrive from different places and change
+   * at different times: her face spec is her colours and her size, this is a
+   * permission the person set on a screen. Folding them would mean a character
+   * switch and a permission change could not be told apart.
+   */
+  mayWear(faces: readonly Emotion[]): void
   wear(face: FaceSpec): void
   /** Which side of her the bubble should sit on, or `auto`. */
   prefersBubble(side: SidePreference): void
@@ -277,6 +287,15 @@ export function showFace(canvas: HTMLCanvasElement): Face {
    * big is she by default" and it lives in the format.
    */
   let worn: FaceSpec = MOCHI
+  /*
+    Which expressions she may wear. Everything until a session is configured.
+
+    `EMOTIONS` rather than `[]` as the starting value, and the difference
+    matters: an empty set is a real answer meaning "she is never told she has a
+    face to change", and starting there would make every character wake without
+    a perk for as long as it took the first session to negotiate.
+  */
+  let allowed: readonly Emotion[] = EMOTIONS
   const avatar = new MochiAvatar(ctx, { size: worn.size, face: worn })
 
   /*
@@ -1315,9 +1334,23 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         word "decaying" invited the opposite reading.
       */
       if (woke) {
+        /*
+          ASKED, not assumed — and this is what makes A2c's switch a control.
+
+          `persona.faces` was inert for the whole life of the field: nothing
+          consulted it to decide what she wears, so the switch that set it
+          changed one sentence in her instructions and then not even that.
+          Contract C2 and C5 were marked moot for exactly that reason.
+
+          Withhold `surprised` and she now wakes without it. `wearing` answers
+          `neutral` for anything withheld, and setting neutral here is not the
+          same as skipping: waking must leave her at rest rather than at
+          whatever the last session left on her face.
+        */
+        const perk = wearing(allowed, 'surprised')
         avatar.setEmotion({
-          emotion: 'surprised',
-          intensity: WAKING_PERK_INTENSITY,
+          emotion: perk,
+          intensity: perk === RESTING ? 0 : WAKING_PERK_INTENSITY,
           holdMs: WAKING_PERK_MS,
         })
         // And she moves, not only changes face. A perk with no motion under it
@@ -1412,6 +1445,10 @@ export function showFace(canvas: HTMLCanvasElement): Face {
     showWords: (shown: boolean) => {
       showingWords = shown
       if (!shown) bubble.clear()
+    },
+    /** What she may wear, from the session's configuration. */
+    mayWear: (faces: readonly Emotion[]) => {
+      allowed = faces
     },
     wear: (face: FaceSpec) => {
       worn = face
