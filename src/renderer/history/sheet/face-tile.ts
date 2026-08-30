@@ -118,4 +118,16 @@ export function faceTile(
 */
 
 /** SHE / HER, HE / HIM, IT / ITS — the caps line under her name. */
-export const PRONOUN_CAPS: ByPronoun = { she: 'she / her', he: 'he / him', it: 'it / its' }
+/*
+  ONE WORD, which is what `Rail.dc.html` prints: `she · ballad`.
+
+  It was `she / her`, the subject and the object together, which is how a
+  pronoun is CITED rather than how it is used — and this string appears under
+  every character's name in a 207px column, where the extra four characters push
+  the voice out of the row on any name longer than "Mochi". The masthead reads
+  the same table and drew `she / her · ballad · from a file` for the same reason.
+
+  Nothing needs the object form: the window never writes "give it to her". It
+  needs the word that says which pronoun table is in force.
+*/
+export const PRONOUN_CAPS: ByPronoun = { she: 'she', he: 'he', it: 'it' }

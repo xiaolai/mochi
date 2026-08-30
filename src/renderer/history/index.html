@@ -227,35 +227,39 @@
         overflow-y: auto;
       }
       /* "Two characters" — a heading, and the only one in the rail. */
+      /*
+        THE WORD AND THE NUMBER AT OPPOSITE ENDS, which is what `Rail.dc.html`
+        draws: `CHARACTERS` in caps on the left, `2` in mono on the right,
+        `padding: 0 8px 10px`.
+
+        It was one sentence — "2 characters" — set entirely in the caps face, so
+        a count that changes sat inside a heading that does not, and the number
+        was drawn in the one face this window reserves for labels. Two facts, two
+        elements, the same row.
+      */
       .rail-head {
         margin: 0;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--s3);
         font-family: var(--sans);
         font-size: var(--t-label);
         font-weight: var(--w-medium);
         letter-spacing: var(--track-wide);
         text-transform: uppercase;
         color: var(--ink-3);
-        padding: 0 18px var(--s3);
+        padding: 0 var(--s2) 10px;
         max-width: none;
       }
-      /*
-        The foot is a NOTE, not a second heading.
-
-        It shared the rule above — uppercase, tracked, Sora — so "true whoever
-        is worn" was set exactly like "Two characters", and the bottom of the
-        rail read as another section heading with nothing underneath it. The
-        delivery sets it in DM Mono at 10px, lower case, on two lines: what the
-        machine page holds, and who it is true of. Apparatus, in the face this
-        design gives apparatus.
-      */
-      .rail-says {
-        margin: 0;
+      /* The count is a machine fact and takes the machine face — it is not part
+         of the heading beside it. */
+      .rail-count {
         font-family: var(--mono);
-        font-size: var(--t-nano);
-        line-height: var(--leading);
-        color: var(--ink-3);
-        padding: 10px 18px 0;
-        max-width: none;
+        font-size: var(--t-data-2);
+        font-weight: var(--w-regular);
+        letter-spacing: normal;
+        text-transform: none;
       }
       .rail-cast {
         display: flex;
@@ -366,8 +370,7 @@
         `--ink-3` is the value that clears 4.5:1 on both, so the distinction
         costs nothing and the rule stays one rule.
       */
-      .rail-worn,
-      .rail-stat {
+      .rail-worn {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -375,6 +378,36 @@
         font-size: var(--t-micro);
         margin-top: var(--s-px);
         color: var(--ink-3);
+      }
+      /*
+        The machine's mark: a 30px rounded tile with a 12px square outlined in
+        it, standing where a character's face stands. `Rail.dc.html`'s, and the
+        reason is that this row is one of the rail's rows — it needs the thing on
+        the left that every other row has, or it reads as a caption under the
+        list rather than as a destination in it.
+      */
+      .rail-tile {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        background: var(--rule);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .rail-tile::before {
+        content: '';
+        width: var(--s3);
+        height: var(--s3);
+        border-radius: 3px;
+        border: 1.5px solid var(--ink-2);
+      }
+      .rail-machine[aria-current='true'] .rail-tile {
+        background: var(--paper);
+      }
+      .rail-machine[aria-current='true'] .rail-tile::before {
+        border-color: var(--ink);
       }
       /*
         Making a character: two underlined words, exactly as drawn.
@@ -393,23 +426,35 @@
         characters drawn heavier than the characters, on a rail whose job is
         saying who exists.
       */
+      /*
+        Making a character: two BUTTONS, which is what `Rail.dc.html` draws —
+        white, a 1px `#d4d4d8` edge, a pill radius, `padding: 6px 14px` at
+        12.5/500, the pair on `padding: 14px 8px 0` with an 8px gap.
+
+        They were two underlined words at 12px in `--ink-2`, on the reading that
+        the rail is a table of contents and a bordered control in it would be
+        loud. The delivery disagrees, and it is right for a reason the reading
+        missed: these two are the only things in this column that MAKE something,
+        and everything else in it navigates. An underline is this window's mark
+        for an editable field, so the two controls that are not fields were
+        wearing the one shape reserved for fields.
+      */
       .rail-make {
         display: flex;
-        gap: 14px;
-        padding: var(--s4) 18px 0;
+        gap: var(--s2);
+        padding: 14px var(--s2) 0;
       }
       .rail-word {
         min-height: 0;
         min-width: 0;
-        padding: 0 0 var(--s-px);
-        border: 0;
-        border-bottom: var(--s-px) solid var(--rule-2);
-        border-radius: 0;
-        background: transparent;
+        padding: 6px 14px;
+        border: var(--s-px) solid var(--rule-2);
+        border-radius: var(--r-pill);
+        background: var(--paper);
         font-family: var(--sans);
         font-size: var(--t-cap);
-        font-weight: var(--w-regular);
-        color: var(--ink-2);
+        font-weight: var(--w-medium);
+        color: var(--ink);
       }
       .rail-word:hover:not(:disabled) {
         color: var(--ink);
@@ -426,7 +471,7 @@
       .rail-rule {
         height: var(--s-px);
         background: var(--rule);
-        margin: var(--s4) 18px var(--s2);
+        margin: var(--s4) var(--s2) var(--s2);
       }
       /*
         WORN, as a pill on the row it is true of.
@@ -748,9 +793,17 @@
         32 is not arbitrary: it is the gutter the width arithmetic closes on,
         232 + 32 + 760 + 32 + 224 = 1280.
       */
+      /*
+        26 at the top, not 32 — `HerHead.dc.html` is `padding: 26px 32px 0`.
+
+        The six pixels matter because this band has a budget: `Mochi 窗口
+        尺寸.dc.html` sizes the masthead at 152 and derives the whole window
+        from it, and this header measured 193. Every pixel over comes out of the
+        reading column on all four screens.
+      */
       .head {
         flex: none;
-        padding: var(--s6) var(--s6) 0;
+        padding: 26px var(--s6) 0;
       }
       /*
         The subject row: her face, her name, and the search that is about her.
@@ -776,11 +829,16 @@
         them compiled, linted and passed the suite; `stylesheets.test.ts` now
         holds the shape.
       */
+      /*
+        `align-items: flex-start` and no bottom padding — the views' own
+        `margin-top` is the gap under this row, which is what HerHead draws
+        (`margin: 24px 0 0` on the pill). It had 22px of padding here AND the
+        row's own trailing space, so the two stacked.
+      */
       .subject-row {
         display: flex;
         align-items: flex-start;
         gap: var(--s6);
-        padding-bottom: var(--s5);
       }
       .subject-of {
         min-width: 0;
@@ -884,43 +942,59 @@
         destinations — I, II, III reads as a contents list and Cast/Archive/
         Machine reads as three apps sharing a window.
       */
+      /*
+        A SEGMENTED CONTROL, which is what `HerHead.dc.html` draws.
+
+        This was three 19px labels in a row under a hairline, each with a Roman
+        numeral over it. The numerals were invented here — nothing in the
+        delivery has them — and at 19px the three views were the loudest thing
+        on the page after her name, on a header the sizing document budgets at
+        152px total.
+
+        The delivery draws the same pill this window already uses for `she|he|it`
+        and for `Sent|Tools|Write`: one sunken track, the current one a raised
+        white lozenge. Three switchers, one shape — and the two that were
+        already right are what makes the third obviously wrong.
+      */
       .views {
         display: flex;
-        gap: var(--s6);
-        border-bottom: var(--s-px) solid var(--rule-2);
+        gap: 0;
+        width: fit-content;
+        margin-top: var(--s5);
+        padding: 3px;
+        border-radius: var(--r-pill);
+        background: var(--paper-3);
       }
       .view {
-        display: flex;
-        flex-direction: column;
-        gap: 7px;
-        padding: 0 0 9px;
+        display: block;
+        padding: var(--s2) 20px;
         border: 0;
+        border-radius: var(--r-pill);
         background: transparent;
         color: inherit;
         text-align: left;
         cursor: pointer;
       }
-      .view-numeral {
-        font-family: var(--mono);
-        font-size: var(--t-nano);
-        letter-spacing: var(--track);
-        color: var(--ink-3);
-      }
       .view-label {
         font-family: var(--sans);
-        font-size: var(--t-h3);
-        color: var(--ink-3);
+        font-size: var(--t-ui);
+        font-weight: var(--w-medium);
+        color: var(--ink-2);
         white-space: nowrap;
       }
+      /*
+        The raised one carries `--paper`, and it needs a lift to read as raised
+        on a track that is only one step darker than it.
+      */
       .view[aria-current='true'] {
         background: var(--paper);
+        box-shadow: var(--lift-small);
       }
-      .view[aria-current='true'] .view-label,
-      .view[aria-current='true'] .view-numeral {
+      .view[aria-current='true'] .view-label {
         color: var(--ink);
       }
       .view:hover .view-label {
-        color: var(--ink-2);
+        color: var(--ink);
       }
       .view-head {
         display: flex;
@@ -1209,9 +1283,18 @@
         color: var(--ink-3);
         max-width: none;
       }
+      /*
+        `padding: 22px 12px`, which is `MachineNav.dc.html`'s.
+
+        It was `22 32 0 40`, so a 222px column gave its rows 150px of content
+        against the component's 198 — and "Looking things up" wrapped onto a
+        second line, making the current tab 55px tall where every other one is
+        37. A nav whose rows change height depending on which is open is a
+        column that moves when you use it.
+      */
       .groups {
         border-right: var(--s-px) solid var(--rule);
-        padding: var(--s5) var(--s6) 0 var(--s7);
+        padding: var(--s5) var(--s3);
         overflow-y: auto;
       }
       /* ---- the day strip ---------------------------------------------------
@@ -3025,19 +3108,37 @@
       .who-band {
         display: flex;
         align-items: center;
-        gap: 18px;
+        /* 20, HerHead's gap between her face and her name. */
+        gap: 20px;
         min-width: 0;
+      }
+      /*
+        HER NAME, drawn rather than typed — 34px at 500, on a 1.05 line.
+
+        Only the INPUT form of this had a weight and a line-height, so the drawn
+        one — every screen where her name is a heading rather than a field —
+        inherited the body's 400 and the body's 1.5. At 34px that is a 51px line
+        for a 36px word: fifteen pixels of nothing under her name, on a header
+        the sizing document budgets at 152 and which measured 193.
+      */
+      .who-name {
+        font-weight: var(--w-medium);
+        line-height: 1.05;
       }
       .who-band .tile {
         flex: none;
       }
+      /*
+        7px under her name and nothing under the block — HerHead's `margin-top:
+        7px` on the facts line. It was an 8px gap plus 8px of trailing padding,
+        which is the band's own height spent twice on the same joint.
+      */
       .who-of {
         min-width: 0;
         flex: 1;
         display: flex;
         flex-direction: column;
-        gap: var(--s2);
-        padding-bottom: var(--s2);
+        gap: 7px;
       }
       /*
         Her name at h1, with no box until it is touched.
@@ -3171,14 +3272,19 @@
         own, below — the middot separates two facts, and nothing separates a
         control from the sentence it is the subject of except space.
       */
+      /*
+        11px in `--ink-2`, which is HerHead's. It was `--t-data` in `--ink-3` —
+        a step smaller and a step quieter than the component draws, on the one
+        line that tells two characters apart once the face has.
+      */
       .who-facts {
         display: flex;
         align-items: baseline;
         gap: 10px;
         flex-wrap: wrap;
         font-family: var(--mono);
-        font-size: var(--t-data);
-        color: var(--ink-3);
+        font-size: var(--t-data-2);
+        color: var(--ink-2);
       }
       /*
         The control-to-sentence joint: 22px, so 32px from the last word in it.
@@ -3847,16 +3953,27 @@
           <div class="rail-make" id="cast-actions"></div>
           <div class="rail-foot">
             <div class="rail-rule"></div>
-            <button class="rail-row rail-machine" id="rail-machine" type="button">
-              <span class="rail-name">This machine</span>
-              <span class="rail-stat" id="machine-check"></span>
-            </button>
             <!--
-              What is on that page, and who it is true of. Two lines of mono in
-              the delivery, and the first is the one that answers "is what I am
-              looking for in there" without a trip.
+              A TILE AND A NAME, the same shape as a character's row.
+
+              `Rail.dc.html` draws it that way — a 30px rounded tile with a
+              square outline in it, then "This machine" at 14/500 — and the shape
+              is the argument: this row is one more thing you can be standing
+              on, so it is built like the rows above it and marked current the
+              same way.
+
+              It carried two extra lines: a mono `#machine-check` sub-line and a
+              two-line paragraph reading "keys · hearing · folders / true whoever
+              is worn". Both were explaining the destination from the rail, in a
+              column whose other rows say a name and nothing else, and the second
+              is prose in a table of contents. The machine's own page says the
+              same sentence under its title, where somebody who has arrived can
+              read it.
             -->
-            <p class="rail-says">keys · hearing · folders<br />true whoever is worn</p>
+            <button class="rail-row rail-machine" id="rail-machine" type="button">
+              <span class="rail-tile" aria-hidden="true"></span>
+              <span class="rail-name">This machine</span>
+            </button>
           </div>
         </nav>
 

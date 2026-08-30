@@ -437,8 +437,19 @@ function renderCards(): void {
       openCharacter()
     }),
   )
+  /*
+    THE WORD AND THE NUMBER, as two elements — `Rail.dc.html` draws `CHARACTERS`
+    at one end of the row and `2` at the other.
+
+    It was one string, "2 characters", so a count that changes every time
+    somebody makes or deletes a character was set inside a heading that never
+    does, entirely in the caps face this window reserves for labels.
+  */
   const many = shelf.characters.length
-  charactersCountEl.textContent = `${String(many)} ${many === 1 ? 'character' : 'characters'}`
+  charactersCountEl.replaceChildren(
+    element('span', undefined, forPronoun(SAYS.railCast, saying())),
+    element('span', 'rail-count', String(many)),
+  )
   /*
     New, Duplicate and Delete, under the list they act on.
 
@@ -987,14 +998,18 @@ function renderPlaces(): void {
       button.setAttribute('role', 'tab')
       button.id = `tab-for-${one.id}`
       button.setAttribute('aria-controls', 'reading')
-      // The numeral and the title, because these are parts of one document
-      // rather than three destinations.
-      const numeral = document.createElement('span')
-      numeral.className = 'view-numeral'
-      numeral.textContent = one.numeral
+      /*
+        THE TITLE, and nothing over it.
+
+        Each of these carried a Roman numeral — I, II, III — on the reading that
+        they are parts of one document rather than three destinations. That
+        reading is fine and the numerals were still an invention: nothing in the
+        delivery draws them, `HerHead.dc.html` least of all, and they were the
+        second line of a control that the design makes one line of a pill.
+      */
       const label = document.createElement('span')
       label.className = 'view-label'
-      button.append(numeral, label)
+      button.append(label)
       button.addEventListener('click', () => {
         showPlace(one.id)
       })

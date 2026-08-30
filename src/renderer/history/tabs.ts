@@ -29,11 +29,17 @@
  */
 export type Place = 'cast' | 'archive' | 'permits' | 'machine'
 
-/** A view on her page: a numeral, and the place it shows. */
+/**
+ * A view on her page.
+ *
+ * It carried a Roman numeral, on the reading that these are parts of one
+ * document rather than three destinations. That reading is right and the
+ * numerals were still an invention: nothing in the delivery draws them, and
+ * `HerHead.dc.html` — the component every screen's header is built from — draws
+ * the three views as one segmented pill with the words alone.
+ */
 export interface View {
   readonly id: Place
-  /** Roman, because these are parts of one document rather than destinations. */
-  readonly numeral: string
 }
 
 /**
@@ -51,11 +57,7 @@ export interface View {
  * what the developer built; a view called "Who she is" names what the reader
  * came for.
  */
-export const VIEWS: readonly View[] = [
-  { id: 'cast', numeral: 'I' },
-  { id: 'archive', numeral: 'II' },
-  { id: 'permits', numeral: 'III' },
-]
+export const VIEWS: readonly View[] = [{ id: 'cast' }, { id: 'archive' }, { id: 'permits' }]
 
 /** Every place, including the one that is not about her. */
 export const PLACES: readonly { readonly id: Place }[] = [

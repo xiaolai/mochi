@@ -1,8 +1,7 @@
 import type { SettingsView } from '@shared/ipc'
-import { forPronoun, label as paneLabel } from '@shared/pronoun'
+import { label as paneLabel } from '@shared/pronoun'
 import { element } from '../../element'
 import { PANES } from '../../settings/panes'
-import { SAYS } from '../main-says'
 
 /**
  * The machine's seven groups, down the left of its page.
@@ -80,13 +79,24 @@ export function machineNav(
   })
 
   /*
-    What this whole page is for, under the seven groups.
+    HOW MANY ARE MARKED, and only when any are — `MachineNav.dc.html`'s foot.
 
-    The delivery puts it there and it earns its place: her page and this one both
-    hold switches, and the difference between them — who she IS versus what is
-    true whoever is worn — is `plan-shell.md`'s split, which nothing on screen
-    said out loud. It is the sentence that stops somebody looking for her voice
-    in here.
+    This slot held the sentence saying what the whole page is for: "who she IS
+    versus what is true whoever is worn". That is `plan-shell.md`'s split and it
+    does need saying, but the page's own header says it — "This machine · These
+    settings apply whoever she is" — two inches above and in the place a heading
+    goes. Saying it a second time at the foot of the nav spent the one slot the
+    component reserves for a fact that changes.
+
+    The count is what the dots on the rows add up to. A reader who has scrolled
+    the pane past the nav can see that something above wants looking at without
+    scrolling back; that is the whole reason the component has a foot.
   */
-  return [...groups, element('p', 'nav-foot', forPronoun(SAYS.machineIsFor, view.pronoun))]
+  const marked = PANES.filter((one) => one.attention(view) !== null).length
+  if (marked === 0) return groups
+  const foot = element('p', 'nav-foot')
+  const dot = element('span', 'dot')
+  dot.setAttribute('aria-hidden', 'true')
+  foot.append(dot, ` ${String(marked)} marked above`)
+  return [...groups, foot]
 }

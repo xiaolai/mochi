@@ -69,7 +69,12 @@ export function characterRows(
     const row = element('button', 'rail-row')
     row.type = 'button'
     row.setAttribute('aria-current', String(one.id === openId))
-    row.append(faceTile(one.face, 22))
+    /*
+      34, which is `Rail.dc.html`'s. It was 22 — a face small enough that the
+      thing the design uses to tell characters apart at a glance was the
+      smallest element in the row it identifies.
+    */
+    row.append(faceTile(one.face, 34))
     // Said out loud rather than shown as an identical row of built-in mochis.
     // Contract C4: a character with no face file is SAID, not substituted.
     if (one.face === undefined) row.classList.add('faceless')

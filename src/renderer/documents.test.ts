@@ -114,7 +114,6 @@ const DOCUMENTS: readonly {
       'page-hers',
       'page-machine',
       'rail-machine',
-      'machine-check',
       'views',
       'subject',
       'view-head',

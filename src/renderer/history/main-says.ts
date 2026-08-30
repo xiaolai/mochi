@@ -174,6 +174,9 @@ export const SAYS = {
     the screen about her notes stood beside "Last awake" and "Stored at · wisp",
     which are true and are about something else.
   */
+  /* The rail's heading over the character list. A label, not a sentence — the
+     count beside it is the part that moves. */
+  railCast: { she: 'Characters', he: 'Characters', it: 'Characters' },
   talkUsedNothing: {
     she: 'no capabilities used',
     he: 'no capabilities used',
@@ -234,11 +237,6 @@ export const SAYS = {
     she: 'Erased. Everything she had kept about you is gone.',
     he: 'Erased. Everything he had kept about you is gone.',
     it: 'Erased. Everything it had kept about you is gone.',
-  },
-  machineIsFor: {
-    she: 'Who she is is on her own page. This holds only what is true whoever is worn.',
-    he: 'Who he is is on his own page. This holds only what is true whoever is worn.',
-    it: 'What it is is on its own page. This holds only what is true whoever is worn.',
   },
   /*
     "on the left" was true of a layout that no longer exists — the list was in

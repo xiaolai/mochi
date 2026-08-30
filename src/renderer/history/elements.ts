@@ -79,8 +79,6 @@ export const pageMachineEl = need('page-machine', HTMLElement)
 /** The rail's row for the machine, which is not one of her views. */
 export const railMachineEl = need('rail-machine', HTMLButtonElement)
 
-export const machineCheckEl = need('machine-check', HTMLElement)
-
 /** The three numbered views under her name. */
 export const viewsEl = need('views', HTMLElement)
 
