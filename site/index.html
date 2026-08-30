@@ -293,6 +293,46 @@
         background: var(--gold);
       }
 
+      /*
+        The whole thing in four lines, before anything is asked of the reader.
+
+        Everything under it is an expansion: what she is, what she does to your
+        Codex install, whose account pays, and whether she can reach the web.
+        Somebody who reads only this block should not be surprised by anything
+        further down — which is the test a summary either passes or is noise.
+
+        A gold dot rather than a disc bullet: the accent is already the status
+        pill's, so the page gains no new colour, and a marker is a graphic at a
+        3:1 floor rather than text at 4.5.
+      */
+      .brief {
+        list-style: none;
+        margin: 0 0 clamp(2.5rem, 8vw, 4rem);
+        padding: 0;
+        display: grid;
+        gap: 0.85rem;
+        max-width: var(--measure);
+      }
+      .brief li {
+        position: relative;
+        padding-left: 1.5rem;
+        color: var(--ink-2);
+      }
+      .brief li::before {
+        content: '';
+        position: absolute;
+        left: 0.3rem;
+        top: 0.6em;
+        width: 0.4rem;
+        height: 0.4rem;
+        border-radius: 50%;
+        background: var(--gold);
+      }
+      .brief b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
       /* ---- sections --------------------------------------------------- */
 
       section {
@@ -480,6 +520,28 @@
             alt="A small green mochi with two round eyes, blushed cheeks and a small mouth."
           />
         </div>
+
+        <ul class="brief">
+          <li data-zh="<b>常驻桌面的 voice mate。</b>按一个键叫醒她，其余时候她不挡路。">
+            <b>A voice mate who is simply there.</b> She lives on your desktop, wakes on a keypress,
+            and stays out of the way the rest of the time.
+          </li>
+          <li
+            data-zh="<b>不独占 Codex。</b>她的设置是单独一个文件，叠在你的 <code>config.toml</code> 之上 —— 你那份她从不写入。删掉她那个文件，她就什么也没留下。"
+          >
+            <b>She does not take Codex over.</b> Her settings are a separate file layered on top of
+            your <code>config.toml</code>, which she never writes to. Delete her file and nothing of
+            hers is left behind.
+          </li>
+          <li data-zh="<b>只用你已经登录的订阅账户。</b>不走远程 API key —— 那条路很贵。">
+            <b>Your subscription, not an API key.</b> She uses the login your Codex CLI already
+            holds. Metered API access is the expensive way to do this.
+          </li>
+          <li data-zh="<b>需要的时候她能上网搜。</b>问题超出你给她的那个目录时。">
+            <b>She can search the web.</b> For the questions that need more than the folder you gave
+            her.
+          </li>
+        </ul>
 
         <hr class="rule" />
 
