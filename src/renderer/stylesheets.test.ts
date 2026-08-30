@@ -530,7 +530,56 @@ describe('the focus ring is declared', () => {
       is a character class that matches almost anything.
     */
     const sheet = bare(inlineStyleOf('history'))
-    const shows = /(border|background|box-shadow|text-decoration)/
+    /*
+      A WIDTH AND A COLOUR ARE NOT A BORDER, and this check used to think they
+      were.
+
+      `.finding` sets `border: 0`, which sets `border-style: none`. The rule that
+      claimed to replace the ring set `border-bottom-width` and
+      `border-bottom-color` — and a width and a colour on a side with no style
+      paint nothing at all. So the search field opted out of the focus ring, its
+      replacement drew nothing, and this test passed the whole time: it matched
+      the word "border" and asked no more.
+
+      A border only shows if it carries a STYLE — the shorthand with a keyword in
+      it, or an explicit `border-*-style`. Everything else here paints on its own.
+    */
+    const paints = (block: string): boolean => {
+      /*
+        A NO-OP VALUE IS NOT A PAINT, and the first version of this check missed
+        that in the funniest possible way: it matched `outline` against the very
+        `outline: none` it was inspecting, so every opt-out counted as its own
+        replacement.
+      */
+      const NOTHING = new Set(['none', 'transparent', '0', ''])
+      /*
+        The VALUE is read out and compared, rather than asserted past with a
+        lookahead.
+
+        `:\s*(?!none)` looks right and is not: `\s*` backtracks to match zero
+        characters, which puts the lookahead on the space before the value, and
+        "none" does not begin at a space — so `outline: none` satisfied a pattern
+        written to reject it, and every opt-out counted as its own replacement.
+
+        That is the third lookup-that-always-misses in this pass, and the second
+        one inside a check meant to catch the first.
+      */
+      const has = (property: string): boolean => {
+        const found = new RegExp(`(?:^|;|\\s)${property}\\s*:([^;]*)`).exec(block)
+        return found !== null && !NOTHING.has((found[1] ?? '').trim())
+      }
+      return (
+        has('background') ||
+        has('box-shadow') ||
+        has('outline') ||
+        has('text-decoration') ||
+        /border[a-z-]*:\s*[^;]*\b(solid|dashed|dotted|double|groove|ridge|inset|outset)\b/.test(
+          block,
+        ) ||
+        /border[a-z-]*-style\s*:\s*(?!none\b)/.test(block)
+      )
+    }
+
     const rules = [...sheet.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((one) => ({
       selector: (one[1] ?? '').trim(),
       block: one[2] ?? '',
@@ -550,8 +599,7 @@ describe('the focus ring is declared', () => {
       */
       const beside = rules[at + 1]?.block ?? ''
       const shown =
-        shows.test(rule.block) ||
-        (shows.test(beside) && /focus/.test(rules[at + 1]?.selector ?? ''))
+        paints(rule.block) || (paints(beside) && /focus/.test(rules[at + 1]?.selector ?? ''))
       expect(
         shown,
         `${rule.selector} refuses the focus ring; the rule beside it has to show focus instead`,

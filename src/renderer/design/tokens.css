@@ -169,8 +169,11 @@
    * disabled control on it. It holds the same relationship to the dark page
    * that the light half holds to the light one.
    *
-   * `--ink-empty`, for a day in the month strip with nothing on it, is the same
-   * idea and arrives with the strip that draws it.
+   * A day in the month strip with nothing on it wears this too. It was going to
+   * be `--ink-empty`, a second token for the same idea, and the strip arrived
+   * without it while two rules quietly used `--rule-2` instead — a rule colour
+   * doing an ink's job. One name, because "you cannot act on this" is one claim
+   * whether the thing is a button or a date.
    */
   --ink-off: light-dark(#b4b4bb, #5a5a62);
 

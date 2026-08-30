@@ -150,7 +150,17 @@ const ROLES: readonly { readonly property: RegExp; readonly family: RegExp }[] =
   { property: /^font-weight$/, family: /^--w-/ },
   { property: /^letter-spacing$/, family: /^--track/ },
   { property: /^line-height$/, family: /^--leading/ },
-  { property: /border-radius$/, family: /^--r\d|^--r-pill$/ },
+  /*
+    `--r-` , not `--r\d`.
+
+    The ladder was `--r1` through `--r5` and is `--r-part`, `--r-card`,
+    `--r-panel`, `--r-pill` — named for the job rather than numbered, because
+    five names for two values is five names nobody can choose between. The
+    pattern was not renamed with them, so for the whole of the v2 port a
+    hardcoded `14px` radius matched no token in its role and this check quietly
+    covered nothing.
+  */
+  { property: /border-radius$/, family: /^--r-/ },
   {
     property:
       /^(margin|padding|gap|row-gap|column-gap|inset|top|right|bottom|left|width|height|min-width|min-height|border(-\w+)?-width)/,
@@ -349,5 +359,38 @@ describe('the vocabulary that is declared and not yet spoken', () => {
             `with the reason. A scale that grows rungs nobody plays is how --s-px came to be ` +
             `dead while forty hardcoded 1px copies of it sat in the sheet.`,
     ).toBe(true)
+  })
+})
+
+/**
+ * The frame's colour before the document paints, bound to the page's.
+ *
+ * The shelf is created already shown, so `BrowserWindow`'s `backgroundColor` is
+ * what somebody sees for the moment between the window appearing and the first
+ * paint. It held v1's warm paper for the whole of the v2 port — `#f7f6f1` — so
+ * opening the window flashed warm grey in the build whose palette claims neutral
+ * grey with no warmth at all. Nothing could have caught it: it is a colour in
+ * main, and every check in this file reads stylesheets.
+ *
+ * Hardcoded there rather than read, for the reason `accent.ts` gives about its
+ * own copy — main has parsed no stylesheet and can parse none. So this is the
+ * binding, the same shape as the ring's geometry above: the constant stays where
+ * it has to be and the claim that it matches becomes a thing that fails.
+ */
+describe('the window opens in the page’s own colour', () => {
+  const main = readFileSync(fileURLToPath(new URL('../main/window.ts', import.meta.url)), 'utf8')
+
+  it('has both sides to compare', () => {
+    expect(main).toMatch(/backgroundColor:/)
+    expect(declared.get('--paper')).toBeDefined()
+  })
+
+  it('uses the two halves of `--paper`, and no other colour', () => {
+    const paper = declared.get('--paper') ?? ''
+    const halves = /light-dark\(\s*(#[0-9a-f]{6})\s*,\s*(#[0-9a-f]{6})\s*\)/.exec(paper)
+    expect(halves, '--paper is not a light-dark pair').not.toBeNull()
+    const line = /backgroundColor:[^,\n]*/.exec(main)?.[0] ?? ''
+    expect(line).toContain(halves?.[1] ?? 'no-light-half')
+    expect(line).toContain(halves?.[2] ?? 'no-dark-half')
   })
 })

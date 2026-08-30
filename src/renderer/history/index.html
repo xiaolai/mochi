@@ -8,13 +8,16 @@
       /*
         1a, at 1440 x 900: her state, her characters, the one that is open.
 
-        The layout is the artifact's — a state strip that is always first, a row
-        of character cards, then a 1fr/380px body with the open character on the
-        left and an inspector on the right. What fills it is only what this
-        build can actually do: the artifact draws a command palette, an
-        installer and per-character session stats, and drawing chrome for a
-        feature that does not exist is the same failure as offering her a tool
-        she cannot call.
+        The layout is the v2 delivery's — a rail that is always present, a
+        masthead that says whose page this is, and one page at a time under it.
+        Three arrangements, each closing at 1280 by its own arithmetic: her page
+        spends 224 on apparatus, the machine 222 on its nav, the archive 368 on
+        the list.
+
+        What fills it is only what this build can actually do. Both deliveries
+        drew chrome for features that do not exist — a command palette, an
+        installer, per-character session stats — and drawing those is the same
+        failure as offering her a tool she cannot call.
 
         Every value is a token, for the reason `tokens.css` gives: a literal
         here is a place this window and the design can drift without either of
@@ -55,12 +58,15 @@
         panes, the storage group, the margin. The prompts pane is where it
         showed, twenty-seven unmeasured paragraphs down one column.
 
-        SERIF, which is the half that survived even inside a section. `body` is
-        Sora, so every note in this window inherited the operating face — and
-        the scale says of it, in the token file, "never prose". The delivery is
-        unanimous on the other side: every explanatory sentence in it is
-        Literata, 12.5 to 14.5px, `--ink-2`, at a measure of 62 to 66ch. There
-        is no counter-example in the document.
+        The face argument here was v1's and is spent: there were three faces,
+        `body` was Sora, and every note inherited the operating face while the
+        scale said of it "never prose". v2 has two faces and Outfit sets
+        everything you read, so a note is already in the right one and weight
+        carries what a third face used to.
+
+        What survives is the MEASURE, which was never about the face: 62ch and
+        `pretty`, so a line can be read without losing the start of the next and
+        no single word is left alone on the last.
 
         62ch and `pretty` for the same reason they used them: a line somebody
         reads without losing the start of the next one, and no single word left
@@ -124,9 +130,12 @@
 
         It drew in TWO: `--red` outside a section and `--warn-ink` inside one,
         for the same class with the same meaning — so the prompts pane's "over
-        the limit" was red and her sheet's failing-contrast warning was gold.
-        `--red` belongs to the destructive controls (`.btn.bad`, `.btn.arming`);
-        a sentence warning about what you typed is not one of those.
+        the limit" was red and her sheet's failing-contrast warning was gold —
+        two families for one kind of sentence.
+
+        Neither exists now: v2 is monochrome, so a warning is said in words and
+        weight. `--ink-2` rather than `--ink` because it is still a note, and the
+        thing it warns about is beside it.
       */
       .note.bad {
         color: var(--ink-2);
@@ -165,6 +174,10 @@
         replaced. Neither shows in a screenshot as anything but "slightly
         wrong", and both were found by measuring every drawn element against
         the scale rather than by looking.
+
+        The face argument that stood here — "in whatever the system calls mono
+        rather than in DM Mono" — is spent. There are two faces now and this is
+        not a machine shape, so it takes Outfit like everything else you read.
       */
       h3 {
         margin: 0;
@@ -249,12 +262,13 @@
         flex-direction: column;
       }
       /*
-        A row, and the chosen one gets a BAR.
+        A row, and the chosen one gets ONE STEP OF GREY — V4.
 
-        The 21px left padding on an unchosen row is the bar's 3px paid back, so
-        every name starts on the same vertical line whether or not it is chosen
-        — a list whose text shifts sideways as the selection moves is one that
-        reads as two lists.
+        It got a bar, and an unchosen row carried 21px of left padding to pay the
+        bar's 3px back, so names stayed on one vertical line whether or not they
+        were chosen: a list whose text shifts sideways as the selection moves
+        reads as two lists. The padding is symmetric now because there is no bar
+        to pay for, and the fill is the whole state.
       */
       .rail-row {
         display: flex;
@@ -496,6 +510,37 @@
         is — a drawer that rose from the middle would be a dialog wearing a
         different word.
       */
+      /*
+        THE CONFIRMATION, and it had no rule of its own at all.
+
+        It was drawing on the user agent's `<dialog>` defaults — a 2px inset
+        border, white, black text — in a window that declares its own palette,
+        its own radius ladder and its own type. The one irreversible action in
+        the app looked like nothing else in the application.
+
+        It is the second of the three surfaces v2 allows a shadow on, for the
+        rule rather than the look: a modal covers the page it is asking about, so
+        a hairline would put it in the same plane as the thing it is about to
+        destroy. The gate's allow-list names this id.
+      */
+      #sure {
+        max-width: 480px;
+        padding: var(--s5) var(--s6);
+        border: var(--s-px) solid var(--rule);
+        border-radius: var(--r-panel);
+        background: var(--paper);
+        box-shadow: var(--lift-top);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: var(--t-body);
+      }
+
+      /* Dimmed, so the page it covers reads as covered rather than as behind a
+         floating box. */
+      #sure::backdrop {
+        background: light-dark(rgb(10 10 11 / 28%), rgb(0 0 0 / 55%));
+      }
+
       #troubles-drawer {
         position: fixed;
         left: var(--s6);
@@ -669,9 +714,19 @@
         display: flex;
         flex-direction: column;
       }
+      /*
+        THE SAME GUTTER as the column under it.
+
+        It was `--s7` — 40 — where `.reading` is 32, so her name, the numbered
+        views and the search field sat eight pixels right of every paragraph they
+        head, and nine short of the margin's edge. On a layout whose structure is
+        a printed page that reads as a mistake rather than as breathing room, and
+        32 is not arbitrary: it is the gutter the width arithmetic closes on,
+        232 + 32 + 760 + 32 + 224 = 1280.
+      */
       .head {
         flex: none;
-        padding: var(--s6) var(--s7) 0;
+        padding: var(--s6) var(--s6) 0;
       }
       /*
         The subject row: her face, her name, and the search that is about her.
@@ -774,21 +829,29 @@
         background: transparent;
       }
       /*
-        The RULE thickens; no box appears.
+        THE RING GOES ON THE PILL, and until now nothing went anywhere.
 
-        An outline on this field draws a rounded rectangle around the one
-        control on the subject row that is deliberately not a rectangle. It opts
-        out of the ring and the line under it carries focus instead — and the
-        padding pays back the pixel the thicker rule takes, so nothing moves
-        under the pointer.
+        This opted the input out and gave the wrapper `border-bottom-width` and
+        `border-bottom-color` to carry focus instead. `.finding` sets `border: 0`,
+        which sets `border-style: none` — and a width and a colour on a side with
+        no style paint nothing. So keyboard focus on the one field in the masthead
+        was invisible, while `padding-bottom` DID apply and the pill lost height
+        the moment it was reached.
+
+        The comment that stood here argued the case for a ruled line, on a control
+        that v2 draws as a pill with no rule at all. It was v1's answer carried
+        across whole.
+
+        V5's answer fits a pill exactly: the control's own edge at 2px ink, drawn
+        inside the border box so nothing moves. The input keeps opting out, or the
+        pill and the box inside it would both ring.
       */
       #q:focus-visible {
         outline: none;
       }
       .finding:focus-within {
-        border-bottom-width: var(--s0);
-        border-bottom-color: var(--ink);
-        padding-bottom: var(--s1);
+        outline: var(--s0) solid var(--ink);
+        outline-offset: calc(-1 * var(--s0));
       }
       /*
         The three views, as a sub-navigation under her name.
@@ -1039,42 +1102,22 @@
         Its own mark, and none of her colour anywhere on the page.
       */
       /*
-        Rule 6, the third clause: "It gets its own page, its own mark, and NONE
-        OF HER COLOUR."
+        `#page-machine` REDEFINED her eight variables here, and the block is gone.
 
-        Two of the three were built and the third was not. Her hue reached
-        everything inside this page that asks for it — the Save button of all
-        twenty-seven prompt editors drew in `--her-wash` inside a `--her`
-        border, and every field in every group took her colour on focus. Wearing
-        a different character changed the look of a page whose whole subject is
-        that it is not about a character.
+        Rule 6 — "the machine is not her. It gets its own page, its own mark, and
+        none of her colour" — was held by overriding `--her`, `--her-hover`,
+        `--her-ink`, `--her-wash`, `--her-deep`, `--her-deep-ink`, `--her-veil`
+        and `--ink-brand` for this subtree, so every control inside it drew in ink
+        without needing a machine variant of each rule. That was the right shape
+        for a window whose chrome was washed in her hue.
 
-        Check the delivery's own machine frame and there is not one hit: its
-        buttons are `Check again`, `Choose…`, `When needed ⌄`, all outlined in
-        `--rule-2`. The only `--her` in that image is `worn now` in the rail,
-        which is always present and IS about her.
-
-        Done by REDEFINING her variables for this subtree rather than by writing
-        a machine variant of each control. There are eight of them and they are
-        used by rules all over the sheet; a variant per control is eight rules
-        that have to be remembered every time a ninth control is added here.
-        This is one rule that cannot be forgotten, and `rule-6` in the rendered
-        gate is what holds it.
-
-        The emphasis SURVIVES — Save is still filled, still bordered, still
-        semibold. It is ink now instead of her green, which is what "the machine
-        is not her" leaves a commit button looking like.
+        v2 spends no hue on chrome anywhere, so the rule is true of every page
+        rather than arranged for this one, and four of those eight names are not
+        tokens any more — the block was keeping `--ink-brand` alive by
+        declaring it. A rule that holds by construction does not also need a
+        selector somebody has to remember, and `rule-6` in the rendered gate is
+        what says so.
       */
-      #page-machine {
-        --her: var(--ink-2);
-        --her-hover: var(--ink);
-        --her-ink: var(--paper);
-        --her-wash: var(--paper-2);
-        --her-deep: var(--ink);
-        --her-deep-ink: var(--paper);
-        --her-veil: transparent;
-        --ink-brand: var(--ink);
-      }
       .machine-subject {
         display: flex;
         align-items: center;
@@ -1258,7 +1301,7 @@
       }
       .month-one[aria-current='true'] {
         background: var(--chosen-2);
-        border-color: var(--her);
+        border-color: var(--ink);
         color: var(--ink);
         font-weight: var(--w-semibold);
       }
@@ -1273,8 +1316,15 @@
       .daystrip .step:hover:not(:disabled) {
         color: var(--ink);
       }
+      /*
+        `--ink-off`, not `--rule-2`. A rule colour used as ink is the drift the
+        two-name convention exists to prevent — and this one already has a name
+        that means exactly "cannot be pressed now", deliberately under the
+        contrast floor, with the gate exempting anything that also says
+        `disabled`. Which this does.
+      */
       .daystrip .step:disabled {
-        color: var(--rule-2);
+        color: var(--ink-off);
       }
       .daystrip .step svg {
         fill: none;
@@ -1315,7 +1365,7 @@
         cursor: pointer;
       }
       .day:disabled {
-        color: var(--rule-2);
+        color: var(--ink-off);
         cursor: default;
       }
       .day-n {
@@ -1332,13 +1382,28 @@
         font-weight: var(--w-medium);
         color: var(--ink);
       }
-      /* The dot is the whole indication, so a day with nothing has none — an
-         empty circle would be a mark that means "no mark". */
+      /*
+        The dot is the whole indication, so a day with nothing has none — an
+        empty circle would be a mark that means "no mark".
+
+        INK, not her colour, and the difference was a contrast failure the gate
+        could not see. `--her` at 0.55 composites to about `#95b2a2` on white —
+        roughly 2.2:1, under the 3.0 a mark needs — and the sweep only measures
+        elements with a text child, so a 4px `<span>` with nothing in it is never
+        looked at. The fallback said little: a day with conversations moves its
+        numeral from `--ink-3` to `--ink-2`, 4.63:1 to 4.94:1, which nobody can
+        see. So the only legible carrier of "something happened here" was the one
+        mark below the floor.
+
+        Ink at 0.55 is about 4.5:1, and the current day still separates itself by
+        going to full strength and 1.4x — a difference of weight rather than hue,
+        which is the whole of V4 applied to a mark.
+      */
       .day .dot {
         width: var(--s1);
         height: var(--s1);
         border-radius: var(--r-pill);
-        background: var(--her);
+        background: var(--ink);
         opacity: 0.55;
       }
       .day[aria-current='true'] .day-n {
@@ -1362,7 +1427,7 @@
         color: var(--ink-3);
         max-width: none;
       }
-      /* ---- machine: the six groups, as they were ---------------------------- */
+      /* ---- machine: the seven groups ---------------------------------------- */
       /*
         `.machine` used to define this page's grid, and it was the SIXTH class
         collision in this stylesheet: the delivered frame gives every page a
@@ -1533,9 +1598,11 @@
         fine, and the check has not finished — for a check that genuinely has a
         not-finished-yet state.
 
-        `--warn-*` rather than `--red`: an unusable Codex is a machine somebody
-        has to go and fix, not a fault in this application, and the same family
-        marks the problems chip in the drawer for the same reason.
+        The colour argument here is spent — there is no `--warn-*` and no
+        `--red`. What it was protecting survives in the shape: an unusable Codex
+        is a machine somebody has to go and fix rather than a fault in this
+        application, so the card is outlined rather than alarmed, and only when
+        the state is actually KNOWN to be unusable. See `rules/readiness.ts`.
       */
       .codex {
         display: flex;
@@ -1577,17 +1644,18 @@
         flex: none;
       }
       /*
-        Green when it is working, and NOT red when it is not.
+        THREE SHAPES, because there are three answers — and no colour at all.
 
-        `--ok` is the fourth status family and the only one that means "this is
-        fine" — see `tokens.css` for why it is fixed rather than hers, and for
-        the measurements. Unlit is `--warn-line`, not `--red`: an unusable Codex
-        is a machine somebody has to go and fix, not a fault in this
-        application, and red would make an errand look like a crash.
+        It was green when working and a neutral grey when not, on the argument
+        that an unusable Codex is an errand rather than a crash so red would
+        overstate it. That argument survives; the colours do not, because v2
+        spends no hue on chrome. What replaced them says MORE: filled when she
+        can look things up, hollow when she cannot, and a dashed ring when
+        nobody knows — the third being the state a two-colour light had no way
+        to draw and therefore drew as "cannot".
 
-        A ring around the lit one only. An 8px dot of colour on paper reads as a
-        bullet; the glow is what makes it a light, and it should only be there
-        when there is something to be pleased about.
+        A ring around the lit one only. An 8px dot on paper reads as a bullet;
+        the glow is what makes it a light.
       */
       .light {
         width: var(--s3);
@@ -1671,7 +1739,7 @@
         border-radius: var(--r-pill);
         background: linear-gradient(
           to right,
-          var(--her) 0 var(--along),
+          var(--ink) 0 var(--along),
           var(--paper-3) var(--along) 100%
         );
         cursor: pointer;
@@ -1681,16 +1749,16 @@
         width: var(--s4);
         height: var(--s4);
         border-radius: var(--r-pill);
-        background: var(--her);
+        background: var(--ink);
         /*
           A ring in the page's own colour, so the thumb reads as sitting ON the
           bar rather than as a bulge in it — and so it is still findable where
-          it stops, at either end, when the fill behind it is the same hue.
+          it stops, at either end, when the fill behind it is the same tone.
         */
         border: var(--s0) solid var(--paper);
       }
       .size-slider:hover::-webkit-slider-thumb {
-        background: var(--ink);
+        background: var(--ink-2);
       }
       .size-reading {
         color: var(--ink-2);
@@ -1833,8 +1901,9 @@
         tell whether it is capturing.
       */
       .btn.key.listening {
-        border-color: var(--her);
-        color: var(--her);
+        border-color: var(--ink);
+        color: var(--ink);
+        font-weight: var(--w-medium);
       }
       /* ---- the day's conversations, and the one being read ------------------
         A list of what was said on the chosen day, above the transcript. Rows
@@ -1888,18 +1957,23 @@
         background: var(--paper-2);
       }
       /*
-        Chosen is a BAR and a word, never a fill alone: her hue behind a chosen
-        row measures 1.01:1 against the surface on some characters, and a fill
-        nobody can see is not a state.
+        Chosen is a FILL, and that became safe when the hue left.
+
+        It was a bar and a word, never a fill alone, because her hue behind a
+        chosen row measured 1.01:1 against the surface on some characters and a
+        fill nobody can see is not a state. `--chosen-2` is a step of grey — one
+        value, not a computed hue — so the objection is gone with the thing it
+        objected to.
       */
       /*
         On the chosen row, the facts take `--ink-2`.
 
-        `--ink-3` on her wash measures 4.04:1 in dark — under the floor — and it
-        only shows on the row that is chosen, which is the one row somebody is
-        looking at. Her wash is computed from the worn character's hue at
-        runtime, so the built-in's green passing says nothing about the next
-        character's.
+        The reason has changed and the rule has not. It was that `--ink-3` on HER
+        WASH measured 4.04:1 in dark, and the wash was computed from the worn
+        character's hue — so the built-in's green passing said nothing about the
+        next character's. There is no wash now; the ground is `--chosen-2`, where
+        `--ink-3` measures 5.00:1 and would pass. `--ink-2` stays because a
+        chosen row is the one row somebody is reading, and the step is free.
       */
       .entry[aria-current='true'] .fact,
       .entry[aria-current='true'] .when {
@@ -1930,7 +2004,7 @@
         color: var(--ink-3);
       }
       .entry[data-picked='true'] .tick {
-        color: var(--her);
+        color: var(--ink);
       }
       /* Only while a selection is being made, so the column of boxes is not a
          permanent invitation to delete something. */
@@ -2068,16 +2142,19 @@
         color: var(--ink);
       }
       /*
-        `--ink-brand` for the WORD, `--her` for the edge.
+        INK for the word, one step of grey for the ground.
 
-        The delivery writes `color: var(--her)` here and its `--her` is deep
-        enough to be a text colour. Ours is not: `accent.ts` computes `--her`
-        from the worn character's hue as a FILL, and the check for it —
-        `AA_BODY` — is applied to `--ink-brand`, which is the same hue taken
-        deep enough to carry text. A character whose colour resolves to a light
-        mint drew "ballad" at 1.72:1 against her own wash, and only
-        `verify:rendered` saw it: the built-in's green passes, so nothing was
-        wrong until a character was made.
+        This is the site that taught the window the lesson v2 then applied
+        everywhere. The delivery wrote `color: var(--her)` here, and its `--her`
+        is deep enough to carry text where ours was not: `accent.ts` computes it
+        from the worn character's hue as a FILL, so a character whose colour
+        resolved to a light mint drew "ballad" at 1.72:1 against her own wash.
+        Only `verify:rendered` saw it — the built-in's green passes, so nothing
+        was wrong until somebody made a character.
+
+        The fix then was a second token deep enough for text. The fix now is that
+        chosen is a step of grey and the word is ink, so there is no hue to be
+        deep enough and nothing computed at runtime for a check to have to chase.
       */
       .switchers button[aria-current='true'] {
         background: var(--chosen-2);
@@ -2121,7 +2198,7 @@
       */
       .theme[aria-current='true'] {
         background: var(--chosen-2);
-        border-color: var(--her);
+        border-color: var(--ink);
       }
       /*
         THE SAME SHAPE AS THE PRONOUN, because it is the same question.
@@ -2175,7 +2252,7 @@
       }
       .pills button[aria-current='true'] {
         background: var(--chosen-2);
-        /* The word takes `--ink-brand`; see the switchers above for why. */
+        /* The word takes `--ink`; see the switchers above for why. */
         color: var(--ink);
         font-weight: var(--w-semibold);
       }
@@ -2238,7 +2315,7 @@
 
         NO NEGATIVE MARGIN any more.
 
-        It cancelled the padding of the 236px sidebar this panel used to live
+        It cancelled the padding of the 236px sidebar this panel used to live in
         in, so the text ran to that column's edges. The panel is in the reading
         column now — her instructions are the thing itself, not apparatus — and
         the same margin pulled the rule above it 30px left of everything else on
@@ -2302,7 +2379,18 @@
           where the words begin.
         */
         padding: var(--s4) var(--s6);
+        /*
+          A STYLE, not just a width — the same defect as the search field, and
+          this one hid a hairline rather than a focus ring.
+
+          `textarea` in `tokens.css` sets `border: 0`, which is
+          `border-style: none`. `border-width: 1px 0 0` over that paints nothing,
+          so the top edge this box's own comment describes as the thing focus
+          darkens has never been drawn.
+        */
+        border-style: solid none none;
         border-width: var(--s-px) 0 0;
+        border-color: var(--rule);
         border-radius: 0;
         resize: none;
       }
@@ -2331,6 +2419,13 @@
         outline: none;
       }
       .wake-edit:focus {
+        /*
+          A STYLE with the colour. The declaration above it sets one now, so this
+          would paint either way — it is repeated because a focus rule that names
+          only a colour is what shipped, and it painted nothing for as long as
+          the base had no style. Stated where the failure was.
+        */
+        border-top-style: solid;
         border-top-color: var(--ink);
       }
       /*
@@ -2969,11 +3064,19 @@
         color: var(--ink);
       }
       /*
-        Her side is HER colour, which is the design's second semantic rule doing
-        real work rather than decorating. `--ink-brand` on `--her-wash` is the
-        pairing `contrastFailures` already sweeps for every persona and
-        `accent.test.ts` sweeps for all eight built-in themes -- so a character
-        somebody else wrote cannot make her own words unreadable here.
+        WHICH EDGE, not which colour.
+
+        Her side was her hue on her wash, which was the v1 design's second
+        semantic rule doing real work — and `contrastFailures` swept that exact
+        pairing for every persona so a character somebody else wrote could not
+        make her own words unreadable.
+
+        v2 takes the hue out and leaves the rule standing on the thing that
+        always carried it: in a conversation, what says who is speaking is which
+        side the bubble is on. The pairing is gone from `contrastFailures` with
+        the wash it measured, and the sweep it was protecting against — a
+        stranger's hue behind her own words — cannot happen, because her words
+        are on a grey nobody computes.
       */
       .bubble {
         position: relative;
@@ -3003,10 +3106,10 @@
         can be hovered.
 
         `background: inherit` takes whichever surface its own bubble is painted
-        with — `--her-wash` on her side, `--paper-2` on yours — so the part that
-        overlaps reads as the bubble rather than as a hole in it. One
-        declaration rather than a rule per side, and it cannot drift when either
-        colour changes.
+        with, so the part that overlaps reads as the bubble rather than as a hole
+        in it. One declaration rather than a rule per side, and it cannot drift
+        when either colour changes — which is what let the two sides move from
+        her wash and `--paper-2` to two greys without touching this.
       */
       .bubble .copy {
         position: absolute;
@@ -3400,7 +3503,7 @@
                   The margin is "where a thing is stored, when it was last used,
                   whose recommendation it is. Never the thing itself" — and the
                   assembled instruction is the thing itself, her words verbatim.
-                  It also does not fit: the margin is 236px and this is prose.
+                  It also does not fit: the margin is 224px and this is prose.
                 -->
                 <div id="panel-wake" hidden></div>
               </div>

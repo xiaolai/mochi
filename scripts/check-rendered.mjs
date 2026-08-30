@@ -464,7 +464,24 @@ async function audit(page) {
     `span.light` stays for its own reason: the ring around a lit status light is
     what makes an 8px dot read as a light rather than as a bullet.
   */
-  const ALLOWED = ['span.light', 'dialog#sure', 'div#troubles-drawer', 'div#month-pick']
+  /*
+    NAMED AS THE SWEEP NAMES THEM, which is tag + `#id` + `.` + FIRST CLASS.
+
+    `div#month-pick` could never have matched: the element is
+    `<div class="month-pick" id="month-pick">`, so the sweep calls it
+    `div#month-pick.month-pick` and the entry silently exempted nothing. Harmless
+    while that rule drew no shadow, and a finding somebody would have read as
+    noise the day it did.
+
+    `dialog#sure` and `div#troubles-drawer` match because those two happen to
+    carry no class — which is luck rather than design, and is why this comment
+    exists rather than three tidier names.
+
+    `span.light` is the one that is not a top-layer surface. A ring around a lit
+    status light is what makes an 8px dot read as a light rather than a bullet;
+    it lifts nothing.
+  */
+  const ALLOWED = ['span.light', 'dialog#sure', 'div#troubles-drawer', 'div#month-pick.month-pick']
 
   console.log('\n  ─── the sweep ───────────────────────────────────────────────')
   for (const theme of ['light', 'dark']) {

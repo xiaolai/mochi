@@ -661,7 +661,19 @@ export function showHistoryWindow(): BrowserWindow {
     minHeight: 680,
     // Shown from the start — see `bringForward` for why waiting for the first
     // paint never returns here. The colour is what `ready-to-show` was for.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1d1a' : '#f7f6f1',
+    /*
+      `--paper`, in both schemes — and these were the last hardcoded colours in
+      main, still holding v1's warm paper.
+
+      The window is created already shown, so this is the frame's colour before
+      the document paints. It flashed warm grey on every open, in the build whose
+      palette claims neutral grey with no warmth at all.
+
+      Hardcoded rather than read, for the reason `accent.ts` gives about its own
+      copy: this runs in main, where no stylesheet has been parsed and none can
+      be. `design-values.test.ts` binds them to `--paper` so the two cannot drift.
+    */
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#08080a' : '#ffffff',
     /*
       Named for the application, not for one of its three places.
 
