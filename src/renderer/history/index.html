@@ -444,25 +444,33 @@
         gap: var(--s2);
         padding: 14px var(--s2) 0;
       }
-      .rail-word {
+      /*
+        THE PADDING, and nothing else — it is `button.btn` for everything else.
+
+        `Rail.dc.html` draws New and Duplicate at `12.5/500, #fff, 1px #d4d4d8,
+        pill`, which is `button.btn` exactly, on `padding: 6px 14px` — tighter
+        than the button's 8/16 because the rail is 207px wide.
+
+        This class carried the whole box, so it was a fifth vocabulary for one
+        control, and it kept a hover written for the underline these used to be:
+        `border-bottom-color`, which on a fully bordered pill darkens one side
+        and reads as a bottom border arriving under the word. The window has one
+        hover for an outlined button and it darkens the whole edge.
+
+        `button.btn.rail-word`, at (0,2,1), and the specificity is load-bearing:
+        `.rail-word` alone is (0,1,0) and loses to `button.btn` at (0,1,1).
+        Matching at (0,1,1) does not help either, and that is the part worth
+        knowing — THE BUILD INVERTS THE SHEET ORDER. In this file the link to
+        `tokens.css` sits above the inline block, so a tie reads as "the block
+        wins"; in `out/` the block is inlined FIRST and the extracted stylesheet
+        follows it, so `tokens.css` wins every tie in the app while the source
+        says the opposite. Anything here overriding a token rule has to
+        out-specify it, never out-order it.
+      */
+      button.btn.rail-word {
         min-height: 0;
         min-width: 0;
         padding: 6px 14px;
-        border: var(--s-px) solid var(--rule-2);
-        border-radius: var(--r-pill);
-        background: var(--paper);
-        font-family: var(--sans);
-        font-size: var(--t-cap);
-        font-weight: var(--w-medium);
-        color: var(--ink);
-      }
-      .rail-word:hover:not(:disabled) {
-        color: var(--ink);
-        border-bottom-color: var(--ink-3);
-      }
-      .rail-word:disabled {
-        color: var(--ink-3);
-        border-bottom-color: var(--rule);
       }
       .rail-foot {
         margin-top: auto;

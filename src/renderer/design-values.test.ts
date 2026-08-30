@@ -79,9 +79,20 @@ function withoutFontFaces(css: string): string {
   return css.replace(/@font-face\s*\{[^}]*\}/g, '')
 }
 
+/*
+  The inline sheet, taken by MATCHING THE TAG rather than by splitting on its
+  text.
+
+  `html.split('<style>')[1]` is everything between the first two occurrences of
+  that string — and the second one can be prose. A comment in `index.html`
+  mentioning the style block truncated the sheet at that comment, so every token
+  used below it read as unused and three of them were reported dead while being
+  drawn. The failure looked like a palette problem and was a parser problem.
+*/
 function styleOf(window: string): string {
   const html = read(`./${window}/index.html`)
-  return withoutComments(html.split('<style>')[1]?.split('</style>')[0] ?? '')
+  const found = /<style>([\s\S]*?)<\/style>/.exec(html)
+  return withoutComments(found?.[1] ?? '')
 }
 
 const SHEETS: readonly (readonly [string, string])[] = [

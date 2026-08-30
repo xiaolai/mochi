@@ -60,14 +60,21 @@ export function castActions(view: ShelfView, handlers: ShelfHandlers): readonly 
 
   const word = (label: string, act: () => void): HTMLButtonElement => {
     /*
-      `rail-word`, not `btn`.
+      `btn rail-word` — the window's button, with the rail's tighter padding.
 
-      `.btn` is a bordered, filled control with a 3px radius, and these are two
-      underlined words in a column of names. Wearing the same class made one
-      name mean two treatments, which is the thing `--controls` reports and the
-      thing this stylesheet has been bitten by seven times under other names.
+      The comment here argued for a separate class on the grounds that "`.btn` is
+      a bordered, filled control and these are two underlined words". Both halves
+      stopped being true: `Rail.dc.html` draws them as `12.5/500, #fff, 1px
+      #d4d4d8, pill, padding 6px 14px`, which IS `button.btn` at every value but
+      the padding, and the underline went when they became pills.
+
+      What was left was a fifth vocabulary for one control. It kept the class's
+      own hover — `border-bottom-color: var(--ink-3)` — which was right for an
+      underline and, on a fully bordered pill, darkens one side and reads as a
+      bottom border appearing under the word. `rail-word` is now the padding and
+      nothing else.
     */
-    const button = element('button', 'rail-word', label)
+    const button = element('button', 'btn rail-word', label)
     button.type = 'button'
     button.addEventListener('click', () => {
       once(act)
