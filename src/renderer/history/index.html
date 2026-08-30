@@ -950,9 +950,12 @@
       }
       /* The outer ring alone, like every other field — the pill is a filled well
          and an ink edge on its own boundary is that boundary drawn twice. */
+      /* The outer ring alone and ON the pill's edge — it is a filled well like
+         every other field, and an offset ring leaves a band of page between the
+         fill and the thing meant to be around it. */
       .finding:focus-within {
         outline: var(--s-px) solid var(--ink);
-        outline-offset: 3px;
+        outline-offset: 0;
       }
       /*
         The three views, as a sub-navigation under her name.

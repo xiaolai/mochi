@@ -1343,6 +1343,68 @@ async function checks(page, where = '') {
     else ok('strip-holds', `the days hold still across ${JSON.stringify(held.names)}`)
   })
 
+  await step('focus-hugs', async () => {
+    /* --- a focused field's ring sits on the field ------------------------- */
+    /*
+      Two things, measured on the computed style rather than argued from the
+      rule, because both were introduced by rules that read correctly.
+
+      ONE RING. The sandwich's innermost layer is an ink edge at the control's
+      own boundary, which is what makes a bare button findable — a button has no
+      edge of its own. A field is a filled well with `border: 0`, so that layer
+      draws the well's outline twice with a hairline of paper trapped between.
+
+      AND NO OFFSET. The 3px gap is what separates the sandwich's inner edge from
+      its outer ring; with the inner edge gone it is a band of page between the
+      fill and the ring around it, and a ring that does not touch what it is
+      around reads as a second object beside it.
+
+      Every field, not one: the fields on her page, the machine's, and the search
+      pill are three different rules and the defect was in all of them.
+    */
+    const rings = []
+    for (const place of ['cast', 'archive', 'machine']) {
+      await goTo(page, place)
+      const found = await page.run(`(() => {
+        const out = [];
+        for (const f of document.querySelectorAll('input[type=text], input[type=search], select, textarea')) {
+          if (f.getClientRects().length === 0 || f.disabled) continue;
+          f.focus();
+          const own = getComputedStyle(f);
+          const box = f.closest('.finding');
+          const s = box === null ? own : getComputedStyle(box);
+          out.push({
+            id: f.id || f.className || f.tagName.toLowerCase(),
+            offset: parseFloat(s.outlineOffset) || 0,
+            width: parseFloat(s.outlineWidth) || 0,
+            layered: s.boxShadow !== 'none',
+          });
+          f.blur();
+        }
+        return out;
+      })()`)
+      rings.push(...found)
+    }
+    const gapped = rings.filter((one) => one.offset !== 0)
+    const layered = rings.filter((one) => one.layered)
+    const ringless = rings.filter((one) => one.width === 0)
+    if (rings.length < 4)
+      bad(
+        'focus-hugs',
+        `only ${String(rings.length)} fields were reachable, so little was compared`,
+      )
+    else if (ringless.length > 0)
+      bad('focus-hugs', 'a field shows no ring at all: ' + JSON.stringify(ringless))
+    else if (layered.length > 0)
+      bad(
+        'focus-hugs',
+        'a field draws its own edge as well as the ring: ' + JSON.stringify(layered),
+      )
+    else if (gapped.length > 0)
+      bad('focus-hugs', 'a ring stands off its field: ' + JSON.stringify(gapped))
+    else ok('focus-hugs', `all ${String(rings.length)} fields ring their own edge, once`)
+  })
+
   await step('field-widths', async () => {
     /* --- one width for every single-line field ----------------------------- */
     /*

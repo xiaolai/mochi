@@ -802,6 +802,20 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   box-shadow: none;
+  /*
+    ON the field's edge, not 3px off it.
+    
+    The offset is what the sandwich needs — it is the gap between the inner edge
+    and the outer ring, and with the inner edge gone it is a 3px band of page
+    between the well's fill and the ring around it. A ring that does not touch
+    the thing it is around reads as a second object near it.
+    
+    Zero, not negative: the field has `border: 0`, so its border edge is exactly
+    where the fill ends, and an outline at 0 sits against that fill without
+    covering any of it. Drawing it inside would eat a pixel of a 14px radius and
+    the corner would flatten.
+  */
+  outline-offset: 0;
 }
 
 /*
@@ -809,8 +823,9 @@ textarea:focus-visible {
  * strip is not a surprise.
  *
  * The sandwich paints 4px OUTSIDE the border box: 1px edge, 2px of paper, 1px
- * ring. A field paints 4px too — the outline sits at the same offset — it just
- * has nothing inside it. Every container that holds a focusable control has to have that much
+ * ring. A FIELD paints 1px: one ring, on its own edge, with no offset and no
+ * layer inside it — so the containers that were tight for a field are no longer
+ * tight at all, and only the bare controls need the room. Every container that holds a focusable control has to have that much
  * slack or the ring lands on a neighbour. `.groups` has 12px of padding and
  * `.reading` has 32, so both are clear. The day strip is not: 25px cells at a
  * 1px gap means the paper gap of a focused day covers part of the two days
