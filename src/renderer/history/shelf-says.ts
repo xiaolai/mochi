@@ -39,10 +39,17 @@ export const SAYS = {
     he: 'How he is told to read it',
     it: 'How it is told to read it',
   },
+  /*
+    What the fence SAYS, not where it is kept.
+
+    "under 'What she is told'" is a location, and a location is not the fact
+    somebody on this screen needs — A2b puts the fence's own words here, because
+    the boundary is the point and where it is stored is a detail of it.
+  */
   fenceWhere: {
-    she: 'under “What she is told”',
-    he: 'under “What he is told”',
-    it: 'under “What it is told”',
+    she: 'data, not instructions',
+    he: 'data, not instructions',
+    it: 'data, not instructions',
   },
   fenceWhy: {
     she:
@@ -173,8 +180,45 @@ export const SAYS = {
     he: 'his manner, sent as the session instructions',
     it: 'its manner, sent as the session instructions',
   },
-  remembers: { she: 'What she remembers', he: 'What he remembers', it: 'What it remembers' },
-  wroteThese: { she: 'she wrote these', he: 'he wrote these', it: 'it wrote these' },
+  /*
+    A2b's heading. "What she remembers" is a claim about her; this is a claim
+    about a FILE, and the difference is the screen's whole subject — what is on
+    it is the lines she wrote down, not everything she has retained.
+  */
+  remembers: {
+    she: 'What she has written down about you',
+    he: 'What he has written down about you',
+    it: 'What it has written down about you',
+  },
+  /*
+    Why the lines cannot be edited, said where somebody would first try.
+
+    The section had "she wrote these" as its only note — three words that state
+    the authorship and answer none of the questions it raises. The unrewritable
+    part is the one people push on, and the reason is worth one sentence: a note
+    you rewrote would no longer be what she remembers.
+  */
+  wroteThese: {
+    she:
+      'She writes these herself, when you ask her to remember something. You can read all of ' +
+      'it, and you can take it away — but you cannot edit it, because a note you rewrote would ' +
+      'no longer be what she remembers.',
+    he:
+      'He writes these himself, when you ask him to remember something. You can read all of ' +
+      'it, and you can take it away — but you cannot edit it, because a note you rewrote would ' +
+      'no longer be what he remembers.',
+    it:
+      'It writes these itself, when you ask it to remember something. You can read all of ' +
+      'it, and you can take it away — but you cannot edit it, because a note you rewrote would ' +
+      'no longer be what it remembers.',
+  },
+  /* Beside the erase control, saying what pressing it costs before it is
+     pressed. D2's sheet is the thing this describes. */
+  eraseAsks: {
+    she: 'asks once, and offers a copy first',
+    he: 'asks once, and offers a copy first',
+    it: 'asks once, and offers a copy first',
+  },
   /* The destructive control on her notes. Named, because "Erase everything" on
      its own does not say everything of WHAT — and the sheet it opens says the
      rest. */

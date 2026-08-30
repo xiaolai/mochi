@@ -623,6 +623,26 @@
         line — which is what the delivery draws and what makes them read as a
         head rather than as a sidebar that lost its side.
       */
+      /*
+        A3's head for a transcript: the clock, then everything else as one mono
+        phrase beside it. It was three stacked apparatus blocks 245px tall, at
+        the top of the reading column, above the first thing anybody said.
+      */
+      .talk-head {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s3);
+      }
+      .talk-when {
+        font-size: var(--t-h3);
+        font-weight: var(--w-medium);
+        color: var(--ink);
+      }
+      .talk-facts-line {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-3);
+      }
       .talk-facts {
         display: flex;
         flex-wrap: wrap;
@@ -2032,8 +2052,11 @@
       .entry .said-of {
         overflow-wrap: anywhere;
       }
+      /* `--paper-hover`, which is the sheet's one hover surface and had lost its
+         only reader. A list row picking `--paper-2` by hand is how a window ends
+         up with two hover greys that agree until one of them is changed. */
       .entry:hover {
-        background: var(--paper-2);
+        background: var(--paper-hover);
       }
       /*
         Chosen is a FILL, and that became safe when the hue left.
@@ -2860,7 +2883,17 @@
         align-items: baseline;
         gap: var(--s3);
       }
-      .section .hint {
+      /*
+        Unscoped, because it is built in two files now.
+
+        `.section .hint` reached the heading's own fact and nothing else — a hint
+        beside a control inside a section, which is where A2b puts "asks once,
+        and offers a copy first", inherited the body face at the body size. A
+        class whose only rule names an ancestor is styled in the one place its
+        author was looking at, which is this file's fourth rule and its most
+        frequent defect.
+      */
+      .hint {
         font-family: var(--mono);
         font-size: var(--t-data);
         color: var(--ink-3);
@@ -3376,18 +3409,6 @@
       .run.you .said {
         align-items: flex-end;
       }
-      .who {
-        font-family: var(--sans);
-        font-size: var(--t-label);
-        font-weight: var(--w-semibold);
-        letter-spacing: var(--track);
-        text-transform: uppercase;
-        color: var(--ink-3);
-        margin-bottom: var(--s0);
-      }
-      .run.her .who {
-        color: var(--ink);
-      }
       /*
         WHICH EDGE, not which colour.
 
@@ -3415,89 +3436,81 @@
         user-select: text;
       }
       /*
-        Take this turn. ON the bubble's top-right corner, on hover and on focus.
+        HER TURN IS TEXT, at the size A3 sets it: 15px, full ink, no surface.
 
-        Top, because that is where people already look for it. It was moved to
-        the bottom for a measured reason — the last line of a wrapped bubble has
-        room to spare and the first line is full by definition, so the bottom
-        corner covers 0px of text against 2px at the top — and 2px is a sliver
-        inside the corner radius, which is a smaller cost than a control sitting
-        where the hand does not expect it.
-
-        Straddling the corner, not inside it. Fully inside, a 21px button covers
-        11px of the line beside it, which on "Bye." — a 56px bubble holding 30px
-        of text — masks the last character. The alternative was reserving the
-        button's width as padding on every bubble forever so that one of them
-        can be hovered.
-
-        `background: inherit` takes whichever surface its own bubble is painted
-        with, so the part that overlaps reads as the bubble rather than as a hole
-        in it. One declaration rather than a rule per side, and it cannot drift
-        when either colour changes — which is what let the two sides move from
-        her wash and `--paper-2` to two greys without touching this.
+        She had a bubble in `--chosen-2` and you had one in `--paper-2`, which is
+        a chat client's convention rather than this window's. A3 gives the bubble
+        to you alone — her face is what marks her side — so the shape means one
+        thing instead of being spent on both sides to say what the face already
+        said.
       */
-      .bubble .copy {
-        position: absolute;
-        top: -7px;
-        right: -7px;
+      .line {
+        font-size: var(--t-body);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        user-select: text;
+      }
+      /*
+        WHEN IT WAS SAID, AND HOW TO TAKE IT — one mono line under the turn.
+
+        The copy control was a 21px icon straddling the bubble's top-right
+        corner, so it overlapped the first line of the text it acts on and said
+        what it did only in a tooltip. On its own line it covers nothing.
+
+        `visibility`, not `display`: the row is laid out whether or not the word
+        is in it, so hovering a turn does not move the turn under the pointer.
+      */
+      .turn-facts {
         display: flex;
-        padding: var(--s1);
-        border: 0;
-        /*
-          Round, with an edge and a lift. Square-cornered and flat it read as a
-          bump ON the bubble's own outline rather than as something resting on
-          it — the shape has to say "separate object" precisely because it is
-          painted in the bubble's own colour.
-        */
-        border-radius: var(--r-pill);
-        background: inherit;
-        /*
-          One shadow, not two. This was `var(--lift-0), 0 0 0 1px var(--rule)`,
-          and `--lift-0` is `none` — which is legal ONLY as the whole value, so
-          the entire declaration was invalid and dropped. The ring the comment
-          above argues for has never been drawn in this window.
-        */
-        box-shadow: 0 0 0 1px var(--rule);
+        align-items: center;
+        gap: var(--s2);
+        font-family: var(--mono);
+        font-size: var(--t-data-2);
         color: var(--ink-3);
+      }
+      .run.you .turn-facts {
+        flex-direction: row-reverse;
+      }
+      /* The stamp itself. Its own class so the hover rule above can name the
+         word beside it without also naming this. */
+      .turn-at {
+        font-variant-numeric: tabular-nums;
+      }
+      .turn-facts .copy {
+        padding: 0;
+        border: 0;
+        background: none;
+        font-family: var(--mono);
+        font-size: var(--t-data-2);
+        color: var(--ink);
         cursor: default;
-        opacity: 0;
-        /* Untouchable while invisible, so it cannot take a click meant for the
-           words underneath it. */
-        pointer-events: none;
+        visibility: hidden;
       }
-      .bubble:hover .copy,
-      .bubble:focus-within .copy {
-        opacity: 1;
-        pointer-events: auto;
+      .run:hover .turn-facts .copy,
+      .turn-facts .copy:focus-visible {
+        visibility: visible;
       }
-      .bubble .copy:hover {
-        background: var(--paper-hover);
-        color: var(--ink);
-      }
-      .bubble .copy svg {
-        display: block;
-        fill: none;
-        stroke: currentColor;
-        stroke-width: 1.4;
-        stroke-linejoin: round;
-      }
-      .run.her .bubble {
-        background: var(--chosen-2);
-        border-color: transparent;
-        color: var(--ink);
+      .turn-facts .copy:hover {
+        text-decoration: underline;
       }
       /* The corner nearest the speaker is tightened. That is the whole tail. */
-      .run.her .said > .bubble:last-of-type {
-        border-bottom-left-radius: var(--r-part);
-      }
       .run.you .said > .bubble:last-of-type {
         border-bottom-right-radius: var(--r-part);
       }
+      /*
+        She was cut off — a pill, on the turn's own facts line.
+
+        A3 draws it as a bordered mono chip before the stamp rather than as a
+        sentence under the bubble, which is what makes it read as a property of
+        the turn instead of as a remark about it.
+      */
       .cut {
-        margin-top: var(--s0);
-        font-family: var(--sans);
-        font-size: var(--t-label);
-        color: var(--ink-2);
+        font-family: var(--mono);
+        font-size: var(--t-data-2);
+        color: var(--ink);
+        border: var(--s-px) solid var(--rule-2);
+        border-radius: var(--r-pill);
+        padding: var(--s0) var(--s2);
       }
 
       /* ---- the problem list, which is a report rather than a conversation --- */

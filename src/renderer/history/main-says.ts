@@ -174,6 +174,11 @@ export const SAYS = {
     the screen about her notes stood beside "Last awake" and "Stored at · wisp",
     which are true and are about something else.
   */
+  talkUsedNothing: {
+    she: 'no capabilities used',
+    he: 'no capabilities used',
+    it: 'no capabilities used',
+  },
   keptHead: { she: 'Lines kept', he: 'Lines kept', it: 'Lines kept' },
   keptSizeHead: { she: 'Written', he: 'Written', it: 'Written' },
   keptWhereHead: { she: 'Stored at', he: 'Stored at', it: 'Stored at' },

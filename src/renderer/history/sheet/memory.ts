@@ -131,7 +131,21 @@ export function memorySection(view: ShelfView, handlers: ShelfHandlers): HTMLEle
   */
   const head = wrap.querySelector('.section-head')
   if (head === null) throw new Error('a section with no head cannot carry its controls')
-  head.append(element('span', 'grow'), undo, forget)
+  /*
+    What the erase costs, beside the control — A2b's "asks once, and offers a
+    copy first".
+
+    Without it the only way to find out what the button does is to press it, and
+    what it does is open the one surface in this window that deletes something a
+    model spent a month writing. The sentence is the difference between a control
+    somebody avoids and one they can use.
+  */
+  head.append(
+    element('span', 'grow'),
+    undo,
+    forget,
+    element('span', 'hint', forPronoun(SAYS.eraseAsks, view.pronoun)),
+  )
 
   /*
     THE FENCE, on the screen that shows what it fences.

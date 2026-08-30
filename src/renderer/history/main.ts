@@ -461,17 +461,6 @@ function wornFaceSpec(): ShelfView['face'] | undefined {
 }
 
 /**
- * What to call her at the top of a turn.
- *
- * The conversations listed are the worn character's, so the worn character is
- * who "her" turns belong to.
- */
-function speaker(): string {
-  const worn = shelf?.characters.find((one) => one.id === shelf?.wornId)
-  return worn?.name ?? forPronoun(SAYS.spoke, saying())
-}
-
-/**
  * View III: what she may do, and what she is told she can.
  *
  * ## Why this is one of HER views rather than a group on the machine's page
@@ -576,35 +565,38 @@ function wornName(): string | null {
  * separate model call that often does not run. An empty block would be
  * indistinguishable from one that could not be read.
  */
-function renderTalkMargin(turns: readonly HistoryTurn[], tools: readonly ToolUse[]): void {
+function renderTalkHead(turns: readonly HistoryTurn[], tools: readonly ToolUse[]): void {
   const her = saying()
   const first = turns[0]?.at ?? Date.now()
   const last = turns.at(-1)?.at ?? first
   const cut = interruptions(turns)
-  const lines = [
-    `began ${clockLabel(first)}`,
-    `ended ${clockLabel(last)}`,
-    `${String(turns.length)} ${turns.length === 1 ? 'turn' : 'turns'} · ${lengthLabel(first, last)}`,
-  ]
-  // Only when there was one. A line reading "0 interrupted" is a fact nobody
-  // needs and it makes the ordinary conversation look like a report.
-  if (cut > 0) lines.push(`${String(cut)} interrupted`)
-
   const used = [...new Set(tools.map((one) => one.name))]
   /*
-    Rendered into the transcript's head rather than into the margin. Same blocks,
-    same function, one destination — the margin is not on this page.
+    ONE LINE, which is what A3 draws: the clock at 19px, and everything else as
+    a single mono phrase beside it — "4 turns · 3 min · no capabilities used".
+
+    It was three stacked apparatus blocks — began, ended, turns, what it was
+    about, capabilities used — 245px tall, at the top of the READING column,
+    above the first thing anybody said. That is the arrangement this window's own
+    notes call "apparatus where the subject goes", written about the very block
+    this replaced and then rebuilt one column over.
+
+    Two of those blocks say nothing worth 245px. "Ended" is the last stamp and
+    every turn carries its own; "What it was about · No summary was made. That is
+    normal — the summary is a separate call that may not have run" is three lines
+    explaining an absence, in the space where the conversation starts.
   */
-  talkFacts.replaceChildren(
-    ...marginColumn(
-      marginBlock(forPronoun(SAYS.marginTalkHead, her), marginFacts(...lines)),
-      marginBlock(forPronoun(SAYS.marginAbout, her), forPronoun(SAYS.marginNoSummary, her)),
-      marginBlock(
-        forPronoun(SAYS.marginUsedHead, her),
-        used.length === 0 ? forPronoun(SAYS.marginUsedNone, her) : marginFacts(...used),
-      ),
-    ),
+  const facts = [`${String(turns.length)} ${turns.length === 1 ? 'turn' : 'turns'}`]
+  const span = lengthLabel(first, last)
+  if (span !== null) facts.push(span)
+  if (cut > 0) facts.push(`${String(cut)} interrupted`)
+  facts.push(used.length === 0 ? forPronoun(SAYS.marginUsedNone, her) : `used ${used.join(' · ')}`)
+  const head = element('div', 'talk-head')
+  head.append(
+    element('span', 'talk-when', clockLabel(first)),
+    element('span', 'talk-facts-line', facts.join(' \u00b7 ')),
   )
+  talkFacts.replaceChildren(head)
 }
 
 /**
@@ -1358,12 +1350,28 @@ function row(
  * reasoning is the part worth keeping, and it is only misleading where it was.
  */
 function copyButton(text: string): HTMLButtonElement {
-  const button = iconButton(
-    'copy',
-    'Copy this turn',
-    ['M5.5 5.5h7v7h-7z', 'M10.5 5.5v-2h-7v7h2'],
-    13,
-  )
+  /*
+    A WORD, not a glyph on the corner of the bubble.
+
+    It was a 21px icon straddling the bubble's top-right, which meant it sat over
+    the first line of the text it acts on — argued for at the time as 2px inside
+    a corner radius, and true, but the whole trade goes away once the turn has a
+    facts line of its own. A6's own check takes the raw text either way; what
+    changes is that "copy" now says what it does without a tooltip, and that it
+    is on the line where the timestamp already is.
+  */
+  const button = element('button', 'copy', 'copy')
+  button.type = 'button'
+  button.title = 'Copy this turn'
+  /*
+    NAMED, even though the word is now visible.
+
+    The visible word is one syllable repeated once per turn, so on its own it
+    reads out as "copy, copy, copy" with nothing saying copy WHAT. The name
+    contains the visible label, which is what 2.5.3 asks: somebody saying "copy"
+    to a voice control still reaches this button.
+  */
+  button.setAttribute('aria-label', 'Copy this turn')
 
   button.addEventListener('click', () => {
     /*
@@ -1388,6 +1396,23 @@ function copyButton(text: string): HTMLButtonElement {
       })
   })
   return button
+}
+
+/**
+ * The stamp under one turn, to the second.
+ *
+ * A3 draws `13:00:04`, and the seconds are the point: two turns a few seconds
+ * apart both read `13:01` at the archive's precision, and inside one
+ * conversation the interval between turns is what somebody is reading these
+ * for. `clockLabel` stays as it is — a list of conversations does not need them.
+ */
+function secondsLabel(at: number): string {
+  return new Date(at).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  })
 }
 
 /*
@@ -1437,7 +1462,7 @@ async function show(token: string, term: string): Promise<void> {
   // The head is APPARATUS and it lives in the margin now — "Subject first,
   // apparatus in the margin. Nothing to the right of the rule is a thing you
   // came to read." What she said leads the column.
-  renderTalkMargin(turns, conversations.find((one) => one.token === token)?.tools ?? [])
+  renderTalkHead(turns, conversations.find((one) => one.token === token)?.tools ?? [])
   transcript.append()
 
   let run: HTMLElement | null = null
@@ -1451,10 +1476,15 @@ async function show(token: string, term: string): Promise<void> {
       run.className = `run ${turn.who}`
       said = document.createElement('div')
       said.className = 'said'
-      const who = document.createElement('div')
-      who.className = 'who'
-      who.textContent = turn.who === 'her' ? speaker() : 'you'
-      said.append(who)
+      /*
+        NO NAME OVER EITHER RUN — A3 draws neither hers nor yours.
+
+        A run carried a caps label: her name over her lines and "you" over
+        yours. Both are already unambiguous from the shape — her face is beside
+        her words, and yours are the ones in a bubble — so the label was a third
+        statement of a fact two things already made, repeated down the column
+        every time the speaker changed.
+      */
       // Her face on the left of her own run. Yours is not drawn: the side of the
       // column a bubble is on is already unambiguous, and inventing an avatar
       // for a person this app has never seen would be a lie about knowing them.
@@ -1469,21 +1499,48 @@ async function show(token: string, term: string): Promise<void> {
       transcript.append(run)
     }
 
-    const bubble = document.createElement('div')
-    bubble.className = 'bubble'
-    bubble.append(marked(turn.text, term), copyButton(turn.text))
-    said?.append(bubble)
+    /*
+      HER WORDS ARE NOT IN A BUBBLE, and yours are.
 
+      Both sides were bubbles in two greys, which is a chat client's convention
+      and not this one's: A3 sets her turns as plain text at 15px with her face
+      beside them, and gives the bubble to you alone. The bubble is what marks a
+      turn as the one somebody typed, so putting one on both sides spent the
+      distinction to say something the face was already saying.
+    */
+    const line = document.createElement('div')
+    line.className = turn.who === 'her' ? 'line' : 'line bubble'
+    line.append(marked(turn.text, term))
+    said?.append(line)
+
+    /*
+      THE STAMP AND THE COPY UNDER THE TURN, in mono — A3's `13:01:22   copy`.
+
+      The copy control was an icon straddling the bubble's top-right corner,
+      revealed on hover, overlapping the first line of the text it acts on. A
+      word on the turn's own facts line covers nothing, says what it does
+      without a tooltip, and puts the two things a reader wants about a turn —
+      when it was said, and how to take it — in one place.
+
+      Seconds, not minutes: two turns a few seconds apart both read `13:01` at
+      the archive's precision, and inside one conversation the interval between
+      turns is the fact somebody is reading these for.
+    */
+    const facts = document.createElement('div')
+    facts.className = 'turn-facts'
     if (turn.cut) {
-      // Said out loud rather than implied by a short line. The boundary is an
-      // ESTIMATE (§60: -3% to -22%, always short), so a reader who can see that
-      // it was cut can also discount the last few words. It follows the bubble
-      // it belongs to rather than the run, because only one turn was cut.
-      const note = document.createElement('div')
-      note.className = 'cut'
-      note.textContent = turn.text === '' ? forPronoun(SAYS.cutEarly, saying()) : 'interrupted'
-      said?.append(note)
+      /*
+        A pill, before the stamp. Said out loud rather than implied by a short
+        line: the boundary is an ESTIMATE (§60: -3% to -22%, always short), so a
+        reader who can see it was cut can discount the last few words.
+      */
+      const mark = document.createElement('span')
+      mark.className = 'cut'
+      mark.textContent = turn.text === '' ? forPronoun(SAYS.cutEarly, saying()) : 'cut off'
+      facts.append(mark)
     }
+    facts.append(element('span', 'turn-at', secondsLabel(turn.at)), copyButton(turn.text))
+    said?.append(facts)
   }
 
   /*
