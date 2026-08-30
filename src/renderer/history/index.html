@@ -644,6 +644,43 @@
       /* ---- this machine ----------------------------------------------------
         Its own mark, and none of her colour anywhere on the page.
       */
+      /*
+        Rule 6, the third clause: "It gets its own page, its own mark, and NONE
+        OF HER COLOUR."
+
+        Two of the three were built and the third was not. Her hue reached
+        everything inside this page that asks for it — the Save button of all
+        twenty-seven prompt editors drew in `--her-wash` inside a `--her`
+        border, and every field in every group took her colour on focus. Wearing
+        a different character changed the look of a page whose whole subject is
+        that it is not about a character.
+
+        Check the delivery's own machine frame and there is not one hit: its
+        buttons are `Check again`, `Choose…`, `When needed ⌄`, all outlined in
+        `--rule-2`. The only `--her` in that image is `worn now` in the rail,
+        which is always present and IS about her.
+
+        Done by REDEFINING her variables for this subtree rather than by writing
+        a machine variant of each control. There are eight of them and they are
+        used by rules all over the sheet; a variant per control is eight rules
+        that have to be remembered every time a ninth control is added here.
+        This is one rule that cannot be forgotten, and `rule-6` in the rendered
+        gate is what holds it.
+
+        The emphasis SURVIVES — Save is still filled, still bordered, still
+        semibold. It is ink now instead of her green, which is what "the machine
+        is not her" leaves a commit button looking like.
+      */
+      #page-machine {
+        --her: var(--ink-2);
+        --her-hover: var(--ink);
+        --her-ink: var(--paper);
+        --her-wash: var(--paper-2);
+        --her-deep: var(--ink);
+        --her-deep-ink: var(--paper);
+        --her-veil: transparent;
+        --ink-brand: var(--ink);
+      }
       .machine-subject {
         display: flex;
         align-items: center;

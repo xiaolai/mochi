@@ -1216,6 +1216,106 @@ async function checks(page, where = '') {
   await page.send('Emulation.setEmulatedMedia', { features: [] })
   await wait(300)
 
+  /* --- Rule 6: none of her colour on the machine's page ------------------ */
+  /*
+    "The machine is not her. It gets its own page, its own mark, and NONE OF HER
+    COLOUR."
+
+    The first two clauses were built and the third was not: her hue reached
+    every control on that page that asks for it, so wearing a different
+    character restyled a page whose whole subject is that it is not about a
+    character. The Save button of all twenty-seven prompt editors was the
+    visible half.
+
+    Her colours are resolved by PROBE rather than read from the sheet — they are
+    computed by `applyAccent` from whichever character is worn, so there is no
+    literal to compare against. The probe lives outside the page, which is the
+    point: it reads the value the rest of the window still has.
+  */
+  await page.run(`document.getElementById('rail-machine').click()`)
+  await wait(700)
+  /*
+    EVERY GROUP, not the one that happens to be open.
+
+    The first version of this check measured whatever the machine page was
+    showing, which is one group of seven — and the twenty-seven Save buttons
+    that were the whole reason for it live in the third. Removing the fix left
+    it green, which is the only reason it was found: a check that cannot go red
+    when the fix is deleted is not a check.
+  */
+  const groups = await page.run(`document.querySelectorAll('#nav-groups .tab').length`)
+  const rule6 = { colours: 0, hit: [], away: false, groups }
+  for (let g = 0; g < groups; g += 1) {
+    await page.run(
+      `(() => { const t = document.querySelectorAll('#nav-groups .tab')[${String(g)}]; if (t) t.click(); })()`,
+    )
+    await wait(320)
+    /*
+      A field is measured FOCUSED as well as at rest, because her colour on a
+      focus ring is the state that only exists while somebody is typing — the
+      one nothing else in this window would ever show.
+    */
+    await page.run(
+      `(() => { const f = document.querySelector('#machine-pane input, #machine-pane textarea, #machine-pane select'); if (f) f.focus(); })()`,
+    )
+    await wait(160)
+    const round = await page.run(`(() => {
+      const probe = document.createElement('span');
+      probe.style.position = 'fixed';
+      probe.style.left = '-9999px';
+      document.body.append(probe);
+      const hers = new Map();
+      for (const name of ['--her', '--her-hover', '--her-wash', '--her-deep', '--ink-brand']) {
+        probe.style.color = 'var(' + name + ')';
+        const value = getComputedStyle(probe).color;
+        if (!hers.has(value)) hers.set(value, name);
+      }
+      probe.remove();
+      const page = document.getElementById('page-machine');
+      if (page === null || page.getClientRects().length === 0) return { away: true };
+      const group = document.querySelector('#nav-groups .tab[aria-current="true"]');
+      const named = group === null ? '?' : group.textContent.trim().slice(0, 22);
+      const hit = [];
+      const edges = { borderTopColor: 'borderTopWidth', borderRightColor: 'borderRightWidth', borderBottomColor: 'borderBottomWidth', borderLeftColor: 'borderLeftWidth' };
+      for (const el of page.querySelectorAll('*')) {
+        if (el.getClientRects().length === 0) continue;
+        const s = getComputedStyle(el);
+        const what = named + ' · ' + (el.className ? el.tagName.toLowerCase() + '.' + String(el.className).trim().split(/\\s+/).join('.') : el.tagName.toLowerCase());
+        if (hers.has(s.color) && el.textContent.trim() !== '') hit.push(what + ' text ' + hers.get(s.color));
+        if (hers.has(s.backgroundColor)) hit.push(what + ' fill ' + hers.get(s.backgroundColor));
+        for (const [colour, width] of Object.entries(edges)) {
+          if (hers.has(s[colour]) && parseFloat(s[width]) > 0) hit.push(what + ' edge ' + hers.get(s[colour]));
+        }
+        if (hers.has(s.outlineColor) && parseFloat(s.outlineWidth) > 0) hit.push(what + ' ring ' + hers.get(s.outlineColor));
+      }
+      return { colours: hers.size, hit: [...new Set(hit)] };
+    })()`)
+    if (round.away === true) rule6.away = true
+    else {
+      rule6.colours = round.colours
+      for (const one of round.hit) if (!rule6.hit.includes(one)) rule6.hit.push(one)
+    }
+  }
+  if (rule6.away === true) bad('rule-6', 'the machine page is not showing, so nothing was measured')
+  else if (rule6.hit.length > 0)
+    bad(
+      'rule-6',
+      rule6.hit.length +
+        ' things on the machine page are drawn in her colour: ' +
+        JSON.stringify(rule6.hit.slice(0, 6)),
+    )
+  else
+    ok(
+      'rule-6',
+      'none of her ' +
+        rule6.colours +
+        ' colours is drawn on any of the machine\u2019s ' +
+        rule6.groups +
+        ' groups',
+    )
+  await page.run(`document.getElementById('tab-for-archive').click()`)
+  await wait(600)
+
   /* --- if anything moves, reduced motion stills it ---------------------- */
   const moving = await page.run(`(() => [...document.querySelectorAll('*')]
     .filter((e) => e.getClientRects().length > 0)
