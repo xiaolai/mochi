@@ -391,6 +391,24 @@
    * `--s6` is 32 rather than v1's 30: it is the gutter either side of every
    * content pane, and the single most-drawn distance in the delivery.
    */
+  /*
+    THE MEASURE, and it is a ceiling on CONTROLS as well as on prose.
+
+    "正文列硬性 640,字段最宽 640,滑块 300,按钮按标签长度收。没有一个控件随窗口变
+    宽." — the reading column is a hard 640, a field is at most 640, the slider
+    is 300, a button shrinks to its label, and NO control grows with the window.
+
+    That last clause is the one with teeth. A field on `flex: 1` inside a column
+    that widens is a control whose size is an accident of the window; two of
+    them side by side end up different widths for no reason anybody chose, and
+    a text field 700px wide is a line nobody can track back to its start.
+
+    The COLUMN may still be wider than this — the sizing document is explicit
+    that surplus width goes to the apparatus column and to whitespace rather
+    than into the line.
+  */
+  --measure: 640px;
+  --measure-slider: 300px;
   --s-px: 1px;
   --s0: 2px;
   --s1: 4px;
@@ -647,14 +665,26 @@ input[type='checkbox']:disabled {
  * a layout, which the padding version can and would, once, in whichever control
  * somebody forgot.
  *
- * ## The delivery defines this four different ways
+ * ## The delivery defines this four different ways, and one of them settles it
  *
  * The system page says a 2px edge with no gap. `HerHead` draws 1px. The
- * self-audit's addendum describes 1px + a 2px gap + a 1px outer ring. The
- * artboards draw it as a shadow, `0 0 0 1.5px`. This is the delivery's own
- * headline defect — one state, more than one definition — surviving into the
- * shipped zip in the one place it is hardest to see. The system page is the
- * spec by its own rule ("一个状态只有一处定义"), so 2px is what is built.
+ * artboards draw it as a shadow, `0 0 0 1.5px`. The self-audit's addendum
+ * describes 1px + a 2px gap + a 1px outer ring, at "about half the weight" of
+ * what it replaces.
+ *
+ * This was resolved the wrong way round. It picked the system page, reasoning
+ * that it "is the spec by its own rule" — but the self-audit is a document
+ * ABOUT these files, and its item B says in so many words that the system page
+ * is the stale one: it hand-copied the rail, the machine nav and the
+ * conversation list, it is now the only file still drawing a 3px chosen bar,
+ * and the recommendation is to delete its screens and let 全部页面 be the single
+ * source. Its item D is the one that says what focus should be, its addendum
+ * says the treatment was "安下" — settled — and it is dated later the same day.
+ *
+ * So the file the audit tells you to stop trusting was used to overrule the
+ * audit. What is built is the addendum's: a 1px edge, a 2px gap in `--paper`,
+ * and a 1px ring outside that. Three layers, and about half the ink of a solid
+ * 2px inset — which is the thing xiaolai objected to in the first place.
  *
  * ## `--ink`, not her colour
  *
@@ -665,8 +695,23 @@ input[type='checkbox']:disabled {
  * control it just pressed.
  */
 :focus-visible {
-  outline: var(--s0) solid var(--ink);
-  outline-offset: calc(-1 * var(--s0));
+  /*
+    The OUTER ring, and the two inner layers as shadows.
+
+    `outline` cannot draw three layers, and the gap has to be PAINTED rather
+    than left transparent: a focused control on the rail's `--paper-3` or on a
+    chosen row would otherwise show a grey gap, and the whole point of the
+    sandwich is that it reads the same on any ground.
+
+    The shadow list is deliberately ordered. The first is painted on top, so the
+    1px ink edge sits over the 3px paper disc and what survives of the paper is
+    the 2px ring between them.
+  */
+  outline: var(--s-px) solid var(--ink);
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 var(--s-px) var(--ink),
+    0 0 0 3px var(--paper);
 }
 
 /*

@@ -1884,7 +1884,14 @@
           and 100% is what a slider that has never moved should look like.
         */
         --along: 100%;
-        flex: 1 1 auto;
+        /*
+          300, and it does not grow. A slider's width is its RESOLUTION — how
+          many pixels one percent is worth — so a control that is 300 on one
+          window and 710 on another is two different instruments. The delivery
+          fixes it at 300 and the reason is that number, not the tidiness.
+        */
+        width: var(--measure-slider);
+        flex: none;
         min-width: 0;
         appearance: none;
         /*
@@ -2832,10 +2839,17 @@
         semantics; both gaps are now the one number, so the box changes nothing
         about where anything sits.
       */
+      /*
+        CAPPED at the measure. The reading column is 824px wide in a 1280 window
+        and every control in it was taking as much of that as its flex allowed —
+        a 709px slider, a 666px chooser, a name field that changed width when
+        the window did.
+      */
       .sheet {
         display: flex;
         flex-direction: column;
         gap: var(--s5);
+        max-width: var(--measure);
       }
       /*
         A section: a caps heading, a hint in mono beside it, and whatever
