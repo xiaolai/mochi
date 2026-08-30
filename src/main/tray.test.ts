@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { trayMenuTemplate, WINDOWS_SCALES } from './tray'
+import { quitAcceleratorFor, trayMenuTemplate, WINDOWS_SCALES } from './tray'
 
 /** Nothing wrong, nothing chosen, and only the side there is always room for. */
 const BUBBLE = { available: ['above'], asked: 'auto', using: 'above' }
@@ -145,7 +145,24 @@ describe('the only way out', () => {
     expect(labels(bare)).toContain('Quit Mochi')
   })
 
-  it('spells the shortcut out, because there is no application menu to carry it', () => {
+  /*
+    BOTH ANSWERS, and the second one is why this is a table.
+
+    The assertion was `Command+Q`, flat, on whatever platform the suite happened
+    to run -- which on a Mac is the only branch there is. `Command` is a
+    modifier macOS has and Windows does not, so the item shipped advertising a
+    key in a vocabulary that platform cannot read, and nothing here could see
+    it. The same shape as `iconFileFor`'s win32 branch, and the same fix.
+  */
+  it.each([
+    ['darwin', 'Command+Q'],
+    ['win32', undefined],
+    ['linux', undefined],
+  ] as const)('spells the shortcut on %s as %s', (platform, expected) => {
+    expect(quitAcceleratorFor(platform)).toBe(expected)
+  })
+
+  it('spells it out on macOS, because there is no application menu to carry it', () => {
     const template = trayMenuTemplate(
       {
         personas: [],
@@ -160,7 +177,9 @@ describe('the only way out', () => {
       'Mochi',
     )
     const quit = template.find((item) => item.label === 'Quit Mochi')
-    expect(quit?.accelerator).toBe('Command+Q')
+    // Against the RULE rather than a literal, so the item cannot drift back to
+    // a spelling one of the three platforms does not read.
+    expect(quit?.accelerator).toBe(quitAcceleratorFor(process.platform))
   })
 
   it('offers the window, which is otherwise reached only by hovering her', () => {

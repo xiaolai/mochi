@@ -88,6 +88,36 @@ export interface TrayHandlers {
 }
 
 /**
+ * The Quit item's shortcut, on the one platform that has one to spell.
+ *
+ * MACOS ONLY, and the reason is the one already written beside the item: an
+ * accessory app has no application menu, so the tray is the only place the
+ * combination is written down at all. That argument is about macOS and it does
+ * not travel.
+ *
+ * It was `Command+Q` everywhere. `Command` is a modifier only macOS has, so on
+ * Windows the item advertised a key in a vocabulary that platform does not
+ * read.
+ *
+ * TRANSLATING IT WOULD HAVE BEEN WRONG TWICE. Electron's portable spelling is
+ * `CommandOrControl`, which is not a modifier THIS BUILD writes:
+ * `shared/accelerator.ts` keeps a closed list -- Control, Alt, Shift, Command
+ * -- and `acceleratorProblem` refuses everything outside it, so one file would
+ * have been spelling a modifier another file rejects. And Ctrl+Q is not how
+ * Windows quits: a tray Quit carries no accelerator there, nothing in this
+ * build registers that combination, and a context menu does not dispatch its
+ * own accelerators anyway. It would have swapped a shortcut nobody can read
+ * for one that reads perfectly and does nothing.
+ *
+ * Takes a platform rather than reading `process.platform`, for the reason
+ * `iconFileFor` does: on a Mac the other branch is unreachable, and a branch
+ * that cannot be reached is a branch nothing can check.
+ */
+export function quitAcceleratorFor(platform: NodeJS.Platform): string | undefined {
+  return platform === 'darwin' ? 'Command+Q' : undefined
+}
+
+/**
  * The menu, as data, so it can be checked without a display.
  *
  * Separated from `new Tray` for exactly that reason: everything below decides
@@ -99,6 +129,7 @@ export function trayMenuTemplate(
   appName: string,
 ): MenuItemConstructorOptions[] {
   const worn = model.personas.find((one) => one.id === model.wornId)
+  const quitKey = quitAcceleratorFor(process.platform)
   return [
     // Who she is right now, as a readout. Disabled because it is not a control
     // — the list below is.
@@ -200,9 +231,14 @@ export function trayMenuTemplate(
       ],
     },
     { type: 'separator' },
-    // The item this whole file exists for. `Command+Q` is spelled out because
-    // an accessory app has no application menu to carry it.
-    { label: `Quit ${appName}`, accelerator: 'Command+Q', click: handlers.onQuit },
+    // The item this whole file exists for. The shortcut is spelled out on
+    // macOS, where an accessory app has no application menu to carry it, and
+    // nowhere else -- `quitAcceleratorFor` carries the argument.
+    {
+      label: `Quit ${appName}`,
+      ...(quitKey === undefined ? {} : { accelerator: quitKey }),
+      click: handlers.onQuit,
+    },
   ]
 }
 
