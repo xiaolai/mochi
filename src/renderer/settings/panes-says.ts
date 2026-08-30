@@ -22,6 +22,7 @@ export const SAYS = {
     withheld it everywhere. The switches are the same; what changed is who they
     are about, and a pane that does not say that is a pane that misleads.
   */
+  mayDoHead: { she: 'What you permit', he: 'What you permit', it: 'What you permit' },
   mayDoWhose: {
     she: 'These are for the character she is wearing. Each one has her own.',
     he: 'These are for the character he is wearing. Each one has his own.',

@@ -19,24 +19,7 @@ export const SAYS = {
     it: 'Reading what it may do…',
   },
 
-  /* ---- the margin: apparatus, never the thing itself -------------------- */
-  marginIs: {
-    she: 'Everything to the right of this rule is apparatus — where a thing is stored, when it was last used, whose recommendation it is. Never the thing itself.',
-    he: 'Everything to the right of this rule is apparatus — where a thing is stored, when it was last used, whose recommendation it is. Never the thing itself.',
-    it: 'Everything to the right of this rule is apparatus — where a thing is stored, when it was last used, whose recommendation it is. Never the thing itself.',
-  },
-  marginColourHead: { she: 'Her colour', he: 'His colour', it: 'Its colour' },
-  marginColour: {
-    she: 'Retints this window as well as her. A hue that cannot reach 4.5:1 is refused and the built-in is used instead — you will be told.',
-    he: 'Retints this window as well as him. A hue that cannot reach 4.5:1 is refused and the built-in is used instead — you will be told.',
-    it: 'Retints this window as well as it. A hue that cannot reach 4.5:1 is refused and the built-in is used instead — you will be told.',
-  },
   marginFacesHead: { she: 'Her expressions', he: 'His expressions', it: 'Its expressions' },
-  marginFaces: {
-    she: 'The set may legally be empty. Nothing changes her face on its own except waking and falling asleep.',
-    he: 'The set may legally be empty. Nothing changes his face on its own except waking and falling asleep.',
-    it: 'The set may legally be empty. Nothing changes its face on its own except waking and falling asleep.',
-  },
   marginStored: { she: 'Stored at', he: 'Stored at', it: 'Stored at' },
   marginBuiltIn: {
     she: 'built-in · no file of her own',
@@ -176,6 +159,23 @@ export const SAYS = {
   /* The receipt after the notes are erased. It names what went and what did
      not, because the confirmation just promised the conversations were safe. */
   backToWho: { she: '‹ Who she is', he: '‹ Who he is', it: '‹ What it is' },
+  /* The apparatus column's four labels. Facts, never arguments — the delivery's
+     own first audit finding was that this column held prose about the design. */
+  /*
+    `marginIs`, `marginColour(Head)` and `marginFaces` were here — four
+    paragraphs the apparatus column used to carry. They went with the column's
+    prose: the delivery's first audit finding is that no words explaining the
+    design are left in the interface, and one of them had gone false anyway,
+    still saying her colour retints a window that no longer takes a hue.
+  */
+  marginNow: { she: 'Right now', he: 'Right now', it: 'Right now' },
+  marginAsleep: { she: 'asleep', he: 'asleep', it: 'asleep' },
+  marginLastAwake: { she: 'Last awake', he: 'Last awake', it: 'Last awake' },
+  marginNeverAwake: {
+    she: 'never · nothing kept yet',
+    he: 'never · nothing kept yet',
+    it: 'never · nothing kept yet',
+  },
   keptErased: {
     she: 'Erased. Everything she had kept about you is gone.',
     he: 'Erased. Everything he had kept about you is gone.',

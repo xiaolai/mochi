@@ -430,6 +430,74 @@ async function firstHour(page) {
  * It reports rather than fails, because a sweep is how you find out what to
  * check, and a list of forty deviations is not a gate.
  */
+
+/**
+ * The window's own structure, dumped the way the artboards were.
+ *
+ * `dev-docs/design-system-v2/extracted/` holds each screen's DOM read out of the
+ * delivery — nesting, layout declarations, text. This writes the same shape for
+ * what the app actually renders, into `rendered/`, so the two can be diffed.
+ *
+ * Written because the alternative was finding differences one CSS rule at a
+ * time by eye, which is how a re-composition turns back into a re-tint: values
+ * are easy to measure and structure is not, so structure is what stops being
+ * checked. A `diff` of two files is a complete answer to "what is still
+ * different", and it can be re-run after every change.
+ *
+ * The property list matches the artboard extractor's exactly. Any drift between
+ * the two makes the diff lie in the most convincing possible way — a difference
+ * that is really a difference in how the two sides were measured.
+ */
+async function outline(page) {
+  const { writeFileSync, mkdirSync } = await import('node:fs')
+  const into = join(ROOT, 'dev-docs', 'design-system-v2', 'rendered')
+  mkdirSync(into, { recursive: true })
+  console.log('\n  ─── the window, in the artboards\u2019 own terms ─────────────')
+  for (const place of ['cast', 'archive', 'permits', 'machine']) {
+    await goTo(page, place)
+    await wait(600)
+    const text = await page.run(`(() => {
+      const KEEP = ['width','height','flex','display','flex-direction','padding','margin-top',
+        'gap','background','border','border-radius','font-size','font-weight','font-family',
+        'color','position','overflow','text-transform','letter-spacing','opacity'];
+      const digest = (el) => {
+        const s = getComputedStyle(el);
+        const out = [];
+        for (const prop of KEEP) {
+          const v = s.getPropertyValue(prop);
+          if (v && v !== 'none' && v !== 'normal' && v !== 'auto' && v !== '0px' && v !== 'static') {
+            out.push(prop + ':' + v);
+          }
+        }
+        return out.join('; ');
+      };
+      const lines = [];
+      const walk = (el, depth) => {
+        if (el.getClientRects().length === 0) return;
+        const own = [...el.childNodes]
+          .filter((n) => n.nodeType === 3 && n.textContent.trim())
+          .map((n) => n.textContent.trim())
+          .join(' ')
+          .slice(0, 70);
+        lines.push('  '.repeat(depth) + '<' + el.tagName.toLowerCase() +
+          (el.id ? '#' + el.id : '') +
+          (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\\s+/).join('.') : '') +
+          '>  ' + digest(el) + (own ? '   \u00ab ' + own + ' \u00bb' : ''));
+        for (const kid of el.children) walk(kid, depth + 1);
+      };
+      const root = document.querySelector('.frame') ?? document.body;
+      walk(root, 0);
+      return lines.join(String.fromCharCode(10));
+    })()`)
+    const path = join(into, `${place}.txt`)
+    writeFileSync(path, `# ${place} — what the window actually renders\n\n${text}\n`)
+    console.log(
+      `  ${place.padEnd(9)} ${String(text.split('\n').length).padStart(4)} nodes  -> ${path}`,
+    )
+  }
+  console.log('  ─────────────────────────────────────────────────────────────\n')
+}
+
 async function audit(page) {
   /*
     The v2 system, and every value below was read OUT of the twenty artboards
@@ -1772,6 +1840,7 @@ async function main() {
       page.close()
       return
     }
+    if (process.argv.includes('--outline')) await outline(page)
     if (process.argv.includes('--audit')) await audit(page)
     if (process.argv.includes('--space')) await breathing(page)
     if (process.argv.includes('--controls')) await controls(page)

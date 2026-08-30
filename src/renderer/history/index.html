@@ -526,6 +526,23 @@
         a hairline would put it in the same plane as the thing it is about to
         destroy. The gate's allow-list names this id.
       */
+      /*
+        The QUESTION is the largest thing on this surface.
+
+        A5 sets it at 22 — the sheet asks one thing and everything else on it is
+        the consequence of answering, so the sentence has to be read before the
+        buttons are. It inherited the body size, which put the question at the
+        same weight as the paragraph explaining it.
+      */
+      #sure h2 {
+        margin: 0;
+        font-family: var(--sans);
+        font-size: var(--t-h2);
+        font-weight: var(--w-medium);
+        letter-spacing: var(--track-tight);
+        color: var(--ink);
+      }
+
       #sure {
         max-width: 480px;
         padding: var(--s5) var(--s6);
@@ -1049,7 +1066,7 @@
       */
       .margin {
         border-left: var(--s-px) solid var(--rule);
-        padding: 24px 22px;
+        padding: 24px var(--s5);
         overflow-y: auto;
         display: flex;
         flex-direction: column;
@@ -2256,8 +2273,17 @@
         opacity: 0.9;
         cursor: pointer;
       }
+      /* The tile has no border to colour — it is a fill and an opacity now, so
+         hover moves the opacity. A  on  paints nothing,
+         which is the same defect the search field had. */
+      /*
+        The tile has no border to colour — it is a fill and an opacity now, so
+        hover moves the opacity. This was `border-color: var(--rule-2)` over
+        `border: 0`, which paints nothing: the same defect the search field had,
+        found here by the token check rather than by looking.
+      */
       .theme:hover {
-        border-color: var(--rule-2);
+        opacity: 1;
       }
       /*
         A FILL AND A RULE, not a fill alone.
@@ -3772,7 +3798,7 @@
                 <span class="machine-mark" aria-hidden="true">&#9636;</span>
                 <div class="machine-titles">
                   <h1>This machine</h1>
-                  <p class="machine-says">Not about her. True whoever is worn.</p>
+                  <p class="machine-says">These settings apply whoever she is.</p>
                 </div>
               </div>
             </header>

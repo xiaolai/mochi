@@ -109,14 +109,14 @@ export const SAYS = {
     it: 'the built-in, with no file of its own',
   },
   nextWake: {
-    she: 'ten · a change is a reconnect, so it lands on her next wake',
-    he: 'ten · a change is a reconnect, so it lands on his next wake',
-    it: 'ten · a change is a reconnect, so it lands on its next wake',
+    she: 'ten · lands on her next wake',
+    he: 'ten · lands on his next wake',
+    it: 'ten · lands on its next wake',
   },
   bubbleWhen: {
-    she: 'off by default · the switch lands on her next wake, a side moves them now',
-    he: 'off by default · the switch lands on his next wake, a side moves them now',
-    it: 'off by default · the switch lands on its next wake, a side moves them now',
+    she: 'off · lands on her next wake',
+    he: 'off · lands on his next wake',
+    it: 'off · lands on its next wake',
   },
   keeps: {
     she: 'What she is told and what she says are written to this machine, and stay there until you delete them.',

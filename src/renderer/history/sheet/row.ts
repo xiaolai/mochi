@@ -40,6 +40,18 @@ export interface ShelfHandlers {
   readonly say: (text: string, bad?: boolean) => void
 }
 
+/**
+ * Just the head row — a caps heading with its mono fact beside it.
+ *
+ * For a pane whose rows are already siblings in a column, where `section` would
+ * nest a column inside a column to hold one heading.
+ */
+export function sectionHead(title: string, hint: string): HTMLElement {
+  const head = element('div', 'section-head')
+  head.append(element('h3', undefined, title), element('span', 'hint', hint))
+  return head
+}
+
 /** A caps heading, a hint in mono beside it, and the control underneath. */
 export function section(title: string, hint: string, ...body: readonly HTMLElement[]): HTMLElement {
   const wrap = element('section', 'section')
@@ -53,9 +65,7 @@ export function section(title: string, hint: string, ...body: readonly HTMLEleme
     the month navigation under a page header's padding, and the tenth of this
     exact shape in this stylesheet.
   */
-  const head = element('div', 'section-head')
-  head.append(element('h3', undefined, title), element('span', 'hint', hint))
-  wrap.append(head, ...body)
+  wrap.append(sectionHead(title, hint), ...body)
   return wrap
 }
 

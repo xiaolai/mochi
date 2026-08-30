@@ -8,6 +8,7 @@
  * making a claim rather than admitting a gap.
  */
 import { element } from '../../element'
+import { sectionHead } from '../../history/sheet/row'
 import { type Pane } from '../pane'
 import { GRANT_SPECS } from '@shared/grants'
 import { type GrantUse } from '@shared/ipc'
@@ -58,6 +59,24 @@ export const MAY_DO: Pane = {
       return row
     })
 
+    /*
+      THE SECTION'S OWN HEADING, which this screen did not have.
+
+      A7 draws two sections — "What you permit" over the switches and "What she
+      is told she can do" over the capability list — and this had only the
+      second. So the grants arrived under the view's name with no heading of
+      their own, which on a page whose every other block is a titled section
+      reads as content that fell out of one.
+
+      `sectionHead` rather than `section`, because the rows are already siblings
+      in the pane's column and wrapping them would nest a column inside a column
+      for nothing.
+    */
+    const permits = sectionHead(
+      forPronoun(SAYS.mayDoHead, view.pronoun),
+      `${String(view.grants.filter((one) => one.allowed).length)} of ${String(view.grants.length)} allowed`,
+    )
+
     // Above the switches, not below them: whose answer this is has to be read
     // before they are operated, not after.
     const whose = element('p', 'note', forPronoun(SAYS.mayDoWhose, view.pronoun))
@@ -66,6 +85,7 @@ export const MAY_DO: Pane = {
     const heading = element('h3', undefined, forPronoun(SAYS.told, view.pronoun))
     if (view.capabilities.length === 0) {
       return [
+        permits,
         whose,
         ...rows,
         note,
@@ -74,6 +94,7 @@ export const MAY_DO: Pane = {
       ]
     }
     return [
+      permits,
       whose,
       ...rows,
       note,

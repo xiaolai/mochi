@@ -164,7 +164,15 @@ const ROLES: readonly { readonly property: RegExp; readonly family: RegExp }[] =
   {
     property:
       /^(margin|padding|gap|row-gap|column-gap|inset|top|right|bottom|left|width|height|min-width|min-height|border(-\w+)?-width)/,
-    family: /^--s/,
+    /*
+      The LADDER, not everything beginning with s.
+
+      `/^--s/` also matches `--status-h` and `--sans`, so a 44px height was
+      reported as restating the status bar and any length equal to a font stack
+      would have been too. A spacing role is measured against spacing rungs;
+      `--status-h` is component geometry that happens to share a prefix.
+    */
+    family: /^--s(-px|\d)$/,
   },
 ]
 
@@ -283,8 +291,12 @@ describe('the vocabulary that is declared and not yet spoken', () => {
     // and zero keyframes; she is the only thing that moves, she is a canvas,
     // and `mochi.ts` honours `prefers-reduced-motion` itself. These stay as the
     // vocabulary a future CSS transition would use.
+    /*
+      `--duration-fast` came off this list when the switch's knob started
+      moving. It is the window's first CSS motion, which also means the reduced
+      motion block at the foot of `tokens.css` finally protects something.
+    */
     '--duration': 'no CSS motion exists yet; the rig gates its own',
-    '--duration-fast': 'no CSS motion exists yet; the rig gates its own',
     /*
       The ring's geometry, which IS bound — by the check above, not at runtime.
 

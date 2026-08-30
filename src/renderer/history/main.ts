@@ -580,23 +580,59 @@ function renderTalkMargin(turns: readonly HistoryTurn[], tools: readonly ToolUse
 function renderHerMargin(): void {
   if (shelf === null) return
   const her = saying()
-  // The WORN character's file, because `characterSheet` draws the worn one and
-  // this margin sits beside it. Reading a different character here would put
-  // one character's path under another's controls.
-  const stored = shelf.characters.find((one) => one.id === shelf?.wornId)?.source ?? null
+  const worn = shelf.characters.find((one) => one.id === shelf?.wornId)
+  /*
+    FACTS, and nothing else — the delivery's own first audit finding.
+
+    "界面里不再有解释设计的话。右栏只剩 mono 事实" — no words explaining the design
+    are left in the interface, and the right column holds only machine facts.
+    This column held four paragraphs of exactly that: what a margin is for, that
+    her colour retints the window, that an expression set may be empty. Prose
+    about the design, in the column whose job is to answer "when", "where" and
+    "how many".
+
+    One of them had also become false. "Retints this window as well as her" was
+    true while her hue carried the chrome; the window carries none now, so the
+    margin was explaining a mechanism that had been removed — which is the cost
+    of putting an argument where a fact belongs.
+
+    A1 draws four pairs: Right now, Last awake, Stored at, Expressions. Each is a
+    caps label and a mono value, and the value is what somebody came to read.
+  */
+  const stored = worn?.source ?? null
   marginHersEl.replaceChildren(
     ...marginColumn(
-      marginBlock('In the margin', forPronoun(SAYS.marginIs, her)),
-      marginBlock(forPronoun(SAYS.marginColourHead, her), forPronoun(SAYS.marginColour, her)),
-      marginBlock(forPronoun(SAYS.marginFacesHead, her), forPronoun(SAYS.marginFaces, her)),
+      marginBlock(forPronoun(SAYS.marginNow, her), marginFacts(forPronoun(SAYS.marginAsleep, her))),
+      marginBlock(
+        forPronoun(SAYS.marginLastAwake, her),
+        marginFacts(lastAwakeOf() ?? forPronoun(SAYS.marginNeverAwake, her)),
+      ),
       marginBlock(
         forPronoun(SAYS.marginStored, her),
         // The path, or the honest answer that there is not one. A built-in with
         // no file of her own is a real state, not a missing value.
         marginFacts(stored ?? forPronoun(SAYS.marginBuiltIn, her)),
       ),
+      marginBlock(
+        forPronoun(SAYS.marginFacesHead, her),
+        marginFacts(`${String(worn?.faces.length ?? 0)} of 8 allowed`),
+      ),
     ),
   )
+}
+
+/**
+ * When she was last awake, as the margin says it.
+ *
+ * `null` when nothing has been kept — which is a real state on a fresh install
+ * and not a missing value, so the caller says so in words rather than drawing an
+ * empty line under a label.
+ */
+function lastAwakeOf(): string | null {
+  // The list this window already holds, newest first — no second read, and no
+  // second answer to "when did she last speak" for the two to disagree about.
+  const latest = conversations[0]
+  return latest === undefined ? null : clockLabel(latest.startedAt)
 }
 
 /** Her face and her name, at the size the view on screen calls for. */
