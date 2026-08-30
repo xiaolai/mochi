@@ -377,7 +377,23 @@
         than a `justify-content` on the row — the row has three items and only
         one of them is meant to move.
       */
-      .subject {
+      /*
+        `subject-row`, NOT `subject` — which the renderer already writes on the
+        SUBJECT LINE of a conversation and of a problem, as a `<div>` holding
+        one string.
+
+        So both of those were flex containers with `gap: 18px` and thirty pixels
+        of padding under them, from a rule about the row across the top of a
+        page. `.entry .subject` asks for `text-overflow: ellipsis`, which a flex
+        container does not give its anonymous item — every conversation title
+        too long for its column was hard-clipped instead of ellipsised, and sat
+        over thirty pixels of nothing.
+
+        The eleventh name in this stylesheet to mean two things. Every one of
+        them compiled, linted and passed the suite; `stylesheets.test.ts` now
+        holds the shape.
+      */
+      .subject-row {
         display: flex;
         align-items: center;
         gap: 18px;
@@ -2006,7 +2022,15 @@
       }
       /* Nothing below the last one to divide it from. */
       /* The column's own padding ends the list; a section adds nothing. */
-      .section > .head {
+      /*
+        A section's heading: its name, and the apparatus note beside it.
+
+        Its own name, because `.head` is the header of a PAGE and carries that
+        page's padding — see `row.ts` for what nine sections looked like wearing
+        it. The gap between one section and the next is the column's, so this
+        adds none of its own.
+      */
+      .section-head {
         display: flex;
         align-items: baseline;
         gap: var(--s4);
@@ -2839,7 +2863,7 @@
                 question about the character, and gave the head three rules to
                 cross instead of two.
               -->
-              <div class="subject">
+              <div class="subject-row">
                 <div class="subject-of" id="subject"></div>
                 <span class="grow"></span>
                 <div class="finding" id="finding" hidden>

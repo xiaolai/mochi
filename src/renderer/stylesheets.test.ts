@@ -562,3 +562,110 @@ describe('the focus ring is declared', () => {
     expect(checked).toBeGreaterThan(0)
   })
 })
+
+/**
+ * A class the FRAME writes in markup is not also a class the renderer writes.
+ *
+ * The eleventh, twelfth and thirteenth bugs of one shape in this window, and
+ * the first one this file can see. Each was a single global stylesheet where
+ * one name meant two things:
+ *
+ *   `.head`     the header of a PAGE, at `padding: 30px 40px 0` — and the
+ *               heading row of a section on her sheet. Nine caps labels sat
+ *               forty pixels right of the control they name.
+ *   `.subject`  the row across the top of a page, `display: flex` with 30px
+ *               under it — and the subject LINE of a conversation and of a
+ *               problem. Both were flex containers with padding they never
+ *               asked for, and `.entry .subject` asks for an ellipsis a flex
+ *               container does not give its anonymous item.
+ *   `.machine`  the page's grid — and, later in the sheet at equal
+ *               specificity, the thing that turned that page back into three
+ *               columns.
+ *
+ * The shape is mechanical and therefore checkable: `index.html` holds the FRAME
+ * — the shell each page is drawn into, written once by hand — and the modules
+ * build what goes inside it. A name in both is a name whose owner is unclear,
+ * and the cascade resolves that ambiguity silently and in one direction.
+ *
+ * ## Why an allow-list rather than zero
+ *
+ * Some names are legitimately shared, and they are all shared for the same
+ * reason: the frame draws ONE instance of a thing the renderer draws the rest
+ * of. The machine's rail row is in the markup because it is always there and
+ * the character rows are built; the spacer, the button and the warning colour
+ * are vocabulary. Each is named here, so an eleventh has to be argued for
+ * rather than merely typed.
+ */
+describe('a class the frame writes is not also one the renderer writes', () => {
+  /**
+   * Every class in the document's BODY, not its stylesheet.
+   *
+   * Cut at `</style>`, so the rules above are not read as markup — otherwise
+   * every selector in the sheet counts as a class the frame writes and the
+   * check compares the sheet against itself.
+   */
+  function classesInFrame(window: string): ReadonlySet<string> {
+    const html = read(`./${window}/index.html`)
+    const body = html.slice(html.indexOf('</style>'))
+    const names = new Set<string>()
+    for (const one of body.matchAll(/class="([^"]+)"/g)) {
+      for (const name of (one[1] ?? '').split(/\s+/)) if (name !== '') names.add(name)
+    }
+    return names
+  }
+
+  /**
+   * Every class a module puts on an element it MAKES.
+   *
+   * Only unambiguous literals, like the created-classes check above: this
+   * reports a collision, so a name it wrongly believes is created is a false
+   * alarm about a file somebody then has to read.
+   */
+  function classesFromModules(): ReadonlySet<string> {
+    const names = new Set<string>()
+    for (const path of sourcesUnder(fileURLToPath(new URL('./', import.meta.url)))) {
+      const source = readFileSync(path, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+      const found = [
+        ...source.matchAll(/element\(\s*'[\w-]+'\s*,\s*'([^']+)'/g),
+        ...source.matchAll(/\.className\s*=\s*'([^']+)'/g),
+      ]
+      for (const one of found) for (const name of (one[1] ?? '').split(/\s+/)) names.add(name)
+    }
+    names.delete('')
+    return names
+  }
+
+  /**
+   * The frame draws one of these and the renderer draws the rest, or they are
+   * shared vocabulary. Both readings mean the same element type, which is the
+   * thing that makes them safe.
+   */
+  const SHARED = new Set([
+    // The machine's rail row is in the markup because it is always present;
+    // every character's row is built. Same row, same rule, on purpose.
+    'rail-row',
+    'rail-name',
+    // Vocabulary: a button, a warning, a bullet, a spacer.
+    'btn',
+    'bad',
+    'dot',
+    'grow',
+  ])
+
+  it('has something to check, and knows the ones that broke', () => {
+    const frame = classesInFrame('history')
+    expect(frame.size).toBeGreaterThan(10)
+    // Named, so an extractor that has silently stopped matching cannot pass as
+    // a window with no collisions.
+    expect(frame.has('head')).toBe(true)
+    expect(classesFromModules().has('section-head')).toBe(true)
+  })
+
+  it.each(WINDOWS)('%s', (window) => {
+    const made = classesFromModules()
+    const both = [...classesInFrame(window)].filter((one) => made.has(one) && !SHARED.has(one))
+    expect(both).toEqual([])
+  })
+})

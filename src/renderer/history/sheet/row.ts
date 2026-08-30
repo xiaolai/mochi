@@ -33,7 +33,17 @@ export interface ShelfHandlers {
 /** A caps heading, a hint in mono beside it, and the control underneath. */
 export function section(title: string, hint: string, ...body: readonly HTMLElement[]): HTMLElement {
   const wrap = element('section', 'section')
-  const head = element('div', 'head')
+  /*
+    `section-head`, NOT `head` — which this window already uses for the HEADER
+    OF A PAGE, at `padding: 30px 40px 0`.
+
+    So every one of these nine headings carried a page header's padding: the
+    caps label sat forty pixels to the right of the control it names, with an
+    unowned thirty above it, on her main page. It is the same collision that put
+    the month navigation under a page header's padding, and the tenth of this
+    exact shape in this stylesheet.
+  */
+  const head = element('div', 'section-head')
   head.append(element('h3', undefined, title), element('span', 'hint', hint))
   wrap.append(head, ...body)
   return wrap
