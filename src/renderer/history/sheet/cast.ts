@@ -130,7 +130,7 @@ export function castDangerous(
         handlers.persona({ kind: 'restore-built-in' })
       })
     })
-    row.append(restore)
+    row.append(restore, element('span', 'hint', forPronoun(SAYS.restoreOnly, pronoun)))
     guarded.push(restore)
   } else {
     /*

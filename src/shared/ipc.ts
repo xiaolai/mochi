@@ -828,6 +828,14 @@ export interface SettingsCodex {
  */
 export interface SettingsNote {
   readonly text: string
+  /**
+   * Where the file is, so A2b's apparatus column can say it.
+   *
+   * The same exception `SettingsLookup.workspace` names and for the same reason:
+   * a path sent OUT is display, and somebody cannot be told where their own
+   * notes are kept without being told. Nothing travels back on it.
+   */
+  readonly path: string
   readonly previous: string | null
 }
 

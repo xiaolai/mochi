@@ -28,7 +28,7 @@ import {
   countByDay,
   openingDay,
 } from './month'
-import { assembledPanel, characterSheet } from './shelf'
+import { assembledPanel, characterSheet, type PromptState } from './shelf'
 import { expressionsSection } from './sheet/expressions'
 import { memorySection } from './sheet/memory'
 import { promptSection } from './sheet/prompt'
@@ -671,6 +671,13 @@ function renderHerMargin(): void {
   )
 }
 
+/** What A8's first block says, per state. See `PromptState`. */
+const PROMPT_STATE_SAYS: Readonly<Record<PromptState, ByPronoun>> = {
+  saved: SAYS.promptSaved,
+  unsaved: SAYS.promptUnsaved,
+  saving: SAYS.promptSaving,
+}
+
 /**
  * The apparatus column for whichever screen is open under her page.
  *
@@ -690,11 +697,33 @@ function deeperMargin(words: Pronoun, worn: ShelfCharacter | undefined): readonl
         forPronoun(SAYS.keptSizeHead, words),
         marginFacts(`${String(text.length)} characters`),
       ),
+      marginBlock(
+        forPronoun(SAYS.keptWhereHead, words),
+        // The file, not the whole path — this column is 224px. A2b draws
+        // `mochi/memory.json`, which is the last two segments and enough to
+        // find it.
+        marginFacts((shelf?.note.path ?? '').split('/').slice(-2).join('/')),
+      ),
     ]
   }
   if (deeperInto === 'faces') {
     const size = worn?.size ?? null
+    /*
+      FOUR blocks, which is what A2c draws: how many exist, how many she may
+      use, what she is wearing, and how big she is drawn.
+
+      The first two are not the same number and that is the screen's whole
+      point — every expression is DRAWN here whether or not she is permitted it,
+      because seeing one and permitting it are two separate things (C5). A column
+      that reported only the allowed count would leave the tiles beside it
+      unexplained.
+    */
     return [
+      marginBlock(forPronoun(SAYS.drawnHead, words), marginFacts(String(EMOTIONS.length))),
+      marginBlock(
+        forPronoun(SAYS.allowedHead, words),
+        marginFacts(`${String(worn?.faces.length ?? 0)} of ${String(EMOTIONS.length)}`),
+      ),
       marginBlock(
         forPronoun(SAYS.wearingHead, words),
         /*
@@ -721,6 +750,10 @@ function deeperMargin(words: Pronoun, worn: ShelfCharacter | undefined): readonl
   }
   const lines = shelf === null ? 0 : shelf.assembled.split('\n').length
   return [
+    marginBlock(
+      forPronoun(SAYS.marginNow, words),
+      marginFacts(forPronoun(PROMPT_STATE_SAYS[promptState], words)),
+    ),
     marginBlock(
       forPronoun(SAYS.sentAtWakeHead, words),
       marginFacts(`${String(lines)} line${lines === 1 ? '' : 's'}`),
@@ -2440,6 +2473,16 @@ function describe(change: PersonaChange, kind: string): string {
  */
 let deeperInto: 'faces' | 'notes' | 'instruction' | null = null
 
+/**
+ * How her instruction stands right now, as A8's column reports it.
+ *
+ * Written by the panel and read by the margin, because the panel owns it: the
+ * draft lives inside `assembledPanel`'s `editing()` and a margin that re-derived
+ * "unsaved" from the stored text would be a second opinion about the same
+ * keystroke.
+ */
+let promptState: PromptState = 'saved'
+
 /** Her page, or the one screen underneath it that is open. */
 function deeperScreen(shelf: ShelfView, handlers: ShelfHandlers): readonly HTMLElement[] {
   if (deeperInto === null) return [characterSheet(shelf, handlers)]
@@ -2468,7 +2511,15 @@ function deeperScreen(shelf: ShelfView, handlers: ShelfHandlers): readonly HTMLE
       what she is told — so this is the only row they belong under.
     */
     const panel = element('div', 'wake')
-    panel.append(...assembledPanel(shelf, handlers))
+    panel.append(
+      ...assembledPanel(shelf, handlers, (state) => {
+        // Only on a CHANGE. `showState` runs on every keystroke, and rebuilding
+        // four apparatus blocks per character typed is work nobody asked for.
+        if (state === promptState) return
+        promptState = state
+        renderHerMargin()
+      }),
+    )
     return [back, panel, promptSection(shelf, worn, handlers)]
   }
   const screen =

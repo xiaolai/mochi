@@ -75,6 +75,16 @@ export function colourSection(
     body.push(element('p', 'note', forPronoun(SAYS.ownHue, view.pronoun)))
   }
   /*
+    WHAT THE ROW DOES, which nothing on this screen said.
+
+    Eight faces in a row with one of them in focus is a control whose meaning has
+    to be inferred from the focus ring, and the consequence — that only SHE
+    changes — is the half nobody can infer at all. v1's theme retinted the
+    window, so somebody who used that build presses a swatch, sees the window
+    stay grey, and reads a change that landed as one that did not.
+  */
+  body.push(element('p', 'note', forPronoun(SAYS.themeNote, view.pronoun)))
+  /*
     The hint is which appearance she is WEARING, not where her file is.
 
     A1 puts the theme's own name there — "mint" — because the hint beside a

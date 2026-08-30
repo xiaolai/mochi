@@ -57,7 +57,7 @@ export function memoryRoot(userData: string): string {
  * and it is the one place where a grammar change that let a `/` through would
  * become a traversal rather than a lookup failure.
  */
-function memoryPath(userData: string, id: string): string {
+export function memoryPath(userData: string, id: string): string {
   if (!isPersonaId(id))
     throw new Error(`refusing to build a memory path from ${JSON.stringify(id)}`)
   return join(memoryRoot(userData), `${id}.json`)

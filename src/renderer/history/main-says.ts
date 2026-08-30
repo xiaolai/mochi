@@ -182,6 +182,14 @@ export const SAYS = {
   keptHead: { she: 'Lines kept', he: 'Lines kept', it: 'Lines kept' },
   keptSizeHead: { she: 'Written', he: 'Written', it: 'Written' },
   keptWhereHead: { she: 'Stored at', he: 'Stored at', it: 'Stored at' },
+  /* A8's "Right now", per state. `saving` is not a synonym for either of the
+     others: while a save is in flight the box and both buttons are dead, and
+     reporting that as "unsaved" would describe the freeze as an edit. */
+  promptSaved: { she: 'saved', he: 'saved', it: 'saved' },
+  promptUnsaved: { she: 'unsaved', he: 'unsaved', it: 'unsaved' },
+  promptSaving: { she: 'saving…', he: 'saving…', it: 'saving…' },
+  drawnHead: { she: 'Drawn', he: 'Drawn', it: 'Drawn' },
+  allowedHead: { she: 'Allowed', he: 'Allowed', it: 'Allowed' },
   wearingHead: { she: 'Wearing now', he: 'Wearing now', it: 'Wearing now' },
   drawnAtHead: { she: 'Drawn at', he: 'Drawn at', it: 'Drawn at' },
   drawnAtOwn: {

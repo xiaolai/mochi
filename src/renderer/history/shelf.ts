@@ -212,7 +212,29 @@ function wakeTabs(parts: {
   return { element: strip, draw }
 }
 
-export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readonly HTMLElement[] {
+/**
+ * How the document stands right now, for A8's first apparatus block.
+ *
+ * Three states, because the middle one is real and visible: while a save is in
+ * flight the box and both buttons go dead, and a column that said only
+ * saved/unsaved would report the freeze as one of the other two.
+ */
+export type PromptState = 'saved' | 'unsaved' | 'saving'
+
+export function assembledPanel(
+  view: ShelfView,
+  handlers: ShelfHandlers,
+  /**
+   * Called whenever the draft's standing changes.
+   *
+   * A8's column opens with "Right now · unsaved", and it is the only fact on
+   * that screen that moves while somebody is looking at it — everything else
+   * there is about a file. The panel owns the state (`editing()` holds it) so
+   * the margin is told rather than asked; asking would mean a second reading of
+   * the same draft, which is how the two come to disagree mid-edit.
+   */
+  onState?: (state: PromptState) => void,
+): readonly HTMLElement[] {
   const head = element('div', 'row')
   const count = element('span', 'meta')
   head.append(
@@ -304,6 +326,7 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
   */
   const doc = editing(view.prompt.text)
   const showState = (): void => {
+    onState?.(doc.sending() ? 'saving' : doc.canRevert() ? 'unsaved' : 'saved')
     save.disabled = !doc.canCommit()
     cancel.disabled = !doc.canRevert()
     editor.disabled = doc.sending()
@@ -352,6 +375,8 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
   const where = element('p', 'note')
   where.append(element('code', undefined, view.prompt.path))
 
+  // Once before anything is typed, so the column opens agreeing with the box.
+  onState?.('saved')
   draw()
   return [
     head,

@@ -263,9 +263,27 @@ export const SAYS = {
     it: 'It has not written anything down about you yet.',
   },
   restore: {
-    she: 'Put the built-in back as she ships',
-    he: 'Put the built-in back as he ships',
-    it: 'Put the built-in back as it ships',
+    she: 'Put her back as she ships…',
+    he: 'Put him back as he ships…',
+    it: 'Put it back as it ships…',
+  },
+  /* Beside it, and it says why there is no Delete on this row. Without it the
+     absence of the control every other character has reads as a bug. */
+  restoreOnly: {
+    she: 'the built-in only — she has no file to delete',
+    he: 'the built-in only — he has no file to delete',
+    it: 'the built-in only — it has no file to delete',
+  },
+  /*
+    A1's sentence under the eight swatches, and its second half is the one that
+    is not obvious: v1's theme retinted the whole window, and v2's changes HER
+    and nothing else. Somebody who used the old build will otherwise read a
+    window that did not change as a swatch that did not take.
+  */
+  themeNote: {
+    she: 'The one in focus is the one she is wearing. Eight themes, and only she changes — this window stays as it is.',
+    he: 'The one in focus is the one he is wearing. Eight themes, and only he changes — this window stays as it is.',
+    it: 'The one in focus is the one it is wearing. Eight themes, and only it changes — this window stays as it is.',
   },
   ownHue: {
     she: 'She wears a hue of her own; none of the eight is stored.',

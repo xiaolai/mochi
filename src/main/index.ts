@@ -172,6 +172,7 @@ import { whatSheMayDo } from './what-she-may-do'
 import { createConversation, type Conversation } from './store/conversation'
 import {
   markSummarised,
+  memoryPath,
   previousNote,
   recall,
   recallState,
@@ -2941,7 +2942,11 @@ ipcMain.handle('shelf:read', (): ShelfView => {
       slots: [...PROMPT_SLOTS],
       limit: MAX_PROMPT_CHARS,
     },
-    note: { text: note, previous: previousNote(userData, worn.id) },
+    note: {
+      text: note,
+      previous: previousNote(userData, worn.id),
+      path: memoryPath(userData, worn.id),
+    },
   }
 })
 
