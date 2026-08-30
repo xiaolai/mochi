@@ -1590,6 +1590,24 @@ function renderHits(hits: readonly HitGroup[], term: string): void {
   }
   const now = Date.now()
   const parts: HTMLElement[] = []
+  /*
+    BOTH numbers, because they are different questions — A4.
+
+    A match is a TURN, so one long conversation can match twenty times. The rows
+    are grouped so a conversation appears once, which is right and which on its
+    own makes "20 results" a lie in one direction and "1 result" a lie in the
+    other. The delivery states the rule plainly: the count says both numbers.
+
+    Above the day headings rather than beside the field, because it describes
+    what is in this list rather than what was typed — and the list is what
+    changes when a day is picked out from under a search.
+  */
+  const matches = hits.reduce((sum, one) => sum + one.count, 0)
+  const found = element('p', 'found')
+  found.textContent =
+    `${String(matches)} ${matches === 1 ? 'match' : 'matches'} in ` +
+    `${String(hits.length)} ${hits.length === 1 ? 'conversation' : 'conversations'}`
+  parts.push(found)
   for (const day of byDay(hits, now, (one) => one.at)) {
     parts.push(dayHeading(day.day))
     for (const hit of day.items) {
