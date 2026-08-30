@@ -26,10 +26,12 @@
  * back would pin this release's wording for ever while reporting itself
  * unedited, which is the failure `store/prompt.ts` describes.
  */
+import { sectionHead } from '../../history/sheet/row'
 import { element } from '../../element'
 import { editing } from '../../rules/editing'
 import { type Pane } from '../pane'
 import { SAYS } from '../panes-says'
+import { forPronoun } from '@shared/pronoun'
 import { canSave, lengthNote } from './prompt-edit'
 export const PROMPTS: Pane = {
   id: 'prompts',
@@ -46,7 +48,28 @@ export const PROMPTS: Pane = {
     return worrying === 0 ? null : String(worrying)
   },
   render(view, handlers) {
-    const blocks: Node[] = []
+    /*
+      HOW MANY, AND HOW MANY HAVE MOVED — B3's "27 texts · 2 changed from
+      as-shipped", over the list.
+
+      This pane opened straight into the first of twenty-seven editors, so its
+      two standing facts were only discoverable by scrolling to the bottom and
+      counting: that there are twenty-seven, and whether any of them has been
+      changed away from what ships. The second is the one that matters after a
+      support conversation — "is anything on this machine non-standard" — and
+      nothing on the page answered it.
+    */
+    const changed = view.prompts.filter((one) => one.edited).length
+    const blocks: Node[] = [
+      sectionHead(
+        forPronoun(SAYS.promptsHead, view.pronoun),
+        `${String(view.prompts.length)} texts \u00b7 ${
+          changed === 0
+            ? 'none changed from as-shipped'
+            : `${String(changed)} changed from as-shipped`
+        }`,
+      ),
+    ]
     for (const one of view.prompts) {
       /*
         ONE BLOCK PER PROMPT, with a rule between them.
@@ -59,7 +82,10 @@ export const PROMPTS: Pane = {
       const nodes: Node[] = []
       const head = element('div', 'row')
       head.append(element('h3', undefined, one.title))
-      if (one.edited) head.append(element('span', 'meta', 'edited'))
+      // B3's word for it. "edited" describes what somebody did; "changed" is a
+      // property of the text, which is what the badge is claiming — and it is
+      // the word the count above uses, so the two agree.
+      if (one.edited) head.append(element('span', 'meta', 'changed'))
       nodes.push(head)
       nodes.push(element('p', 'note', one.purpose))
 
@@ -119,7 +145,15 @@ export const PROMPTS: Pane = {
 
       const save = element('button', 'btn primary', 'Save')
       save.type = 'button'
-      const reset = element('button', 'btn', 'Reset')
+      /*
+        "Put back as shipped", not "Reset" — B3's wording and the accurate one.
+
+        This control DELETES the override so the prompt goes back to tracking
+        whatever the build ships, which is not what "Reset" says: reset reads as
+        clearing a field, and the one thing somebody must not think is that it
+        empties the text.
+      */
+      const reset = element('button', 'btn', 'Put back as shipped')
       reset.type = 'button'
       /*
         The rule lives in `rules/editing`, which holds and tests the whole of

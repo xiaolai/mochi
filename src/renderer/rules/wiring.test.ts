@@ -36,13 +36,23 @@ describe('C3 · the panes that edit a document use the rule', () => {
   })
 
   it('leaves neither pane setting a control from its own comparison', () => {
-    // The inline form was `save.disabled = !canSave(box.value, one.text, ...)`
-    // and `const changed = editor.value !== view.prompt.text`. Either one
-    // reintroduces a second opinion about what is available, which is how the
-    // two drifted apart in the first place.
+    /*
+      The inline form was `save.disabled = !canSave(box.value, one.text, ...)`
+      and `const changed = editor.value !== view.prompt.text`. Either one
+      reintroduces a second opinion about what is available, which is how the
+      two drifted apart in the first place.
+
+      The second pattern names WHAT IS COMPARED, not the variable.
+      `/const changed =/` alone matched `const changed = view.prompts.filter(
+      (one) => one.edited).length` — a count of how many stored texts differ
+      from what ships, decided by main and read here, which is not a second
+      opinion about anything. A guard that fires on an unrelated line is one
+      that gets worked around by renaming a variable, and then it guards
+      nothing.
+    */
     for (const pane of [PROMPTS, SHELF]) {
       expect(pane).not.toMatch(/\bsave\.disabled = !(?!doc\.)/)
-      expect(pane).not.toMatch(/const changed =/)
+      expect(pane).not.toMatch(/const \w+ = [^\n]*\b(?:editor|box)\.value\s*!==/)
     }
   })
 

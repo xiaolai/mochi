@@ -133,6 +133,13 @@ export const SAYS = {
   /* B6's heading over the folders. They were loose rows under a sentence, so a
      reader scanning headings found the destruction below them and nothing above
      them. */
+  /* B3's heading over the catalogue. The pane opened straight into the first of
+     twenty-seven editors, so it had no name of its own on screen. */
+  promptsHead: {
+    she: 'What she is told',
+    he: 'What he is told',
+    it: 'What it is told',
+  },
   onDisk: { she: 'On disk', he: 'On disk', it: 'On disk' },
   languagesHead: {
     she: 'Languages she listens for',
