@@ -131,19 +131,25 @@ export function trayMenuTemplate(
     },
     { type: 'separator' },
     /**
-     * ONE item, named after the window rather than after a tab of it.
+     * ONE item, named after what it opens.
      *
      * "Shelf…" and "Settings…" stood here and both opened the same window; the
      * second sent it to the Machine tab afterwards. Settings stopped being a
-     * window when the six groups became that tab, so the menu was offering two
-     * doors into one room and neither label named the room — the shelf is one
-     * of its three places, beside the archive and this machine.
+     * window when those groups became a page of it, so the menu was offering two
+     * doors into one room and neither label named the room.
+     *
+     * Then it was the application's name, and that was wrong in a quieter way:
+     * this menu is already headed by the application's name, and the item under
+     * it repeating that word says "Mochi… what?". The tray is Mochi. What this
+     * opens is her main window, and the label that helps is the one that says
+     * so — the more so now that the window holds two pages rather than three
+     * tabs, and no one of them can name it either.
      *
      * The deep link is NOT deleted with the item. `shell:show` still exists and
      * the problems chip still uses it; what has gone is a second way to open a
      * window that was already open at the top of the list.
      */
-    { label: `${appName}…`, click: handlers.onOpen },
+    { label: 'Main Window', click: handlers.onOpen },
     { type: 'separator' },
     ...(model.personas.length > 1
       ? ([

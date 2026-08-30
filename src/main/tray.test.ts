@@ -177,7 +177,14 @@ describe('the only way out', () => {
       HANDLERS,
       'Mochi',
     )
-    expect(labels(template)).toEqual(expect.arrayContaining(['Mochi…', 'Quit Mochi']))
+    /*
+      "Main Window", not the application's name.
+
+      This menu is already headed by the application's name, and the item under
+      it repeating that word says "Mochi… what?". The tray IS Mochi; what the
+      item opens is her main window.
+    */
+    expect(labels(template)).toEqual(expect.arrayContaining(['Main Window', 'Quit Mochi']))
   })
 
   it('offers ONE way into the window, not one per tab of it', () => {
@@ -203,8 +210,19 @@ describe('the only way out', () => {
       HANDLERS,
       'Mochi',
     )
-    const opens = labels(template).filter((one) => one.endsWith('…'))
-    expect(opens).toEqual(['Mochi…'])
+    /*
+      Counted by what they DO, not by how they are punctuated.
+
+      This filtered on a trailing ellipsis, which counted the convention rather
+      than the behaviour — and the convention is wrong here anyway: an ellipsis
+      says the command needs more input before it can complete, and showing a
+      window needs none. A second item that opened the window without one would
+      have passed.
+    */
+    const opens = template
+      .filter((item) => item.click === HANDLERS.onOpen)
+      .map((item) => item.label)
+    expect(opens).toEqual(['Main Window'])
   })
 })
 
@@ -399,6 +417,6 @@ describe('resting and hiding', () => {
 
   it('puts them first, where somebody in a hurry looks', () => {
     const shown = labels({ ...BASE, resting: { asleep: false, hidden: false } })
-    expect(shown.indexOf('Let her rest')).toBeLessThan(shown.indexOf('Mochi…'))
+    expect(shown.indexOf('Let her rest')).toBeLessThan(shown.indexOf('Main Window'))
   })
 })
