@@ -3,6 +3,27 @@
  * The rendered gate: what the window actually DRAWS, checked against a
  * populated profile.
  *
+ * ## Running it
+ *
+ *     pnpm verify:rendered            build, then every check
+ *     pnpm rendered                   every check, against the last build
+ *     pnpm rendered --list            the names, and nothing else
+ *     pnpm rendered --only fits,A6    just those
+ *     pnpm rendered --grep rail       everything whose name matches
+ *     pnpm rendered --outline         also dump all 14 screens for diffing
+ *
+ * A filtered run means the same thing as a full one — every check names the page
+ * it wants and `goTo` waits for that page to arrive. It did not always: nine
+ * `goTo` calls served eighteen checks, so a check measured whatever the run
+ * before it left up, and `editable` was caught reporting 1 control, then 0, then
+ * 1. Under that arrangement a filter lies, and a filter that lies is worse than
+ * no filter.
+ *
+ * It costs about four seconds to launch, seed and tear down whatever you ask
+ * for, and about a tenth of a second per check on top. So `--only` takes a run
+ * from seven seconds to four, and no filter will do better than four: the floor
+ * is Electron starting twice and giving its debugging port back, not the checks.
+ *
  * ## Why this exists separately from `pnpm test`
  *
  * Everything in `src/renderer/rules` is a decision with no view, and vitest
@@ -42,7 +63,93 @@ import { mkdtempSync, rmSync, existsSync, readdirSync, readFileSync, writeFileSy
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
-import { setTimeout as wait } from 'node:timers/promises'
+import { setTimeout as sleep } from 'node:timers/promises'
+/*
+ * `wait` is for the things that are genuinely about elapsed time — an OS
+ * releasing a port, a process dying. Anything about the WINDOW uses `settle` or
+ * `until` below, which ask it instead of guessing.
+ *
+ * Measured before that split: 22.9s of a 23.8s run was spent inside this
+ * function. Ninety-six per cent of the gate was a sleep, and none of the numbers
+ * were measurements — each was somebody's "long enough on my machine", which is
+ * the same guess that makes a suite flaky on a slower one.
+ */
+const wait = sleep
+
+/**
+ * Which checks this run is for.
+ *
+ * `--only a,b` names them; `--grep rail` matches the name. Neither is given by
+ * default and everything runs, which is what CI wants.
+ *
+ * ## Why a filter is safe HERE and would not have been before
+ *
+ * These checks used to share the window's state: nine `goTo` calls served
+ * eighteen named checks, so a check often measured the page some earlier one had
+ * left up. Under that arrangement a filter LIES — `--only x` puts the window in
+ * a different state than a full run does, so it can pass where the full run
+ * fails, which is worse than having no filter at all. `editable` was caught
+ * doing exactly this: it reported 1 control, then 0, then 1, depending on how
+ * the run before it landed.
+ *
+ * Every check names the page it wants now, and `goTo` waits for that page to
+ * actually arrive. That is what makes a subset mean the same thing as the whole.
+ */
+const wanted = (() => {
+  const only = argOf('--only')
+  const grep = argOf('--grep')
+  if (only === null && grep === null) return () => true
+  const names =
+    only === null
+      ? []
+      : only
+          .split(',')
+          .map((one) => one.trim())
+          .filter(Boolean)
+  const pattern = grep === null ? null : new RegExp(grep, 'i')
+  return (name) => names.includes(name) || (pattern !== null && pattern.test(name))
+})()
+
+function argOf(flag) {
+  const at = process.argv.indexOf(flag)
+  if (at === -1) return null
+  const value = process.argv[at + 1]
+  return value === undefined || value.startsWith('--') ? null : value
+}
+
+/**
+ * Run one check, unless this run is not for it.
+ *
+ * The name is the one it reports under, so `--only rail-lines-up` and the line
+ * it prints are the same string — a filter you can build by copying a failure.
+ */
+async function step(...names) {
+  const run = names.pop()
+  /*
+    `--list` prints the names and runs nothing, so a filter can be built by
+    reading rather than by grepping the source for a string literal.
+  */
+  if (LISTING) {
+    // Deduped: `layoutChecks` runs twice, at the default width and at the
+    // 1120px floor, so its two names would otherwise be printed twice.
+    const line = names.join(', ')
+    if (!listed.includes(line)) {
+      listed.push(line)
+      console.log(`  ${line}`)
+    }
+    return
+  }
+  if (!names.some((name) => wanted(name))) {
+    skipped.push(...names)
+    return
+  }
+  await run()
+}
+
+const LISTING = process.argv.includes('--list')
+const listed = []
+
+const skipped = []
 
 // A port of its own per run, so two gates -- or a stray from a killed run --
 // cannot answer for each other. A fixed port is how a run silently attaches to
@@ -68,6 +175,55 @@ const ROOT = process.cwd()
  * rail instead. Renaming a view id is what breaks this, which is why it shouts
  * rather than skipping: a rename is cheap to make and expensive to notice.
  */
+/**
+ * Let the window finish what a click started, by asking IT rather than by
+ * guessing how long it takes.
+ *
+ * Two animation frames: the first is the one the click's own handler renders
+ * in, the second is the one anything that handler scheduled renders in. Then a
+ * short grace for the round trips a handler may have started — a settings write
+ * answers over IPC and redraws when it lands, and no number of frames can know
+ * about that.
+ *
+ * It replaces `await wait(300)` … `await wait(600)`, of which this file had
+ * twenty-two. Those were not measurements of anything: 96% of a 23.8s run was
+ * spent inside `sleep`, and every one of those numbers was somebody's guess at
+ * "long enough on my machine", which is the same guess that makes a suite flaky
+ * on a slower one. Frames are the thing actually being waited for.
+ */
+async function settle(page) {
+  await page.run(
+    `new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => ` +
+      `setTimeout(() => done(true), 60))))`,
+  )
+}
+
+/**
+ * Poll the page until it says yes, or give up loudly.
+ *
+ * For the waits that are about a CONDITION rather than about rendering — a page
+ * having actually arrived, a popover having actually opened. A fixed sleep
+ * answers "probably by now"; this answers "yes, and it took 34ms".
+ *
+ * Throws rather than returning false. Every caller here is establishing the
+ * state a measurement is about to be taken in, and a caller that carried on
+ * would measure the previous state and report it as this one's — which is the
+ * exact defect `goTo` already shouts about.
+ */
+async function until(page, expression, what, ms = 4000) {
+  const deadline = Date.now() + ms
+  for (;;) {
+    if (
+      (await page.run(`(() => { try { return !!(${expression}) } catch { return false } })()`)) ===
+      true
+    ) {
+      return
+    }
+    if (Date.now() > deadline) throw new Error(`gave up waiting for ${what} after ${String(ms)}ms`)
+    await sleep(25)
+  }
+}
+
 async function goTo(page, place) {
   const id = place === 'machine' ? 'rail-machine' : `tab-for-${place}`
   const reached = await page.run(
@@ -80,6 +236,21 @@ async function goTo(page, place) {
         `this one would have measured whichever page was already showing and passed.`,
     )
   }
+  /*
+    AND WAIT FOR IT TO ARRIVE, here rather than in each caller.
+
+    Every caller followed this with a sleep of its own — 200, 300, 400, 600 —
+    because clicking a tab does not paint the page it opens. The condition is
+    knowable: the control marks itself current when the view it opens is up. So
+    the wait belongs to the navigation, once, and it is over when the window
+    says it is instead of when a number somebody picked runs out.
+  */
+  await until(
+    page,
+    `document.getElementById('${id}').getAttribute('aria-current') === 'true'`,
+    `${place} to open`,
+  )
+  await settle(page)
 }
 
 async function listTargets() {
@@ -87,9 +258,17 @@ async function listTargets() {
   return answer.json()
 }
 
-async function waitForTarget(match, tries = 60) {
+/*
+  Polled every 100ms rather than every 500.
+
+  The budget is unchanged — `tries` is scaled by the same five — so nothing
+  times out sooner. What changes is how long after the target appears this
+  notices: up to half a second, five times a run, for a target that is usually
+  there on the first look.
+*/
+async function waitForTarget(match, tries = 300) {
   for (let i = 0; i < tries; i += 1) {
-    await wait(500)
+    await wait(100)
     let list
     try {
       list = await listTargets()
@@ -183,29 +362,59 @@ function endGroup(app) {
   }
 }
 
-async function stop(running) {
+/*
+  CHECK, THEN SLEEP — both loops here did it the other way round.
+
+  Each began `await wait(250)` and asked afterwards, so a process that died in
+  20ms still cost a quarter of a second, twice over, and `stop` runs twice in a
+  run. Measured: every check finished at 2.6s and the process did not exit until
+  6.5s. Three and a nine-tenths seconds of a six-second gate was this function
+  waiting to be allowed to notice something that had already happened.
+
+  The budgets are unchanged — 5s for the exit, 10s for the port — because the
+  counts are scaled by the same factor the interval shrank by. What changes is
+  the granularity of noticing, from 250ms to 25.
+*/
+async function stop(running, { last = false } = {}) {
   endGroup(running.app)
-  for (let i = 0; i < 20; i += 1) {
-    await wait(250)
-    if (running.app.exitCode !== null || running.app.signalCode !== null) break
-  }
-  if (running.app.exitCode === null && running.app.signalCode === null) {
+  const gone = () => running.app.exitCode !== null || running.app.signalCode !== null
+  // A graceful stop is worth waiting for between launches, because the app
+  // writes its store on the way down and the next launch reads it. The last one
+  // has no reader, so it does not get the grace.
+  if (!last) for (let i = 0; i < 200 && !gone(); i += 1) await wait(25)
+  if (!gone()) {
     try {
       process.kill(-running.app.pid, 'SIGKILL')
     } catch {
       running.app.kill('SIGKILL')
     }
   }
-  // Wait for the debugging port to go with it. Relaunching while the dying
-  // instance still holds it means the next attach lists the OLD window, which
-  // fails in a way that reads as a slow launch rather than as a stale port.
-  for (let i = 0; i < 40; i += 1) {
-    await wait(250)
+  /*
+    Wait for the debugging port to go with it. Relaunching while the dying
+    instance still holds it means the next attach lists the OLD window, which
+    fails in a way that reads as a slow launch rather than as a stale port.
+
+    ALWAYS, including the last one — tried and reverted.
+
+    The obvious saving is to skip this at the end, since nothing in THIS run
+    relaunches: it is 2.5s of a 6s gate. It hangs the next run. The port is a
+    machine-wide resource and "nothing after it" is only true inside one
+    invocation; the process that inherits the port is the next `pnpm rendered`,
+    which then lists the dying window and waits for a target that will never
+    match. The comment above was right and the scope it was written at was
+    wider than one run.
+
+    `last` survives so the SIGTERM can be skipped: the final teardown has
+    nothing to flush, so it goes straight to a kill and the port comes back
+    sooner.
+  */
+  for (let i = 0; i < 400; i += 1) {
     try {
       await listTargets()
     } catch {
       return
     }
+    await wait(25)
   }
 }
 
@@ -884,11 +1093,11 @@ async function checks(page, where = '') {
     nothing is drawn, and that is the difference between asking the DOM and
     asking the window.
   */
-  await page.run(`document.getElementById('tab-for-archive').click()`)
-  await wait(700)
+  await goTo(page, 'archive')
 
-  /* --- A1: a day with nothing on it is not a button --------------------- */
-  const calendar = await page.run(`(() => {
+  await step('A1', async () => {
+    /* --- A1: a day with nothing on it is not a button --------------------- */
+    const calendar = await page.run(`(() => {
     const days = [...document.querySelectorAll('button.day')];
     const withTalk = days.filter((d) => d.classList.contains('has'));
     const without = days.filter((d) => !d.classList.contains('has'));
@@ -899,23 +1108,25 @@ async function checks(page, where = '') {
       hasPressable: withTalk.every((d) => !d.disabled),
     };
   })()`)
-  if (calendar.has !== 3)
-    bad('A1', 'the seeded days did not reach the calendar (expected 3, saw ' + calendar.has + ')')
-  else if (calendar.pressable > 0)
-    bad('A1', calendar.pressable + ' empty days answer a press with an empty column')
-  else if (!calendar.hasPressable) bad('A1', 'a day WITH conversations was not pressable')
-  else
-    ok(
-      'A1',
-      'only days with something on them are pressable (' +
-        calendar.has +
-        ' of ' +
-        calendar.total +
-        ')',
-    )
+    if (calendar.has !== 3)
+      bad('A1', 'the seeded days did not reach the calendar (expected 3, saw ' + calendar.has + ')')
+    else if (calendar.pressable > 0)
+      bad('A1', calendar.pressable + ' empty days answer a press with an empty column')
+    else if (!calendar.hasPressable) bad('A1', 'a day WITH conversations was not pressable')
+    else
+      ok(
+        'A1',
+        'only days with something on them are pressable (' +
+          calendar.has +
+          ' of ' +
+          calendar.total +
+          ')',
+      )
+  })
 
-  /* --- A2: picking a day filters, it does not scroll --------------------- */
-  const filtered = await page.run(`(() => {
+  await step('A2', async () => {
+    /* --- A2: picking a day filters, it does not scroll --------------------- */
+    const filtered = await page.run(`(() => {
     const list = document.querySelector('#list');
     const before = { rows: list.querySelectorAll('.entry').length, top: list.scrollTop };
     const days = [...document.querySelectorAll('button.day.has')];
@@ -924,28 +1135,30 @@ async function checks(page, where = '') {
     other.click();
     return { before, other: other.textContent.trim() };
   })()`)
-  await wait(700)
-  const afterPick = await page.run(`(() => {
+    await settle(page)
+    const afterPick = await page.run(`(() => {
     const list = document.querySelector('#list');
     return { rows: list.querySelectorAll('.entry').length, top: list.scrollTop,
              head: (list.querySelector('.picked .what') || {}).textContent || '' };
   })()`)
-  if (filtered.why) bad('A2', filtered.why)
-  else if (afterPick.rows === 0) bad('A2', 'picking a day with conversations showed none')
-  else if (afterPick.top !== filtered.before.top)
-    bad('A2', 'picking a day scrolled the list instead of narrowing it')
-  else if (!afterPick.head.includes(filtered.other))
-    bad(
-      'A2',
-      'the list still names a different day (' +
-        afterPick.head +
-        ') after picking ' +
-        filtered.other,
-    )
-  else ok('A2', 'picking narrows to that day (' + afterPick.head + ') without scrolling')
+    if (filtered.why) bad('A2', filtered.why)
+    else if (afterPick.rows === 0) bad('A2', 'picking a day with conversations showed none')
+    else if (afterPick.top !== filtered.before.top)
+      bad('A2', 'picking a day scrolled the list instead of narrowing it')
+    else if (!afterPick.head.includes(filtered.other))
+      bad(
+        'A2',
+        'the list still names a different day (' +
+          afterPick.head +
+          ') after picking ' +
+          filtered.other,
+      )
+    else ok('A2', 'picking narrows to that day (' + afterPick.head + ') without scrolling')
+  })
 
-  /* --- nothing is on screen that has not been opened --------------------- */
-  const closed = await page.run(`(() => {
+  await step('closed', async () => {
+    /* --- nothing is on screen that has not been opened --------------------- */
+    const closed = await page.run(`(() => {
     /*
       A popover that is not open must not be drawn — and an author display
       declaration beats the user agent's, so this is checkable only by looking.
@@ -954,16 +1167,18 @@ async function checks(page, where = '') {
     const drawn = shut.filter((p) => p.getClientRects().length > 0);
     return { shut: shut.length, drawn: drawn.map((p) => '#' + (p.id || '?')) };
   })()`)
-  if (closed.shut === 0) bad('closed', 'no popover was found, so this proves nothing')
-  else if (closed.drawn.length > 0)
-    bad(
-      'closed',
-      closed.drawn.length + ' closed popovers are on screen: ' + JSON.stringify(closed.drawn),
-    )
-  else ok('closed', 'all ' + closed.shut + ' closed popovers are off screen')
+    if (closed.shut === 0) bad('closed', 'no popover was found, so this proves nothing')
+    else if (closed.drawn.length > 0)
+      bad(
+        'closed',
+        closed.drawn.length + ' closed popovers are on screen: ' + JSON.stringify(closed.drawn),
+      )
+    else ok('closed', 'all ' + closed.shut + ' closed popovers are off screen')
+  })
 
-  /* --- the picker hangs off the button, not off the window --------------- */
-  const under = await page.run(`(() => {
+  await step('anchored', async () => {
+    /* --- the picker hangs off the button, not off the window --------------- */
+    const under = await page.run(`(() => {
     const open = document.querySelector('.daystrip .month');
     open.click();
     const pick = document.getElementById('month-pick');
@@ -978,23 +1193,25 @@ async function checks(page, where = '') {
       button: Math.round(a.left) + ',' + Math.round(a.bottom),
     };
   })()`)
-  await wait(300)
-  if (!under.overlaps)
-    bad(
-      'anchored',
-      'the picker is not under its button: picker at ' +
-        under.at +
-        ', button at ' +
-        under.button +
-        ' — a popover is in the top layer, so `position: absolute` resolves against the window',
-    )
-  else if (!under.below) bad('anchored', 'the picker covers the button it hangs off')
-  else if (under.near > 24)
-    bad('anchored', 'the picker floats ' + under.near + 'px below its button')
-  else ok('anchored', 'the picker opens ' + under.near + 'px under the month it belongs to')
+    await settle(page)
+    if (!under.overlaps)
+      bad(
+        'anchored',
+        'the picker is not under its button: picker at ' +
+          under.at +
+          ', button at ' +
+          under.button +
+          ' — a popover is in the top layer, so `position: absolute` resolves against the window',
+      )
+    else if (!under.below) bad('anchored', 'the picker covers the button it hangs off')
+    else if (under.near > 24)
+      bad('anchored', 'the picker floats ' + under.near + 'px below its button')
+    else ok('anchored', 'the picker opens ' + under.near + 'px under the month it belongs to')
+  })
 
-  /* --- the month and the days are one row -------------------------------- */
-  const oneRow = await page.run(`(() => {
+  await step('one-row', async () => {
+    /* --- the month and the days are one row -------------------------------- */
+    const oneRow = await page.run(`(() => {
     const month = document.querySelector('.daystrip .month');
     const numeral = document.querySelector('.strip .day-n');
     if (!month || !numeral) return { why: 'the day strip has no month or no days' };
@@ -1002,20 +1219,22 @@ async function checks(page, where = '') {
     const b = numeral.getBoundingClientRect();
     return { month: Math.round(a.top), numeral: Math.round(b.top) };
   })()`)
-  if (oneRow.why) bad('one-row', oneRow.why)
-  else if (Math.abs(oneRow.month - oneRow.numeral) > 4)
-    bad(
-      'one-row',
-      'the month and the days are on different lines: ' +
-        oneRow.month +
-        ' against ' +
-        oneRow.numeral +
-        ' — something is padding one of them',
-    )
-  else ok('one-row', 'the month sits on the same line as the days it names')
+    if (oneRow.why) bad('one-row', oneRow.why)
+    else if (Math.abs(oneRow.month - oneRow.numeral) > 4)
+      bad(
+        'one-row',
+        'the month and the days are on different lines: ' +
+          oneRow.month +
+          ' against ' +
+          oneRow.numeral +
+          ' — something is padding one of them',
+      )
+    else ok('one-row', 'the month sits on the same line as the days it names')
+  })
 
-  /* --- the month picker opens, takes a year, and moves the strip --------- */
-  const picker = await page.run(`(() => {
+  await step('month', async () => {
+    /* --- the month picker opens, takes a year, and moves the strip --------- */
+    const picker = await page.run(`(() => {
     const open = document.querySelector('.daystrip .month');
     if (!open) return { why: 'the day strip has no month control' };
     const was = open.textContent.trim();
@@ -1037,18 +1256,19 @@ async function checks(page, where = '') {
     const moved = document.querySelector('.daystrip .month').textContent.trim();
     return { was, months, refused, moved, stillOpen: (document.getElementById('month-pick') || {}).matches?.(':popover-open') ?? false };
   })()`)
-  await wait(500)
-  if (picker.why) bad('month', picker.why)
-  else if (picker.months !== 12)
-    bad('month', 'the picker offers ' + picker.months + ' months, not 12')
-  else if (picker.refused !== picker.was)
-    bad('month', 'a year the archive cannot hold moved the strip anyway: ' + picker.refused)
-  else if (!/2024/.test(picker.moved))
-    bad('month', 'typing a year did not move the strip: ' + picker.moved)
-  else if (picker.stillOpen) bad('month', 'the picker stayed open over the strip it had just moved')
-  else ok('month', 'opens, refuses "20", moves to ' + picker.moved + ', and closes behind itself')
+    await settle(page)
+    if (picker.why) bad('month', picker.why)
+    else if (picker.months !== 12)
+      bad('month', 'the picker offers ' + picker.months + ' months, not 12')
+    else if (picker.refused !== picker.was)
+      bad('month', 'a year the archive cannot hold moved the strip anyway: ' + picker.refused)
+    else if (!/2024/.test(picker.moved))
+      bad('month', 'typing a year did not move the strip: ' + picker.moved)
+    else if (picker.stillOpen)
+      bad('month', 'the picker stayed open over the strip it had just moved')
+    else ok('month', 'opens, refuses "20", moves to ' + picker.moved + ', and closes behind itself')
 
-  /*
+    /*
     Escape, which is the platform's and has to actually reach it.
 
     A popover gets this for free and that is the reason for using one — but
@@ -1056,26 +1276,26 @@ async function checks(page, where = '') {
     if the element really is a popover and really is open. Both have been true
     and neither was, in this window, an hour ago.
   */
-  await page.run(`document.querySelector('.daystrip .month').click()`)
-  await wait(400)
-  for (const type of ['keyDown', 'keyUp']) {
-    await page.send('Input.dispatchKeyEvent', {
-      type,
-      key: 'Escape',
-      code: 'Escape',
-      windowsVirtualKeyCode: 27,
-      nativeVirtualKeyCode: 27,
-    })
-  }
-  await wait(400)
-  const gone = await page.run(
-    `(() => { const p = document.getElementById('month-pick'); return { open: p.matches(':popover-open'), drawn: p.getClientRects().length > 0 }; })()`,
-  )
-  if (gone.open || gone.drawn) bad('month', 'Escape did not close the picker')
-  else ok('month', 'Escape closes it')
+    await page.run(`document.querySelector('.daystrip .month').click()`)
+    await settle(page)
+    for (const type of ['keyDown', 'keyUp']) {
+      await page.send('Input.dispatchKeyEvent', {
+        type,
+        key: 'Escape',
+        code: 'Escape',
+        windowsVirtualKeyCode: 27,
+        nativeVirtualKeyCode: 27,
+      })
+    }
+    await settle(page)
+    const gone = await page.run(
+      `(() => { const p = document.getElementById('month-pick'); return { open: p.matches(':popover-open'), drawn: p.getClientRects().length > 0 }; })()`,
+    )
+    if (gone.open || gone.drawn) bad('month', 'Escape did not close the picker')
+    else ok('month', 'Escape closes it')
 
-  // Back where the rest of the checks expect it.
-  await page.run(`(() => {
+    // Back where the rest of the checks expect it.
+    await page.run(`(() => {
     const strip = [...document.querySelectorAll('button.day.has')];
     if (strip.length === 0) {
       const back = document.querySelector('.daystrip .step');
@@ -1084,10 +1304,12 @@ async function checks(page, where = '') {
       }
     }
   })()`)
-  await wait(600)
+    await settle(page)
+  })
 
-  /* --- D2/D3: the confirmation, and the order of what it offers ---------- */
-  const opened = await page.run(`(() => {
+  await step('D2', 'D3', async () => {
+    /* --- D2/D3: the confirmation, and the order of what it offers ---------- */
+    const opened = await page.run(`(() => {
     // Wherever it lives. The archive-wide deletions are reached from the topbar
     // and from the cast, not from inside the archive panel -- scoping this to
     // one panel is how a gate reports a rule unheld when it is simply elsewhere.
@@ -1109,74 +1331,81 @@ async function checks(page, where = '') {
       rowsBefore: document.querySelectorAll('#list .entry').length,
     };
   })()`)
-  if (opened.why) {
-    bad('D2', opened.why)
-    bad('D3', 'not reachable — no dialog opened')
-  } else {
-    ok('D2', 'confirming happens on a surface of its own ("' + opened.says + '")')
-    const destructive = opened.buttons.findIndex((t) => /delete|forget/i.test(t))
-    const keepIt = opened.buttons.findIndex((t) => /keep|cancel/i.test(t))
-    const copy = opened.buttons.findIndex((t) => /export|copy|save/i.test(t))
-    if (destructive === -1) bad('D3', 'the dialog offers no destructive action at all')
-    else if (destructive !== opened.buttons.length - 1)
-      bad('D3', 'the destructive button is not last: ' + JSON.stringify(opened.buttons))
-    else if (copy === -1)
-      bad('D3', 'the dialog offers no way to save a copy first: ' + JSON.stringify(opened.buttons))
-    else if (copy > destructive) bad('D3', 'the copy is offered after the deletion')
-    else if (keepIt === -1) bad('D3', 'the dialog offers no way out')
-    else ok('D3', 'safe, then a copy, then the deletion last: ' + JSON.stringify(opened.buttons))
+    if (opened.why) {
+      bad('D2', opened.why)
+      bad('D3', 'not reachable — no dialog opened')
+    } else {
+      ok('D2', 'confirming happens on a surface of its own ("' + opened.says + '")')
+      const destructive = opened.buttons.findIndex((t) => /delete|forget/i.test(t))
+      const keepIt = opened.buttons.findIndex((t) => /keep|cancel/i.test(t))
+      const copy = opened.buttons.findIndex((t) => /export|copy|save/i.test(t))
+      if (destructive === -1) bad('D3', 'the dialog offers no destructive action at all')
+      else if (destructive !== opened.buttons.length - 1)
+        bad('D3', 'the destructive button is not last: ' + JSON.stringify(opened.buttons))
+      else if (copy === -1)
+        bad(
+          'D3',
+          'the dialog offers no way to save a copy first: ' + JSON.stringify(opened.buttons),
+        )
+      else if (copy > destructive) bad('D3', 'the copy is offered after the deletion')
+      else if (keepIt === -1) bad('D3', 'the dialog offers no way out')
+      else ok('D3', 'safe, then a copy, then the deletion last: ' + JSON.stringify(opened.buttons))
 
-    /* Escape closes it, and nothing is gone. */
-    await page.send('Input.dispatchKeyEvent', {
-      type: 'keyDown',
-      key: 'Escape',
-      code: 'Escape',
-      windowsVirtualKeyCode: 27,
-      nativeVirtualKeyCode: 27,
-    })
-    await page.send('Input.dispatchKeyEvent', {
-      type: 'keyUp',
-      key: 'Escape',
-      code: 'Escape',
-      windowsVirtualKeyCode: 27,
-      nativeVirtualKeyCode: 27,
-    })
-    await wait(500)
-    const after = await page.run(`({ open: document.querySelectorAll('dialog[open]').length,
+      /* Escape closes it, and nothing is gone. */
+      await page.send('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'Escape',
+        code: 'Escape',
+        windowsVirtualKeyCode: 27,
+        nativeVirtualKeyCode: 27,
+      })
+      await page.send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: 'Escape',
+        code: 'Escape',
+        windowsVirtualKeyCode: 27,
+        nativeVirtualKeyCode: 27,
+      })
+      await settle(page)
+      const after = await page.run(`({ open: document.querySelectorAll('dialog[open]').length,
                                      rows: document.querySelectorAll('#list .entry').length })`)
-    if (after.open !== 0) bad('D2', 'Escape did not close the confirmation')
-    else if (after.rows !== opened.rowsBefore)
-      bad(
-        'D2',
-        'abandoning the confirmation still changed the archive (' +
-          opened.rowsBefore +
-          ' to ' +
-          after.rows +
-          ')',
-      )
-    else ok('D2', 'Escape abandons it with no consequence')
-  }
+      if (after.open !== 0) bad('D2', 'Escape did not close the confirmation')
+      else if (after.rows !== opened.rowsBefore)
+        bad(
+          'D2',
+          'abandoning the confirmation still changed the archive (' +
+            opened.rowsBefore +
+            ' to ' +
+            after.rows +
+            ')',
+        )
+      else ok('D2', 'Escape abandons it with no consequence')
+    }
+  })
 
-  /* --- D4: no single conversation is deletable in one gesture ------------ */
-  const perRow = await page.run(`(() => {
+  await step('D4', async () => {
+    /* --- D4: no single conversation is deletable in one gesture ------------ */
+    const perRow = await page.run(`(() => {
     const rows = [...document.querySelectorAll('#list .entry')];
     const armed = rows.filter((r) => [...r.querySelectorAll('button, [role=button]')]
       .some((c) => /delete|forget|remove|✕|×/i.test(c.textContent + (c.getAttribute('aria-label') || ''))));
     return { rows: rows.length, armed: armed.length };
   })()`)
-  if (perRow.rows === 0) bad('D4', 'no conversation rows were drawn, so this proves nothing')
-  else if (perRow.armed > 0) bad('D4', perRow.armed + ' conversation rows carry their own delete')
-  else ok('D4', 'no single conversation can be deleted in one gesture (' + perRow.rows + ' rows)')
+    if (perRow.rows === 0) bad('D4', 'no conversation rows were drawn, so this proves nothing')
+    else if (perRow.armed > 0) bad('D4', perRow.armed + ' conversation rows carry their own delete')
+    else ok('D4', 'no single conversation can be deleted in one gesture (' + perRow.rows + ' rows)')
+  })
 
-  /* --- A6: copying takes the original text, not what is on screen ------- */
-  const copied = await page.run(`(() => {
+  await step('A6', async () => {
+    /* --- A6: copying takes the original text, not what is on screen ------- */
+    const copied = await page.run(`(() => {
     const entry = document.querySelector('#list .entry');
     if (!entry) return { why: 'no conversation to open' };
     entry.click();
     return { opened: true };
   })()`)
-  await wait(900)
-  /*
+    await settle(page)
+    /*
     Read off the real clipboard, and put back what was there.
 
     Patching `window.mochiHistory.copy` does not work: it is a `contextBridge`
@@ -1185,11 +1414,11 @@ async function checks(page, where = '') {
     clipboard is the honest end of this path anyway -- it is what the person
     actually gets.
   */
-  const held = clipboardNow()
-  let raw
-  try {
-    setClipboard('')
-    raw = await page.run(`(() => {
+    const held = clipboardNow()
+    let raw
+    try {
+      setClipboard('')
+      raw = await page.run(`(() => {
       const buttons = [...document.querySelectorAll('button')].filter((b) => /copy this turn/i.test(b.getAttribute('aria-label') || ''));
       if (buttons.length === 0) return { why: 'the transcript offers no way to copy a turn' };
       const button = buttons[buttons.length - 1];
@@ -1197,48 +1426,52 @@ async function checks(page, where = '') {
       button.click();
       return { onScreen: run ? run.textContent : '' };
     })()`)
-    await wait(700)
-    if (!raw.why) raw.took = clipboardNow()
-  } finally {
-    setClipboard(held)
-  }
-  if (copied.why) bad('A6', copied.why)
-  else if (raw.why) bad('A6', raw.why)
-  else if (raw.took === null) bad('A6', 'the copy control sent nothing')
-  else if (raw.took !== AWKWARD)
-    bad('A6', 'copied the rendered form, not the original: ' + JSON.stringify(raw.took))
-  else if (raw.onScreen === raw.took)
-    bad('A6', 'the rendered form is identical to the raw text, so this proves nothing')
-  else ok('A6', 'copying takes the original text, indentation and newline intact')
+      await settle(page)
+      if (!raw.why) raw.took = clipboardNow()
+    } finally {
+      setClipboard(held)
+    }
+    if (copied.why) bad('A6', copied.why)
+    else if (raw.why) bad('A6', raw.why)
+    else if (raw.took === null) bad('A6', 'the copy control sent nothing')
+    else if (raw.took !== AWKWARD)
+      bad('A6', 'copied the rendered form, not the original: ' + JSON.stringify(raw.took))
+    else if (raw.onScreen === raw.took)
+      bad('A6', 'the rendered form is identical to the raw text, so this proves nothing')
+    else ok('A6', 'copying takes the original text, indentation and newline intact')
+  })
 
-  /* --- the rail makes characters; it does not remove them --------------- */
-  const rail = await page.run(`(() => {
+  await step('rail', async () => {
+    /* --- the rail makes characters; it does not remove them --------------- */
+    const rail = await page.run(`(() => {
     const make = [...document.querySelectorAll('.rail-make button')].map((b) => b.textContent.trim());
     const railWords = document.querySelector('.rail').textContent;
     const onHerPage = [...document.querySelectorAll('#pane button')].map((b) => b.textContent.trim());
     return { make, removes: /delete|remove/i.test(railWords), onHerPage: onHerPage.filter((t) => /^Delete /.test(t)) };
   })()`)
-  if (rail.make.length === 0) bad('rail', 'the rail offers no way to make a character')
-  else if (rail.removes)
-    bad(
-      'rail',
-      'the rail offers a deletion: it would act on the WORN character while sitting under a list of all of them — ' +
-        JSON.stringify(rail.make),
-    )
-  else if (rail.onHerPage.length === 0)
-    bad('rail', 'no character can be deleted anywhere — it left the rail and arrived nowhere')
-  else
-    ok(
-      'rail',
-      'makes characters (' +
-        JSON.stringify(rail.make) +
-        ') and removes them only from her own page (' +
-        JSON.stringify(rail.onHerPage) +
-        ')',
-    )
+    if (rail.make.length === 0) bad('rail', 'the rail offers no way to make a character')
+    else if (rail.removes)
+      bad(
+        'rail',
+        'the rail offers a deletion: it would act on the WORN character while sitting under a list of all of them — ' +
+          JSON.stringify(rail.make),
+      )
+    else if (rail.onHerPage.length === 0)
+      bad('rail', 'no character can be deleted anywhere — it left the rail and arrived nowhere')
+    else
+      ok(
+        'rail',
+        'makes characters (' +
+          JSON.stringify(rail.make) +
+          ') and removes them only from her own page (' +
+          JSON.stringify(rail.onHerPage) +
+          ')',
+      )
+  })
 
-  /* --- C4: a character with no face file is not drawn as somebody else --- */
-  const faces = await page.run(`(() => {
+  await step('C4', async () => {
+    /* --- C4: a character with no face file is not drawn as somebody else --- */
+    const faces = await page.run(`(() => {
     const cards = [...document.querySelectorAll('.rail-cast .rail-row')];
     if (cards.length < 2) return { why: 'only ' + cards.length + ' character(s) reached the cast list' };
     const shots = cards.map((c) => {
@@ -1251,19 +1484,24 @@ async function checks(page, where = '') {
     return { shots: shots.map((s) => ({ name: s.name, style: s.style, blank: s.blank })),
              identical: shots[0].drawn === shots[1].drawn };
   })()`)
-  if (faces.why) bad('C4', faces.why)
-  else if (faces.identical)
-    bad('C4', 'the character with no face file is drawn with an identical picture to the built-in')
-  else
-    ok(
-      'C4',
-      'a missing face is not silently substituted (' +
-        JSON.stringify(faces.shots.map((s) => s.name)) +
-        ')',
-    )
+    if (faces.why) bad('C4', faces.why)
+    else if (faces.identical)
+      bad(
+        'C4',
+        'the character with no face file is drawn with an identical picture to the built-in',
+      )
+    else
+      ok(
+        'C4',
+        'a missing face is not silently substituted (' +
+          JSON.stringify(faces.shots.map((s) => s.name)) +
+          ')',
+      )
+  })
 
-  /* --- an editable thing looks editable --------------------------------- */
-  /*
+  await step('editable', 'C5', async () => {
+    /* --- an editable thing looks editable --------------------------------- */
+    /*
     ON HER PAGE, and it says so rather than measuring whatever was showing.
 
     This ran on whichever page the check before it happened to leave up, and the
@@ -1277,9 +1515,9 @@ async function checks(page, where = '') {
     the archive and measured its search box. A check that can silently sample
     one subject instead of five is one whose green means very little.
   */
-  await goTo(page, 'cast')
-  await wait(400)
-  const editable = await page.run(`(() => {
+    await goTo(page, 'cast')
+    await settle(page)
+    const editable = await page.run(`(() => {
     const fields = [...document.querySelectorAll('input[type=text], input[type=search], textarea, select')]
       .filter((e) => e.getClientRects().length > 0 && !e.disabled && !e.readOnly);
     const silent = [];
@@ -1328,17 +1566,18 @@ async function checks(page, where = '') {
     return { seen: fields.length, silent: silent.slice(0, 6),
  };
   })()`)
-  if (editable.seen === 0) bad('editable', 'no editable control was drawn, so this proves nothing')
-  else if (editable.silent.length > 0)
-    bad(
-      'editable',
-      editable.silent.length +
-        ' editable things show no rule, box or fill: ' +
-        JSON.stringify(editable.silent),
-    )
-  else ok('editable', 'all ' + editable.seen + ' editable things say so at rest')
+    if (editable.seen === 0)
+      bad('editable', 'no editable control was drawn, so this proves nothing')
+    else if (editable.silent.length > 0)
+      bad(
+        'editable',
+        editable.silent.length +
+          ' editable things show no rule, box or fill: ' +
+          JSON.stringify(editable.silent),
+      )
+    else ok('editable', 'all ' + editable.seen + ' editable things say so at rest')
 
-  /*
+    /*
     C5 · SEEING A FACE AND PERMITTING IT ARE TWO ACTIONS.
 
     This check was removed when the mood tiles were, and the note left in its
@@ -1354,7 +1593,7 @@ async function checks(page, where = '') {
       whose `<input>` lives in it is invalid HTML, and it makes looking at a face
       a click that permits it.
   */
-  /*
+    /*
     HER EXPRESSIONS IS A SCREEN, not a section, so this has to open it.
 
     A2c has its own title and its own apparatus column in the delivery, which
@@ -1363,11 +1602,11 @@ async function checks(page, where = '') {
     a `bad()` rather than a skip: "no tiles" and "tiles that are wrong" must not
     look the same from here.
   */
-  await page.run(
-    `(() => { const row = document.querySelector('[data-opens="faces"]'); if (row) row.click(); })()`,
-  )
-  await wait(400)
-  const tiles = await page.run(`(() => {
+    await page.run(
+      `(() => { const row = document.querySelector('[data-opens="faces"]'); if (row) row.click(); })()`,
+    )
+    await settle(page)
+    const tiles = await page.run(`(() => {
     const all = [...document.querySelectorAll('.face-tile')];
     return {
       count: all.length,
@@ -1377,18 +1616,18 @@ async function checks(page, where = '') {
       wrapped: all.filter((t) => t.querySelector('label canvas') !== null).length,
     };
   })()`)
-  if (tiles.count === 0) bad('C5', 'no expression tiles on her page, so nothing was measured')
-  else if (tiles.drawn !== tiles.count)
-    bad('C5', `${String(tiles.count - tiles.drawn)} of ${String(tiles.count)} tiles draw no face`)
-  else if (tiles.switched !== tiles.count)
-    bad(
-      'C5',
-      `${String(tiles.count - tiles.switched)} of ${String(tiles.count)} tiles have no switch`,
-    )
-  else if (tiles.wrapped > 0)
-    bad('C5', `${String(tiles.wrapped)} tiles put the face inside the switch's own label`)
-  else
-    /*
+    if (tiles.count === 0) bad('C5', 'no expression tiles on her page, so nothing was measured')
+    else if (tiles.drawn !== tiles.count)
+      bad('C5', `${String(tiles.count - tiles.drawn)} of ${String(tiles.count)} tiles draw no face`)
+    else if (tiles.switched !== tiles.count)
+      bad(
+        'C5',
+        `${String(tiles.count - tiles.switched)} of ${String(tiles.count)} tiles have no switch`,
+      )
+    else if (tiles.wrapped > 0)
+      bad('C5', `${String(tiles.wrapped)} tiles put the face inside the switch's own label`)
+    else
+      /*
       The withheld half is only PROVED when something is withheld.
 
       The seeded profile permits all eight, so `drawn === count` holds whether or
@@ -1396,23 +1635,25 @@ async function checks(page, where = '') {
       screen. Said out loud rather than reported as a pass, which is the same
       honesty the day-counting checks on the machine's page already practise.
     */
-    ok(
-      'C5',
-      tiles.withheld > 0
-        ? `all ${String(tiles.count)} faces drawn and separately switched, ` +
-            `including ${String(tiles.withheld)} withheld`
-        : `all ${String(tiles.count)} faces drawn and separately switched — none is ` +
-            'withheld in this profile, so "withheld faces are still drawn" is untested here',
-    )
+      ok(
+        'C5',
+        tiles.withheld > 0
+          ? `all ${String(tiles.count)} faces drawn and separately switched, ` +
+              `including ${String(tiles.withheld)} withheld`
+          : `all ${String(tiles.count)} faces drawn and separately switched — none is ` +
+              'withheld in this profile, so "withheld faces are still drawn" is untested here',
+      )
+  })
 
-  /* --- contrast: the floors the app enforces at runtime ------------------ */
-  /*
+  await step('contrast', async () => {
+    /* --- contrast: the floors the app enforces at runtime ------------------ */
+    /*
     BOTH themes, because the failure that prompted this gate was present in both
     and a single-theme sweep would have reported half of it as fixed. The pair
     that failed was built-in chrome on built-in chrome, which `applyAccent` does
     not guard -- it checks a CHARACTER's hue against the page.
   */
-  const measureContrast = `(() => {
+    const measureContrast = `(() => {
     const lum = (c) => {
       const p = c.match(/[\\d.]+/g).slice(0, 3).map(Number).map((v) => {
         const x = v / 255;
@@ -1480,21 +1721,23 @@ async function checks(page, where = '') {
     }
     return bad.slice(0, 6);
   })()`
-  for (const theme of ['light', 'dark']) {
-    await page.send('Emulation.setEmulatedMedia', {
-      features: [{ name: 'prefers-color-scheme', value: theme }],
-    })
-    await wait(500)
-    const below = await page.run(measureContrast)
-    if (below.length > 0)
-      bad('contrast', theme + ': ' + below.length + ' below the floor: ' + JSON.stringify(below))
-    else ok('contrast', theme + ': every drawn text meets its floor (4.5:1, 3:1 for large)')
-  }
-  await page.send('Emulation.setEmulatedMedia', { features: [] })
-  await wait(300)
+    for (const theme of ['light', 'dark']) {
+      await page.send('Emulation.setEmulatedMedia', {
+        features: [{ name: 'prefers-color-scheme', value: theme }],
+      })
+      await settle(page)
+      const below = await page.run(measureContrast)
+      if (below.length > 0)
+        bad('contrast', theme + ': ' + below.length + ' below the floor: ' + JSON.stringify(below))
+      else ok('contrast', theme + ': every drawn text meets its floor (4.5:1, 3:1 for large)')
+    }
+    await page.send('Emulation.setEmulatedMedia', { features: [] })
+    await settle(page)
+  })
 
-  /* --- the rail is a table of contents, so every entry lands ------------- */
-  /*
+  await step('rail-lands', async () => {
+    /* --- the rail is a table of contents, so every entry lands ------------- */
+    /*
     From the machine's page, pressing a character in the rail did nothing
     visible. `showPlace` is the only thing that moves between the two pages and
     the rail's handler never called it, so her sheet was drawn into a column
@@ -1504,9 +1747,9 @@ async function checks(page, where = '') {
     test, and a check that calls the function it is checking would pass on a row
     that is not wired to it at all.
   */
-  await page.run(`document.getElementById('rail-machine').click()`)
-  await wait(700)
-  const landed = await page.run(`(() => {
+    await page.run(`document.getElementById('rail-machine').click()`)
+    await settle(page)
+    const landed = await page.run(`(() => {
     const rows = [...document.querySelectorAll('#characters .rail-row')];
     if (rows.length === 0) return { none: true };
     const first = rows[0];
@@ -1515,8 +1758,8 @@ async function checks(page, where = '') {
     first.click();
     return { name, wasMachine };
   })()`)
-  await wait(900)
-  const after = await page.run(`(() => {
+    await settle(page)
+    const after = await page.run(`(() => {
     const hers = document.getElementById('page-hers');
     const machine = document.getElementById('page-machine');
     const current = document.querySelector('#characters .rail-row[aria-current="true"] .rail-name');
@@ -1527,37 +1770,39 @@ async function checks(page, where = '') {
       view: (document.querySelector('#views [aria-current="true"] .view-label') || {}).textContent,
     };
   })()`)
-  if (landed.none === true)
-    bad('rail-lands', 'the rail lists no characters, so nothing was pressed')
-  else if (landed.wasMachine !== true)
-    bad('rail-lands', 'the machine page was not showing, so the press proves nothing')
-  else if (!after.hers || after.machine)
-    bad(
-      'rail-lands',
-      'pressing ' +
-        JSON.stringify(landed.name) +
-        ' from the machine page left the window on the machine',
-    )
-  else if (after.current !== landed.name)
-    bad(
-      'rail-lands',
-      'pressing ' +
-        JSON.stringify(landed.name) +
-        ' landed on her page with ' +
-        JSON.stringify(after.current) +
-        ' marked current',
-    )
-  else
-    ok(
-      'rail-lands',
-      'pressing ' +
-        JSON.stringify(landed.name) +
-        ' from the machine page opens ' +
-        JSON.stringify((after.view ?? '').trim()),
-    )
+    if (landed.none === true)
+      bad('rail-lands', 'the rail lists no characters, so nothing was pressed')
+    else if (landed.wasMachine !== true)
+      bad('rail-lands', 'the machine page was not showing, so the press proves nothing')
+    else if (!after.hers || after.machine)
+      bad(
+        'rail-lands',
+        'pressing ' +
+          JSON.stringify(landed.name) +
+          ' from the machine page left the window on the machine',
+      )
+    else if (after.current !== landed.name)
+      bad(
+        'rail-lands',
+        'pressing ' +
+          JSON.stringify(landed.name) +
+          ' landed on her page with ' +
+          JSON.stringify(after.current) +
+          ' marked current',
+      )
+    else
+      ok(
+        'rail-lands',
+        'pressing ' +
+          JSON.stringify(landed.name) +
+          ' from the machine page opens ' +
+          JSON.stringify((after.view ?? '').trim()),
+      )
+  })
 
-  /* --- the masthead is one component ------------------------------------- */
-  /*
+  await step('one-masthead', async () => {
+    /* --- the masthead is one component ------------------------------------- */
+    /*
     Her face and her name are the same size on all three of her views.
 
     `HerHead.dc.html` is ONE component — a 64px face, a 34px name, and the three
@@ -1580,9 +1825,9 @@ async function checks(page, where = '') {
     reported "her name is 13px on all three views" and passed. An invariant that
     holds when the thing it protects is destroyed is not protecting it.
   */
-  const HEAD_NAME_PX = 34
-  const HEAD_FACE_PX = 64
-  const oneHead = await page.run(`(() => {
+    const HEAD_NAME_PX = 34
+    const HEAD_FACE_PX = 64
+    const oneHead = await page.run(`(() => {
     const seen = [];
     for (const id of ['tab-for-cast', 'tab-for-archive', 'tab-for-permits']) {
       const tab = document.getElementById(id);
@@ -1599,28 +1844,30 @@ async function checks(page, where = '') {
     }
     return { seen, sizes: [...new Set(seen.map((o) => o.px))], faces: [...new Set(seen.map((o) => o.face))] };
   })()`)
-  if (typeof oneHead.missing === 'string') {
-    bad('one-masthead', `no ${oneHead.missing} tab, so the three views were never compared`)
-  } else if (typeof oneHead.blank === 'string') {
-    bad('one-masthead', `the masthead is empty on ${oneHead.blank}`)
-  } else if (oneHead.sizes.length > 1 || oneHead.faces.length > 1) {
-    bad('one-masthead', 'the masthead changes between her views: ' + JSON.stringify(oneHead.seen))
-  } else if (parseFloat(oneHead.sizes[0]) !== HEAD_NAME_PX || oneHead.faces[0] !== HEAD_FACE_PX) {
-    bad(
-      'one-masthead',
-      `the masthead agrees with itself and not with HerHead: name ${oneHead.sizes[0]} and face ` +
-        `${String(oneHead.faces[0])}px, drawn at ${String(HEAD_NAME_PX)}px and ` +
-        `${String(HEAD_FACE_PX)}px`,
-    )
-  } else {
-    ok(
-      'one-masthead',
-      `her name is ${oneHead.sizes[0]} and her face ${String(oneHead.faces[0])}px on all three views`,
-    )
-  }
+    if (typeof oneHead.missing === 'string') {
+      bad('one-masthead', `no ${oneHead.missing} tab, so the three views were never compared`)
+    } else if (typeof oneHead.blank === 'string') {
+      bad('one-masthead', `the masthead is empty on ${oneHead.blank}`)
+    } else if (oneHead.sizes.length > 1 || oneHead.faces.length > 1) {
+      bad('one-masthead', 'the masthead changes between her views: ' + JSON.stringify(oneHead.seen))
+    } else if (parseFloat(oneHead.sizes[0]) !== HEAD_NAME_PX || oneHead.faces[0] !== HEAD_FACE_PX) {
+      bad(
+        'one-masthead',
+        `the masthead agrees with itself and not with HerHead: name ${oneHead.sizes[0]} and face ` +
+          `${String(oneHead.faces[0])}px, drawn at ${String(HEAD_NAME_PX)}px and ` +
+          `${String(HEAD_FACE_PX)}px`,
+      )
+    } else {
+      ok(
+        'one-masthead',
+        `her name is ${oneHead.sizes[0]} and her face ${String(oneHead.faces[0])}px on all three views`,
+      )
+    }
+  })
 
-  /* --- the rail's rows line up ------------------------------------------- */
-  /*
+  await step('rail-lines-up', async () => {
+    /* --- the rail's rows line up ------------------------------------------- */
+    /*
     A rail row's label sits immediately after its own tile, and every row in the
     character list starts at the same x.
 
@@ -1644,9 +1891,9 @@ async function checks(page, where = '') {
     sized by attribute alone is a replaced element at `width: auto` and
     `box-sizing` has nothing to apply to.
   */
-  await goTo(page, 'cast')
-  await wait(300)
-  const railLeft = await page.run(`(() => {
+    await goTo(page, 'cast')
+    await settle(page)
+    const railLeft = await page.run(`(() => {
     const read = (row) => {
       const label = row.querySelector('.rail-name');
       const tile = row.querySelector('.tile, .rail-tile');
@@ -1668,31 +1915,33 @@ async function checks(page, where = '') {
       rows: all.length,
     };
   })()`)
-  if (typeof railLeft.few === 'number') {
-    bad(
-      'rail-lines-up',
-      `only ${String(railLeft.few)} rows in the rail, so nothing lines up or fails to`,
-    )
-  } else if (railLeft.pushed.length > 0) {
-    bad(
-      'rail-lines-up',
-      'a rail label is not beside its own tile: ' + JSON.stringify(railLeft.pushed),
-    )
-  } else if (railLeft.spread > 1) {
-    bad(
-      'rail-lines-up',
-      'the character list starts its names at different places: ' + JSON.stringify(railLeft.list),
-    )
-  } else {
-    ok(
-      'rail-lines-up',
-      `all ${String(railLeft.rows)} rail labels sit beside their own tile, and the ` +
-        `${String(railLeft.list.length)} in the list share one left edge`,
-    )
-  }
+    if (typeof railLeft.few === 'number') {
+      bad(
+        'rail-lines-up',
+        `only ${String(railLeft.few)} rows in the rail, so nothing lines up or fails to`,
+      )
+    } else if (railLeft.pushed.length > 0) {
+      bad(
+        'rail-lines-up',
+        'a rail label is not beside its own tile: ' + JSON.stringify(railLeft.pushed),
+      )
+    } else if (railLeft.spread > 1) {
+      bad(
+        'rail-lines-up',
+        'the character list starts its names at different places: ' + JSON.stringify(railLeft.list),
+      )
+    } else {
+      ok(
+        'rail-lines-up',
+        `all ${String(railLeft.rows)} rail labels sit beside their own tile, and the ` +
+          `${String(railLeft.list.length)} in the list share one left edge`,
+      )
+    }
+  })
 
-  /* --- Rule 6: none of her colour on the machine's page ------------------ */
-  /*
+  await step('rule-6', async () => {
+    /* --- Rule 6: none of her colour on the machine's page ------------------ */
+    /*
     "The machine is not her. It gets its own page, its own mark, and NONE OF HER
     COLOUR."
 
@@ -1707,9 +1956,9 @@ async function checks(page, where = '') {
     literal to compare against. The probe lives outside the page, which is the
     point: it reads the value the rest of the window still has.
   */
-  await page.run(`document.getElementById('rail-machine').click()`)
-  await wait(700)
-  /*
+    await page.run(`document.getElementById('rail-machine').click()`)
+    await settle(page)
+    /*
     EVERY GROUP, not the one that happens to be open.
 
     The first version of this check measured whatever the machine page was
@@ -1718,23 +1967,23 @@ async function checks(page, where = '') {
     it green, which is the only reason it was found: a check that cannot go red
     when the fix is deleted is not a check.
   */
-  const groups = await page.run(`document.querySelectorAll('#nav-groups .tab').length`)
-  const rule6 = { colours: 0, hit: [], away: false, missing: undefined, groups }
-  for (let g = 0; g < groups; g += 1) {
-    await page.run(
-      `(() => { const t = document.querySelectorAll('#nav-groups .tab')[${String(g)}]; if (t) t.click(); })()`,
-    )
-    await wait(320)
-    /*
+    const groups = await page.run(`document.querySelectorAll('#nav-groups .tab').length`)
+    const rule6 = { colours: 0, hit: [], away: false, missing: undefined, groups }
+    for (let g = 0; g < groups; g += 1) {
+      await page.run(
+        `(() => { const t = document.querySelectorAll('#nav-groups .tab')[${String(g)}]; if (t) t.click(); })()`,
+      )
+      await settle(page)
+      /*
       A field is measured FOCUSED as well as at rest, because her colour on a
       focus ring is the state that only exists while somebody is typing — the
       one nothing else in this window would ever show.
     */
-    await page.run(
-      `(() => { const f = document.querySelector('#machine-pane input, #machine-pane textarea, #machine-pane select'); if (f) f.focus(); })()`,
-    )
-    await wait(160)
-    const round = await page.run(`(() => {
+      await page.run(
+        `(() => { const f = document.querySelector('#machine-pane input, #machine-pane textarea, #machine-pane select'); if (f) f.focus(); })()`,
+      )
+      await settle(page)
+      const round = await page.run(`(() => {
       /*
         THE PROBE SITS INSIDE A SENTINEL, and that is not fussiness.
 
@@ -1791,75 +2040,79 @@ async function checks(page, where = '') {
       }
       return { colours: hers.size, hit: [...new Set(hit)] };
     })()`)
-    if (round.missing !== undefined) rule6.missing = round.missing
-    else if (round.away === true) rule6.away = true
-    else {
-      rule6.colours = round.colours
-      for (const one of round.hit) if (!rule6.hit.includes(one)) rule6.hit.push(one)
+      if (round.missing !== undefined) rule6.missing = round.missing
+      else if (round.away === true) rule6.away = true
+      else {
+        rule6.colours = round.colours
+        for (const one of round.hit) if (!rule6.hit.includes(one)) rule6.hit.push(one)
+      }
     }
-  }
-  if (rule6.missing !== undefined)
-    bad(
-      'rule-6',
-      'these are not tokens any more, so this check was measuring nothing: ' +
-        JSON.stringify(rule6.missing) +
-        '. Update the list to what her colour is actually spent on.',
-    )
-  else if (rule6.away === true)
-    bad('rule-6', 'the machine page is not showing, so nothing was measured')
-  else if (rule6.hit.length > 0)
-    bad(
-      'rule-6',
-      rule6.hit.length +
-        ' things on the machine page are drawn in her colour: ' +
-        JSON.stringify(rule6.hit.slice(0, 6)),
-    )
-  else
-    ok(
-      'rule-6',
-      'none of her ' +
-        rule6.colours +
-        ' colours is drawn on any of the machine\u2019s ' +
-        rule6.groups +
-        ' groups',
-    )
-  await page.run(`document.getElementById('tab-for-archive').click()`)
-  await wait(600)
+    if (rule6.missing !== undefined)
+      bad(
+        'rule-6',
+        'these are not tokens any more, so this check was measuring nothing: ' +
+          JSON.stringify(rule6.missing) +
+          '. Update the list to what her colour is actually spent on.',
+      )
+    else if (rule6.away === true)
+      bad('rule-6', 'the machine page is not showing, so nothing was measured')
+    else if (rule6.hit.length > 0)
+      bad(
+        'rule-6',
+        rule6.hit.length +
+          ' things on the machine page are drawn in her colour: ' +
+          JSON.stringify(rule6.hit.slice(0, 6)),
+      )
+    else
+      ok(
+        'rule-6',
+        'none of her ' +
+          rule6.colours +
+          ' colours is drawn on any of the machine\u2019s ' +
+          rule6.groups +
+          ' groups',
+      )
+    await page.run(`document.getElementById('tab-for-archive').click()`)
+    await settle(page)
+  })
 
-  /* --- if anything moves, reduced motion stills it ---------------------- */
-  const moving = await page.run(`(() => [...document.querySelectorAll('*')]
+  await step('reduced-motion', async () => {
+    /* --- if anything moves, reduced motion stills it ---------------------- */
+    const moving = await page.run(`(() => [...document.querySelectorAll('*')]
     .filter((e) => e.getClientRects().length > 0)
     .filter((e) => {
       const s = getComputedStyle(e);
       return parseFloat(s.transitionDuration) > 0 || parseFloat(s.animationDuration) > 0;
     }).length)()`)
-  if (moving === 0) {
-    // Vacuous today and deliberately not a failure: this shell declares no
-    // transitions at all. The check is here so that the first one added has to
-    // answer for itself rather than shipping unguarded.
-    ok('reduced-motion', 'nothing declares motion, so there is nothing to still')
-  } else {
-    await page.send('Emulation.setEmulatedMedia', {
-      features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
-    })
-    await wait(400)
-    const stilled = await page.run(`(() => [...document.querySelectorAll('*')]
+    if (moving === 0) {
+      // Vacuous today and deliberately not a failure: this shell declares no
+      // transitions at all. The check is here so that the first one added has to
+      // answer for itself rather than shipping unguarded.
+      ok('reduced-motion', 'nothing declares motion, so there is nothing to still')
+    } else {
+      await page.send('Emulation.setEmulatedMedia', {
+        features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+      })
+      await settle(page)
+      const stilled = await page.run(`(() => [...document.querySelectorAll('*')]
       .filter((e) => e.getClientRects().length > 0)
       .filter((e) => {
         const s = getComputedStyle(e);
         return parseFloat(s.transitionDuration) > 0 || parseFloat(s.animationDuration) > 0;
       }).map((e) => e.tagName.toLowerCase() + '.' + e.className).slice(0, 5))()`)
-    await page.send('Emulation.setEmulatedMedia', { features: [] })
-    if (stilled.length > 0)
-      bad(
-        'reduced-motion',
-        stilled.length + ' still move when the system asks not to: ' + JSON.stringify(stilled),
-      )
-    else ok('reduced-motion', moving + ' moving things, all stilled when asked')
-  }
+      await page.send('Emulation.setEmulatedMedia', { features: [] })
+      if (stilled.length > 0)
+        bad(
+          'reduced-motion',
+          stilled.length + ' still move when the system asks not to: ' + JSON.stringify(stilled),
+        )
+      else ok('reduced-motion', moving + ' moving things, all stilled when asked')
+    }
+  })
 
-  /* --- if anything declares a drag region, its controls opt out ---------- */
-  const drag = await page.run(`(() => {
+  await step('one-title-bar', async () => {
+    /* --- if anything declares a drag region, its controls opt out ---------- */
+    const drag = await page.run(`(() => {
     const dragging = [...document.querySelectorAll('*')].filter((e) => getComputedStyle(e).webkitAppRegion === 'drag');
     if (dragging.length === 0) return { none: true };
     const stuck = [];
@@ -1871,21 +2124,22 @@ async function checks(page, where = '') {
     }
     return { regions: dragging.length, stuck: stuck.slice(0, 5) };
   })()`)
-  if (drag.none) {
-    // This window is frameless and the operating system draws its controls; no
-    // element claims a drag region. Stated rather than skipped, so that adding
-    // one later is a decision somebody made and not a silent change.
-    ok('one-title-bar', 'the window declares no drag region of its own')
-  } else if (drag.stuck.length > 0) {
-    bad(
-      'one-title-bar',
-      drag.stuck.length +
-        ' controls in a drag region do not opt out: ' +
-        JSON.stringify(drag.stuck),
-    )
-  } else {
-    ok('one-title-bar', drag.regions + ' drag region(s), every control in them opts out')
-  }
+    if (drag.none) {
+      // This window is frameless and the operating system draws its controls; no
+      // element claims a drag region. Stated rather than skipped, so that adding
+      // one later is a decision somebody made and not a silent change.
+      ok('one-title-bar', 'the window declares no drag region of its own')
+    } else if (drag.stuck.length > 0) {
+      bad(
+        'one-title-bar',
+        drag.stuck.length +
+          ' controls in a drag region do not opt out: ' +
+          JSON.stringify(drag.stuck),
+      )
+    } else {
+      ok('one-title-bar', drag.regions + ' drag region(s), every control in them opts out')
+    }
+  })
 }
 
 /**
@@ -1897,8 +2151,9 @@ async function checks(page, where = '') {
  */
 async function layoutChecks(page, where = '') {
   at = where === '' ? '' : `  [${where}]`
-  /* --- a control whose own label does not fit in it ---------------------- */
-  const squashed = await page.run(`(() => {
+  await step('fits', async () => {
+    /* --- a control whose own label does not fit in it ---------------------- */
+    const squashed = await page.run(`(() => {
     const out = [];
     for (const el of document.querySelectorAll('button, select, input, textarea, .name, .worn, .what')) {
       if (el.getClientRects().length === 0) continue;
@@ -1930,8 +2185,8 @@ async function layoutChecks(page, where = '') {
     }
     return out.slice(0, 6);
   })()`)
-  if (squashed.length > 0 && process.argv.includes('--why')) {
-    const why = await page.run(`(() => {
+    if (squashed.length > 0 && process.argv.includes('--why')) {
+      const why = await page.run(`(() => {
       const over = [...document.querySelectorAll('button, select, input, textarea, .name, .worn, .what')]
         .filter((e) => e.getClientRects().length > 0 && e.tagName !== 'TEXTAREA')
         .find((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflow !== 'auto');
@@ -1946,14 +2201,19 @@ async function layoutChecks(page, where = '') {
       }
       return out;
     })()`)
-    console.log('  why:\n   ' + why.join('\n   '))
-  }
-  if (squashed.length > 0)
-    bad('fits', squashed.length + ' controls cut off their own label: ' + JSON.stringify(squashed))
-  else ok('fits', 'every control and name fits the width it is given')
+      console.log('  why:\n   ' + why.join('\n   '))
+    }
+    if (squashed.length > 0)
+      bad(
+        'fits',
+        squashed.length + ' controls cut off their own label: ' + JSON.stringify(squashed),
+      )
+    else ok('fits', 'every control and name fits the width it is given')
+  })
 
-  /* --- nothing clips out of the window ---------------------------------- */
-  const clipped = await page.run(`(() => {
+  await step('clipping', async () => {
+    /* --- nothing clips out of the window ---------------------------------- */
+    const clipped = await page.run(`(() => {
     const room = document.documentElement.clientWidth;
     const out = [];
     for (const el of document.querySelectorAll('#reading *, #list *, #page-machine *')) {
@@ -1966,8 +2226,8 @@ async function layoutChecks(page, where = '') {
     }
     return out.slice(0, 5);
   })()`)
-  if (clipped.length > 0 && process.argv.includes('--why')) {
-    const why = await page.run(`(() => {
+    if (clipped.length > 0 && process.argv.includes('--why')) {
+      const why = await page.run(`(() => {
       const out = [];
       for (const g of document.querySelectorAll('.machine-spread, .spread')) {
         if (g.getClientRects().length === 0) continue;
@@ -1979,12 +2239,13 @@ async function layoutChecks(page, where = '') {
       }
       return out;
     })()`)
-    console.log('  why:\n   ' + why.join('\n   '))
-  }
-  if (clipped.length > 0)
-    bad('clipping', clipped.length + ' elements run past the window: ' + JSON.stringify(clipped))
-  else ok('clipping', 'nothing is drawn past the right edge of the window')
-  at = ''
+      console.log('  why:\n   ' + why.join('\n   '))
+    }
+    if (clipped.length > 0)
+      bad('clipping', clipped.length + ' elements run past the window: ' + JSON.stringify(clipped))
+    else ok('clipping', 'nothing is drawn past the right edge of the window')
+    at = ''
+  })
 }
 
 /* ---- the run ------------------------------------------------------------ */
@@ -2015,7 +2276,20 @@ async function main() {
     const made = await page.run(
       `window.mochiHistory.character({ kind: 'duplicate', name: 'Wisp' }).then((r) => JSON.stringify(r))`,
     )
-    await wait(3000)
+    /*
+      Wait for the SECOND ROW, not for three seconds.
+
+      Duplicating a character is a write, a re-read and a redraw, and three
+      seconds was the number that covered it on the machine this was written on.
+      The rail showing two rows is the thing that was being waited for, and it
+      says so about 200ms in.
+    */
+    await until(
+      page,
+      `document.querySelectorAll('.rail .rail-row').length > 1`,
+      'the seeded character',
+      8000,
+    )
     const listed = await page.run(`document.querySelectorAll('.rail .rail-row').length`)
     page.close()
     await stop(running)
@@ -2045,7 +2319,15 @@ async function main() {
     /* --- second launch: a populated window --- */
     running = launch(userData)
     page = await openShell()
-    await wait(1200)
+    // The window is open as soon as `openShell` returns; what this was waiting
+    // for is the first read landing and the rail being drawn from it.
+    await until(
+      page,
+      `document.querySelectorAll('.rail .rail-row').length > 0`,
+      'the rail to draw',
+      10000,
+    )
+    await settle(page)
 
     if (fresh) {
       await firstHour(page)
@@ -2179,17 +2461,23 @@ async function main() {
       deviceScaleFactor: 0,
       mobile: false,
     })
-    await wait(800)
+    await settle(page)
     await layoutChecks(page, 'at the 1120px floor')
     await page.send('Emulation.clearDeviceMetricsOverride')
 
     page.close()
   } finally {
-    if (running) await stop(running)
+    if (running) await stop(running, { last: true })
     rmSync(userData, { recursive: true, force: true })
   }
   console.log(
-    failures.length ? `\n${failures.length} failed` : `\n${passes.length} checks, all green`,
+    LISTING
+      ? `\n${listed.length} checks — name any of them with --only, or match with --grep`
+      : failures.length
+        ? `\n${failures.length} failed`
+        : `\n${passes.length} checks, all green${
+            skipped.length ? ` \u00b7 ${String(skipped.length)} not asked for` : ''
+          }`,
   )
   process.exit(failures.length ? 1 : 0)
 }
