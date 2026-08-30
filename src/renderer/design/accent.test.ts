@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { FACE_BOUNDS, MOCHI, parseFaceSpec, type FaceSpec } from '@shared/avatar-spec'
 import { THEME_IDS, paletteFor } from '@shared/theme'
 import {
+  AA_BODY,
+  AA_MARK,
   accentVariables,
   contrast,
   contrastFailures,
   luminance,
   parseHex,
+  readableAgainst,
   shade,
   toHex,
 } from './accent'
@@ -62,14 +65,22 @@ describe('luminance and contrast', () => {
 describe('accentVariables', () => {
   it('derives every property the token sheet declares', () => {
     const vars = accentVariables(MOCHI)
-    // FOUR, down from eight. She is one colour whatever the OS is set to, so
-    // none of them is a `light-dark()` pair any more: the two that were read
-    // against the page went with the window's hue.
-    for (const name of ['--her', '--her-deep', '--her-deep-ink']) {
+    /*
+      FOUR, down from eight — but two of them are pairs again, and the reason is
+      not the window's hue coming back. `--her` and `--her-veil` are the halo,
+      which is drawn over somebody's DESKTOP: her colour has to be dark enough
+      to read on a white one and light enough on a black one, and no single
+      value is both. The two that were dropped were read against the page, which
+      no longer takes her colour at all.
+    */
+    for (const name of ['--her-deep', '--her-deep-ink']) {
       expect(vars[name], name).toMatch(/^#[0-9a-f]{6}$/)
     }
-    // Her colour as a film, for the halo's interior. Alpha, so neither shape.
-    expect(vars['--her-veil'], '--her-veil').toMatch(/^rgb\(\d+ \d+ \d+ \/ \d+%\)$/)
+    expect(vars['--her'], '--her').toMatch(/^light-dark\(#[0-9a-f]{6}, #[0-9a-f]{6}\)$/)
+    // Her colour as a film, at the two alphas the boards give the open ring.
+    expect(vars['--her-veil'], '--her-veil').toMatch(
+      /^light-dark\(rgb\(\d+ \d+ \d+ \/ 14%\), rgb\(\d+ \d+ \d+ \/ 22%\)\)$/,
+    )
     // And nothing else: a property written onto the document that no sheet
     // declares and nothing reads is a producer with no consumer.
     expect(Object.keys(vars).sort()).toEqual([
@@ -84,7 +95,13 @@ describe('accentVariables', () => {
     // One graphical source. If somebody makes her pink, the buttons go pink --
     // the same guarantee the tray icon has, for the same reason.
     const pink: FaceSpec = { ...MOCHI, colBody: '#e79ab8' }
-    expect(accentVariables(pink)['--her']).toBe('#e79ab8')
+    /*
+      A PAIR now, not a bare hex: the ring is her only sign that the microphone
+      is open, so each half is taken to a floor against the surface it can land
+      on. Her hue still has to survive the trip, which is what the second
+      assertion is for — a floor that returned grey would satisfy the first.
+    */
+    expect(accentVariables(pink)['--her']).toMatch(/^light-dark\(#[0-9a-f]{6}, #[0-9a-f]{6}\)$/)
     expect(accentVariables(pink)['--her']).not.toBe(accentVariables(MOCHI)['--her'])
   })
 
@@ -92,7 +109,7 @@ describe('accentVariables', () => {
     // `parseFaceSpec` guarantees hex today, so this is defence against a future
     // caller. An unstyled window is a worse outcome than a slightly wrong one.
     const broken = { ...MOCHI, colBody: 'not-a-colour' } as FaceSpec
-    expect(accentVariables(broken)['--her']).toMatch(/^#[0-9a-f]{6}$/)
+    expect(accentVariables(broken)['--her']).toMatch(/^light-dark\(#[0-9a-f]{6}, #[0-9a-f]{6}\)$/)
   })
 
   it('falls back to HER green, not to a copy of it', () => {
@@ -100,7 +117,9 @@ describe('accentVariables', () => {
     // stated twice. Retuning `MOCHI.colBody` would have left the stale copy
     // behind with no test comparing the two -- this is that test.
     const broken = { ...MOCHI, colBody: 'not-a-colour' } as FaceSpec
-    expect(accentVariables(broken)['--her']).toBe(MOCHI.colBody.toLowerCase())
+    // HER green, taken to each floor — the fallback is her, not a grey that
+    // happens to read.
+    expect(accentVariables(broken)['--her']).toBe(accentVariables(MOCHI)['--her'])
   })
   it('is defined for the extremes of the colour bounds', () => {
     expect(FACE_BOUNDS.eyeGlint.min).toBe(0)
@@ -159,5 +178,44 @@ describe('white on her colour, which is the pairing the palette added', () => {
     for (const theme of THEME_IDS) {
       expect(contrastFailures({ ...MOCHI, ...paletteFor(theme) })).toEqual([])
     }
+  })
+})
+
+describe('her colour, taken far enough to be a mark', () => {
+  const WHITE = { r: 255, g: 255, b: 255 }
+  const NEAR_BLACK = { r: 20, g: 26, b: 23 }
+
+  it('rescues the built-in, which fails badly as drawn', () => {
+    /*
+      `#a5d8bd` is 1.60:1 on white. The halo is her only indicator that the
+      microphone is open, and `halo.ts` opens by calling that the failure this
+      repository most cannot get wrong — so this is a safety floor, not a
+      preference. The delivery's own audit made it item A.
+    */
+    const base = { r: 165, g: 216, b: 189 }
+    expect(contrast(base, WHITE)).toBeLessThan(3)
+    expect(contrast(readableAgainst(base, WHITE, AA_BODY), WHITE)).toBeGreaterThanOrEqual(AA_BODY)
+  })
+
+  it('rescues a hue a fixed shade would not', () => {
+    // `deep()` is one step of -0.42. A pale yellow is still pale after it, and
+    // this is a colour somebody else chose — no table can have anticipated it.
+    const pale = { r: 245, g: 230, b: 168 }
+    expect(contrast(readableAgainst(pale, WHITE, AA_BODY), WHITE)).toBeGreaterThanOrEqual(AA_BODY)
+  })
+
+  it('leaves a colour that already reads alone', () => {
+    // Darkening one that passes would spend her hue for nothing.
+    const dark = { r: 47, g: 79, b: 62 }
+    expect(readableAgainst(dark, WHITE, AA_BODY)).toEqual(dark)
+  })
+
+  it('goes the other way against a dark surface', () => {
+    // The same colour has to be a mark on somebody's black wallpaper too, and
+    // there the answer is lighter rather than darker.
+    const murky = { r: 40, g: 52, b: 45 }
+    const lifted = readableAgainst(murky, NEAR_BLACK, AA_MARK)
+    expect(contrast(lifted, NEAR_BLACK)).toBeGreaterThanOrEqual(AA_MARK)
+    expect(lifted.r).toBeGreaterThan(murky.r)
   })
 })

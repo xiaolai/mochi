@@ -56,6 +56,12 @@ export interface Palette {
   readonly bubbleInk: string
   readonly bubbleAhead: string
   readonly bubbleEdge: string
+  /** The disc behind a control at rest, and under the pointer. */
+  readonly bubbleChip: string
+  readonly bubbleChipOn: string
+  /** The two shadow layers the boards give every bubble. */
+  readonly bubbleLiftFar: string
+  readonly bubbleLiftNear: string
   /**
    * The unread-problems dot, and the one colour here that does NOT flip by
    * scheme — see `--alarm` in `tokens.css` for the argument and the four
@@ -101,6 +107,10 @@ const READ = [
   { key: 'bubbleInk', token: '--bubble-ink', property: 'text-emphasis-color' },
   { key: 'bubbleAhead', token: '--bubble-ahead', property: 'caret-color' },
   { key: 'bubbleEdge', token: '--bubble-edge', property: 'text-decoration-color' },
+  { key: 'bubbleChip', token: '--bubble-chip', property: 'flood-color' },
+  { key: 'bubbleChipOn', token: '--bubble-chip-on', property: 'lighting-color' },
+  { key: 'bubbleLiftFar', token: '--bubble-lift-far', property: 'stop-color' },
+  { key: 'bubbleLiftNear', token: '--bubble-lift-near', property: 'text-underline-color' },
   /*
     The halo's three. `--her` and `--her-veil` are written onto the document by
     `applyAccent` from the WORN face, so reading them here is what makes the ring

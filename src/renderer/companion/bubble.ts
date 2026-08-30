@@ -108,6 +108,25 @@ export interface BubbleColours {
    */
   readonly edge: string
   /**
+   * The disc behind one of the three controls: at rest, and under the pointer.
+   *
+   * `静止时浅灰,悬停加深` — the boards fill these at rest and deepen them on
+   * hover. They were STROKED at rest and filled only when hovered, which is a
+   * different shape arriving rather than the same one darkening.
+   */
+  readonly chip: string
+  readonly chipOn: string
+  /**
+   * The bubble's two shadow layers.
+   *
+   * The delivery's own note on the surface reads "白气泡在亮壁纸上没有边界,只靠
+   * 影子不够" — the 1px stroke was ADDED because a shadow alone is not enough.
+   * Only the stroke was built, so the bubble had a hairline and nothing else and
+   * read as a sticker rather than as something above the desktop.
+   */
+  readonly liftFar: string
+  readonly liftNear: string
+  /**
    * The unread-problems dot. Not themed, unlike everything else here.
    *
    * The rest of the colour is handed in so she can sit on a light desktop or a
@@ -785,7 +804,29 @@ export function createBubble(): Bubble {
         ctx.lineTo(edge, tip + TAIL)
       }
       ctx.closePath()
-      ctx.fill()
+      /*
+        FILLED TWICE, once per shadow layer.
+
+        A canvas carries one shadow at a time and the boards specify two —
+        `0 10px 30px` at 16% with `0 1px 3px` at 10% beneath it. Painting the
+        same opaque path under each gives the pair; the order is far first so
+        the tight one lands on top of it.
+
+        Reset before the stroke, or the outline casts a shadow of its own and
+        the edge doubles.
+      */
+      for (const layer of [
+        { colour: colours.liftFar, blur: 30, drop: 10 },
+        { colour: colours.liftNear, blur: 3, drop: 1 },
+      ]) {
+        ctx.shadowColor = layer.colour
+        ctx.shadowBlur = layer.blur
+        ctx.shadowOffsetY = layer.drop
+        ctx.fill()
+      }
+      ctx.shadowColor = 'transparent'
+      ctx.shadowBlur = 0
+      ctx.shadowOffsetY = 0
 
       /*
         Its own edge, drawn over both fills so the seam between box and tail is
@@ -867,14 +908,16 @@ export function createBubble(): Bubble {
         // vocabulary. Stroked at rest, filled once the pointer is on the bubble.
         ctx.beginPath()
         ctx.arc(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, 0, Math.PI * 2)
-        if (hovered) {
-          ctx.fillStyle = colours.edge
-          ctx.fill()
-        } else {
-          ctx.strokeStyle = colours.edge
-          ctx.lineWidth = 1
-          ctx.stroke()
-        }
+        /*
+          FILLED AT REST, deeper under the pointer — `静止时浅灰,悬停加深`.
+
+          It was a stroked ring at rest and a filled disc on hover, so arriving
+          with the pointer changed the SHAPE rather than its depth, and at 18px
+          an outline on a white bubble is most of nothing. The boards fill all
+          three with `#f4f4f5` before anything is hovered.
+        */
+        ctx.fillStyle = hovered ? colours.chipOn : colours.chip
+        ctx.fill()
         // Inset, so Lucide's 24-grid artwork has the margin it is drawn for.
         strokeIcon(
           ctx,

@@ -96,7 +96,11 @@ const COLOURS = {
   paper: '#ffffff',
   ink: '#0a0a0b',
   ahead: '#75757d',
-  edge: '#e6e6e8',
+  edge: '#dcdce0',
+  chip: '#f4f4f5',
+  chipOn: '#dcdce0',
+  liftFar: 'rgb(10 10 11 / 16%)',
+  liftNear: 'rgb(10 10 11 / 10%)',
   alarm: '#d1495b',
 }
 

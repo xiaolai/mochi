@@ -325,8 +325,38 @@
     an opaque bubble is that nothing should. A measured colour instead: dim, and
     still over the floor. "淡是'她还没说到',不是'你不该读'."
   */
-  --bubble-ahead: light-dark(#75757d, #8b8b93);
-  --bubble-edge: light-dark(#e6e6e8, #35353c);
+  /* `#9b9ba3` in dark, which is board 07's. `#8b8b93` was a step quieter than
+     the boards draw, on the one run of text that is already the quiet one. */
+  --bubble-ahead: light-dark(#75757d, #9b9ba3);
+  /*
+    `#dcdce0` / `#2b2b31`, which is what the bubble boards draw and the same
+    edge every window artboard gives its own frame. It was the window's `--rule`
+    a step lighter, which is a hairline for dividing things INSIDE a surface;
+    this one has to say where a surface ends, on somebody's wallpaper.
+  */
+  --bubble-edge: light-dark(#dcdce0, #2b2b31);
+  /*
+    The disc behind one of the bubble's three controls, at rest.
+
+    `静止时浅灰,悬停加深` — pale grey at rest, darker under the pointer. It is a
+    FILL: the controls were stroked circles at rest and filled only on hover,
+    which is a different shape appearing rather than the same shape deepening,
+    and an outline at 18px on a white bubble is most of nothing.
+  */
+  --bubble-chip: light-dark(#f4f4f5, #1f1f24);
+  --bubble-chip-on: light-dark(#dcdce0, #35353c);
+  /*
+    The two shadow layers, as colours the canvas can read.
+
+    "白气泡在亮壁纸上没有边界,只靠影子不够" — the stroke was added BECAUSE the
+    shadow is not enough on its own, and only the stroke was built. A bubble
+    with a hairline and no shadow is a sticker; the boards give it
+    `0 10px 30px` at 16% with `0 1px 3px` at 10% under it, and half that again
+    in dark, where the surface is darker than most wallpapers rather than
+    lighter.
+  */
+  --bubble-lift-far: light-dark(rgb(10 10 11 / 16%), rgb(0 0 0 / 50%));
+  --bubble-lift-near: light-dark(rgb(10 10 11 / 10%), rgb(0 0 0 / 16%));
 
   /* ---- two faces, two jobs ----------------------------------------------
    *

@@ -83,6 +83,9 @@ export function contrast(a: Rgb, b: Rgb): number {
 }
 
 const NEAR_BLACK: Rgb = { r: 20, g: 26, b: 23 }
+/* The brightest surface the halo can land on. Somebody's wallpaper is not
+   knowable; white is the worst case it has to survive. */
+const WHITE: Rgb = { r: 255, g: 255, b: 255 }
 
 /** WCAG AA for body text. */
 export const AA_BODY = 4.5
@@ -122,6 +125,38 @@ export const AA_MARK = 3.0
   existed only for its saturated-mid-tone fallback. `NEAR_BLACK` stays: it is the
   last-resort fallback when a face's colours cannot be parsed at all.
 */
+
+/**
+ * Her colour, taken far enough from a surface to be a MARK on it.
+ *
+ * ## Why this is not a fixed shade
+ *
+ * The halo is her colour and it is a safety indicator: an open microphone with
+ * nothing on screen saying so is the failure `halo.ts` opens by calling the one
+ * this repository most cannot get wrong. So the ring has to clear `AA_MARK`
+ * against whatever it sits on, and it sits on a desktop nobody chose.
+ *
+ * `deep()` is `shade(base, -0.42)`, one fixed step. That is right for the
+ * built-in and says nothing about anybody else's: a persona whose colour is a
+ * pale yellow is still pale yellow after one step, and the step that rescues it
+ * would blacken a colour that was already dark. Stepping until the ratio clears
+ * is the only version that holds for a hue this code has never seen.
+ *
+ * Returns the base unchanged when it already reads — darkening a colour that
+ * passes would be taking her hue away for nothing.
+ */
+export function readableAgainst(base: Rgb, surface: Rgb, floor: number): Rgb {
+  if (contrast(base, surface) >= floor) return base
+  // Toward black or toward white, whichever the surface is not.
+  const away = luminance(surface) > 0.5 ? -1 : 1
+  let best = base
+  for (let step = 1; step <= 20; step += 1) {
+    best = shade(base, away * (step / 20))
+    if (contrast(best, surface) >= floor) return best
+  }
+  // Nothing in twenty steps: black or white, whichever this was heading for.
+  return best
+}
 
 export function toHex({ r, g, b }: Rgb): string {
   const part = (value: number): string =>
@@ -215,7 +250,31 @@ export function accentVariables(face: FaceSpec): Readonly<Record<string, string>
      * recorded here is the arithmetic, so whoever makes it does not have to
      * rediscover it.
      */
-    '--her': toHex(base),
+    /*
+      TWO HALVES, and they are not interchangeable — board 09 says so directly.
+
+      This was one value, `toHex(base)`, written over the `light-dark()` pair in
+      `tokens.css` on every read. So the corrected token never survived: the
+      built-in's ring came out `#a5d8bd` on a light desktop, which is **1.60:1
+      against white** — below the 3.0 an open microphone's only indicator has to
+      clear, and worse than the 1.8:1 the delivery's own audit called its most
+      serious finding. It is item A of that audit, and the token was fixed while
+      the thing that overwrites it was not.
+
+      Derived rather than tabulated. The pair in `tokens.css` is the built-in's
+      and a persona this code has never seen needs the same guarantee, which is
+      a ratio and not a hex.
+
+      The LIGHT half is taken to `AA_BODY`, not to `AA_MARK`. The ring is a mark
+      and 3.0 is its floor, but that floor is measured against white — and white
+      is the BEST case for a desktop, not the worst. The delivery's own light
+      value measures 5.54:1, well past 3.0, and the margin is what a background
+      nobody chose costs. The dark half keeps the mark floor because it is
+      measured against near-black, where her colour is already far away.
+    */
+    '--her': `light-dark(${toHex(readableAgainst(base, WHITE, AA_BODY))}, ${toHex(
+      readableAgainst(base, NEAR_BLACK, AA_MARK),
+    )})`,
     /*
       FOUR properties, down from eight.
 
@@ -250,7 +309,12 @@ export function accentVariables(face: FaceSpec): Readonly<Record<string, string>
       is drawn over an unknown desktop: a fixed tint would be some other
       character's green sitting inside her ring.
     */
-    '--her-veil': `rgb(${String(base.r)} ${String(base.g)} ${String(base.b)} / 22%)`,
+    /*
+      The film inside the open ring, at the boards' two alphas: 14% on light,
+      22% on dark. It was 22% for both — a tint meant to sit under a dark ring,
+      used under a light one.
+    */
+    '--her-veil': `light-dark(rgb(${String(base.r)} ${String(base.g)} ${String(base.b)} / 14%), rgb(${String(base.r)} ${String(base.g)} ${String(base.b)} / 22%))`,
     '--her-deep': toHex(deep(base)),
     '--her-deep-ink': '#ffffff',
   }
