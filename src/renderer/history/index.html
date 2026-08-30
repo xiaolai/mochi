@@ -1320,6 +1320,19 @@
         row measures 1.01:1 against the surface on some characters, and a fill
         nobody can see is not a state.
       */
+      /*
+        On the chosen row, the facts take `--ink-2`.
+
+        `--ink-3` on her wash measures 4.04:1 in dark — under the floor — and it
+        only shows on the row that is chosen, which is the one row somebody is
+        looking at. Her wash is computed from the worn character's hue at
+        runtime, so the built-in's green passing says nothing about the next
+        character's.
+      */
+      .entry[aria-current='true'] .fact,
+      .entry[aria-current='true'] .when {
+        color: var(--ink-2);
+      }
       .entry[aria-current='true'] {
         background: var(--her-wash);
         border-left-color: var(--her);
@@ -1959,14 +1972,6 @@
         gap: var(--s1);
       }
       .moment .label,
-      .who-facts .label {
-        font-family: var(--narrow);
-        font-size: var(--t-label);
-        font-weight: var(--w-bold);
-        letter-spacing: var(--track-2);
-        text-transform: uppercase;
-        color: var(--ink-3);
-      }
       .moments {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -2106,21 +2111,79 @@
       input[type='text'].who-name:focus {
         padding: var(--s0) 0;
       }
+      /*
+        Her name, then the words she takes, on one line.
+
+        `baseline`, so three 12px words sit on the line her 46px name sits on
+        rather than floating in the middle of it.
+      */
+      .who-named {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s4);
+        flex-wrap: wrap;
+        min-width: 0;
+      }
+      /*
+        One line of apparatus under her name: where she is stored, and what she
+        calls you, joined by a middot.
+
+        It was a small-caps "CALLS YOU" label with a boxed field beside it —
+        the treatment for something you operate, applied to a fact about her.
+        The delivery sets the whole line in DM Mono and puts the field INLINE in
+        the sentence, so it reads as "calls you nothing yet" with a blank in it
+        rather than as a labelled input.
+      */
       .who-facts {
         display: flex;
-        align-items: center;
-        gap: var(--s3);
+        align-items: baseline;
+        gap: 10px;
+        flex-wrap: wrap;
+        font-family: var(--mono);
+        font-size: var(--t-cap);
+        color: var(--ink-3);
       }
       .who-facts .meta {
-        font-family: var(--mono);
-        font-size: var(--t-data);
-        color: var(--ink-3);
         overflow-wrap: anywhere;
       }
+      .who-dot {
+        color: var(--rule-2);
+      }
+      .who-calls {
+        display: inline-flex;
+        align-items: baseline;
+        gap: var(--s1);
+      }
+      /*
+        The field is a word in a sentence, so it takes the sentence's face and
+        an underline — not a box. `#…` specificity is not available on a class
+        the builder names, so the element selector carries it, exactly as
+        `who.ts` warns about her name.
+      */
       input[type='text'].inline {
-        width: 132px;
-        padding: var(--s0) var(--s3);
-        font-size: var(--t-sm);
+        width: 14ch;
+        padding: 0 0 var(--s-px);
+        border: 0;
+        border-bottom: var(--s-px) solid var(--rule-2);
+        border-radius: 0;
+        font-family: var(--mono);
+        font-size: var(--t-cap);
+        color: var(--ink-2);
+      }
+      /*
+        A field inside a SENTENCE keeps its rule when empty.
+
+        The general rule gives an empty field a box, because a placeholder with
+        no edge is a grey word floating over paper. That reasoning does not
+        reach here: this one has "calls you" immediately before it, so the
+        sentence says what the blank is for, and a box in the middle of a line
+        of prose breaks the line rather than clarifying it.
+      */
+      input[type='text'].inline:placeholder-shown {
+        padding: 0 0 var(--s-px);
+        border: 0;
+        border-bottom: var(--s-px) solid var(--rule-2);
+        border-radius: 0;
       }
 
       pre,

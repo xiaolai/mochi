@@ -590,6 +590,19 @@ async function photograph(page) {
  */
 async function checks(page, where = '') {
   at = where === '' ? '' : `  [${where}]`
+  /*
+    THE ARCHIVE, explicitly, before anything asks about it.
+
+    These checks used to rely on the window happening to be here — and several
+    of them passed while it was not: `querySelectorAll` finds a hidden element
+    perfectly well, so a check that counts days counts them on the machine's
+    page too. `anchored` is the one that noticed, because a rect is 0×0 when
+    nothing is drawn, and that is the difference between asking the DOM and
+    asking the window.
+  */
+  await page.run(`document.getElementById('tab-for-archive').click()`)
+  await wait(700)
+
   /* --- A1: a day with nothing on it is not a button --------------------- */
   const calendar = await page.run(`(() => {
     const days = [...document.querySelectorAll('button.day')];
@@ -992,7 +1005,23 @@ async function checks(page, where = '') {
       const clear = (c) => c === 'transparent' || c.split(' ').join('') === 'rgba(0,0,0,0)';
       const ruled = edges.some((w, i) => w > 0 && !clear(colours[i]));
       const filled = !clear(s.backgroundColor);
-      if (!ruled && !filled) {
+      /*
+        Or its container says it.
+
+        A field can be the word in a sentence — the search box is a caret inside
+        a ruled line, and her name and what she calls you are the same shape.
+        The rule is on the thing that draws it; requiring it on the input itself
+        would fail exactly the treatment this design asks for.
+      */
+      const parent = el.parentElement;
+      let held = false;
+      if (parent) {
+        const ps = getComputedStyle(parent);
+        const pEdges = [ps.borderTopWidth, ps.borderRightWidth, ps.borderBottomWidth, ps.borderLeftWidth].map(parseFloat);
+        const pColours = [ps.borderTopColor, ps.borderRightColor, ps.borderBottomColor, ps.borderLeftColor];
+        held = pEdges.some((w, i) => w > 0 && !clear(pColours[i])) || !clear(ps.backgroundColor);
+      }
+      if (!ruled && !filled && !held) {
         silent.push((el.id ? '#' + el.id : el.tagName.toLowerCase()) + '.' + (el.className || '?'));
       }
     }

@@ -109,16 +109,28 @@ export function whoBand(
     // suggestion. `addressLine` omits the instruction entirely rather than
     // telling her to call somebody "you", so an empty box is a real answer and
     // says which one.
-    placeholder: 'nobody has said',
+    // The delivery's word, and it is better: "nothing yet" is what is true,
+    // where "nobody has said" is a small story about how it got that way.
+    placeholder: 'nothing yet',
     save: (value) => {
       handlers.save({ id: worn.id, addressUser: value })
     },
   })
 
-  const facts = element('div', 'who-facts')
-  facts.append(
-    element('span', 'label', 'calls you'),
-    called,
+  /*
+    HER NAME, then the words she takes. One line.
+
+    The pronoun sat below her name, after "calls you", among the apparatus —
+    which made it read as another fact about her file rather than as the thing
+    every sentence in this window bends to. It belongs beside her name because
+    it is part of naming her: "Mochi · she".
+
+    `baseline`, so three 12px words sit on the line her 46px name sits on rather
+    than floating in the middle of it.
+  */
+  const named = element('div', 'who-named')
+  named.append(
+    name,
     chooser(
       'switchers',
       PRONOUNS.map((one) => ({ value: one, label: one })),
@@ -127,14 +139,29 @@ export function whoBand(
         handlers.save({ id: worn.id, pronoun: value })
       },
     ),
-    element('span', 'grow'),
+  )
+
+  /*
+    Then one line of apparatus: where she is stored, and what she calls you.
+
+    Both are DM Mono and both are facts about her rather than controls — the
+    delivery joins them with a middot and puts the field inline in the sentence,
+    so "calls you nothing yet" reads as a sentence with a blank in it rather
+    than as a labelled input.
+  */
+  const facts = element('div', 'who-facts')
+  const calls = element('span', 'who-calls')
+  calls.append(document.createTextNode('calls you '), called)
+  facts.append(
     // Where her file is — the one line that answers "which of these on disk am
     // I editing".
     element('span', 'meta', worn.source ?? forPronoun(SAYS.noFile, view.pronoun)),
+    element('span', 'who-dot', '·'),
+    calls,
   )
 
   const of = element('div', 'who-of')
-  of.append(name, facts)
+  of.append(named, facts)
   band.append(of)
   return band
 }
