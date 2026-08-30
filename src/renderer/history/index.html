@@ -46,6 +46,48 @@
         margin: 0;
       }
       /*
+        A sentence of explanation, wherever one is written.
+
+        This class is used forty-four times across this window and had NO rule
+        of its own. Everything about it came from `.section .note` — so the same
+        class was 12.5px at a 68ch measure inside a settings row, and body text
+        running the full width of the column everywhere else: the machine's
+        panes, the storage group, the margin. The prompts pane is where it
+        showed, twenty-seven unmeasured paragraphs down one column.
+
+        SERIF, which is the half that survived even inside a section. `body` is
+        Sora, so every note in this window inherited the operating face — and
+        the scale says of it, in the token file, "never prose". The delivery is
+        unanimous on the other side: every explanatory sentence in it is
+        Literata, 12.5 to 14.5px, `--ink-2`, at a measure of 62 to 66ch. There
+        is no counter-example in the document.
+
+        62ch and `pretty` for the same reason they used them: a line somebody
+        reads without losing the start of the next one, and no single word left
+        alone on the last line.
+      */
+      .note {
+        margin: 0;
+        max-width: 62ch;
+        font-family: var(--serif);
+        font-size: var(--t-sm);
+        line-height: var(--leading-long);
+        color: var(--ink-2);
+        text-wrap: pretty;
+      }
+      /*
+        A caution, in the one colour this window uses for one.
+
+        It drew in TWO: `--red` outside a section and `--warn-ink` inside one,
+        for the same class with the same meaning — so the prompts pane's "over
+        the limit" was red and her sheet's failing-contrast warning was gold.
+        `--red` belongs to the destructive controls (`.btn.bad`, `.btn.arming`);
+        a sentence warning about what you typed is not one of those.
+      */
+      .note.bad {
+        color: var(--warn-ink);
+      }
+      /*
         A button takes the page's face.
 
         The user agent gives one its own — Arial here — and several buttons in
@@ -490,9 +532,12 @@
       .reading,
       .machine-pane {
         min-width: 0;
+        min-height: 0;
         overflow-y: auto;
         display: flex;
         flex-direction: column;
+      }
+      .reading {
         gap: 26px;
         padding: 26px var(--s5) var(--s6) var(--s7);
       }
@@ -500,9 +545,49 @@
         The machine's rows carry their own rhythm — `padding: 12px 0` and a rule
         above each — so the column adds none. With both, one field sat 26px from
         the next and another 48px, for no reason either could state.
+
+        Said ONCE. This class was declared three times, twice here and again in
+        the machine's own section of the sheet: a 26px gap, then no gap, then a
+        different padding. Two of the three had no effect and nothing said which.
       */
       .machine-pane {
         gap: 0;
+        padding: var(--s5) var(--s6) var(--s6);
+      }
+      /*
+        One catalogued prompt: a title, what it is for, the text, and the two
+        controls that write it.
+
+        A rule above each, like every other row on this page. They were flat
+        siblings in a column with no gap, so one prompt's Save sat against the
+        next one's title — twenty-seven times down the page, with nothing saying
+        where one ended.
+      */
+      .prompt-block {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s3);
+        padding: var(--s5) 0;
+        border-top: var(--s-px) solid var(--rule);
+      }
+      .prompt-block:first-of-type {
+        border-top: 0;
+        padding-top: 0;
+      }
+      /*
+        An ordinary textarea, sized by its own `rows`.
+
+        It wore `.wake-edit` — the system prompt editor, which is `flex: 1` with
+        a 220px floor and only a top edge because it fills a column and the
+        column's border says where it is. Twenty-seven of those is twenty-seven
+        220px voids with no box around any of them, and the `rows` this pane
+        computes from the text was ignored entirely.
+      */
+      .prompt-box {
+        width: 100%;
+        resize: vertical;
+        font-size: var(--t-data);
+        line-height: var(--leading);
       }
       .margin {
         border-left: var(--s-px) solid var(--rule);
@@ -930,11 +1015,6 @@
         color: var(--ink-3);
         max-width: none;
       }
-      .machine-pane {
-        min-height: 0;
-        overflow-y: auto;
-        padding: var(--s5) var(--s6) var(--s6);
-      }
       /*
         A numbered row, separated by a rule rather than boxed.
 
@@ -1278,10 +1358,6 @@
         border-color: var(--her);
         color: var(--her);
       }
-      .note.bad {
-        color: var(--red);
-      }
-
       /* ---- the day's conversations, and the one being read ------------------
         A list of what was said on the chosen day, above the transcript. Rows
         rather than cards, and rules rather than boxes: "Rules do the grouping.
@@ -1593,15 +1669,13 @@
       */
       .pills .dot,
       .note .dot {
+        display: inline-block;
+        vertical-align: middle;
         width: var(--s2);
         height: var(--s2);
         border-radius: var(--r-pill);
         background: var(--her-deep);
         flex: none;
-      }
-      .note .dot {
-        display: inline-block;
-        vertical-align: middle;
       }
       .pills button:hover:not([aria-current='true']) {
         color: var(--ink);
@@ -1660,8 +1734,6 @@
       }
       #panel-wake .note {
         margin: 0 0 var(--s2);
-        font-size: var(--t-cap);
-        line-height: var(--leading);
         color: var(--ink-3);
       }
       #panel-wake .meta {
@@ -1906,16 +1978,6 @@
         font-family: var(--mono);
         font-size: var(--t-data);
         color: var(--ink-3);
-      }
-      .section .note {
-        margin: 0;
-        max-width: 68ch;
-        font-size: var(--t-ui-2);
-        line-height: var(--leading);
-        color: var(--ink-2);
-      }
-      .section .note.bad {
-        color: var(--warn-ink);
       }
       /*
         `.moment`, not `.field` — which this window already uses for the Machine

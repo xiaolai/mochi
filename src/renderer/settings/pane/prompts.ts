@@ -46,15 +46,35 @@ export const PROMPTS: Pane = {
     return worrying === 0 ? null : String(worrying)
   },
   render(view, handlers) {
-    const nodes: Node[] = []
+    const blocks: Node[] = []
     for (const one of view.prompts) {
+      /*
+        ONE BLOCK PER PROMPT, with a rule between them.
+
+        These were flat siblings — heading, note, box, buttons, heading, note,
+        box, buttons — in a column whose rows carry their own rhythm. So one
+        prompt's Save sat against the next one's title with nothing saying where
+        one ended, twenty-seven times down the page.
+      */
+      const nodes: Node[] = []
       const head = element('div', 'row')
       head.append(element('h3', undefined, one.title))
       if (one.edited) head.append(element('span', 'meta', 'edited'))
       nodes.push(head)
       nodes.push(element('p', 'note', one.purpose))
 
-      const box = element('textarea', 'wake-edit')
+      /*
+        `prompt-box`, NOT `wake-edit`.
+
+        `.wake-edit` is the system prompt editor on her page: `flex: 1` with a
+        220px floor and only a top edge, because it fills a column and the
+        column's border says where it is. Twenty-seven of them in a scrolling
+        pane is twenty-seven 220px voids with no box around any of them — the
+        `rows` this sets two lines below were being ignored entirely.
+
+        The ninth collision of one name meaning two things in this window.
+      */
+      const box = element('textarea', 'prompt-box')
       box.value = one.text
       box.spellcheck = false
       box.rows = Math.min(10, Math.max(3, one.text.split('\n').length + 1))
@@ -140,7 +160,10 @@ export const PROMPTS: Pane = {
       const actions = element('div', 'row')
       actions.append(save, reset)
       nodes.push(actions)
+      const block = element('div', 'prompt-block')
+      block.append(...nodes)
+      blocks.push(block)
     }
-    return nodes
+    return blocks
   },
 }
