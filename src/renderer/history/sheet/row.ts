@@ -131,3 +131,38 @@ export function chooser(
   }
   return wrap
 }
+
+/**
+ * A one-line field that saves what was typed, and puts itself back when nothing
+ * was.
+ *
+ * Both fields on this band did the same four things — set a value, set a
+ * placeholder, compare a trimmed edit against what is stored, and either put
+ * the box back or dispatch a save. Written out twice, and the halves that are
+ * easy to lose are the two that are not about saving: the reset, and comparing
+ * the TRIMMED value so that typing a space and deleting it is not a change.
+ *
+ * A control displaying a value that was never stored is the small version of
+ * the failure this whole window exists to avoid.
+ */
+export function savedField(options: {
+  readonly className: string
+  readonly value: string
+  readonly placeholder: string
+  readonly save: (value: string) => void
+}): HTMLInputElement {
+  const field = element('input', options.className)
+  field.type = 'text'
+  field.placeholder = options.placeholder
+  field.value = options.value
+  field.addEventListener('change', () => {
+    if (field.value.trim() === options.value) {
+      // Nothing to save — and the field is put back rather than left showing
+      // the spaces somebody added.
+      field.value = options.value
+      return
+    }
+    options.save(field.value)
+  })
+  return field
+}

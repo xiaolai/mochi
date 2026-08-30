@@ -28,6 +28,14 @@ export const SAYS = {
   },
   /* The name field's hint. It shows for one keystroke when the name is cleared
      before `change` puts it back, which is the only time anybody sees it. */
+  herName: { she: 'Her name', he: 'His name', it: 'Its name' },
+  herWords: { she: 'Her words', he: 'His words', it: 'Its words' },
+  whoHead: { she: 'Who she is', he: 'Who he is', it: 'What it is' },
+  whoHint: {
+    she: 'Her name, the words she takes, and what she calls you.',
+    he: 'His name, the words he takes, and what he calls you.',
+    it: 'Its name, the words it takes, and what it calls you.',
+  },
   namePlaceholder: { she: 'her name', he: 'his name', it: 'its name' },
   /* The size section: its heading, its reading, and the way back. */
   sizeHeading: { she: 'Her size', he: 'His size', it: 'Its size' },

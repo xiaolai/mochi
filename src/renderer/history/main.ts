@@ -599,7 +599,7 @@ function renderHerMargin(): void {
 /** Her face and her name, at the size the view on screen calls for. */
 function renderSubject(): void {
   if (shelf === null) return
-  const subject = characterSubject(shelf, handlers, place === 'cast' ? 104 : 52)
+  const subject = characterSubject(shelf)
   subjectEl.replaceChildren(...(subject === null ? [] : [subject]))
 }
 

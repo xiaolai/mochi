@@ -566,6 +566,35 @@
         border-bottom: var(--s-px) solid var(--rule);
       }
 
+      /*
+        WHO SHE IS, as rows of a label over a control.
+
+        These were three controls loose in the masthead — a name field, a pronoun
+        chooser and a "calls you" box — joined by a middot and read left to
+        right. That works for facts and not for controls: a row of three things
+        you can change, with no word saying which is which, has to be operated to
+        be understood.
+      */
+      .who-rows {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s4);
+      }
+
+      .who-row {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s1);
+      }
+
+      .who-label {
+        font-family: var(--sans);
+        font-size: var(--t-label);
+        letter-spacing: var(--track-2);
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+
       .kept {
         display: flex;
         flex-direction: column;
@@ -2642,31 +2671,13 @@
       .who-facts .meta {
         overflow-wrap: anywhere;
       }
-      .who-dot {
-        color: var(--rule-2);
-      }
-      .who-calls {
-        display: inline-flex;
-        align-items: baseline;
-        gap: var(--s1);
-      }
       /*
         The field is a word in a sentence, so it takes the sentence's face and
         an underline — not a box. `#…` specificity is not available on a class
         the builder names, so the element selector carries it, exactly as
         `who.ts` warns about her name.
       */
-      input[type='text'].inline {
-        width: 14ch;
-        padding: 0 0 var(--s-px);
-        border: 0;
-        border-bottom: var(--s-px) solid var(--rule-2);
-        border-radius: 0;
-        font-family: var(--mono);
-        font-size: var(--t-cap);
-        color: var(--ink-2);
-      }
-      /*
+      input[type='text']      /*
         A field inside a SENTENCE keeps its rule when empty.
 
         The general rule gives an empty field a box, because a placeholder with
@@ -2675,12 +2686,6 @@
         sentence says what the blank is for, and a box in the middle of a line
         of prose breaks the line rather than clarifying it.
       */
-      input[type='text'].inline:placeholder-shown {
-        padding: 0 0 var(--s-px);
-        border: 0;
-        border-bottom: var(--s-px) solid var(--rule-2);
-        border-radius: 0;
-      }
 
       pre,
       textarea {

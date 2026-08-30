@@ -5,6 +5,7 @@ import { element } from '../element'
 import { editing } from '../rules/editing'
 import { SAYS } from './shelf-says'
 import { colourSection } from './sheet/colour'
+import { whoSection } from './sheet/who'
 import { expressionsSection } from './sheet/expressions'
 import { fileSection } from './sheet/file'
 import { memorySection } from './sheet/memory'
@@ -111,6 +112,7 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
       having on its own and goes with them. Recorded rather than glossed: it is
       §5 of the brief, and it is a choice about product rather than a tidy-up.
     */
+    whoSection(view, worn, handlers),
     colourSection(view, worn, handlers),
     expressionsSection(view, worn, handlers),
     sizeSection(view, worn, handlers),
