@@ -735,10 +735,21 @@
                 uploads the binary to Apple, and it is a decision rather than a build step.
               </dd>
             </div>
+            <!--
+              NOT an API key, and this row said one for as long as the page has
+              existed. `voice/credential.ts` is unambiguous — "There is no
+              API-key path" — and `delegation.ts` says the same from the other
+              end: one credential source, the Codex login. The four lines at the
+              top of this page now say so too, which is what made a contradiction
+              two screens apart worth finding.
+            -->
             <div>
               <dt data-zh="需要什么">You need</dt>
-              <dd data-zh="一个你自己的 OpenAI API key，和一个麦克风。">
-                Your own OpenAI API key, and a microphone.
+              <dd
+                data-zh="一个已经登录 ChatGPT 账户的 Codex CLI —— 她借用那份凭据。再加一个麦克风。"
+              >
+                The Codex CLI, signed in to your ChatGPT account — she borrows that credential. And
+                a microphone.
               </dd>
             </div>
           </dl>
@@ -748,7 +759,7 @@
       <footer>
         <span data-zh="moch.im · 做着玩，也做得认真">moch.im · a small thing, made carefully</span>
         <span>
-          <a href="mailto:hello@moch.im" data-zh="联系">Get in touch</a>
+          <a href="https://github.com/xiaolai/mochi" data-zh="源码">Source on GitHub</a>
         </span>
       </footer>
     </div>
