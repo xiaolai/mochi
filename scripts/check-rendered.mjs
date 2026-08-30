@@ -453,9 +453,55 @@ async function outline(page) {
   const into = join(ROOT, 'dev-docs', 'design-system-v2', 'rendered')
   mkdirSync(into, { recursive: true })
   console.log('\n  ─── the window, in the artboards\u2019 own terms ─────────────')
-  for (const place of ['cast', 'archive', 'permits', 'machine']) {
-    await goTo(page, place)
-    await wait(600)
+  /*
+    EVERY SCREEN, not every TAB.
+
+    The four views were dumped and the five screens underneath them were not, so
+    the transcript — the largest surface in the application — and the three
+    drill-downs off her page were the parts of this window nothing ever compared
+    against a drawing. That is most of A2b, A2c, A3 and the whole of A8.
+
+    `open` is a click that has to land before the dump; it is checked, because a
+    selector that stops matching would leave this printing the page behind it
+    under the name of the screen it failed to open — which is the same silent
+    pass `goTo` throws about.
+  */
+  const SCREENS = [
+    { place: 'cast', name: 'cast', open: null },
+    { place: 'cast', name: 'expressions', open: '[data-opens="faces"]' },
+    { place: 'cast', name: 'memory', open: '[data-opens="notes"]' },
+    { place: 'cast', name: 'instruction', open: '[data-opens="instruction"]' },
+    { place: 'archive', name: 'archive', open: null },
+    { place: 'archive', name: 'transcript', open: '.list .entry' },
+    { place: 'permits', name: 'permits', open: null },
+    { place: 'machine', name: 'machine', open: null },
+  ]
+  for (const screen of SCREENS) {
+    const place = screen.name
+    /*
+      A HOP THROUGH ANOTHER VIEW FIRST, because a drill-down survives its own
+      tab. `deeperInto` is cleared when the window LEAVES her page, so pressing
+      "Who she is" while already standing on a sub-screen re-selects the tab and
+      changes nothing — the second drill-down found no rows to press, because the
+      first one was still open over them.
+    */
+    await goTo(page, screen.place === 'machine' ? 'cast' : 'machine')
+    await wait(200)
+    await goTo(page, screen.place)
+    await wait(400)
+    if (screen.open !== null) {
+      const opened = await page.run(
+        `(() => { const t = document.querySelector('${screen.open}');` +
+          ` if (t === null) return false; t.click(); return true; })()`,
+      )
+      if (opened !== true) {
+        throw new Error(
+          `cannot open "${place}": no ${screen.open} on the ${screen.place} page. The dump ` +
+            `would have been of whatever was already showing, under this screen's name.`,
+        )
+      }
+      await wait(500)
+    }
     const text = await page.run(`(() => {
       const KEEP = ['width','height','flex','display','flex-direction','padding','margin-top',
         'gap','background','border','border-radius','font-size','font-weight','font-family',

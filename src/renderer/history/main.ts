@@ -5,10 +5,12 @@ import type {
   HistoryProblem,
   HistoryTurn,
   MochiHistoryApi,
+  ShelfCharacter,
   ShelfView,
   ToolUse,
 } from '@shared/history-window'
 import { DEFAULT_PRONOUN, forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
+import { EMOTIONS } from '@shared/avatar'
 import { applyAccent } from '../design/apply-accent'
 import { MAY_DO } from '../settings/pane/may-do'
 import { PANES } from '../settings/panes'
@@ -635,6 +637,26 @@ function renderHerMargin(): void {
     A1 draws four pairs: Right now, Last awake, Stored at, Expressions. Each is a
     caps label and a mono value, and the value is what somebody came to read.
   */
+  /*
+    THE COLUMN BELONGS TO THE SCREEN, not to the tab.
+
+    Her page has three screens under it and each one is drawn with an apparatus
+    column of its own — A2b's lines and where they are kept, A2c's what she is
+    wearing and how big she is drawn, A8's how long her instruction is and where
+    it lives. All three were showing A1's four facts, so the screen about her
+    notes stood beside "Last awake · 13:00" and "Stored at · wisp": true
+    statements, about something the reader had navigated away from.
+
+    Blocks whose fact does not exist are LEFT OUT rather than drawn empty. The
+    artboards show "Last written · 14 May · 13:02" and "Room left · 18,796
+    characters"; nothing records when a note was written and nothing caps its
+    length, so those two are absent here. A label over a number this window
+    would have to invent is worse than a shorter column.
+  */
+  if (deeperInto !== null) {
+    marginHersEl.replaceChildren(...marginColumn(...deeperMargin(her, worn)))
+    return
+  }
   const stored = worn?.source ?? null
   marginHersEl.replaceChildren(
     ...marginColumn(
@@ -655,6 +677,69 @@ function renderHerMargin(): void {
       ),
     ),
   )
+}
+
+/**
+ * The apparatus column for whichever screen is open under her page.
+ *
+ * Its own function because `renderHerMargin` is A1's four pairs and nothing
+ * else; three more sets of pairs inside it would make the one that is drawn a
+ * question you answer by reading past the other three.
+ */
+function deeperMargin(words: Pronoun, worn: ShelfCharacter | undefined): readonly HTMLElement[] {
+  if (deeperInto === 'notes') {
+    const text = shelf?.note.text ?? ''
+    // Lines, not characters: an empty note is nought lines, and `''.split` is
+    // one — the count somebody reads has to agree with the list beside it.
+    const kept = text === '' ? 0 : text.split('\n').length
+    return [
+      marginBlock(forPronoun(SAYS.keptHead, words), marginFacts(String(kept))),
+      marginBlock(
+        forPronoun(SAYS.keptSizeHead, words),
+        marginFacts(`${String(text.length)} characters`),
+      ),
+    ]
+  }
+  if (deeperInto === 'faces') {
+    const size = worn?.size ?? null
+    return [
+      marginBlock(
+        forPronoun(SAYS.wearingHead, words),
+        /*
+          The FALLBACK and her state, which is what "wearing now" resolves to
+          while she is asleep — A2c's own caption for `neutral` is "what she
+          falls back to", and `EMOTIONS[0]` is that entry rather than a second
+          copy of the word. Nothing here knows a live expression: she is a
+          separate window and the shelf carries what is stored, not what is on
+          her face this second.
+        */
+        marginFacts(`${EMOTIONS[0]} · ${forPronoun(SAYS.marginAsleep, words)}`),
+      ),
+      marginBlock(
+        forPronoun(SAYS.drawnAtHead, words),
+        // Her own size is a real answer and not a missing one — the slider on
+        // A1 has a button that puts it back to exactly this.
+        marginFacts(
+          size === null
+            ? forPronoun(SAYS.drawnAtOwn, words)
+            : `${String(size)}px · ${forPronoun(SAYS.drawnAtOwn, words)}`,
+        ),
+      ),
+    ]
+  }
+  const lines = shelf === null ? 0 : shelf.assembled.split('\n').length
+  return [
+    marginBlock(
+      forPronoun(SAYS.sentAtWakeHead, words),
+      marginFacts(`${String(lines)} line${lines === 1 ? '' : 's'}`),
+    ),
+    marginBlock(
+      forPronoun(SAYS.promptWhereHead, words),
+      // The FILE, not the full path: this column is 224px and a temporary
+      // directory is longer than it. The whole path is on the screen beside it.
+      marginFacts(shelf?.prompt.path.split('/').pop() ?? forPronoun(SAYS.marginBuiltIn, words)),
+    ),
+  ]
 }
 
 /**
@@ -737,10 +822,23 @@ function showPlace(next: Place): void {
     One class, because the sizes belong to the sheet and the view belongs here.
   */
   subjectEl.classList.toggle('subject-large', place === 'cast')
-  // A drill-down is about the character this view is about. Leaving the view
-  // leaves the screen — one that survived would be a page about somebody the
-  // window has stopped being about.
-  if (place !== 'cast') deeperInto = null
+  /*
+    A drill-down is about the character this view is about. Leaving the view
+    leaves the screen — one that survived would be a page about somebody the
+    window has stopped being about.
+
+    AND THE PANE IS REDRAWN, which this only claimed to do. Clearing the flag
+    settles what the window thinks is open; the sub-screen's markup was still in
+    `#pane`, and the arrival path repaints only `if (!showingCharacter)` — which
+    is false, because a drill-down IS her page. So leaving her expressions,
+    visiting the machine and coming back showed the expressions again, with the
+    model saying her sheet was open. Every write from that screen redrew it, so
+    the two only disagreed until somebody touched something.
+  */
+  if (place !== 'cast' && deeperInto !== null) {
+    deeperInto = null
+    showingCharacter = false
+  }
   /*
     The archive is the one page with three columns competing, so it is the one
     page whose body is laid out differently — the list becomes a track and the

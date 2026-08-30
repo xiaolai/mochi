@@ -168,6 +168,28 @@ export const SAYS = {
     design are left in the interface, and one of them had gone false anyway,
     still saying her colour retints a window that no longer takes a hue.
   */
+  /*
+    The three drill-downs each have an apparatus column of their own — A2b, A2c
+    and A8 all draw one — and all three were showing HER PAGE's four facts. So
+    the screen about her notes stood beside "Last awake" and "Stored at · wisp",
+    which are true and are about something else.
+  */
+  keptHead: { she: 'Lines kept', he: 'Lines kept', it: 'Lines kept' },
+  keptSizeHead: { she: 'Written', he: 'Written', it: 'Written' },
+  keptWhereHead: { she: 'Stored at', he: 'Stored at', it: 'Stored at' },
+  wearingHead: { she: 'Wearing now', he: 'Wearing now', it: 'Wearing now' },
+  drawnAtHead: { she: 'Drawn at', he: 'Drawn at', it: 'Drawn at' },
+  drawnAtOwn: {
+    she: 'her desktop size',
+    he: 'his desktop size',
+    it: 'its desktop size',
+  },
+  sentAtWakeHead: {
+    she: 'Sent at her next wake',
+    he: 'Sent at his next wake',
+    it: 'Sent at its next wake',
+  },
+  promptWhereHead: { she: 'Stored at', he: 'Stored at', it: 'Stored at' },
   /* A7's apparatus column: who the grants apply to, how many are withheld, and
      when a change to one takes effect. */
   permitsForHead: { she: 'In force for', he: 'In force for', it: 'In force for' },

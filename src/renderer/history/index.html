@@ -3883,58 +3883,68 @@
               <aside class="margin machine-tools" id="machine-tools"></aside>
             </div>
           </section>
-        </main>
-      </div>
+          <!--
+          INSIDE THE PAGE COLUMN, not across the whole window.
 
-      <!--
-        The status bar. What just happened, and whether anything has gone wrong,
-        both always in the same place.
+          It was a sibling of `.frame`, so the bar ran the full 1280 and its left
+          edge sat under the rail — a receipt about the page beginning in a strip
+          that belongs to the window's table of contents. Every artboard draws it
+          as the last child of the column right of the rail, starting at the same
+          32px gutter the reading column starts at, which is what makes it read
+          as the foot of THIS page rather than as a separate surface.
 
-        This was a toast that appeared and faded, plus a chip in a drawer. A
-        message that removes itself is one somebody can miss entirely, and the
-        answer to "did that save?" should be readable a minute later rather than
-        for four seconds after the fact.
-      -->
-      <div class="status">
-        <!--
-          THE ACTIONS ARE ON THE LEFT, which is A3's arrangement and A6's.
+          What just happened, and whether anything has gone wrong, both always in
+          the same place.
 
-          They were on the right, after the receipt, so the archive's three
-          controls sat in the corner the problem count already owns while the
-          left half of a 1280px bar held one empty paragraph. The artboards give
-          the left of this bar to whatever the view is doing — the receipt on her
-          page, these on the archive — and the right to the two standing facts,
-          how much is here and what has gone wrong.
-
-          Only while what she has said is on screen: they act on conversations,
-          and a delete control visible from her character sheet is one whose
-          scope the surrounding page contradicts.
-
-          EXPORT BEFORE DELETE, and the destructive pair last. Contract D3, and
-          A3 draws the row in that order: a copy is offered before the thing it
-          is a copy of can be destroyed.
+          This was a toast that appeared and faded, plus a chip in a drawer. A
+          message that removes itself is one somebody can miss entirely, and the
+          answer to "did that save?" should be readable a minute later rather than
+          for four seconds after the fact.
         -->
-        <button class="foot-do" id="pick" type="button" hidden>Select&#8230;</button>
-        <button class="foot-do" id="pick-off" type="button" hidden>Cancel</button>
-        <button class="foot-do" id="export" type="button" hidden>Export&#8230;</button>
-        <button class="foot-do bad" id="drop-some" type="button" hidden disabled>Delete</button>
-        <button class="foot-do bad" id="drop-hers" type="button" hidden>Delete all&#8230;</button>
-        <p id="said" role="status" aria-live="polite">
-          <span id="said-what"></span>
-          <button id="said-shut" type="button" aria-label="Dismiss" title="Dismiss" hidden>
-            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-              <path d="M4 4 12 12M12 4 4 12"></path>
-            </svg>
-          </button>
-        </p>
-        <span class="grow"></span>
-        <!-- How much is in the archive. In the foot, where A3 and A6 draw it,
-             rather than in the header beside the day strip: it is a standing
-             fact about the list, not a heading over it. -->
-        <p class="count-of" id="count" hidden></p>
-        <button class="warn" id="troubles" type="button" hidden>
-          <span class="dot"></span><span id="troubles-label"></span>
-        </button>
+          <div class="status">
+            <!--
+            THE ACTIONS ARE ON THE LEFT, which is A3's arrangement and A6's.
+
+            They were on the right, after the receipt, so the archive's three
+            controls sat in the corner the problem count already owns while the
+            left half of a 1280px bar held one empty paragraph. The artboards give
+            the left of this bar to whatever the view is doing — the receipt on her
+            page, these on the archive — and the right to the two standing facts,
+            how much is here and what has gone wrong.
+
+            Only while what she has said is on screen: they act on conversations,
+            and a delete control visible from her character sheet is one whose
+            scope the surrounding page contradicts.
+
+            EXPORT BEFORE DELETE, and the destructive pair last. Contract D3, and
+            A3 draws the row in that order: a copy is offered before the thing it
+            is a copy of can be destroyed.
+          -->
+            <button class="foot-do" id="pick" type="button" hidden>Select&#8230;</button>
+            <button class="foot-do" id="pick-off" type="button" hidden>Cancel</button>
+            <button class="foot-do" id="export" type="button" hidden>Export&#8230;</button>
+            <button class="foot-do bad" id="drop-some" type="button" hidden disabled>Delete</button>
+            <button class="foot-do bad" id="drop-hers" type="button" hidden>
+              Delete all&#8230;
+            </button>
+            <p id="said" role="status" aria-live="polite">
+              <span id="said-what"></span>
+              <button id="said-shut" type="button" aria-label="Dismiss" title="Dismiss" hidden>
+                <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                  <path d="M4 4 12 12M12 4 4 12"></path>
+                </svg>
+              </button>
+            </p>
+            <span class="grow"></span>
+            <!-- How much is in the archive. In the foot, where A3 and A6 draw it,
+               rather than in the header beside the day strip: it is a standing
+               fact about the list, not a heading over it. -->
+            <p class="count-of" id="count" hidden></p>
+            <button class="warn" id="troubles" type="button" hidden>
+              <span class="dot"></span><span id="troubles-label"></span>
+            </button>
+          </div>
+        </main>
       </div>
     </div>
 
