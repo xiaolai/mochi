@@ -758,13 +758,26 @@
         text-transform: uppercase;
       }
 
-      .rail-machine {
-        justify-content: space-between;
-      }
-      .rail-machine .rail-name {
-        font-family: var(--sans);
-        font-size: var(--t-ui);
-      }
+      /*
+        NOTHING. It is a rail row and it is laid out like one.
+
+        This carried `justify-content: space-between`, which was correct for the
+        markup it was written against: the button held a name and a `.rail-stat`
+        sub-line, and the rule pushed them to opposite ends. The children are a
+        tile and a name now — `Rail.dc.html`'s — so the rule sent the tile hard
+        left and flushed "This machine" against the far edge of a 207px row,
+        66px from its own tile, while every character row above it sits its name
+        11px from its face. A column of rows whose labels do not start at the
+        same x is not a list.
+
+        The rule survived the markup it described. That is the failure this
+        stylesheet already records five times over under other names, and it is
+        why `rail-lines-up` is now a rendered check rather than something to
+        notice.
+
+        `Rail.dc.html` gives the machine row 14/500 against a character's 14.5,
+        which is a distinction worth nothing here — one row, one weight.
+      */
 
       /* ---- a page ----------------------------------------------------------
         Two of them, and only one on screen. `[hidden]` in the token file is

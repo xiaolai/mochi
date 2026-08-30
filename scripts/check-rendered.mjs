@@ -1263,6 +1263,22 @@ async function checks(page, where = '') {
     )
 
   /* --- an editable thing looks editable --------------------------------- */
+  /*
+    ON HER PAGE, and it says so rather than measuring whatever was showing.
+
+    This ran on whichever page the check before it happened to leave up, and the
+    check before it navigates. So it raced: three runs of an unchanged build
+    reported "all 1 editable things say so at rest", then "no editable control
+    was drawn, so this proves nothing", then 1 again — and the failing run was
+    not a defect in the window, it was this check arriving a beat early.
+
+    ONE was the tell even when it passed. Her page carries two text fields and
+    three choosers; a run that finds a single control is a run that landed on
+    the archive and measured its search box. A check that can silently sample
+    one subject instead of five is one whose green means very little.
+  */
+  await goTo(page, 'cast')
+  await wait(400)
   const editable = await page.run(`(() => {
     const fields = [...document.querySelectorAll('input[type=text], input[type=search], textarea, select')]
       .filter((e) => e.getClientRects().length > 0 && !e.disabled && !e.readOnly);
@@ -1539,6 +1555,78 @@ async function checks(page, where = '') {
         ' from the machine page opens ' +
         JSON.stringify((after.view ?? '').trim()),
     )
+
+  /* --- the rail's rows line up ------------------------------------------- */
+  /*
+    A rail row's label sits immediately after its own tile, and every row in the
+    character list starts at the same x.
+
+    Written after `.rail-machine { justify-content: space-between }` outlived the
+    markup it was written against. It was right for a button holding a name and
+    a sub-line — it pushed them to opposite ends — and when the children became a
+    tile and a name it sent the tile hard left and flushed "This machine" against
+    the far edge of a 207px row, 42px past where its own tile ends.
+
+    Nothing caught it. The class was created, the class was styled, the widths
+    were unchanged, every gate stayed green, and the only symptom was a word
+    sitting somewhere a word should not sit.
+
+    TWO assertions, because there are two different claims. "A label follows its
+    tile" holds for every row whatever size that tile is — it is what the flush
+    caught on, and it is size-independent, so it does not overrule
+    `Rail.dc.html` drawing the machine's tile at 30 against a face's 34 in a
+    group of its own below the spacer. "The list lines up" is an absolute x and
+    applies only inside `#characters`, which is one run of rows: that is what
+    caught the dashed tile being 36px wide against a face's 34, because a canvas
+    sized by attribute alone is a replaced element at `width: auto` and
+    `box-sizing` has nothing to apply to.
+  */
+  await goTo(page, 'cast')
+  await wait(300)
+  const railLeft = await page.run(`(() => {
+    const read = (row) => {
+      const label = row.querySelector('.rail-name');
+      const tile = row.querySelector('.tile, .rail-tile');
+      if (label === null || tile === null) return null;
+      const gap = parseFloat(getComputedStyle(row).columnGap || '0') || 0;
+      return {
+        name: (label.textContent || '').trim(),
+        x: Math.round(label.getBoundingClientRect().left),
+        after: Math.round(tile.getBoundingClientRect().right + gap),
+      };
+    };
+    const all = [...document.querySelectorAll('.rail .rail-row')].map(read).filter(Boolean);
+    const list = [...document.querySelectorAll('#characters .rail-row')].map(read).filter(Boolean);
+    if (all.length < 2 || list.length < 2) return { few: all.length };
+    return {
+      pushed: all.filter((o) => Math.abs(o.x - o.after) > 1),
+      list,
+      spread: Math.max(...list.map((o) => o.x)) - Math.min(...list.map((o) => o.x)),
+      rows: all.length,
+    };
+  })()`)
+  if (typeof railLeft.few === 'number') {
+    bad(
+      'rail-lines-up',
+      `only ${String(railLeft.few)} rows in the rail, so nothing lines up or fails to`,
+    )
+  } else if (railLeft.pushed.length > 0) {
+    bad(
+      'rail-lines-up',
+      'a rail label is not beside its own tile: ' + JSON.stringify(railLeft.pushed),
+    )
+  } else if (railLeft.spread > 1) {
+    bad(
+      'rail-lines-up',
+      'the character list starts its names at different places: ' + JSON.stringify(railLeft.list),
+    )
+  } else {
+    ok(
+      'rail-lines-up',
+      `all ${String(railLeft.rows)} rail labels sit beside their own tile, and the ` +
+        `${String(railLeft.list.length)} in the list share one left edge`,
+    )
+  }
 
   /* --- Rule 6: none of her colour on the machine's page ------------------ */
   /*

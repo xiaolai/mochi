@@ -63,12 +63,24 @@ export function faceTile(
       absence rather than as a failure — see `.faceless .tile`. So the size is
       the element's own, and the stylesheet says what the absence looks like.
 
-      Attributes rather than `style`, because that is what makes the intrinsic
-      size go away — and because the size is then a fact about the element that
-      survives whatever sheet is in force.
+      THE ATTRIBUTE IS THE INTRINSIC SIZE, so a style is needed as well.
+
+      This set the attributes alone, on the reasoning that they are "what makes
+      the intrinsic size go away". They do not — they SET it. A canvas with no
+      CSS width is a replaced element laid out at `width: auto`, which means its
+      intrinsic size PLUS its borders, and `box-sizing: border-box` has nothing
+      to apply to. So the dashed tile came out 36px against a face's 34, and the
+      name beside it started two pixels further right than the name in the row
+      above: one list, two left edges, for a character whose only difference is
+      that her face file is missing.
+
+      The style is what pins the layout box; the attribute stays because it is
+      still the bitmap's size and still what stops the intrinsic 300×150.
     */
     canvas.width = px
     canvas.height = px
+    canvas.style.width = `${String(px)}px`
+    canvas.style.height = `${String(px)}px`
     return canvas
   }
   const ratio = Math.min(window.devicePixelRatio || 1, 3)

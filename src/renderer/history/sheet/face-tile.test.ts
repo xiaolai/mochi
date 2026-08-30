@@ -74,6 +74,25 @@ describe('a row with no face to draw', () => {
     expect(tile.height).toBe(40)
   })
 
+  it('pins its CSS size too, so its dashed edge falls inside the box', () => {
+    /*
+      THE ATTRIBUTE IS THE INTRINSIC SIZE, not a layout width.
+
+      With the attributes alone this is a replaced element at `width: auto`,
+      which lays out at its intrinsic size PLUS its borders — so the dashed tile
+      came out 36px against a face's 34, and the name beside it started two
+      pixels further right than the name in the row above. One list, two left
+      edges, for a character whose only difference is a missing face file.
+
+      `box-sizing: border-box` cannot fix that, because there is no CSS width
+      for it to apply to. The style is what pins the box; the attribute stays
+      because it is still the bitmap and still what kills the intrinsic 300×150.
+    */
+    const tile = asNode(faceTile(undefined, 40))
+    expect(tile.style.width).toBe('40px')
+    expect(tile.style.height).toBe('40px')
+  })
+
   it('takes no drawing surface it would have to be given a context for', () => {
     // Sized, and still empty: the refusal is the point, and `MochiAvatar` is
     // never constructed. Every other tile blits a rendered face in here.

@@ -32,6 +32,18 @@ export interface FakeNode {
   readonly children: FakeNode[]
   readonly attributes: Map<string, string>
   className: string
+  /**
+   * Inline styles, RECORDED and never computed.
+   *
+   * A plain bag, in the same spirit as `attributes`: this fake says what a
+   * builder set, not what a layout engine would make of it. It exists because
+   * pinning a canvas's CSS size is a real decision a builder makes — a canvas
+   * sized only by its attributes is a replaced element at `width: auto`, so its
+   * border falls outside the box and `box-sizing` has nothing to apply to.
+   * Without somewhere to record that, the one line that fixes it cannot be
+   * tested and setting it crashes the fake.
+   */
+  readonly style: Record<string, string>
   title: string
   textContent: string
   append: (...nodes: readonly FakeNode[]) => void
@@ -44,6 +56,7 @@ function node(tag: string): FakeNode {
     tag,
     children: [],
     attributes: new Map<string, string>(),
+    style: {},
     className: '',
     title: '',
     textContent: '',
