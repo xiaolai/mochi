@@ -125,6 +125,21 @@ export const SAYS = {
   /* B1's sentence under the workspace picker. It says the LIMIT, not the
      purpose: "the one folder" and "nothing above it" are the two facts a person
      needs to predict what a lookup will answer, and neither was on the page. */
+  /* B7's note under what the build stands on. The CJK sentence is the reason
+     the list is short: nothing is fetched, and the one thing that would be
+     expensive to bundle is deliberately not bundled. */
+  /* B2's heading. "Languages spoken" is a heading about the world; this is a
+     heading about her, and it is her listening that the setting changes. */
+  languagesHead: {
+    she: 'Languages she listens for',
+    he: 'Languages he listens for',
+    it: 'Languages it listens for',
+  },
+  typefaces: {
+    she: 'Outfit and JetBrains Mono, both under the SIL Open Font License, bundled rather than fetched. CJK comes from the operating system — bundling a face for せんせい would be tens of megabytes to replace what the system already ships.',
+    he: 'Outfit and JetBrains Mono, both under the SIL Open Font License, bundled rather than fetched. CJK comes from the operating system — bundling a face for せんせい would be tens of megabytes to replace what the system already ships.',
+    it: 'Outfit and JetBrains Mono, both under the SIL Open Font License, bundled rather than fetched. CJK comes from the operating system — bundling a face for せんせい would be tens of megabytes to replace what the system already ships.',
+  },
   workspaceNote: {
     she: 'The one folder she may read. Nothing above it is reachable.',
     he: 'The one folder he may read. Nothing above it is reachable.',

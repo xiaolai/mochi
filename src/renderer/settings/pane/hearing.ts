@@ -75,13 +75,24 @@ export const HEARING: Pane = {
       handlers.hearing({ languages: picked })
     })
 
-    const parts: Node[] = [field('Languages spoken', languages)]
+    /*
+      THE HEADING SAYS WHOSE EARS, and the hint says how full the list is.
+
+      "Languages spoken" is a heading about the world; B2's "Languages she
+      listens for" is a heading about her, which is the setting. The count
+      beside it is the fact somebody needs BEFORE they open a list of twenty-four
+      options and find out by being refused that three is the limit — the same
+      argument A8's character count makes about its own ceiling.
+    */
+    const parts: Node[] = [
+      field(forPronoun(SAYS.languagesHead, view.pronoun), languages, {
+        hint: `${String(chosen.size)} of ${String(view.hearing.most)}`,
+        note: forPronoun(chosen.size === 0 ? SAYS.noLanguages : SAYS.someLanguages, view.pronoun),
+      }),
+    ]
+    // The limit, in words, where somebody reading the count can act on it.
     parts.push(
-      element(
-        'p',
-        'note',
-        forPronoun(chosen.size === 0 ? SAYS.noLanguages : SAYS.someLanguages, view.pronoun),
-      ),
+      element('p', 'note', `${String(view.hearing.most)} is the limit. Drop one to add another.`),
     )
     // Said plainly, because nothing on screen changes when this is saved. The
     // voice locks after her first audio, so the configuration is re-sent on the

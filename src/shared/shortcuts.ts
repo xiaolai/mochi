@@ -68,3 +68,26 @@ export const SHORTCUT_SAYS: Readonly<Record<ShortcutId, ByPronoun>> = {
     it: 'Hide it, or bring it back',
   },
 }
+
+/**
+ * A short NAME for each key, above the sentence saying what it does.
+ *
+ * B5 draws two lines per row — "Talk to her" over "Wakes her and opens the
+ * microphone." — and `SHORTCUT_SAYS` collapsed both into one: "Let her rest, or
+ * wake her" is a description wearing a label's place, so a column of two of them
+ * is two sentences you read rather than two names you scan.
+ *
+ * The sentence stays in `SHORTCUT_SAYS`, which is what it always was.
+ */
+export const SHORTCUT_NAMES: Readonly<Record<ShortcutId, ByPronoun>> = {
+  rest: {
+    she: 'Talk to her',
+    he: 'Talk to him',
+    it: 'Talk to it',
+  },
+  hide: {
+    she: 'Show or hide her',
+    he: 'Show or hide him',
+    it: 'Show or hide it',
+  },
+}

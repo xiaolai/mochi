@@ -301,6 +301,8 @@ export function listKeys(
     readonly accelerator: string
     readonly refused: string | null
   }[],
+  /** A short name for each key, for whoever is worn. See `SHORTCUT_NAMES`. */
+  named: Readonly<Record<string, string>>,
   /** What each key does, in this interface's words for whoever is worn. */
   what: Readonly<Record<string, string>>,
   /** What the app ships for each, so `edited` can be decided here. */
@@ -308,6 +310,7 @@ export function listKeys(
 ): readonly SettingsKey[] {
   return outcomes.map((one) => ({
     id: one.id,
+    name: named[one.id] ?? one.id,
     what: what[one.id] ?? one.id,
     accelerator: one.accelerator,
     refused: one.refused,

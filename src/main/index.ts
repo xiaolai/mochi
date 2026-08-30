@@ -53,7 +53,7 @@ import {
   type SettingsWrite,
 } from '@shared/ipc'
 import { type HistoryExport, type ShelfView } from '@shared/history-window'
-import { forPronoun, type Pronoun } from '@shared/pronoun'
+import { forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
 import { SAYS } from './says'
 import { CAPABILITIES } from '../capabilities'
 import { createLedger, type AnswerFrame } from './capability/ledger'
@@ -97,7 +97,7 @@ import { readGrants, writeGrant } from './store/grants'
 import { claimShortcuts, rebindShortcut, releaseShortcuts, type ShortcutOutcome } from './shortcuts'
 import { readShortcuts, writeShortcut } from './store/keys'
 import { MOST_LANGUAGES, OFFERED_LANGUAGES } from '@shared/transcription'
-import { SHORTCUTS, SHORTCUT_SAYS, type ShortcutId } from '@shared/shortcuts'
+import { SHORTCUTS, SHORTCUT_NAMES, SHORTCUT_SAYS, type ShortcutId } from '@shared/shortcuts'
 import { allowsCapability, isGrant, withheldGuidance } from '@shared/grants'
 import { avatarsRoot, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
@@ -1955,6 +1955,24 @@ let sessionPersona: string | null = null
  * derivations of "what does she look like" would be two accents.
  */
 /**
+ * One of the shortcut tables, resolved for whoever is worn.
+ *
+ * Written out twice at the call site once there were two of them, which is the
+ * moment a repeated expression becomes a place for the two to disagree — a name
+ * resolved for `she` beside a sentence resolved for `he` is exactly the failure
+ * these tables exist to prevent.
+ */
+function resolvedFor(
+  table: Readonly<Record<ShortcutId, ByPronoun>>,
+  userData: string,
+): Readonly<Record<string, string>> {
+  const said = wornPronoun(userData)
+  return Object.fromEntries(
+    (Object.keys(table) as ShortcutId[]).map((id) => [id, forPronoun(table[id], said)]),
+  )
+}
+
+/**
  * Which words the worn character takes.
  *
  * Its own read rather than a field threaded through `wornFace`, because the two
@@ -2607,20 +2625,18 @@ ipcMain.handle('settings:read', (): SettingsView => {
     prompts: promptRows(promptsFor(CAPABILITIES.manifests), overridesOrDefaults(userData)),
     keys: listKeys(
       claimed,
-      // Resolved for whoever is worn. This table lived in `listKeys` and said
+      // Resolved for whoever is worn. These tables lived in `listKeys` and said
       // "her" whatever the character's pronoun was — see `SHORTCUT_SAYS`.
-      Object.fromEntries(
-        (Object.keys(SHORTCUT_SAYS) as ShortcutId[]).map((id) => [
-          id,
-          forPronoun(SHORTCUT_SAYS[id], wornPronoun(userData)),
-        ]),
-      ),
+      resolvedFor(SHORTCUT_NAMES, userData),
+      resolvedFor(SHORTCUT_SAYS, userData),
       SHORTCUTS,
     ),
     about: {
       name: app.getName(),
       version: app.getVersion(),
       electron: process.versions.electron,
+      arch: process.arch,
+      platform: process.platform,
       userData,
     },
     folders: {

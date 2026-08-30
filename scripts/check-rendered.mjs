@@ -475,6 +475,21 @@ async function outline(page) {
     { place: 'archive', name: 'transcript', open: '.list .entry' },
     { place: 'permits', name: 'permits', open: null },
     { place: 'machine', name: 'machine', open: null },
+    /*
+      ALL SEVEN GROUPS, not just the one the page opens on.
+
+      B2 through B7 draw six screens — hearing, her prompts, on screen, keys,
+      storage, about — and the dumper stopped at the first tab, so six of the
+      window's fifteen screens had never been compared with anything. Picked by
+      position because the nav is a list and the artboards number it that way;
+      `machine-nav.ts` draws the numeral for the same reason.
+    */
+    { place: 'machine', name: 'hearing', open: '#nav-groups .tab:nth-of-type(2)' },
+    { place: 'machine', name: 'prompts', open: '#nav-groups .tab:nth-of-type(3)' },
+    { place: 'machine', name: 'on-screen', open: '#nav-groups .tab:nth-of-type(4)' },
+    { place: 'machine', name: 'keys', open: '#nav-groups .tab:nth-of-type(5)' },
+    { place: 'machine', name: 'storage', open: '#nav-groups .tab:nth-of-type(6)' },
+    { place: 'machine', name: 'about', open: '#nav-groups .tab:nth-of-type(7)' },
   ]
   for (const screen of SCREENS) {
     const place = screen.name

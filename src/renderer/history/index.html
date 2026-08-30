@@ -1852,12 +1852,70 @@
         padding: var(--s4) 0;
         border-bottom: var(--s-px) solid var(--rule);
       }
-      .grant .name,
-      .cap .name {
+      /*
+        UNSCOPED, because three files build these now.
+
+        `.grant .name, .cap .name` reached the two places its author was looking
+        at, so a key's row — B5 draws a name over a sentence, exactly like a
+        grant — got the browser's defaults: a `div` at the body weight above
+        another at the body size, which is a two-line row with no hierarchy in
+        it. This is the fourth rule in `stylesheets.test.ts` and its most
+        frequent defect.
+      */
+      /*
+        WHICH BUILD THIS IS — B7's title and the line under it.
+
+        Set as a heading rather than as a labelled field: it is the answer to
+        the one question somebody opens this group for, and a 150px label
+        reading "Application" beside it was a word explaining a word.
+      */
+      /* The two lines together, so the section's own gap does not separate a
+         title from the line that qualifies it. */
+      .build {
+        display: flex;
+        flex-direction: column;
+      }
+      .build-name {
+        font-size: var(--t-h1);
+        font-weight: var(--w-medium);
+        letter-spacing: var(--track-tight);
+        color: var(--ink);
+      }
+      .build-facts {
+        margin-top: var(--s1);
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-2);
+      }
+      /* What it stands on: a name and its licence, one pair per row. */
+      .built-on {
+        display: flex;
+        flex-direction: column;
+      }
+      .built-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--s5);
+        padding: var(--s3) 0;
+        border-top: var(--s-px) solid var(--rule);
+      }
+      .built-what {
+        font-family: var(--mono);
+        font-size: var(--t-sm);
+        color: var(--ink);
+      }
+      .built-detail {
+        font-family: var(--mono);
+        font-size: var(--t-data);
+        color: var(--ink-3);
+        text-align: right;
+      }
+
+      .name {
         font-weight: var(--w-semibold);
       }
-      .grant .desc,
-      .cap .desc {
+      .desc {
         margin: var(--s0) 0 0;
         font-size: var(--t-sm);
         color: var(--ink-2);

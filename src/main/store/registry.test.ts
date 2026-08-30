@@ -94,7 +94,9 @@ const PREFERENCES: Readonly<Record<string, Declared>> = {
   transcriptionLanguages: {
     kind: 'user-choice',
     because: 'the "Hearing you" pane',
-    provenBy: 'Languages spoken',
+    // The heading is a ByPronoun table now — B2 heads it "Languages she listens
+    // for" — so the string that proves the control exists is the table's key.
+    provenBy: 'languagesHead',
   },
   webSearch: {
     kind: 'user-choice',

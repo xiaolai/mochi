@@ -495,6 +495,7 @@ describe('the four standing grants, as the window draws them', () => {
 })
 
 describe('the two global keys, as the window shows them', () => {
+  const NAMES = { rest: 'Talk to her', hide: 'Show or hide her' }
   const SAYS = { rest: 'Let her rest, or wake her', hide: 'Hide her, or bring her back' }
   const SHIPPED = { rest: 'Control+Shift+L', hide: 'Control+Shift+M' }
 
@@ -503,10 +504,12 @@ describe('the two global keys, as the window shows them', () => {
     // somebody scanning this pane is actually looking for.
     const shown = listKeys(
       [{ id: 'rest', accelerator: 'Control+Shift+L', refused: null }],
+      NAMES,
       SAYS,
       SHIPPED,
     )
     expect(shown[0]?.what).toContain('rest')
+    expect(shown[0]?.name).toBe('Talk to her')
     expect(shown[0]?.accelerator).toBe('Control+Shift+L')
     expect(shown[0]?.refused).toBeNull()
   })
@@ -523,6 +526,7 @@ describe('the two global keys, as the window shows them', () => {
           refused: 'another application already has it',
         },
       ],
+      NAMES,
       SAYS,
       SHIPPED,
     )
@@ -531,8 +535,16 @@ describe('the two global keys, as the window shows them', () => {
   })
 
   it('still shows something for an id it has no wording for', () => {
-    const shown = listKeys([{ id: 'wobble', accelerator: 'F13', refused: null }], SAYS, SHIPPED)
+    const shown = listKeys(
+      [{ id: 'wobble', accelerator: 'F13', refused: null }],
+      NAMES,
+      SAYS,
+      SHIPPED,
+    )
     expect(shown[0]?.what).toBe('wobble')
+    // Both fall back to the id, so a key this build does not ship still draws a
+    // row somebody can see rather than an empty one.
+    expect(shown[0]?.name).toBe('wobble')
   })
 
   it('calls a key unedited when it is on what ships', () => {
@@ -540,6 +552,7 @@ describe('the two global keys, as the window shows them', () => {
     // sitting on the default would offer a reset that changes nothing.
     const shown = listKeys(
       [{ id: 'rest', accelerator: 'Control+Shift+L', refused: null }],
+      NAMES,
       SAYS,
       SHIPPED,
     )
@@ -547,7 +560,12 @@ describe('the two global keys, as the window shows them', () => {
   })
 
   it('calls a key edited when somebody has moved it', () => {
-    const shown = listKeys([{ id: 'rest', accelerator: 'Alt+F9', refused: null }], SAYS, SHIPPED)
+    const shown = listKeys(
+      [{ id: 'rest', accelerator: 'Alt+F9', refused: null }],
+      NAMES,
+      SAYS,
+      SHIPPED,
+    )
     expect(shown[0]?.edited).toBe(true)
   })
 
@@ -555,7 +573,12 @@ describe('the two global keys, as the window shows them', () => {
     // It has no default to be edited away from, and `true` here would offer a
     // reset that sends `null` — which deletes a stored answer that is the only
     // thing binding it.
-    const shown = listKeys([{ id: 'wobble', accelerator: 'F13', refused: null }], SAYS, SHIPPED)
+    const shown = listKeys(
+      [{ id: 'wobble', accelerator: 'F13', refused: null }],
+      NAMES,
+      SAYS,
+      SHIPPED,
+    )
     expect(shown[0]?.edited).toBe(false)
   })
 })

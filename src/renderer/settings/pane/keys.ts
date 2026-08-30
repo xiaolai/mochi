@@ -34,6 +34,7 @@ import { type Pane, type PaneHandlers } from '../pane'
 import { type SettingsKey } from '@shared/ipc'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
+import { keyGlyphs } from '../../rules/key-glyphs'
 import { whatWasPressed } from './pressed'
 
 export const KEYS: Pane = {
@@ -46,7 +47,7 @@ export const KEYS: Pane = {
   },
   render(view, handlers) {
     return [
-      ...view.keys.map((key) => row(key, handlers)),
+      ...view.keys.map((key) => row(key, view.about.platform, handlers)),
       element(
         'p',
         'note',
@@ -59,10 +60,18 @@ export const KEYS: Pane = {
   },
 }
 
-function row(key: SettingsKey, handlers: PaneHandlers): HTMLElement {
+function row(key: SettingsKey, platform: string, handlers: PaneHandlers): HTMLElement {
   const line = element('div', 'folder')
   const left = element('div')
-  left.append(element('div', undefined, key.what))
+  /*
+    A NAME, then what it does — B5's two lines.
+
+    It was one line carrying `what`, which is a sentence: "Let her rest, or wake
+    her" over "Hide her, or bring her back" is a column of two descriptions
+    somebody reads rather than two names they scan, and the difference matters
+    on the one pane where people arrive knowing which key they want to change.
+  */
+  left.append(element('div', 'name', key.name), element('div', 'desc', key.what))
   if (key.refused !== null) {
     left.append(element('div', 'refused', `not working — ${key.refused}`))
   }
@@ -74,7 +83,15 @@ function row(key: SettingsKey, handlers: PaneHandlers): HTMLElement {
     is the thing showing what it is — and a button announces itself as
     operable, which a `<code>` beside a field does not.
   */
-  const combo = element('button', 'btn key', key.accelerator)
+  /*
+    THE COMBINATION AS THIS SYSTEM SPELLS IT — `⌃ ⇧ L`, not `Control+Shift+L`.
+
+    The keycaps say ⌃ ⇧ and so does every menu on the machine, so the stored
+    form asks somebody to translate before they can compare it against the key
+    they are about to press. `keyGlyphs` leaves the words alone off macOS,
+    where the words are the convention.
+  */
+  const combo = element('button', 'btn key', keyGlyphs(key.accelerator, platform))
   combo.type = 'button'
 
   const reset = element('button', 'btn', 'Reset')
@@ -87,7 +104,7 @@ function row(key: SettingsKey, handlers: PaneHandlers): HTMLElement {
   let listening = false
   const stop = (): void => {
     listening = false
-    combo.textContent = key.accelerator
+    combo.textContent = keyGlyphs(key.accelerator, platform)
     combo.classList.remove('listening')
     reset.disabled = !key.edited
     window.removeEventListener('keydown', onKey, true)
@@ -117,7 +134,10 @@ function row(key: SettingsKey, handlers: PaneHandlers): HTMLElement {
     if (said.kind === 'refuse') {
       // Said, and STILL LISTENING — somebody most of the way to a good answer
       // should not have to start again.
-      combo.textContent = said.pressed
+      // The same spelling the resting label uses. A refusal that echoes back
+      // `Command+Escape` while the row beside it reads `⌃ ⇧ L` is two
+      // vocabularies for one thing, one of them appearing only on failure.
+      combo.textContent = keyGlyphs(said.pressed, platform)
       handlers.say(said.why, true)
       return
     }

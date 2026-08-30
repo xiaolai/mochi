@@ -52,6 +52,7 @@ function settled(): SettingsView {
     keys: [
       {
         id: 'rest',
+        name: 'Talk to her',
         what: 'Let her rest',
         accelerator: 'Control+Shift+L',
         refused: null,
@@ -59,13 +60,21 @@ function settled(): SettingsView {
       },
       {
         id: 'hide',
+        name: 'Show or hide her',
         what: 'Hide her',
         accelerator: 'Control+Shift+M',
         refused: null,
         edited: false,
       },
     ],
-    about: { name: 'Mochi', version: '0.0.1', electron: '43.0.0', userData: '/u' },
+    about: {
+      name: 'Mochi',
+      version: '0.0.1',
+      electron: '43.0.0',
+      arch: 'arm64',
+      platform: 'darwin',
+      userData: '/u',
+    },
     prompts: [],
     folders: { avatars: '/u/avatars', personas: '/u/personas' },
   }
@@ -202,6 +211,7 @@ describe('the dot, and what it is for', () => {
         { ...(view.keys[0] as SettingsView['keys'][number]) },
         {
           id: 'hide',
+          name: 'Show or hide her',
           what: 'Hide her',
           accelerator: 'Control+Shift+M',
           refused: 'another application already has it',

@@ -526,6 +526,15 @@ export interface ScreenChange {
  */
 export interface SettingsKey {
   readonly id: string
+  /**
+   * A short name for the row — "Talk to her".
+   *
+   * B5 draws a name over a sentence, and `what` was carrying both jobs: "Let her
+   * rest, or wake her" is a description standing where a label goes, so a column
+   * of two of them is two sentences somebody reads rather than two names they
+   * scan. See `SHORTCUT_NAMES`.
+   */
+  readonly name: string
   readonly what: string
   readonly accelerator: string
   /** Null when this application has it. The reason, when it does not. */
@@ -566,6 +575,22 @@ export interface SettingsAbout {
   readonly name: string
   readonly version: string
   readonly electron: string
+  /**
+   * Which processor this build was made for — `arm64`, `x64`.
+   *
+   * B7 draws it on the version line, and it is the fact a bug report needs that
+   * the version number does not carry: the same version on the wrong
+   * architecture runs under translation, and nothing else on screen says so.
+   */
+  readonly arch: string
+  /**
+   * `process.platform`, so the window can spell a key combination the way this
+   * operating system spells it.
+   *
+   * A renderer guessing from a user-agent string is a renderer that gets it
+   * wrong on one machine in twenty and cannot be told it did. See `keyGlyphs`.
+   */
+  readonly platform: string
   /** Where userData lives. Shown because every path below is under it. */
   readonly userData: string
 }
