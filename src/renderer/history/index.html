@@ -2563,6 +2563,67 @@
         part of the control. Baseline-aligned, because a 14px label beside a
         13.5px field centred on its box sits a pixel high and reads as loose.
       */
+      /*
+        THE WAY INTO THE THREE SCREENS that are not sections of this one.
+
+        Rows rather than a corner of buttons, because each carries the fact that
+        says whether it is worth opening — how many she has kept, how many faces
+        she may wear. A door with nothing written on it is a door people stop
+        trying.
+      */
+      .deeper {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s0);
+      }
+
+      .deeper-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s3);
+        width: 100%;
+        padding: var(--s3) var(--s4);
+        border: 0;
+        border-radius: var(--r-card);
+        background: var(--paper-3);
+        font-family: var(--sans);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .deeper-row:hover {
+        background: var(--chosen);
+      }
+
+      .deeper-name {
+        font-size: var(--t-body);
+        font-weight: var(--w-medium);
+        color: var(--ink);
+      }
+
+      .deeper-fact {
+        font-family: var(--mono);
+        font-size: var(--t-data-2);
+        color: var(--ink-3);
+      }
+
+      /* The only exit from a screen that is not in the view nav. */
+      .deeper-back {
+        align-self: flex-start;
+        padding: 6px var(--s3) 6px 0;
+        border: 0;
+        background: transparent;
+        font-family: var(--sans);
+        font-size: var(--t-ui);
+        color: var(--ink-2);
+        cursor: pointer;
+      }
+
+      .deeper-back:hover {
+        color: var(--ink);
+      }
+
       .setting {
         display: flex;
         align-items: baseline;

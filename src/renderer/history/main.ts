@@ -27,6 +27,9 @@ import {
   openingDay,
 } from './month'
 import { assembledPanel, characterSheet } from './shelf'
+import { expressionsSection } from './sheet/expressions'
+import { memorySection } from './sheet/memory'
+import { promptSection } from './sheet/prompt'
 import { characterRows } from './parts/rail'
 import { characterSubject } from './parts/masthead'
 import { machineNav } from './parts/machine-nav'
@@ -608,7 +611,16 @@ function openCharacter(): void {
   if (shelf === null) return
   const arriving = !showingCharacter
   showingCharacter = true
-  paneEl.replaceChildren(characterSheet(shelf, handlers))
+  /*
+    ONE OF FOUR SCREENS in this slot, not one scroll containing all of them.
+
+    Her expressions, her notes and her instruction each have their own title and
+    apparatus column in the delivery — A2c, A2b, A8 — so they are screens rather
+    than sections. `HerHead` hard-codes three view pills and none of the three is
+    among them, so they are drill-downs from view I: opened from the row that
+    names them, left by the control in the head.
+  */
+  paneEl.replaceChildren(...deeperScreen(shelf, handlers))
   // The subject sits above the views, outside the scrolling column: her name is
   // what they are views OF, and it scrolled away with the rest of the sheet.
   renderSubject()
@@ -653,6 +665,10 @@ function showPlace(next: Place): void {
     One class, because the sizes belong to the sheet and the view belongs here.
   */
   subjectEl.classList.toggle('subject-large', place === 'cast')
+  // A drill-down is about the character this view is about. Leaving the view
+  // leaves the screen — one that survived would be a page about somebody the
+  // window has stopped being about.
+  if (place !== 'cast') deeperInto = null
   /*
     The archive is the one page with three columns competing, so it is the one
     page whose body is laid out differently — the list becomes a track and the
@@ -2151,7 +2167,58 @@ function describe(change: PersonaChange, kind: string): string {
   return typeof value === 'string' ? value : ''
 }
 
+/**
+ * Which of view I's four screens is showing.
+ *
+ * `null` is her page itself. The three others are the delivery's A2c, A2b and
+ * A8 — screens with their own titles, reached from the rows that name them.
+ *
+ * Dropped on a character switch and on leaving the view, because a drill-down
+ * that survives either is a screen about somebody the window has stopped being
+ * about.
+ */
+let deeperInto: 'faces' | 'notes' | 'instruction' | null = null
+
+/** Her page, or the one screen underneath it that is open. */
+function deeperScreen(shelf: ShelfView, handlers: ShelfHandlers): readonly HTMLElement[] {
+  if (deeperInto === null) return [characterSheet(shelf, handlers)]
+  const worn = shelf.characters.find((one) => one.id === shelf.wornId)
+  if (worn === undefined) return [characterSheet(shelf, handlers)]
+  /*
+    A way back, first — before the screen, so a keyboard reaches it before the
+    content it leaves. It is the only exit: these screens are not in the view
+    nav, so closing the window is otherwise the only way out of one.
+  */
+  const back = element('button', 'deeper-back', forPronoun(SAYS.backToWho, saying()))
+  back.type = 'button'
+  back.addEventListener('click', () => {
+    deeperInto = null
+    openCharacter()
+  })
+  const screen =
+    deeperInto === 'faces'
+      ? expressionsSection(shelf, worn, handlers)
+      : deeperInto === 'notes'
+        ? memorySection(shelf, handlers)
+        : promptSection(shelf, worn, handlers)
+  return [back, screen]
+}
+
 /* ---- wiring -------------------------------------------------------------- */
+
+/*
+  The rows that open them. Delegated from the pane rather than bound per row,
+  because the sheet is rebuilt after every write and a listener per row is a
+  listener re-added on every one of them.
+*/
+paneEl.addEventListener('click', (event) => {
+  const row = (event.target as HTMLElement | null)?.closest('[data-opens]')
+  if (!(row instanceof HTMLElement)) return
+  const opens = row.dataset.opens
+  if (opens !== 'faces' && opens !== 'notes' && opens !== 'instruction') return
+  deeperInto = opens
+  openCharacter()
+})
 
 troublesEl.addEventListener('click', () => {
   /*

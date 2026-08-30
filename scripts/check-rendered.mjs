@@ -1209,6 +1209,19 @@ async function checks(page, where = '') {
       whose `<input>` lives in it is invalid HTML, and it makes looking at a face
       a click that permits it.
   */
+  /*
+    HER EXPRESSIONS IS A SCREEN, not a section, so this has to open it.
+
+    A2c has its own title and its own apparatus column in the delivery, which
+    makes it a drill-down from view I rather than a block in her sheet. The check
+    found no tiles and said so — which is the right failure, and the reason it is
+    a `bad()` rather than a skip: "no tiles" and "tiles that are wrong" must not
+    look the same from here.
+  */
+  await page.run(
+    `(() => { const row = document.querySelector('[data-opens="faces"]'); if (row) row.click(); })()`,
+  )
+  await wait(400)
   const tiles = await page.run(`(() => {
     const all = [...document.querySelectorAll('.face-tile')];
     return {

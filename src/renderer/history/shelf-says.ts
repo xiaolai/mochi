@@ -30,6 +30,22 @@ export const SAYS = {
      before `change` puts it back, which is the only time anybody sees it. */
   herName: { she: 'Her name', he: 'His name', it: 'Its name' },
   herWords: { she: 'Her words', he: 'His words', it: 'Its words' },
+  sentAtWake: {
+    she: 'sent at her next wake',
+    he: 'sent at his next wake',
+    it: 'sent at its next wake',
+  },
+  deeperFaces: { she: 'Her expressions', he: 'His expressions', it: 'Its expressions' },
+  deeperNotes: {
+    she: 'What she has kept',
+    he: 'What he has kept',
+    it: 'What it has kept',
+  },
+  deeperInstruction: {
+    she: 'Her instruction',
+    he: 'His instruction',
+    it: 'Its instruction',
+  },
   whoHead: { she: 'Who she is', he: 'Who he is', it: 'What it is' },
   whoHint: {
     she: 'Her name, the words she takes, and what she calls you.',

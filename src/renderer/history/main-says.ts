@@ -175,6 +175,7 @@ export const SAYS = {
   },
   /* The receipt after the notes are erased. It names what went and what did
      not, because the confirmation just promised the conversations were safe. */
+  backToWho: { she: '‹ Who she is', he: '‹ Who he is', it: '‹ What it is' },
   keptErased: {
     she: 'Erased. Everything she had kept about you is gone.',
     he: 'Erased. Everything he had kept about you is gone.',

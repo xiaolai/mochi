@@ -1,4 +1,4 @@
-import type { ShelfView } from '@shared/history-window'
+import type { ShelfCharacter, ShelfView } from '@shared/history-window'
 import { forPronoun } from '@shared/pronoun'
 import { castDangerous } from './sheet/cast'
 import { element } from '../element'
@@ -6,12 +6,9 @@ import { editing } from '../rules/editing'
 import { SAYS } from './shelf-says'
 import { colourSection } from './sheet/colour'
 import { whoSection } from './sheet/who'
-import { expressionsSection } from './sheet/expressions'
 import { fileSection } from './sheet/file'
-import { memorySection } from './sheet/memory'
-import { promptSection } from './sheet/prompt'
 import { type ShelfHandlers } from './sheet/row'
-import { bubbleSection, savingSection } from './sheet/saving'
+import { bubbleSection } from './sheet/saving'
 import { voiceSection } from './sheet/voice'
 import { sizeSection } from './sheet/size'
 import { wakeCount } from './wake-count'
@@ -98,30 +95,28 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
     return page
   }
 
+  /*
+    FIVE SECTIONS, which is what A1 draws — not eleven.
+
+    This built every screen the delivery gives her page into one endless scroll:
+    her expressions, her notes and her instruction were sections here, and each
+    of them is a SCREEN in the artboards with its own title and its own
+    apparatus column. Her conversations retention moved to the machine's page,
+    where B6 draws it.
+
+    The order is the artboard's and it is not arbitrary: what she IS, then how
+    she looks, then how she sounds, then how she speaks — identity first,
+    history last. `Her file` joins them only when there is one, which is what A2
+    draws and what "the built-in only — she has no file to delete" says on A1.
+  */
   page.append(
-    /*
-      MOODS are not here any more.
-
-      They were eight tiles with a switch each, deciding which expressions a
-      character "claims". Nothing in this application ever consulted that list
-      to decide what she wears — see `instructions.ts` — so the switch changed
-      one sentence in her instructions and nothing else, and every character now
-      has all eight.
-
-      The tiles also let somebody SEE each expression on her, which was worth
-      having on its own and goes with them. Recorded rather than glossed: it is
-      §5 of the brief, and it is a choice about product rather than a tidy-up.
-    */
     whoSection(view, worn, handlers),
     colourSection(view, worn, handlers),
-    expressionsSection(view, worn, handlers),
     sizeSection(view, worn, handlers),
     voiceSection(view, worn, handlers),
     bubbleSection(view, worn, handlers),
-    savingSection(view, worn, handlers),
     fileSection(view, worn, handlers),
-    promptSection(view, worn, handlers),
-    memorySection(view, handlers),
+    deeper(view, worn),
   )
   /*
     Deleting her, or putting the built-in back, LAST.
@@ -333,4 +328,53 @@ export function assembledPanel(view: ShelfView, handlers: ShelfHandlers): readon
 
   draw()
   return [head, note, where, sent, toolsBox, editor, actions]
+}
+
+/**
+ * The way into the three screens that are not sections.
+ *
+ * Her expressions, her notes and her instruction each have their own title and
+ * their own apparatus column in the delivery — A2c, A2b and A8 — so they are
+ * screens rather than blocks in a scroll. `HerHead` hard-codes three view pills
+ * and none of the three appears in them, so they are reached from HERE: the view
+ * they belong to, from the thing they are about.
+ *
+ * Rows rather than buttons in a corner, because each one carries the fact that
+ * says whether it is worth opening — how many she has kept, how many faces she
+ * may wear, how long her instruction is. A door with nothing written on it is a
+ * door people stop trying.
+ */
+function deeper(view: ShelfView, worn: ShelfCharacter): HTMLElement {
+  const rows = [
+    {
+      to: 'faces' as const,
+      name: forPronoun(SAYS.deeperFaces, view.pronoun),
+      fact: `${String(worn.faces.length)} of 8 allowed`,
+    },
+    {
+      to: 'notes' as const,
+      name: forPronoun(SAYS.deeperNotes, view.pronoun),
+      fact: countOf(view.note.text),
+    },
+    {
+      to: 'instruction' as const,
+      name: forPronoun(SAYS.deeperInstruction, view.pronoun),
+      fact: forPronoun(SAYS.sentAtWake, view.pronoun),
+    },
+  ]
+  const wrap = element('div', 'deeper')
+  for (const one of rows) {
+    const row = element('button', 'deeper-row')
+    row.type = 'button'
+    row.dataset.opens = one.to
+    row.append(element('span', 'deeper-name', one.name), element('span', 'deeper-fact', one.fact))
+    wrap.append(row)
+  }
+  return wrap
+}
+
+/** Lines she has kept, said the way the apparatus column says it. */
+function countOf(text: string): string {
+  const lines = text === '' ? 0 : text.split('\n').length
+  return lines === 0 ? 'nothing yet' : `${String(lines)} kept`
 }
