@@ -1652,10 +1652,22 @@
         "one of these three is a mode", where what is true is "she takes these
         words".
       */
+      /*
+        NO GAP between the words, because each already carries 10px of its own.
+
+        The delivery's 2px sat between two 10px paddings, so the three words
+        were 22px apart — and on her page they share a line with "calls you
+        nothing yet", where 22px is a word space made of nothing. So "she he it
+        calls you nothing yet" read as six words in a row and the control did
+        not read as a control at all. The delivery never had that problem
+        because it drew the chooser on the name's line, alone.
+
+        Inside the control 20px, outside it 40px: see `.who-facts`.
+      */
       .switchers {
         display: inline-flex;
         align-items: baseline;
-        gap: var(--s0);
+        gap: 0;
       }
       .switchers button {
         padding: var(--s1) 10px;
@@ -2258,14 +2270,39 @@
         and the rest is DM Mono at a different size — centring two faces of
         unlike height on a line makes neither sit on it.
       */
+      /*
+        Three joints, and they are not all the same joint.
+
+        This line is read as one statement — "she calls you nothing yet", with
+        the other two words she could take beside the one she does — so the
+        spacing has to say which parts are one thing. One gap for all of it said
+        the opposite: 22px between the three pronouns and 26px between the last
+        of them and "calls" is the same distance twice, and six words in a row
+        with no control in sight.
+
+        So: 10px is the joint, which is the delivery's for this line, and it is
+        what sits either side of the middot. The control gets a wider one of its
+        own, below — the middot separates two facts, and nothing separates a
+        control from the sentence it is the subject of except space.
+      */
       .who-facts {
         display: flex;
         align-items: baseline;
-        gap: var(--s4);
+        gap: 10px;
         flex-wrap: wrap;
         font-family: var(--mono);
         font-size: var(--t-data);
         color: var(--ink-3);
+      }
+      /*
+        The control-to-sentence joint: 22px, so 32px from the last word in it.
+
+        Against 16px inside the control. Only here — the same chooser above the
+        system prompt shares a line with a heading and nothing else, and needs
+        no separation from a sentence it is not part of.
+      */
+      .who-facts > .switchers {
+        margin-right: var(--s5);
       }
       .who-facts .meta {
         overflow-wrap: anywhere;
