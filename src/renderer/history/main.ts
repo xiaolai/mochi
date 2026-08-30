@@ -1670,6 +1670,16 @@ function monthPicker(year: number, month: number): HTMLElement {
   const open = element('button', 'month', monthLabel(year, month))
   open.type = 'button'
   open.setAttribute('popovertarget', 'month-pick')
+  /*
+    Said as an ATTRIBUTE, because the ring on the trigger is a CSS rule.
+
+    `popovertarget` gives a button implicit expanded semantics for a screen
+    reader, but it does not put `aria-expanded` in the DOM, so a selector
+    matching on it never fires — and C2 rings this control precisely while the
+    card it opens is up, which is the only moment a reader needs telling which
+    button the card belongs to.
+  */
+  open.setAttribute('aria-expanded', 'false')
   open.setAttribute('aria-label', `${monthLabel(year, month)} — choose another`)
 
   const pick = element('div', 'month-pick')
@@ -1770,6 +1780,10 @@ function monthPicker(year: number, month: number): HTMLElement {
       : `${String(live)} ${live === 1 ? 'month has' : 'months have'} something in them. ` +
           `The rest are not buttons — choosing one would open an empty column.`,
   )
+
+  pick.addEventListener('toggle', (event) => {
+    open.setAttribute('aria-expanded', String(event.newState === 'open'))
+  })
 
   pick.append(yearRow, grid, note)
   wrap.append(open, pick)

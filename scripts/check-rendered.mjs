@@ -1232,6 +1232,80 @@ async function checks(page, where = '') {
     else ok('one-row', 'the month sits on the same line as the days it names')
   })
 
+  await step('strip-holds', async () => {
+    /* --- paging a month does not move the days ----------------------------- */
+    /*
+      The month's name sits in a fixed slot, so the thirty-one day cells stay
+      where they are while it changes.
+
+      It was shrink-to-fit at 12px. "May 2026" and "September 2026" are
+      different widths, so paging slid the forward arrow and every day cell
+      sideways — under the pointer that had just pressed the arrow, which is the
+      one moment a control must not move. A6 gives the slot `width: 78px` and
+      that width is the whole point of it.
+
+      Measured across a month whose name is SHORT and one whose name is LONG,
+      because two months of similar width would agree by luck.
+    */
+    /*
+      IT PUTS THE MONTH BACK, and that is not tidiness.
+
+      This is the only check that navigates the archive in TIME, and it left the
+      strip five months forward — so `A1-months`, which compares the picker
+      against the strip's own dots, ran against a September with nothing in it
+      and reported the picker as lying.
+
+      Caught by the full run and not by `--only strip-holds`, which passed
+      because it ran alone. A filtered run reads one check's verdict honestly; it
+      cannot tell you that the check dirties the window for the next one. Every
+      check establishing its own page is what makes a subset MEAN the same thing;
+      it is not what makes a check safe to run before another one.
+
+      RE-QUERIED every pass, not held across one.
+
+      The first version of this captured the strip and the forward arrow once
+      and clicked the same node five times. Paging rebuilds the whole row, so
+      both references were detached after the first click: the month stopped
+      advancing and the strip's rect read 0. A stale node is not an error — it
+      is an element that answers, from outside the document.
+    */
+    const held = await page.run(`(() => {
+      const seen = [];
+      for (let i = 0; i < 5; i += 1) {
+        const strip = document.querySelector('.daystrip .strip');
+        const label = document.querySelector('.daystrip .month');
+        const on = [...document.querySelectorAll('.daystrip .step')].pop();
+        if (!strip || !label || !on) return { why: 'the day strip has no month navigation' };
+        seen.push({
+          month: (label.textContent || '').trim(),
+          left: Math.round(strip.getBoundingClientRect().left),
+        });
+        on.click();
+      }
+      // Put the strip back where it was found. See the note above this block.
+      for (let i = 0; i < 5; i += 1) {
+        const back = document.querySelector('.daystrip .step');
+        if (back) back.click();
+      }
+      const names = seen.map((o) => o.month);
+      const lefts = [...new Set(seen.map((o) => o.left))];
+      return { names, lefts, widest: Math.max(...names.map((n) => n.length)),
+               narrowest: Math.min(...names.map((n) => n.length)) };
+    })()`)
+    if (held.why) bad('strip-holds', held.why)
+    else if (held.widest === held.narrowest)
+      bad(
+        'strip-holds',
+        `every month name was ${held.widest} characters, so nothing was tested: ${JSON.stringify(held.names)}`,
+      )
+    else if (held.lefts.length > 1)
+      bad(
+        'strip-holds',
+        `the days move when the month does: ${JSON.stringify(held.names)} start at ${JSON.stringify(held.lefts)}`,
+      )
+    else ok('strip-holds', `the days hold still across ${JSON.stringify(held.names)}`)
+  })
+
   await step('A1-months', async () => {
     /* --- a month with nothing in it is not a button either ----------------- */
     /*

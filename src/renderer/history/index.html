@@ -1319,16 +1319,18 @@
         at the top. Aligned to the numerals now, which is the line the eye reads
         across.
       */
+      /* A3's row: 18 above, 12 below, 18 between the month nav and the days. */
       .daystrip {
         display: flex;
-        align-items: flex-start;
-        gap: 14px;
-        padding: 14px 0 var(--s3);
+        align-items: center;
+        gap: 18px;
+        padding: 18px 0 var(--s3);
       }
       .month-nav {
         display: flex;
         align-items: center;
-        gap: var(--s1);
+        /* 8, A3's — it was 4, which crowded two 26px discs against the slot. */
+        gap: var(--s2);
         flex: none;
       }
       .month-wrap {
@@ -1341,21 +1343,40 @@
         opens a popover is the affordance this window has been bitten by before
         — the underline is what says it can be pressed.
       */
+      /*
+        A FIXED SLOT, and not an underlined word.
+
+        Two defects in one rule. It was `border: 0; border-bottom: 1px solid` on
+        a transparent ground — the third instance of the underlined-word button,
+        after the rail's New/Duplicate and the foot's five, and the one my sweep
+        for that class missed because the sweep also required `border-radius: 0`
+        and this rule never set it.
+
+        And it was SHRINK-TO-FIT at 12px. A6 gives it `width: 78px` at 14/500,
+        and the width is the load-bearing part: "May 2026" and "September 2026"
+        are different widths, so paging a month slid the `›` arrow and all
+        thirty-one day cells sideways under the pointer that was pressing them.
+        A fixed slot is what makes the strip hold still while it changes.
+      */
       .daystrip .month {
-        padding: 0 0 var(--s-px);
-        border: 0;
-        border-bottom: var(--s-px) solid var(--rule-2);
+        width: 78px;
+        padding: 3px 0;
+        border: var(--s-px) solid transparent;
+        border-radius: var(--r-pill);
         background: transparent;
         font-family: var(--sans);
-        font-size: var(--t-cap);
+        font-size: var(--t-read);
         font-weight: var(--w-medium);
-        color: var(--ink-2);
+        color: var(--ink);
+        text-align: center;
         white-space: nowrap;
         cursor: pointer;
       }
-      .daystrip .month:hover {
-        color: var(--ink);
-        border-bottom-color: var(--ink-3);
+      /* C2 rings it while the picker it opens is up — the only time a reader
+         needs to be told which control the card belongs to. */
+      .daystrip .month:hover,
+      .daystrip .month[aria-expanded='true'] {
+        border-color: var(--ink);
       }
       /*
         The button is the ANCHOR the picker hangs off.
@@ -1512,13 +1533,19 @@
         border-color: var(--ink);
         color: var(--paper);
       }
+      /*
+        26px discs on the sunken grey, which is what A3 and A6 draw. They were
+        17px bare icons on nothing — the two controls that page the archive,
+        smaller than the day cells they move.
+      */
       .daystrip .step {
-        display: flex;
-        padding: var(--s0);
+        width: 26px;
+        height: 26px;
+        padding: 0;
         border: 0;
-        background: transparent;
-        color: var(--ink-3);
-        cursor: pointer;
+        border-radius: var(--r-pill);
+        background: var(--paper-3);
+        color: var(--ink-2);
       }
       .daystrip .step:hover:not(:disabled) {
         color: var(--ink);
@@ -1577,7 +1604,7 @@
       }
       .day-n {
         font-family: var(--mono);
-        font-size: var(--t-nano);
+        font-size: var(--t-data-2);
       }
       .day.has {
         color: var(--ink-2);
