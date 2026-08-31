@@ -189,13 +189,19 @@ export const LOOKS: Readonly<Record<Emotion, Look>> = {
       because the breath it was summed with reached +0.045 and could not be
       argued with.
 
-      That breath is one-sided now and reaches +0.024, so the same ceiling buys
-      a fuller resting pose: 0.11 + 0.024 is 0.134, against the 0.135 the old
-      pair already peaked at. Every frame she can draw asleep is a frame the
-      previous version also drew -- which is the argument for the number, and
-      the reason it is not simply put back to 0.19.
+      Back to 0.09, and the round trip is worth recording. It was raised to 0.11
+      when the breath became one-sided and small, on the argument that the same
+      0.135 ceiling bought a fuller resting pose. That argument was sound and the
+      premise did not survive: at the waking amplitude she moved 2px asleep and
+      read as switched off, so the asleep breath is twice as deep again (see
+      `ASLEEP_BREATH_GAIN`). With an excursion of 0.048 the base has to come back
+      down for the ceiling to stay where it was — 0.09 + 0.048 is 0.138, against
+      the 0.135 the pose plus breath already peaked at before any of this.
+
+      The pose is the same as it ever was, then. What changed is that the
+      movement on top of it is now all swell and no stretch.
     */
-    squash: 0.11,
+    squash: 0.09,
   },
 }
 

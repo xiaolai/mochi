@@ -76,6 +76,46 @@ const IMPULSE_DECAY_PER_S = -Math.log(0.86) * 60
  */
 const ASLEEP_DRIFT = 0.2
 
+/**
+ * How much deeper she breathes asleep, against the waking amplitude.
+ *
+ * ## Why sleep needs its own number at all
+ *
+ * The breath was made one-sided and quieter to stop it stretching her head into
+ * a point, and awake that is right — there is a blink, there is drift, there is
+ * a face doing things, and the breath only has to keep her from looking frozen.
+ *
+ * Asleep there is none of that. The eyes are held shut, `ASLEEP_DRIFT` keeps a
+ * fifth of the drift, and the breath is the ONLY thing left moving. At the
+ * waking amplitude that came to 2.0px of width and 1.5px of height on a 94px
+ * body across 3.4 seconds — measured, not guessed — which is not a quiet breath,
+ * it is an invisible one. She read as switched off, which is the exact reading
+ * the kept breath exists to prevent.
+ *
+ * ## Why 2, and not more
+ *
+ * Twice the waking breath puts the asleep excursion at 0.048, on a `sleepy`
+ * resting pose of 0.09, so the widest frame is 0.138. The pose plus breath
+ * already peaked at 0.135 before any of this session's changes and was fine
+ * there; past that lies the 1.24-times-her-width spread that `looks.ts` records
+ * as reading like a puddle. So this restores the movement without reopening the
+ * defect the sleeping pose was cut for.
+ *
+ * A real body breathes deeper asleep than awake, so the direction is not a
+ * concession to visibility — it is what sleep looks like.
+ */
+export const ASLEEP_BREATH_GAIN = 2
+
+/**
+ * And slower, by half again.
+ *
+ * Respiration drops in sleep, and a slow deep swell reads as sleeping where a
+ * quick shallow one reads as a smaller version of awake. It also helps the eye:
+ * the same excursion spread over 5.1 seconds is easier to see as breathing than
+ * the same distance travelled in 3.4.
+ */
+const ASLEEP_BREATH_SLOWER = 1.5
+
 /** No drift at all — the tuner wants her still. See `setIdle`. */
 const NO_DRIFT: Drift = { lean: 0, shift: 0, lift: 0 }
 
@@ -584,7 +624,11 @@ export class MochiAvatar implements AvatarBackend {
         // tile stop breathing as a side effect of an accessibility fix.
         {
           blink: 1,
-          breath: this.reducedMotion ? 0 : this.idleLayer.pose(now, this.face.breathMs).breath,
+          // Slower asleep — see `ASLEEP_BREATH_SLOWER`. The AMPLITUDE is applied
+          // where every other squash contribution is summed, below.
+          breath: this.reducedMotion
+            ? 0
+            : this.idleLayer.pose(now, this.face.breathMs * ASLEEP_BREATH_SLOWER).breath,
         }
       : stirring
         ? this.idleLayer.pose(now, this.face.breathMs)
@@ -600,8 +644,17 @@ export class MochiAvatar implements AvatarBackend {
     // Layer 1, idle: breath feeds the same squash channel a poke does, so they
     // compose instead of fighting over the body scale.
     this.impulse *= Math.exp(-IMPULSE_DECAY_PER_S * dt)
-    const target =
-      look.squash + (moved.squash ?? 0) + pose.breath * this.face.breathAmp + this.impulse
+    /*
+      Deeper asleep, for the reason `ASLEEP_BREATH_GAIN` gives: with the eyes
+      held shut and the drift at a fifth, the breath is the only thing left
+      moving, and at the waking amplitude it moved her 2px.
+
+      Gated on `shutEyes` rather than on `asleep`, so a voice coming out of a
+      sleeping face — which opens her eyes, see above — breathes at the waking
+      depth while it does. Sleeping and speaking should not look like sleeping.
+    */
+    const breathAmp = this.face.breathAmp * (shutEyes ? ASLEEP_BREATH_GAIN : 1)
+    const target = look.squash + (moved.squash ?? 0) + pose.breath * breathAmp + this.impulse
     const settled = this.squashSpring.step(dt, target, {
       stiffness: this.face.stiffness,
       damping: this.face.damping,

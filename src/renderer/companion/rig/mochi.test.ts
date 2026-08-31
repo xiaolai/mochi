@@ -1492,3 +1492,100 @@ describe('the breath runs at the speed the face asks for', () => {
     expect(paintedHeight(BREATH_PERIOD_MS)).toBeLessThan(paintedHeight(BREATH_PERIOD_MS / 2))
   })
 })
+
+describe('she breathes while she sleeps, and visibly', () => {
+  /*
+    The kept breath is the whole of what separates a resting companion from a
+    crashed one, and asleep it is the ONLY thing left moving: the eyes are held
+    shut and `ASLEEP_DRIFT` keeps a fifth of the drift.
+
+    It regressed with nothing failing. Making the waking breath one-sided and
+    quieter — right, for a head that was going pointy — took the sleeping body
+    from about 8.5px of width travel to 2.0px, which on a 94px shape across 3.4
+    seconds is not a quiet breath but an absent one. Every test here passed
+    throughout, because they all asked whether she MOVED between two instants and
+    a fifth of a pixel is movement.
+
+    So this asks for a distance, not for a difference — and asks for it as a
+    FRACTION of her own width, because `rig()` draws at `fit-canvas` and she is
+    far bigger there than the 94px she ships at. A floor in pixels passed the
+    regression on the first attempt for exactly that reason.
+
+    The two states, as a fraction of her widest asleep frame:
+
+        breath at the waking depth   0.024 / 1.134  =  2.1%   <- read as frozen
+        breath doubled for sleep     0.048 / 1.138  =  4.2%
+
+    Three percent sits between them with room on both sides.
+  */
+  const WIDTH_FLOOR = 0.03
+
+  /** Painted width of the widest row, in CSS pixels. */
+  function paintedWidth(ctx: SKRSContext2D): number {
+    const { data } = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+    let widest = 0
+    for (let y = 0; y < HEIGHT; y++) {
+      let left = -1
+      let right = -1
+      for (let x = 0; x < WIDTH; x++) {
+        if ((data[(y * WIDTH + x) * 4 + 3] ?? 0) > 8) {
+          if (left < 0) left = x
+          right = x
+        }
+      }
+      if (left >= 0) widest = Math.max(widest, right - left + 1)
+    }
+    return widest
+  }
+
+  /** The widest and narrowest she gets over one asleep cycle. */
+  function asleepSpread(): { travel: number; widest: number } {
+    const r = rig()
+    r.avatar.setAsleep(true)
+    // Her asleep period is longer than the waking one, so sample over the
+    // longer span or the extremes never arrive. See `ASLEEP_BREATH_SLOWER`.
+    const span = BREATH_PERIOD_MS * 2
+    const seen: number[] = []
+    let at = 0
+    for (; at <= span; at += 1000 / 60) r.avatar.render(at)
+    for (let i = 0; i < 40; i++) {
+      const when = span + (span * i) / 40
+      for (let t = at; t <= when; t += 1000 / 60) r.avatar.render(t)
+      at = when
+      r.avatar.render(when)
+      seen.push(paintedWidth(r.ctx))
+    }
+    return { travel: Math.max(...seen) - Math.min(...seen), widest: Math.max(...seen) }
+  }
+
+  it('moves far enough asleep to be seen, not merely far enough to differ', () => {
+    const { travel, widest } = asleepSpread()
+    expect(travel / widest).toBeGreaterThanOrEqual(WIDTH_FLOOR)
+  })
+
+  it('does not spread into a puddle doing it', () => {
+    /*
+      The other wall, and the reason the sleeping pose was cut from 0.19 once
+      already: `looks.ts` records 1.24 times her width reading as a puddle
+      rather than as something resting. `fit-canvas` draws her wider than the
+      100% layout, so this is asserted as a RATIO against her own resting width.
+    */
+    const r = rig()
+    r.avatar.setIdle(false)
+    r.avatar.render(0)
+    const resting = paintedWidth(r.ctx)
+    expect(asleepSpread().widest / resting).toBeLessThan(1.2)
+  })
+
+  it('holds still asleep when less movement was asked for', () => {
+    // The preference outranks it, and that is the one gate the asleep breath
+    // does answer to.
+    const r = rig()
+    r.avatar.setAsleep(true)
+    r.avatar.setReducedMotion(true)
+    for (let t = 0; t <= 3000; t += 16) r.avatar.render(t)
+    const first = paintedWidth(r.ctx)
+    for (let t = 3000; t <= 3000 + BREATH_PERIOD_MS * 1.5; t += 16) r.avatar.render(t)
+    expect(paintedWidth(r.ctx)).toBe(first)
+  })
+})

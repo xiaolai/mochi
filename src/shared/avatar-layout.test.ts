@@ -21,6 +21,7 @@ import {
   worstCaseUnits,
 } from './avatar-layout'
 import { LOOKS } from '../renderer/companion/rig/looks'
+import { ASLEEP_BREATH_GAIN } from '../renderer/companion/rig/mochi'
 
 /**
  * Which side is allowed to say where she is, and when.
@@ -218,7 +219,16 @@ describe('the deformation limits the window is sized against', () => {
       a data file cannot be constrained by a test in this repository.
     */
     for (const [emotion, look] of Object.entries(LOOKS)) {
-      expect(look.squash + MOCHI.breathAmp, `${emotion} + inhale`).toBeLessThanOrEqual(SQUASH_LIMIT)
+      /*
+        `sleepy` is measured against the DEEPER breath, because that is the only
+        amplitude it is ever drawn with. Sleep doubles the breath — the eyes are
+        shut and the drift is at a fifth, so at the waking amplitude she moved
+        2px and read as switched off — and a check that quietly used the waking
+        number for the one look that never sees it would be reporting on a frame
+        the rig cannot draw.
+      */
+      const amp = emotion === 'sleepy' ? MOCHI.breathAmp * ASLEEP_BREATH_GAIN : MOCHI.breathAmp
+      expect(look.squash + amp, `${emotion} + inhale`).toBeLessThanOrEqual(SQUASH_LIMIT)
       expect(-look.squash, `${emotion} stretched`).toBeLessThanOrEqual(SQUASH_LIMIT)
     }
   })
