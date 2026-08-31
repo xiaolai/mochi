@@ -20,7 +20,6 @@ import {
   DEFAULT_PERSONA,
   PERSONA_FORMAT,
   PERSONA_LIMITS,
-  RECOMMENDED_VOICES,
   VOICE_NAMES,
   type Persona,
   BUBBLE_SIDES,
@@ -568,18 +567,17 @@ describe('voice', () => {
     expect(VOICE_NAMES).toContain(DEFAULT_PERSONA.voice)
   })
 
-  it('marks only voices that exist, so no pill carries a dot for nothing', () => {
-    // `satisfies` catches this at build time; asserted here as well because the
-    // list crosses to a renderer as `readonly string[]`, where the compiler has
-    // stopped watching and a stale name would simply mark nothing.
-    for (const one of RECOMMENDED_VOICES) expect(VOICE_NAMES).toContain(one)
-  })
+  /*
+    Two tests on `RECOMMENDED_VOICES` stood here — that every marked voice is a
+    real one, and that a minority rather than a majority carried the mark.
 
-  it('recommends a few rather than most of them', () => {
-    // A mark on eight of ten is not a recommendation, it is decoration — and
-    // the sentence under the row would be describing a majority as special.
-    expect(RECOMMENDED_VOICES.length).toBeLessThan(VOICE_NAMES.length / 2)
-  })
+    Both were about a dot on two of the ten pills, meaning "OpenAI recommends
+    this for realtime". The picker plays every voice now, so the mark was
+    removed along with the constant: a recommendation next to the means of
+    deciding for yourself is worth less than the means. Deleted rather than
+    left asserting about a thing that is gone, which `rebuild-contract.md`
+    marks **moot**.
+  */
 })
 
 describe('greeting and farewell', () => {

@@ -50,30 +50,21 @@ export const VOICE_NAMES = [
 ] as const
 export type VoiceName = (typeof VOICE_NAMES)[number]
 
-/**
- * The two the service's own guidance singles out for realtime.
- *
- * ## What this claims, and what it does not
- *
- * It is a pointer at somebody else's recommendation, not a verdict of ours.
- * §25's "What is NOT established" is explicit that **latency and quality are
- * entirely unmeasured here** — nobody in this project has listened to ten voices
- * and ranked them, and a mark that implied otherwise would be inventing a
- * measurement. So the pane says who recommends them rather than that they sound
- * better, and this comment is the reason the wording is careful.
- *
- * The one corroborating fact measured on this machine: §24 §3 captured the
- * service's own `session.created` defaults, and its default output voice is
- * `marin` — one of these two.
- *
- * ## Listed, never derived
- *
- * The same discipline as the tuple above: it is not "the last two of
- * `VOICE_NAMES`", which is an ordering accident that any insertion would break
- * silently. `satisfies` is what makes a name that is not a real voice a compile
- * error rather than a dot on a pill that does not exist.
- */
-export const RECOMMENDED_VOICES = ['cedar', 'marin'] as const satisfies readonly VoiceName[]
+/*
+  `RECOMMENDED_VOICES` stood here — `cedar` and `marin`, drawn as a dot on two
+  of the ten pills.
+
+  It was always somebody else's claim rather than ours: §25 records that nobody
+  in this project has listened to ten voices and ranked them, and the comment
+  here went to some length to say so. That care was the right answer while the
+  picker offered ten names and no way to hear any of them.
+
+  The picker plays each voice now, so the mark stopped being a substitute for
+  evidence and started standing next to it. Removed rather than kept for a
+  future caller: it was read by exactly one control, and a constant whose whole
+  value is a carefully-hedged recommendation is not one to leave lying around
+  for somebody who has not read the hedge.
+*/
 
 /**
  * A line she speaks at a moment the app chooses, rather than in reply to you.

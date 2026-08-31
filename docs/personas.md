@@ -82,8 +82,9 @@ ignored my file", which is the least debuggable thing an application can do.
 
 **Voices** (10) — `alloy`, `ash`, `ballad`, `coral`, `echo`, `sage`, `shimmer`,
 `verse`, `cedar`, `marin`. Every model accepts every voice, so no character can
-break by choosing one. `cedar` and `marin` are marked as recommended for realtime
-in the interface.
+break by choosing one. Press a voice in the interface to hear it — the samples
+are recorded by `scripts/voice-clips.mjs`, one sentence per voice, so what
+differs between two clips is the voice and nothing else.
 
 **Themes** (8) — `moss`, `sky`, `mint`, `sand`, `clay`, `blossom`, `lilac`,
 `slate`.

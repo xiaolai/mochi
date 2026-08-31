@@ -150,15 +150,6 @@ export interface ShelfView {
   readonly avatars: readonly SettingsAvatar[]
   readonly voices: readonly string[]
   /**
-   * Which of `voices` carry a mark, and nothing about why.
-   *
-   * Sent rather than decided in the pane, for the same reason `voices` is: two
-   * places holding the same list is how a mark comes to be on a different pill
-   * in each of them. See `RECOMMENDED_VOICES` for what the mark is allowed to
-   * claim — it is somebody else's recommendation, not a measurement of ours.
-   */
-  readonly recommendedVoices: readonly string[]
-  /**
    * Which words this interface uses for the worn character.
    *
    * Sent rather than assumed, which is the whole reason `Persona.pronoun`

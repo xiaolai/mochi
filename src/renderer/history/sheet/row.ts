@@ -141,14 +141,6 @@ export function chooser(
   entries: readonly {
     readonly value: string
     readonly label: string
-    /**
-     * Whether this one carries a dot, and NOT what the dot means.
-     *
-     * The caller writes the sentence under the row; the dot is only a pointer
-     * at it. A mark whose meaning lived here would be a claim made by a layout
-     * helper — see `RECOMMENDED_VOICES` for how careful the claim has to be.
-     */
-    readonly marked?: boolean
   }[],
   chosen: string,
   pick: (value: string) => void,
@@ -175,21 +167,13 @@ export function chooser(
     const button = element('button', undefined, entry.label)
     button.type = 'button'
     button.setAttribute('aria-current', String(entry.value === chosen))
-    if (entry.marked === true) {
-      /*
-        A dot, and the WORD beside it in the accessible name.
-
-        The same rule the microphone mark in the top strip states: an icon alone
-        is only a statement to somebody already looking at it, so the fact is
-        kept as text for anybody who is not. `aria-hidden` on the dot itself,
-        because otherwise the graphic and the name both announce.
-      */
-      const dot = element('span', 'dot')
-      dot.setAttribute('aria-hidden', 'true')
-      button.append(dot)
-      button.setAttribute('aria-label', `${entry.label} — recommended`)
-      button.title = 'recommended for realtime'
-    }
+    /*
+      NO `marked` OPTION. One caller ever set it — the voice row, for a dot
+      meaning "OpenAI recommends this" — and that dot went when the voices
+      became listenable. A layout helper carrying a capability nothing asks for
+      is a capability that will be reached for by somebody who has not read what
+      it was careful about.
+    */
     button.addEventListener('click', () => {
       // Nothing to save when it is already the answer, and a write would
       // redraw the pane under the pointer for no change. C1's rule, and the

@@ -78,10 +78,9 @@ export function voiceSection(
   worn: ShelfCharacter,
   handlers: ShelfHandlers,
 ): HTMLElement {
-  const recommended = new Set(view.recommendedVoices)
   const pills = chooser(
     'pills',
-    view.voices.map((one) => ({ value: one, label: one, marked: recommended.has(one) })),
+    view.voices.map((one) => ({ value: one, label: one })),
     worn.voice,
     (value) => {
       handlers.save({ id: worn.id, voice: value })
@@ -89,20 +88,22 @@ export function voiceSection(
   )
 
   /*
-    What the dot means, said once under the row rather than in ten tooltips.
+    THE DOT IS GONE, and with it the sentence explaining it.
 
-    Careful about whose claim it is. §25's "What is NOT established" is explicit
-    that latency and quality are entirely unmeasured here — nobody in this
-    project has listened to ten voices and ranked them — so this points at
-    somebody else's recommendation instead of making one. The one fact measured
-    on this machine is in §24 §3: the service's own default output voice is
-    `marin`, which is one of the two.
+    Two of the ten carried a mark meaning "OpenAI recommends this for
+    realtime", under a note that had to be careful about whose claim it was:
+    §25 is explicit that nobody in this project has listened to ten voices and
+    ranked them, so the row was passing on somebody else's advice.
+
+    That was the right thing to draw while there was no way to listen. There is
+    now. A recommendation is a substitute for evidence, and pressing a name and
+    hearing it is the evidence — leaving both would be telling somebody what to
+    prefer next to the means of deciding for themselves.
+
+    What the row does need said is the affordance, because a name that plays
+    when pressed is not something a pill announces.
   */
-  const marked = element('p', 'note')
-  const dot = element('span', 'dot')
-  dot.setAttribute('aria-hidden', 'true')
-  marked.append(dot, ` ${view.recommendedVoices.join(' and ')} are the two OpenAI recommends `)
-  marked.append('for realtime. Press any of them to hear it.')
+  const how = element('p', 'note', 'Press any of them to hear it.')
 
   /*
     PRESSING A VOICE PLAYS IT, as well as choosing it.
@@ -125,9 +126,5 @@ export function voiceSection(
     play((pressed.textContent ?? '').trim())
   })
 
-  const body: HTMLElement[] = [pills]
-  // Only when there is something to explain. A legend for a mark that is not on
-  // screen is a sentence about nothing, and this list comes from main.
-  if (view.recommendedVoices.length > 0) body.push(marked)
-  return section('Voice', forPronoun(SAYS.nextWake, view.pronoun), ...body)
+  return section('Voice', forPronoun(SAYS.nextWake, view.pronoun), pills, how)
 }

@@ -14,7 +14,7 @@ import {
   type OpenDialogOptions,
 } from 'electron'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { BUBBLE_SIDES, PERSONA_LIMITS, RECOMMENDED_VOICES, VOICE_NAMES } from '@shared/persona'
+import { BUBBLE_SIDES, PERSONA_LIMITS, VOICE_NAMES } from '@shared/persona'
 import { BUILT_IN_ID } from '@shared/parse-persona'
 import { PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry, type WireTool } from '@shared/capability/registry'
@@ -2937,7 +2937,6 @@ ipcMain.handle('shelf:read', (): ShelfView => {
     ),
     avatars: listAvatars(avatarsRoot(userData)),
     voices: [...VOICE_NAMES],
-    recommendedVoices: [...RECOMMENDED_VOICES],
     // Where it actually RESOLVED to, not where it was asked to look. A line
     // showing the requested name for a file that fell back to the built-in is
     // the "the app ignored my file" failure with a label on it.
