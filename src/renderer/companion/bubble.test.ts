@@ -13,7 +13,14 @@ function recorder() {
    */
   const strokeInk: string[] = []
   const arcs: string[] = []
-  const rects: { x: number; y: number; w: number; h: number; alpha: number }[] = []
+  const rects: {
+    x: number
+    y: number
+    w: number
+    h: number
+    corners: [number, number, number, number] | undefined
+    alpha: number
+  }[] = []
   const drawn: { text: string; alpha: number; colour: string }[] = []
   const rules: number[] = []
   const gradients: string[][] = []
@@ -33,7 +40,9 @@ function recorder() {
     },
     // The cursor's underline and the foot fade are both plain rects.
     fillRect(x: number, y: number, w: number, h: number) {
-      rects.push({ x, y, w, h, alpha: ctx.globalAlpha })
+      // A plain rect has no radii — `undefined` rather than absent, because
+      // `exactOptionalPropertyTypes` makes those two different things.
+      rects.push({ x, y, w, h, corners: undefined, alpha: ctx.globalAlpha })
       filled.push(String(ctx.fillStyle))
     },
     // The tail's tip is capped rather than pointed.
@@ -57,8 +66,17 @@ function recorder() {
     // Rounded rects, so the reading rail can be told from the bubble's own box
     // by its width. Recorded with the alpha in force, which is what separates
     // the rail's track from its thumb.
-    roundRect(x: number, y: number, w: number, h: number) {
-      rects.push({ x, y, w, h, alpha: ctx.globalAlpha })
+    roundRect(
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      corners?: [number, number, number, number],
+    ) {
+      // The RADII too. They were dropped, so nothing here could see the shape
+      // of the box -- which is how four corners came to be drawn at two
+      // different sizes without a single test noticing.
+      rects.push({ x, y, w, h, corners, alpha: ctx.globalAlpha })
     },
     strokeStyle: '' as string,
     lineWidth: 0,
@@ -177,6 +195,19 @@ describe('it appears only once her audio has begun', () => {
     const bubble = createBubble()
     seconds(bubble, 3, 0, /* begun */ false)
     expect(paint(bubble, LINE, 4).painted).toBe(false)
+  })
+
+  it('draws one radius on all four corners', () => {
+    /*
+      Two of the four were 10 against the other two at 22, and nothing here
+      could see it: `roundRect` above recorded the box and threw the radii
+      away. A guard that cannot see the property it is about is how a shape
+      ships wrong for months and is then noticed by a person instead.
+    */
+    const bubble = createBubble()
+    seconds(bubble, 1, 0)
+    const box = paint(bubble, LINE, 4).rects.find((one) => one.corners !== undefined)
+    expect(box?.corners).toEqual([22, 22, 22, 22])
   })
 
   it('appears once it has', () => {

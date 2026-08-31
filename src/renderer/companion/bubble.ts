@@ -345,13 +345,6 @@ const PAD = 12
 /** The panel rung, same as the window's. 22, up from 12. */
 const RADIUS = 22
 /**
- * The two corners either side of the tail, which are tighter.
- *
- * At 22 the curve runs so far along the edge that the tail grows straight out
- * of it and reads as stuck on. 10 gives the tail a shoulder to sit on.
- */
-const RADIUS_AT_TAIL = 10
-/**
  * 14/20, up from 13/18.
  *
  * Not a preference: Outfit's x-height is smaller than the face this was set in,
@@ -754,24 +747,28 @@ export function createBubble(): Bubble {
       ctx.fillStyle = colours.paper
       ctx.beginPath()
       /*
-        The two corners the tail comes out of are tighter than the other two.
+        FOUR CORNERS, ONE RADIUS. The two either side of the tail were drawn at
+        10 against the other two at 22.
 
-        At 22 the curve runs so far along the edge that the tail grows out of
-        the curve and reads as stuck on rather than as part of the shape. 10
-        leaves it a flat shoulder to sit on. Per-corner, in CSS order —
-        top-left, top-right, bottom-right, bottom-left.
+        The reason given was that at 22 the curve runs so far along the edge
+        that the tail grows out of the curve and reads as stuck on, so 10 left
+        it a flat shoulder to sit on. The geometry does not support that, and
+        the clamp below is why: the tail's base spans `tip ± TAIL`, and `tip` is
+        held at least `RADIUS + TAIL` from either corner, so the base begins
+        exactly where the curve ends. That holds at 10 and it holds at 22 — the
+        shoulder is the CLAMP's doing, and the radius never affected it.
+
+        What the tightening did do was flatten both corners on the tail's edge
+        whatever the tail was near. The tail tracks HER, so on a 400px box with
+        her off to one side it sits nowhere near either one, and the bubble was
+        visibly rounder along the top than along the bottom for no reason
+        anybody could see. Somebody noticed unprompted, which is the test.
+
+        The cost is 12px off each end of the tail's travel, and it only bites
+        when she is at the very edge of the screen — where the tail is clamped
+        and therefore already approximate.
       */
-      const soft = RADIUS
-      const tight = RADIUS_AT_TAIL
-      const corners: [number, number, number, number] =
-        placed.side === 'above'
-          ? [soft, soft, tight, tight]
-          : placed.side === 'below'
-            ? [tight, tight, soft, soft]
-            : placed.side === 'left'
-              ? [soft, tight, tight, soft]
-              : [tight, soft, soft, tight]
-      ctx.roundRect(x, y, boxWidth, boxHeight, corners)
+      ctx.roundRect(x, y, boxWidth, boxHeight, [RADIUS, RADIUS, RADIUS, RADIUS])
       ctx.fill()
 
       /**
@@ -788,7 +785,7 @@ export function createBubble(): Bubble {
         reads as stuck into her; the tail only has to point at her.
       */
       if (placed.side === 'above' || placed.side === 'below') {
-        const tip = Math.max(x + tight + TAIL, Math.min(x + boxWidth - tight - TAIL, centreX))
+        const tip = Math.max(x + RADIUS + TAIL, Math.min(x + boxWidth - RADIUS - TAIL, centreX))
         // The edge that FACES her, and the direction that reaches for her.
         const edge = placed.side === 'above' ? y + boxHeight - 1 : y + 1
         const reach = placed.side === 'above' ? TAIL : -TAIL
@@ -796,7 +793,7 @@ export function createBubble(): Bubble {
         ctx.arcTo(tip, edge + reach, tip + TAIL, edge, TAIL_TIP)
         ctx.lineTo(tip + TAIL, edge)
       } else {
-        const tip = Math.max(y + tight + TAIL, Math.min(y + boxHeight - tight - TAIL, centreY))
+        const tip = Math.max(y + RADIUS + TAIL, Math.min(y + boxHeight - RADIUS - TAIL, centreY))
         const edge = placed.side === 'left' ? x + boxWidth - 1 : x + 1
         const reach = placed.side === 'left' ? TAIL : -TAIL
         ctx.moveTo(edge, tip - TAIL)
