@@ -1493,6 +1493,80 @@ async function checks(page, where = '') {
       )
   })
 
+  await step('voices', async () => {
+    /* --- pressing a voice actually plays that voice ------------------------ */
+    /*
+      THE WIRING, NOT THE SOUND. Whether cedar sounds like cedar is not a thing
+      a runner can hear. What it can establish is everything between the press
+      and the audio element: that the pills are there, that a press reaches the
+      listener, that the listener resolved a URL for the voice that was pressed
+      rather than for some other one, and that the URL is a real asset in the
+      build rather than a 404 nobody would notice — because a clip that fails to
+      load is silence, and silence is exactly what this control looked like
+      before it had any clips at all.
+
+      `Audio` is patched before the press so the constructed src can be read
+      back. It is put back afterwards; the window stays usable for later checks.
+    */
+    await goTo(page, 'cast')
+    await settle(page)
+    const pills = `[...document.querySelectorAll('.pills button')]`
+    const found = await page.run(`(() => {
+      window.__clips = [];
+      window.__realAudio = window.Audio;
+      window.Audio = function (src) { window.__clips.push(src); return new window.__realAudio(); };
+      const names = ${pills}.map((b) => (b.textContent || '').trim());
+      return { names };
+    })()`)
+    const wanted = ['cedar', 'marin', 'coral']
+    const present = wanted.filter((one) => found.names.includes(one))
+    if (present.length !== wanted.length) {
+      bad(
+        'voices',
+        `expected ${JSON.stringify(wanted)} among the pills, saw ${JSON.stringify(found.names)}`,
+      )
+      return
+    }
+    for (const voice of wanted) {
+      await page.run(
+        `(() => { const b = ${pills}.find((x) => (x.textContent || '').trim() === '${voice}');` +
+          ` if (b) b.click(); return true })()`,
+      )
+      await settle(page)
+    }
+    const heard = await page.run(`(async () => {
+      const clips = window.__clips.slice();
+      const checked = [];
+      for (const src of clips) {
+        try {
+          const res = await fetch(src);
+          checked.push({ src, ok: res.ok, type: res.headers.get('content-type') || '' });
+        } catch (e) { checked.push({ src, ok: false, type: String(e) }); }
+      }
+      window.Audio = window.__realAudio;
+      return checked;
+    })()`)
+    const named = wanted.map((one) => heard.some((c) => String(c.src).includes(one)))
+    if (heard.length < wanted.length) {
+      bad(
+        'voices',
+        `pressed ${String(wanted.length)} voices, ${String(heard.length)} clips were requested`,
+      )
+    } else if (named.includes(false)) {
+      bad(
+        'voices',
+        `a press asked for a clip that is not that voice: ${JSON.stringify(heard.map((c) => c.src))}`,
+      )
+    } else if (heard.some((c) => !c.ok)) {
+      bad('voices', `a clip did not load: ${JSON.stringify(heard.filter((c) => !c.ok))}`)
+    } else {
+      ok(
+        'voices',
+        `${String(found.names.length)} on offer; pressing ${wanted.join(', ')} fetched each one's own clip`,
+      )
+    }
+  })
+
   await step('languages', async () => {
     /* --- many at once, and the ceiling holds where it is drawn ------------- */
     /*
