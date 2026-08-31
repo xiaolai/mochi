@@ -30,13 +30,14 @@ dev-docs/
 
 # Assistant tooling, settings, and worktrees. The worktrees are checkouts of
 # this same repo, so git reports them as untracked nested repos unless ignored.
+#
+# WHOLESALE, with no exceptions. `!.claude/loc-guardian.local.md` used to sit
+# here so the LOC gate's config -- the limit, the argument for the number, and
+# the three files it is knowingly wrong about -- stayed reviewable. It is
+# untracked now by decision, not by oversight: the file is still on disk and the
+# gate still reads it, it is simply not versioned. Do not re-add the negation on
+# the assumption that its absence is a mistake.
 .claude/*
-# Except the LOC gate's config, which is not personal setting but project
-# policy: the limit, the argument for the number, the extraction rules and the
-# three files the limit is knowingly wrong about. Ignored, it was one rm from
-# gone and invisible in review -- and it had already drifted far enough to name
-# a file that no longer exists.
-!.claude/loc-guardian.local.md
 
 # VMark editor session state
 .vmark/
