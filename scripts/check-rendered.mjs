@@ -65,6 +65,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { get as httpGet } from 'node:http'
 /*
  * `wait` is for the things that are genuinely about elapsed time — an OS
  * releasing a port, a process dying. Anything about the WINDOW uses `settle` or
@@ -417,9 +418,58 @@ async function goTo(page, place) {
   await settle(page)
 }
 
-async function listTargets() {
-  const answer = await fetch(`http://127.0.0.1:${PORT}/json/list`)
-  return answer.json()
+/**
+ * `node:http` rather than `fetch`, and that is not a style preference.
+ *
+ * This crashed a release. `fetch` is undici, and undici sets IP_TOS on its
+ * socket; on a macOS runner that call came back EINVAL and undici THREW —
+ * from inside a socket event handler, which is nowhere near the promise this
+ * function returns:
+ *
+ *     Error: setTypeOfService EINVAL
+ *         at Socket.setTypeOfService (node:net:684:13)
+ *         at writeH1 (undici:8006:16)
+ *         at Socket.emit (node:events:509:28)
+ *
+ * `waitForTarget` already wraps this in `try/catch` and continues, and that
+ * catch is useless against it: an exception raised in an emitter callback is an
+ * uncaught exception, not a rejected promise. So a poll that is EXPECTED to fail
+ * — it runs up to 300 times a launch while the app is still starting — took the
+ * whole process down instead of looping.
+ *
+ * The symptom was as misleading as it gets. All 38 checks had already printed
+ * `ok`; the run died before the summary line, so the gate reported failure over
+ * a green suite, and the release stopped with every artifact already built.
+ *
+ * `node:http` never calls `setTypeOfService`. Every failure it can have arrives
+ * as an `error` event or a timeout, both of which land in the `reject` below and
+ * therefore in the caller's `catch`, which is where a failing poll belongs.
+ */
+function listTargets() {
+  return new Promise((resolve, reject) => {
+    const request = httpGet({ host: '127.0.0.1', port: PORT, path: '/json/list' }, (response) => {
+      if (response.statusCode !== 200) {
+        response.resume()
+        reject(new Error(`/json/list answered ${String(response.statusCode)}`))
+        return
+      }
+      let body = ''
+      response.setEncoding('utf8')
+      response.on('data', (chunk) => (body += chunk))
+      response.on('error', reject)
+      response.on('end', () => {
+        try {
+          resolve(JSON.parse(body))
+        } catch (error) {
+          reject(error)
+        }
+      })
+    })
+    request.on('error', reject)
+    // The app may not be listening yet, and a socket that neither connects nor
+    // refuses would hold a poll open past the loop that is counting them.
+    request.setTimeout(2_000, () => request.destroy(new Error('/json/list did not answer in 2s')))
+  })
 }
 
 /*
