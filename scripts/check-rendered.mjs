@@ -58,7 +58,7 @@
  * the manifest format has a version and required fields, and a gate carrying
  * its own copy of that shape would start lying the first time the format moved.
  */
-import { spawn, execFileSync } from 'node:child_process'
+import { spawn, spawnSync, execFileSync } from 'node:child_process'
 import { DatabaseSync } from 'node:sqlite'
 import { mkdtempSync, rmSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -475,7 +475,10 @@ function launch(userData) {
   let log = ''
   app.stdout.on('data', (d) => (log += d))
   app.stderr.on('data', (d) => (log += d))
-  return { app, said: () => log }
+  // `userData` travels with the handle: the single-instance check needs the
+  // profile this app holds the lock on, and reaching for a variable in `main`
+  // from inside `checks` is how a check comes to test a different profile.
+  return { app, userData, said: () => log }
 }
 
 function electronBinary() {
@@ -1671,6 +1674,50 @@ async function checks(page, where = '') {
         'no-scrollbars',
         `${String(bars.overflowing.length)} container(s) overflow and none draws a bar`,
       )
+  })
+
+  await step('one-of-her', async () => {
+    /* --- a second launch refuses, and refuses BEFORE it does anything ------ */
+    /*
+      Several claims in this repository rest on there being one process, not on
+      any code: `preferences.json` says its writes are read-change-write with no
+      lock, `usage.json` follows it, and `transcripts.ts` states flatly that
+      "this one is the only writer". None of that is enforced anywhere. It is
+      true because a second instance stops.
+
+      It very nearly was not. `app.quit()` is asynchronous — it schedules the
+      end and lets the module go on being evaluated — so a losing instance was
+      observed printing "another mochi is already running" and then
+      `[capability] 3 available`, from a process that had supposedly refused to
+      start. How much further it got was a race with `whenReady`.
+
+      So this asserts the refusal AND the silence after it. The second line is
+      the one that matters: a loser that keeps evaluating is a loser that can
+      reach a store.
+    */
+    const second = spawnSync(electronBinary(), ['.', `--user-data-dir=${running.userData}`], {
+      cwd: ROOT,
+      env: { ...process.env, NODE_ENV: 'production' },
+      encoding: 'utf8',
+      timeout: 30_000,
+    })
+    const said = `${second.stdout ?? ''}${second.stderr ?? ''}`
+    const refused = said.includes('already running')
+    // A line only a STARTING instance prints. If this appears, the module went
+    // on past the lock.
+    const carriedOn = said.includes('[capability]')
+    if (second.status !== 0) {
+      bad('one-of-her', `a second launch exited ${String(second.status)} rather than standing down`)
+    } else if (!refused) {
+      bad(
+        'one-of-her',
+        `a second launch did not recognise the first: ${JSON.stringify(said.slice(-200))}`,
+      )
+    } else if (carriedOn) {
+      bad('one-of-her', 'the second launch refused and then carried on starting anyway')
+    } else {
+      ok('one-of-her', 'a second launch stands down, and stops there')
+    }
   })
 
   await step('about-links', async () => {

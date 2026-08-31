@@ -207,12 +207,30 @@ app.setAppUserModelId(APP_USER_MODEL_ID)
  * permission revoked in one is silently restored by the other's next write.
  *
  * Refused BEFORE any window exists, so a second launch costs nothing and
- * changes nothing. `app.quit()` rather than an error: launching her twice is an
- * ordinary thing to do by accident, and the answer is the copy already running.
+ * changes nothing. Not an error: launching her twice is an ordinary thing to do
+ * by accident, and the answer is the copy already running.
+ *
+ * ## `app.exit`, not `app.quit`, and the difference is the whole point
+ *
+ * `quit()` is ASYNCHRONOUS. It asks windows to close and schedules the end; it
+ * does not stop this file, which goes on being evaluated to the last line —
+ * registering forty IPC handlers and arming `whenReady` in a process that has
+ * already lost. Measured rather than reasoned about: a second launch printed
+ * "another mochi is already running" and then `[capability] 3 available`, from
+ * a module that had supposedly refused to start.
+ *
+ * How much further it gets is a race between the quit landing and `whenReady`
+ * firing, and everything above depends on that race being won every time. The
+ * stores are read-change-write with no lock; a loser that reaches one is a
+ * permission revoked in the real instance and silently restored by the ghost.
+ *
+ * `exit()` ends the process there. It skips `before-quit` and `will-quit`,
+ * which is correct here rather than merely acceptable: those flush an archive
+ * this instance never opened.
  */
 if (!app.requestSingleInstanceLock()) {
   console.log('[main] another mochi is already running; leaving it to her')
-  app.quit()
+  app.exit(0)
 }
 
 /**
