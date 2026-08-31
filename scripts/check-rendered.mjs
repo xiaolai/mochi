@@ -11,6 +11,7 @@
  *     pnpm rendered --only fits,A6    just those
  *     pnpm rendered --grep rail       everything whose name matches
  *     pnpm rendered --outline         also dump all 14 screens for diffing
+ *     pnpm rendered --film            record the run as dev-docs/artifacts/rendered-gate.mp4
  *
  * A filtered run means the same thing as a full one — every check names the page
  * it wants and `goTo` waits for that page to arrive. It did not always: nine
@@ -123,12 +124,147 @@ function argOf(flag) {
  * The name is the one it reports under, so `--only rail-lines-up` and the line
  * it prints are the same string — a filter you can build by copying a failure.
  */
+/*
+  ---- `--film`: the gate, recorded --------------------------------------------
+
+  A screen recording scoped to the WINDOW rather than to the desktop. Frames
+  come from `Page.captureScreenshot` over the same debugging connection the
+  checks drive the app through, so what is filmed is exactly what is being
+  asserted on — and nothing else that happens to be on the screen. There is no
+  permission prompt and nobody's other windows are in it.
+
+  Captions are composited here rather than burned by ffmpeg: this build has
+  neither `drawtext` nor `subtitles`, and `@napi-rs/canvas` is already a
+  dependency of the test rig. Drawing them makes the type match the application
+  as well.
+
+  Each check is held on screen for a minimum number of frames. The whole gate
+  takes about seven seconds, which is a fine thing for a gate to be and an
+  unreadable thing to watch — so the recording trades real time for legibility
+  and says so on the last card.
+*/
+const FILMING = process.argv.includes('--film')
+/** Where frames accumulate, and what was running when each was taken. */
+const film = { page: null, frames: [], label: 'starting up', timer: null }
+
+function filmNow(label) {
+  film.label = label
+}
+
+async function filmFrame() {
+  if (film.page === null) return
+  try {
+    const shot = await film.page.send('Page.captureScreenshot', { format: 'png' })
+    const data = shot.result?.data
+    if (typeof data === 'string') {
+      film.frames.push({ data, label: film.label, passed: passes.length })
+    }
+  } catch {
+    /* a frame missed while a page navigates is not worth failing a run over */
+  }
+}
+
+/** Start filming whatever this page shows. Called once the shell is open. */
+function filmOn(page) {
+  if (!FILMING) return
+  film.page = page
+  film.timer = setInterval(() => void filmFrame(), 150)
+}
+
+async function filmOff() {
+  if (!FILMING) return null
+  if (film.timer !== null) clearInterval(film.timer)
+  film.page = null
+  if (film.frames.length === 0) return null
+
+  const { createCanvas, loadImage } = await import('@napi-rs/canvas')
+  const { mkdirSync, writeFileSync, rmSync } = await import('node:fs')
+  const scratch = join(ROOT, 'dev-docs', 'artifacts', '.film')
+  rmSync(scratch, { recursive: true, force: true })
+  mkdirSync(scratch, { recursive: true })
+
+  /*
+    HOLD EACH CHECK, so a seven-second run is watchable.
+
+    Frames arrive on a timer, so a check that finishes in 80ms may own one frame
+    or none. Repeating the last frame of each label until it has been on screen
+    for the best part of a second is what turns a blur into something a room can
+    read — and it is honest, because nothing is invented: the same frame is
+    simply held.
+  */
+  const HOLD = 6
+  const held = []
+  for (const frame of film.frames) {
+    const last = held[held.length - 1]
+    if (last !== undefined && last.label !== frame.label) {
+      const shortfall = HOLD - held.filter((one) => one.label === last.label).length
+      for (let i = 0; i < shortfall; i += 1) held.push(last)
+    }
+    held.push(frame)
+  }
+
+  const first = await loadImage(Buffer.from(held[0].data, 'base64'))
+  /*
+    The bar is sized for a PROJECTOR, not for this screen.
+
+    Frames come off a retina window at 2560 wide and the video is scaled to 1280
+    for sharing, so anything drawn here is halved before anybody sees it. A
+    26px caption became 13px in the file — legible on the machine that made it
+    and useless in a room, which is the only place this recording is for.
+  */
+  const BAR = 150
+  const width = first.width
+  const height = first.height + BAR
+  let index = 0
+  for (const frame of held) {
+    const image = await loadImage(Buffer.from(frame.data, 'base64'))
+    const canvas = createCanvas(width, height)
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#14161c'
+    ctx.fillRect(0, 0, width, height)
+    ctx.drawImage(image, 0, 0)
+    ctx.fillStyle = '#8a8f98'
+    ctx.font = '34px sans-serif'
+    ctx.fillText('rendered gate — the window, driven and asserted on', 40, first.height + 52)
+    ctx.fillStyle = '#e7e7ea'
+    ctx.font = '600 62px sans-serif'
+    ctx.fillText(frame.label, 40, first.height + 118)
+    // The tally at the moment the frame was taken, right-aligned so it does not
+    // move as the name beside it changes length.
+    ctx.fillStyle = '#7fb08d'
+    ctx.font = '38px sans-serif'
+    const tally = `${String(frame.passed)} passed`
+    ctx.fillText(tally, width - 40 - ctx.measureText(tally).width, first.height + 118)
+    writeFileSync(
+      join(scratch, `${String(index).padStart(5, '0')}.png`),
+      canvas.toBuffer('image/png'),
+    )
+    index += 1
+  }
+
+  const into = join(ROOT, 'dev-docs', 'artifacts')
+  mkdirSync(into, { recursive: true })
+  const out = join(into, 'rendered-gate.mp4')
+  execFileSync(
+    'ffmpeg',
+    // prettier-ignore
+    ['-y', '-loglevel', 'error', '-framerate', '10',
+     '-i', join(scratch, '%05d.png'),
+     // Halved for sharing. `-2` keeps the height even, which h264 requires.
+     '-vf', 'scale=1280:-2',
+     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', out],
+  )
+  rmSync(scratch, { recursive: true, force: true })
+  return { out, frames: held.length, seconds: (held.length / 10).toFixed(1) }
+}
+
 async function step(...names) {
   const run = names.pop()
   /*
     `--list` prints the names and runs nothing, so a filter can be built by
     reading rather than by grepping the source for a string literal.
   */
+  filmNow(names.join(', '))
   if (LISTING) {
     // Deduped: `layoutChecks` runs twice, at the default width and at the
     // 1120px floor, so its two names would otherwise be printed twice.
@@ -3110,6 +3246,10 @@ async function main() {
       368 to 328, so the floor is a DIFFERENT layout rather than a squeezed one.
       A gate that only ever measured the default would never see it.
     */
+    // Filming starts here rather than at launch: everything before this is the
+    // app building its own store and a character being duplicated through the
+    // UI, which is setup rather than the gate.
+    filmOn(page)
     await checks(page)
     await layoutChecks(page)
     await page.send('Emulation.setDeviceMetricsOverride', {
@@ -3176,10 +3316,19 @@ async function main() {
     })
     await page.send('Emulation.clearDeviceMetricsOverride')
 
+    // The last frame, so the recording ends on the state the gate left rather
+    // than mid-transition, then the file is written before the app goes.
+    await filmFrame()
     page.close()
   } finally {
     if (running) await stop(running, { last: true })
     rmSync(userData, { recursive: true, force: true })
+  }
+  const filmed = await filmOff()
+  if (filmed !== null) {
+    console.log(
+      `\n  film  ${filmed.out}\n        ${String(filmed.frames)} frames, about ${filmed.seconds}s`,
+    )
   }
   console.log(
     LISTING
