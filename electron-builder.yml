@@ -11,10 +11,23 @@
 #   the .app → build the .dmg from the stapled .app → sign the .dmg → notarize +
 #   staple the .dmg
 #
-# electron-builder does all of that in one pass, which is most of the reason to
+# electron-builder does MOST of that in one pass, which is most of the reason to
 # use it rather than hand-rolled scripts: signing the app after building the dmg
 # means the dmg contains the unsigned app, and nothing about the build output
 # says so.
+#
+# ## The two steps it does NOT do, measured rather than assumed
+#
+# This said "all of that" and it is not all of it. `notarizeIfProvided` is called
+# from `macPackager` and from the `pkg` target and from nowhere else, so the
+# `.app` is notarized and stapled -- `@electron/notarize` staples, with three
+# retries of its own -- and the `.dmg` is SIGNED and never notarized.
+#
+# A dmg with no ticket reads `rejected / Unnotarized Developer ID`, and the dmg is
+# the artifact a person actually downloads and double-clicks. `release.yml`
+# submits and staples the disk images itself once this has run, and
+# `scripts/verify-signing.sh` fails the release if either half is missing. Do not
+# delete that step believing this file covers it.
 #
 # ## Notarization is DECLARED here and not yet run
 #

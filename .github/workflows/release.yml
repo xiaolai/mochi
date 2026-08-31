@@ -185,6 +185,59 @@ jobs:
           pnpm build
           npx electron-builder --mac --publish never -c.mac.notarize=true
 
+      # THE STEP ELECTRON-BUILDER DOES NOT DO.
+      #
+      # `notarizeIfProvided` is called from `macPackager` and from the `pkg`
+      # target and from nowhere else, so what the build above produced is a
+      # notarized-and-stapled `.app` inside a `.dmg` that is signed and carries
+      # no ticket of its own. The dmg is the file a person downloads, and
+      # without a ticket Gatekeeper answers `rejected / Unnotarized Developer
+      # ID` on the double-click.
+      #
+      # The retry is not decoration. `notarytool` has none of its own, Apple
+      # drops connections, and the expensive failure is a timed-out STATUS POLL
+      # after a 120MB upload has already succeeded — re-submitting blind then
+      # uploads it again. So the submission id is read out of the first lines of
+      # output, which are printed before the wait begins, and a failure asks
+      # `notarytool info` whether the thing already passed before trying again.
+      - name: Notarize and staple the disk images
+        timeout-minutes: 45
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          creds=(--apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD"
+                 --team-id "$APPLE_TEAM_ID")
+
+          accepted() {
+            # `status: Accepted` from `notarytool info`, for a submission that
+            # may have landed while the poll on it was timing out.
+            xcrun notarytool info "$1" "${creds[@]}" 2>&1 |
+              grep -qE '^ *status: Accepted$'
+          }
+
+          for dmg in release/*.dmg; do
+            echo "── $dmg"
+            done_it=
+            for attempt in 1 2 3; do
+              out=$(xcrun notarytool submit "$dmg" "${creds[@]}" --wait --timeout 30m 2>&1) && {
+                echo "$out"; done_it=yes; break
+              }
+              echo "$out"
+              id=$(grep -m1 -oE '\bid: [0-9a-f-]{36}' <<<"$out" | awk '{print $2}' || true)
+              if [ -n "$id" ] && accepted "$id"; then
+                echo "submission $id was accepted after all — not re-uploading"
+                done_it=yes; break
+              fi
+              echo "attempt $attempt failed; retrying in 30s"
+              sleep 30
+            done
+            [ -n "$done_it" ] || { echo "::error::notarization failed for $dmg"; exit 1; }
+            xcrun stapler staple "$dmg"
+          done
+
       # The half that cannot be inferred from a green build. This reads the
       # ARTIFACTS: Developer ID authority, hardened runtime, a secure timestamp,
       # and a stapled notarization ticket — and it tells `Notarized Developer
