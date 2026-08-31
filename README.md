@@ -102,11 +102,11 @@ codex        # once, to refresh the login
 
 Four tools, and each is a switch you can turn off in **What she may do**:
 
-- **`ask_workspace`** — press `⌃⇧K` and ask. She reads one folder you point her
-  at and, when the question needs it, the web, then answers in her own words.
-  Read-only: she cannot change a file. This is the one thing the official
-  ChatGPT desktop app cannot do for you, and it is why the Codex CLI is a
-  requirement rather than a burden.
+- **`ask_workspace`** — just ask her, out loud, mid-conversation. She reads one
+  folder you point her at and, when the question needs it, the web, then answers
+  in her own words. Read-only: she cannot change a file. This is the one thing
+  the official ChatGPT desktop app cannot do for you, and it is why the Codex CLI
+  is a requirement rather than a burden.
 - **`remember_this`** — write a fact into her long-term note.
 - **`recall_conversations`** — search what you have actually said to her.
 - **`recall_codex`** — search what you have already said to **Codex** on this
