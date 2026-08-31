@@ -1,5 +1,5 @@
 import { greetingFor } from '@shared/instructions'
-import { GRANT_SPECS, WITHHELD_GRANTS } from '@shared/grants'
+import { GRANT_SPECS, offeredGrants, WITHHELD_GRANTS, type Grant } from '@shared/grants'
 import { TRANSCRIPTION_MODEL } from '@shared/transcription'
 import type { SessionConfig } from '@shared/ipc'
 import { activePersona, packageFolder } from '../store/personas'
@@ -85,6 +85,14 @@ export interface SessionConfigDeps {
    * text.
    */
   readonly tools: () => readonly WireTool[]
+  /**
+   * Grants whose capability cannot be performed YET, whatever was stored.
+   *
+   * Empty in the ordinary case. `recall_codex` is in it while its index is
+   * still building — see `offeredGrants`, which explains why this is applied
+   * over consent rather than written into it.
+   */
+  readonly unready: () => ReadonlySet<Grant>
   /**
    * What each catalogued prompt currently says. See `@shared/prompts`.
    *
@@ -314,8 +322,8 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
     per-character reader withholds on its own when a file cannot be read, so
     the fail-closed direction is the same; what changes is whose answer it is.
   */
-  const grants = readGrants(userData, resolved.persona.id, legacyGrants(userData))
-  if (grants === WITHHELD_GRANTS) {
+  const stored = readGrants(userData, resolved.persona.id, legacyGrants(userData))
+  if (stored === WITHHELD_GRANTS) {
     deps.warn(`[grants] ${resolved.persona.id}'s permissions could not be read; withholding`)
     deps.note(
       'settings',
@@ -324,6 +332,17 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
         '— she cannot greet you, look anything up, or keep a note',
     )
   }
+  /*
+    PERMITTED is not the same as PERFORMABLE, and the wire needs the second.
+
+    `recall_codex` is granted the moment somebody flips the switch and its index
+    takes seconds to build. Offering the tool in that window would let her call
+    something that can only answer "I could not look" — so readiness is applied
+    over the stored answer here, and is never written back: what somebody chose
+    is theirs, and the settings panel goes on showing it.
+  */
+  const grants = offeredGrants(stored, deps.unready())
+
   const brief = briefing(deps, resolved.persona.id, liveBefore)
   deps.briefedWith(brief)
   const mayDo = whatSheMayDo({

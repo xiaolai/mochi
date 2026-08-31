@@ -37,11 +37,19 @@
  * at all. A switch governing something nothing has ever done is a decision
  * nobody can make.
  *
- * ## App-level, not per character
+ * ## Per character, and this paragraph used to say the opposite
  *
- * `plan-shell.md`'s split settles it: a grant is true of this machine whoever is
- * worn. Filing one under a persona would make the switch and the "last used"
- * beside it mean different things the first time somebody changed character.
+ * It said "app-level, not per character", citing `plan-shell.md`. That stopped
+ * being true in 2026-08: `store/grants.ts` files permissions under a persona id
+ * and explains at length why — a grant has to survive a character's package
+ * being updated, and it has to die with her, because ids are derived from names
+ * and handed back out once free.
+ *
+ * The stale sentence mattered more once `recall_codex` arrived, because that
+ * one authorises reading another application's archive: a reader who believed
+ * the header would have expected one answer per machine and found one per
+ * character. The switch a person sees belongs to the character they are
+ * looking at.
  *
  * ## Off means she is TOLD, not that she quietly fails
  *
@@ -73,7 +81,7 @@ const CATALOGUE: readonly PromptSpec[] = promptsFor([])
 export const SHIPPED_GRANT_PROMPTS: Prompts = (key) =>
   CATALOGUE.find((spec) => spec.key === key)?.text ?? ''
 
-export const GRANTS = ['speak_first', 'ask_workspace', 'remember_this'] as const
+export const GRANTS = ['speak_first', 'ask_workspace', 'remember_this', 'recall_codex'] as const
 
 export type Grant = (typeof GRANTS)[number]
 
@@ -141,22 +149,70 @@ export const GRANT_SPECS: readonly GrantSpec[] = [
     capabilities: ['remember_this'],
     withheld: 'You can no longer write anything into your long-term notes.',
   },
+  {
+    id: 'recall_codex',
+    label: 'Read your Codex history',
+    /*
+      WHOSE data, that it is READ-ONLY, and THAT RESULTS LEAVE THE MACHINE.
+
+      The other three describe something Mochi does with its own state, so
+      "your workspace" is enough. This one is about a second application's
+      archive, and somebody deciding on it needs the facts before they decide
+      rather than after.
+
+      "Never writes to it" was the first wording and it promised more than the
+      code keeps: `present.ts` documents that opening a live WAL database
+      read-only may create a `-shm` beside it. The switch now says what is
+      actually true — read-only, never changed, and a scratch file may appear.
+
+      The transmission clause was missing entirely, and it is the one that
+      matters most. "Reads
+      it and never writes to it" is true and reads as *local*, which the feature
+      is not: a recall result is a `function_call_output` and goes to OpenAI's
+      Realtime service with the rest of the conversation. A disclosure that
+      lives only in the README is not consent at the switch — this is the
+      moment somebody is actually deciding, and it is the sentence they read.
+    */
+    detail: {
+      she: 'Let her search your own Codex history on this machine. She opens it read-only and never changes it, though SQLite may leave a scratch file beside it. What she finds is sent to OpenAI as part of the conversation, and the check for keys and tokens is best-effort.',
+      he: 'Let him search your own Codex history on this machine. He opens it read-only and never changes it, though SQLite may leave a scratch file beside it. What he finds is sent to OpenAI as part of the conversation, and the check for keys and tokens is best-effort.',
+      it: 'Let it search your own Codex history on this machine. It opens it read-only and never changes it, though SQLite may leave a scratch file beside it. What it finds is sent to OpenAI as part of the conversation, and the check for keys and tokens is best-effort.',
+    },
+    capabilities: ['recall_codex'],
+    withheld: 'You can no longer look at anything they said to Codex.',
+  },
 ]
 
 /**
- * Everything allowed, which is what an installation that has never been asked
- * gets.
+ * What an installation that has never been asked gets.
  *
- * Permissive by default and deliberately so: these are the capabilities this
- * build ships with, described in her tool list and in the settings window, and
- * a companion that arrives unable to greet you or remember anything is not a
- * safer companion — it is a broken one. The switch exists so somebody can say no, not so the app can
- * say it for them.
+ * Permissive by default for everything Mochi itself does, and deliberately so:
+ * these are the capabilities this build ships with, described in her tool list
+ * and in the settings window, and a companion that arrives unable to greet you
+ * or remember anything is not a safer companion — it is a broken one. The switch
+ * exists so somebody can say no, not so the app can say it for them.
+ *
+ * ## `recall_codex` is FALSE, and it is the exception that proves the argument
+ *
+ * The paragraph above holds because the other three govern things this app does
+ * with its own state. This one governs reading **another application's** archive
+ * of everything you have worked on — nine thousand conversations that nobody
+ * wrote for her and that she cannot edit or delete through this app. Default-on
+ * would mean an update silently handed her all of it, and the panel's whole
+ * argument is that a permission is a decision somebody made.
+ *
+ * It has to be false HERE and not merely present in `WITHHELD_GRANTS`, which is
+ * where the first version of this was wrong: `parseGrants(undefined)` returns
+ * these defaults, and `parseGrants` falls back to `DEFAULT_GRANTS[id]` for every
+ * key a stored file does not carry — so a grant that was only listed as
+ * withheld-on-failure would be ON for everybody whose preferences predate it.
+ * `grants.test.ts` asserts the default rather than the intention.
  */
 export const DEFAULT_GRANTS: Grants = {
   speak_first: true,
   ask_workspace: true,
   remember_this: true,
+  recall_codex: false,
 }
 
 /**
@@ -178,6 +234,7 @@ export const WITHHELD_GRANTS: Grants = {
   speak_first: false,
   ask_workspace: false,
   remember_this: false,
+  recall_codex: false,
 }
 
 export function isGrant(value: unknown): value is Grant {
@@ -227,6 +284,41 @@ export function parseGrants(value: unknown): Grants {
     grants[id] = Object.hasOwn(held, id) ? held[id] === true : DEFAULT_GRANTS[id]
   }
   return grants
+}
+
+/**
+ * The grants that apply ON THE WIRE, which is not always what is stored.
+ *
+ * A capability can be permitted and still not performable — `recall_codex` is
+ * granted the moment somebody flips the switch, and its index takes seconds to
+ * build. Offering a tool in that window would let her call something that
+ * answers "I could not look" for no reason a person could act on.
+ *
+ * So readiness is applied HERE, over the stored answer, and it is deliberately
+ * NOT written back: consent is what somebody chose, and an app that rewrote it
+ * to represent a machine state would have made the switch mean two things. The
+ * settings panel reads the stored grants; the wire reads these.
+ *
+ * ## What this is NOT for, and the sentence that made the difference
+ *
+ * It governs what is OFFERED. It must not govern what is REFUSED at the moment
+ * of a call, and it did: the dispatch asked this before running a handler, so a
+ * capability that was permitted and merely still building was answered with
+ * `withheldGuidance` — *"They turned it off in settings"*. They had not. She
+ * would have said something false about a decision the person never made, which
+ * is worse than any of the states this was trying to tidy.
+ *
+ * The dispatch reads the STORED grants now, and a permitted-but-unready
+ * capability reaches its handler and answers `unavailable` — "I could not
+ * look", which is true, is one of the three statuses that already exist, and is
+ * the sentence that fits. So the collapse holds where it belongs, at the wire,
+ * and nowhere else.
+ */
+export function offeredGrants(stored: Grants, unready: ReadonlySet<Grant>): Grants {
+  if (unready.size === 0) return stored
+  const offered: Record<Grant, boolean> = { ...stored }
+  for (const id of unready) offered[id] = false
+  return offered
 }
 
 /** Whether a capability may be offered and may run. Unknown names are allowed. */

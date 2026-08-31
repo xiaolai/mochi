@@ -42,6 +42,21 @@ const STORE = join(process.cwd(), 'src', 'main', 'store')
  * catch reports the absence of a defect it never looked for.
  */
 const MEMORY = join(process.cwd(), 'src', 'main', 'memory')
+/**
+ * Scanned as well, and it is here for the reason `MEMORY` is.
+ *
+ * `main/codex/archive` is a subsystem that reads another application's database
+ * and mirrors it, and every one of its surfaces is reached from exactly one
+ * place: `main/index.ts`, which imports Electron and is therefore not testable
+ * at all. So a review found the honest version of this gap — the capability's
+ * own "end to end" test builds the coordinator itself, and would stay green if
+ * main never called `settle`, `recall` or `forget`.
+ *
+ * This is the check that can be made: a surface with no production caller fails
+ * here. It proves a call site exists in shipped source, which is a floor and is
+ * exactly the floor that was missing.
+ */
+const CODEX = join(process.cwd(), 'src', 'main', 'codex')
 const SRC = join(process.cwd(), 'src')
 
 /**
@@ -127,7 +142,7 @@ interface Surface {
  */
 function surfaces(): Surface[] {
   const found: Surface[] = []
-  for (const root of [STORE, MEMORY]) {
+  for (const root of [STORE, MEMORY, CODEX]) {
     for (const path of tsFilesUnder(root)) {
       const text = stripped(path)
       const module = path.slice(root.length + 1)

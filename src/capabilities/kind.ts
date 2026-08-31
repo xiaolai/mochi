@@ -44,6 +44,7 @@
 import type { CapabilityManifest } from '@shared/capability/manifest'
 import type { WebSearchMode } from '@shared/delegation'
 import type { Transcripts } from '../main/store/transcripts'
+import type { CodexRecall } from '../main/codex/archive/index-store'
 
 /**
  * Arguments arrive already read against the manifest that declared them, so a
@@ -86,6 +87,25 @@ export interface CapabilityDeps {
   readonly wearing: () => string | null
   /** The archive, or null when it could not be opened. */
   readonly transcripts: () => Transcripts | null
+  /**
+   * Their Codex history, searchable — or null, which means she may not look.
+   *
+   * ONE accessor, a function like everything else here, and NULL carries three
+   * different situations on purpose: the permission has not been given, the
+   * index has not finished building yet, or Codex's archive is not there or
+   * cannot be read. All three are `unavailable` to the handler, which is the
+   * right answer to all three — "I could not look" — and the layer that knows
+   * WHICH is the layer that logs it.
+   *
+   * That collapse is what makes a fourth status unnecessary. An index that is
+   * still building is indistinguishable, here, from a permission not yet given;
+   * `grants.ts` already withholds a tool she cannot perform and already gives
+   * her a sentence for it.
+   *
+   * Read at call time, like the rest: the switch is in a window somebody can
+   * open mid-conversation.
+   */
+  readonly codexArchive: () => CodexRecall | null
   /**
    * Every OTHER persona on this machine, never the one being worn.
    *

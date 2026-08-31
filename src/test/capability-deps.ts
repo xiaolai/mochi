@@ -32,6 +32,7 @@ export function stubDeps(overrides: Partial<CapabilityDeps> = {}): CapabilityDep
     userData: () => '/nowhere',
     wearing: () => null,
     transcripts: () => null,
+    codexArchive: () => null,
     otherPersonaIds: () => new Set(),
     codexPath: () => null,
     workspace: () => '/nowhere',

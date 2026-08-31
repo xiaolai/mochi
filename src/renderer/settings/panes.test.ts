@@ -23,6 +23,9 @@ function settled(): SettingsView {
       { id: 'speak_first', allowed: true, lastUsed: { kind: 'not-recorded' } },
       { id: 'ask_workspace', allowed: true, lastUsed: { kind: 'never' } },
       { id: 'remember_this', allowed: true, lastUsed: { kind: 'at', at: 1_700_000_000_000 } },
+      // Off, which is what a settled installation actually looks like: this one
+      // ships withheld because it reads another application's archive.
+      { id: 'recall_codex', allowed: false, lastUsed: { kind: 'never' } },
     ],
     lookup: {
       workspace: '/w',

@@ -31,6 +31,7 @@ function deps(over: Partial<SessionConfigDeps> = {}): SessionConfigDeps {
     replacingASession: () => false,
     resting: () => ({ asleep: false }),
     tools: () => [],
+    unready: () => new Set(),
     prompts: () => SHIPPED_PROMPTS,
     transcripts: () => null,
     problemCount: () => 0,

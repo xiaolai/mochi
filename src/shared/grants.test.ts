@@ -3,6 +3,7 @@ import { PRONOUNS } from './pronoun'
 import {
   allowsCapability,
   grantsNotice,
+  offeredGrants,
   SHIPPED_GRANT_PROMPTS,
   isGrant,
   parseGrants,
@@ -13,8 +14,8 @@ import {
   GRANT_SPECS,
 } from './grants'
 
-describe('the three', () => {
-  it('is 5b’s three, and no more', () => {
+describe('the four', () => {
+  it('is 5b’s three, plus the one that reads somebody else’s archive', () => {
     // The plugin sandbox and the grant broker are struck, so a grant is not a
     // fence around somebody else's code — it is what this machine lets her do.
     //
@@ -27,7 +28,10 @@ describe('the three', () => {
     // records a last-called time per tool and names none of the four they
     // governed. The same rule as `microphone`, decided by measurement rather
     // than by argument.
-    expect([...GRANTS]).toEqual(['speak_first', 'ask_workspace', 'remember_this'])
+    // `recall_codex` is the fourth, and it is the only one that governs
+    // reading ANOTHER APPLICATION's data rather than something Mochi does with
+    // its own. That is why it is the only one off by default.
+    expect([...GRANTS]).toEqual(['speak_first', 'ask_workspace', 'remember_this', 'recall_codex'])
   })
 
   it('describes every one of them exactly once', () => {
@@ -40,7 +44,34 @@ describe('the three', () => {
     // Flattened: one switch may govern several tools, and every name it lists
     // has to be one that exists.
     const named = GRANT_SPECS.flatMap((one) => one.capabilities)
-    expect(named).toEqual(['ask_workspace', 'remember_this'])
+    expect(named).toEqual(['ask_workspace', 'remember_this', 'recall_codex'])
+  })
+
+  it('tells somebody the three things they need before they decide', () => {
+    /*
+      The other three switches describe something Mochi does with its own state,
+      so "your workspace" is enough. This one is about a SECOND APPLICATION's
+      archive, and the decision needs all three facts before it is made rather
+      than after — in the sentence somebody actually reads, not only in a README.
+
+      "Never writes to it" was the first wording and promised more than the code
+      keeps: opening a live WAL database read-only may leave a `-shm` beside it.
+      And the transmission clause was missing altogether, which is the one that
+      matters most — a recall result goes to OpenAI with the rest of the
+      conversation, so "she reads it locally" is exactly the wrong impression.
+    */
+    const spec = GRANT_SPECS.find((one) => one.id === 'recall_codex')
+    expect(spec).toBeDefined()
+    for (const pronoun of PRONOUNS) {
+      const copy = spec?.detail[pronoun] ?? ''
+      // Whose data it is.
+      expect(copy).toContain('Codex')
+      // What is done to it, without overpromising.
+      expect(copy).toContain('read-only')
+      expect(copy).not.toContain('never writes')
+      // And where what she finds goes.
+      expect(copy).toContain('OpenAI')
+    }
   })
 
   it('gives every one a sentence she can say out loud', () => {
@@ -68,6 +99,17 @@ describe('what an installation that has never been asked gets', () => {
       speak_first: true,
       ask_workspace: true,
       remember_this: true,
+      /*
+        FALSE, and asserted HERE rather than trusted to `WITHHELD_GRANTS`.
+
+        `parseGrants(undefined)` returns this object, and `parseGrants` falls
+        back to `DEFAULT_GRANTS[id]` for every key a stored file does not carry
+        — so a grant that was only listed as withheld-on-failure would be ON for
+        everybody whose preferences predate it. Reading nine thousand of
+        somebody's Codex conversations because they upgraded is precisely the
+        thing the panel exists to make impossible.
+      */
+      recall_codex: false,
     })
   })
 })
@@ -152,15 +194,63 @@ describe('which capabilities may run', () => {
       speak_first: false,
       ask_workspace: false,
       remember_this: false,
+      recall_codex: false,
     }
     expect(allowsCapability(nothing, 'recall_conversations')).toBe(true)
   })
 })
 
+describe('what is offered on the wire, as against what is stored', () => {
+  it('changes nothing when everything it governs is ready', () => {
+    expect(offeredGrants(DEFAULT_GRANTS, new Set())).toBe(DEFAULT_GRANTS)
+  })
+
+  it('withholds a grant whose capability cannot be performed yet', () => {
+    /*
+      `recall_codex` is granted the moment somebody flips the switch, and its
+      index takes seconds to build. Offering the tool in that window would let
+      her call something that answers "I could not look" for no reason a person
+      could act on.
+    */
+    const granted = { ...DEFAULT_GRANTS, recall_codex: true }
+    const offered = offeredGrants(granted, new Set(['recall_codex'] as const))
+    expect(offered.recall_codex).toBe(false)
+    expect(allowsCapability(offered, 'recall_codex')).toBe(false)
+  })
+
+  it('does not touch what somebody actually chose', () => {
+    // Consent is what somebody chose; readiness is a fact about this machine.
+    // An app that wrote one over the other would have made the switch mean two
+    // things, and the settings panel would show the wrong one.
+    const granted = { ...DEFAULT_GRANTS, recall_codex: true }
+    offeredGrants(granted, new Set(['recall_codex'] as const))
+    expect(granted.recall_codex).toBe(true)
+  })
+
+  it('leaves the other grants exactly as they were', () => {
+    const granted = { ...DEFAULT_GRANTS, recall_codex: true, ask_workspace: false }
+    const offered = offeredGrants(granted, new Set(['recall_codex'] as const))
+    expect(offered.ask_workspace).toBe(false)
+    expect(offered.speak_first).toBe(true)
+    expect(offered.remember_this).toBe(true)
+  })
+})
+
 describe('what she is told', () => {
   it('says nothing at all while she may do everything', () => {
-    // The ordinary session carries no extra prompt.
-    expect(grantsNotice(DEFAULT_GRANTS, SHIPPED_GRANT_PROMPTS)).toBe('')
+    // The ordinary session carries no extra prompt. Asserted against everything
+    // ALLOWED rather than against the defaults, because the defaults now
+    // withhold one — see `DEFAULT_GRANTS`.
+    const everything = Object.fromEntries(GRANTS.map((id) => [id, true])) as typeof DEFAULT_GRANTS
+    expect(grantsNotice(everything, SHIPPED_GRANT_PROMPTS)).toBe('')
+  })
+
+  it('names the Codex archive while it is off, which is the default', () => {
+    // The ordinary FIRST session does carry one line, and it should: she is
+    // told she cannot look at their Codex history rather than being left to
+    // decline when it comes up.
+    const notice = grantsNotice(DEFAULT_GRANTS, SHIPPED_GRANT_PROMPTS)
+    expect(notice).toContain('said to Codex')
   })
 
   it('names every grant that is off', () => {
@@ -190,6 +280,20 @@ describe('what she is told', () => {
     expect(guidance).toContain('do not guess')
   })
 
+  it('gives the Codex archive its own sentence when it is called anyway', () => {
+    /*
+      REVOKED MID-CONVERSATION, which is the case the switch has to survive.
+
+      She holds a tool list from before the change, calls it, and must get a
+      SENTENCE rather than an error — the failure `notBuilt` was deleted for is
+      a capability she cannot perform presenting as her declining to help.
+    */
+    const guidance = withheldGuidance('recall_codex')
+    expect(guidance).toContain('said to Codex')
+    expect(guidance).toContain('turned it off')
+    expect(guidance).toContain('do not guess')
+  })
+
   it('still says something usable for a name it does not know', () => {
     expect(withheldGuidance('something_else').trim().length).toBeGreaterThan(0)
   })
@@ -205,6 +309,7 @@ describe('what applies when a stored answer cannot be read', () => {
       speak_first: false,
       ask_workspace: false,
       remember_this: false,
+      recall_codex: false,
     })
   })
 
