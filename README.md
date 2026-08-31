@@ -17,13 +17,9 @@ brew install --cask xiaolai/tap/mochi
 ```
 
 **The `xiaolai/tap/` prefix is not optional.** Homebrew's own cask index already
-has a `mochi` — a flashcards app from mochi.cards — so a bare
-`brew install --cask mochi` quietly installs somebody else's program. The prefix
-is what disambiguates, and it belongs on every later command too:
-
-```sh
-brew upgrade --cask xiaolai/tap/mochi
-```
+carries a `mochi` — a flashcards app from mochi.cards — so a bare
+`brew install --cask mochi` fetches that one instead, and succeeds while doing
+it. There is no error to notice.
 
 Or take the disk image from the
 [latest release](https://github.com/xiaolai/mochi/releases/latest):
@@ -37,7 +33,24 @@ is Gatekeeper's phrasing for unnotarized rather than a real diagnosis.
 
 ### Updating
 
-She checks for updates from **About Mochi**, and installs them herself.
+She checks for updates from **About Mochi**, and installs them herself. Through
+Homebrew, the ordinary commands do the right thing:
+
+```sh
+brew upgrade                              # safe — leaves her alone
+brew upgrade --cask --greedy              # safe
+brew upgrade --cask xiaolai/tap/mochi     # safe — the prefix resolves to her
+```
+
+**The one command never to run is `brew upgrade --cask mochi`.** Homebrew keys
+the Caskroom by bare token, so once she is installed she and the flashcards app
+are one entry to it: without the prefix it resolves the token to mochi.cards and
+offers `0.1.9 -> 26.8.2`. That is a different program replacing this one, not an
+update — and `brew outdated` does not list it, so nothing warns you first.
+
+All four of those were measured with `--dry-run` on 2026-08-31, not reasoned
+about. Only the fourth is dangerous; the blanket upgrade most people actually
+run is not, which is why this is a footnote rather than a reason to rename her.
 
 One exception, permanent: **0.1.8's update button is broken.** `electron-updater`
 hides its `autoUpdater` behind `.default` under CommonJS interop, so the app
