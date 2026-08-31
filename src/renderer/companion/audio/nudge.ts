@@ -17,7 +17,7 @@
  *
  * ```
  * 00:00:23  ask_workspace(…)                    she says she will look
- * 00:00:42  "Just a tiny moment more, 笑来."
+ * 00:00:42  "Just a tiny moment more."          (she used a name; elided)
  * 00:01:07  ask_workspace delivered {"status":"ok","answer":"…27 to 30 degrees…"}
  *           — and then nothing, because nobody spoke to her again
  * ```

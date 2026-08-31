@@ -474,7 +474,7 @@ describe('asking her to volunteer a late answer', () => {
       its note for what happens next is *"it comes out naturally the next time
       she speaks"*. Observed 2026-08-24, that assumed a conversation that keeps
       going: the forecast landed 25 seconds after she said "just a tiny moment
-      more, 笑来", into a silent room, and was never spoken at all.
+      more", into a silent room, and was never spoken at all.
 
       The frame itself is unchanged — `ledger.test.ts` still asserts it never
       asks for a turn. This is a separate signal, and the RENDERER decides
