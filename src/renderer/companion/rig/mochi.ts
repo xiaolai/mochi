@@ -582,9 +582,12 @@ export class MochiAvatar implements AvatarBackend {
         // breathing through it — "asleep: eyes shut, and the breath left
         // running", above. Widening the gate here would have made a preview
         // tile stop breathing as a side effect of an accessibility fix.
-        { blink: 1, breath: this.reducedMotion ? 0 : this.idleLayer.pose(now).breath }
+        {
+          blink: 1,
+          breath: this.reducedMotion ? 0 : this.idleLayer.pose(now, this.face.breathMs).breath,
+        }
       : stirring
-        ? this.idleLayer.pose(now)
+        ? this.idleLayer.pose(now, this.face.breathMs)
         : { blink: 0, breath: 0 }
 
     // Layer 2, motion. The layer order is the ORDER OF THESE LINES:

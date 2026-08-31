@@ -1420,3 +1420,70 @@ describe('the tuner switch and the accessibility preference are different things
     expect(shot(asked, SETTLED)).toBe(shot(asked, SETTLED + BREATH_PERIOD_MS / 2))
   })
 })
+
+describe('the breath runs at the speed the face asks for', () => {
+  /*
+    `FaceSpec.breathMs` is validated, bounded and offered as a slider, and for a
+    while nothing read it: `IdleLayer.pose` called `breathAt(now)` and took the
+    module default. The default and the field both said 3400, so every gate here
+    stayed green and the only symptom was a knob that did nothing.
+
+    Pinned by PERIOD rather than by amplitude, because that is what the field
+    names. At 850ms a 3400ms breath is at its inhaled extreme and a 1700ms one
+    has come all the way back to rest, so the two bodies are different heights
+    at the same instant -- and were byte-identical before this was wired.
+  */
+  const HEIGHT_AT = 850
+
+  /** Painted body height in device pixels: bottom row minus top row. */
+  const paintedHeight = (breathMs: number): number => {
+    const canvas = createCanvas(WIDTH, HEIGHT)
+    const ctx = canvas.getContext('2d')
+    const avatar = new MochiAvatar(ctx as unknown as CanvasRenderingContext2D, {
+      face: { ...MOCHI, breathMs },
+      size: 'fit-canvas',
+      // Far out, so no blink lands in the window and changes a pixel.
+      random: () => 0.999,
+    })
+    avatar.resize(WIDTH, HEIGHT, 1)
+    // From zero at 60fps: the spring is an integrator, so a single render at
+    // the sample time would read a cold spring rather than a breathing one.
+    for (let t = 0; t <= HEIGHT_AT; t += 1000 / 60) avatar.render(t)
+    avatar.render(HEIGHT_AT)
+
+    const { data } = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+    let top = HEIGHT
+    let bottom = 0
+    for (let y = 0; y < HEIGHT; y++) {
+      for (let x = 0; x < WIDTH; x++) {
+        if ((data[(y * WIDTH + x) * 4 + 3] ?? 0) > 8) {
+          if (y < top) top = y
+          bottom = y
+          break
+        }
+      }
+    }
+    // Height, not the apex: the drift translates her whole body, and a
+    // measurement of the top alone would be reading that instead of the breath.
+    return bottom - top
+  }
+
+  it('reads breathMs, rather than the module default', () => {
+    // The control: the same number twice is the same body, so a failure below
+    // cannot be blamed on the measurement being noisy.
+    expect(paintedHeight(BREATH_PERIOD_MS)).toBe(paintedHeight(BREATH_PERIOD_MS))
+    expect(paintedHeight(BREATH_PERIOD_MS)).not.toBe(paintedHeight(BREATH_PERIOD_MS / 2))
+  })
+
+  it('is at the inhaled extreme of ITS OWN period, not of the default one', () => {
+    /*
+      Direction as well as difference, so this cannot pass on noise.
+
+      At 850ms the 3400ms breath is fully inhaled and the 1700ms one has come
+      back to rest. Inhaled is SHORTER here: `breath` positive drives `squash`
+      positive, and `squashed` trades height for width -- so she spreads rather
+      than rises. The tall, narrow half of the cycle is the exhale.
+    */
+    expect(paintedHeight(BREATH_PERIOD_MS)).toBeLessThan(paintedHeight(BREATH_PERIOD_MS / 2))
+  })
+})

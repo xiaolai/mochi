@@ -190,7 +190,17 @@ export class IdleLayer {
     this.nextBlinkAt = startedAt + nextBlinkGap(random)
   }
 
-  pose(now: MonotonicMs): IdlePose {
+  /**
+   * `periodMs` is a PARAMETER rather than a constant read from this module.
+   *
+   * `FaceSpec.breathMs` is a validated, bounded, tuner-exposed field, and for a
+   * while nothing read it: this method called `breathAt(now)` and took the
+   * module default. The two happened to agree at 3400, so every gate stayed
+   * green and the only symptom was a slider that did nothing -- which presents
+   * to a designer as "I set this and the app ignored it", the same failure the
+   * bounds table exists to prevent.
+   */
+  pose(now: MonotonicMs, periodMs: number = BREATH_PERIOD_MS): IdlePose {
     if (!Number.isFinite(now)) return { blink: 0, breath: 0 }
 
     if (this.blinkStartedAt === null && now >= this.nextBlinkAt) {
@@ -211,7 +221,7 @@ export class IdleLayer {
         this.nextBlinkAt = now + nextBlinkGap(this.random)
       }
     }
-    return { blink, breath: breathAt(now) }
+    return { blink, breath: breathAt(now, periodMs) }
   }
 
   /**
