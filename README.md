@@ -8,8 +8,10 @@ mid-sentence, the way you would interrupt anybody. What she remembers is a note
 you can read, edit and delete, not something accumulating invisibly in a context
 window.
 
-**Status: 0.1.0, and not yet released as a signed build.** You can run it from
-source today. See [Building](#building) for what is and is not wired.
+**Status: 0.1.3, and nothing is published yet.** You can run it from source
+today, and `.github/workflows/release.yml` will build, sign, notarize and
+publish a `v*` tag once the Apple credentials are in the repository's secrets.
+See [Building](#building) for what is and is not wired.
 
 ---
 
@@ -22,7 +24,7 @@ own and no API key of its own.
 | --------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | **A ChatGPT subscription**                                      | The realtime voice session runs on it                                     |
 | **The [Codex CLI](https://github.com/openai/codex), signed in** | Mochi borrows its credential from `~/.codex/auth.json` (or `$CODEX_HOME`) |
-| **macOS**                                                       | The Windows and Linux targets are configured but unexercised              |
+| **macOS**                                                       | Windows cross-builds and installs; Linux is configured but unexercised    |
 | **Node 24+, pnpm 10+**                                          | To build                                                                  |
 
 There is deliberately **no API-key path**. One credential source, and it is
@@ -113,29 +115,22 @@ pnpm dist:mac     # a signed .app and .dmg
 `pnpm dist` runs `verify` first and will not build over a red gate.
 
 **Signing and notarization.** Signing is wired and takes the Developer ID
-certificate from your keychain. **Notarization is off** — submitting uploads the
-binary to Apple, which is a decision rather than a side effect of a build script.
+certificate from your keychain, so `pnpm dist:mac` gives you a build that opens
+on the machine that made it.
 
-Turning it on is two steps. The team id is the parenthesised string in your
-signing identity (`security find-identity -v -p codesigning`):
+**You do not have to notarize anything to use Mochi yourself.** Notarization is
+what lets somebody _else_ open your build — without it they get _"Mochi is
+damaged and can't be opened"_, which is Gatekeeper's phrasing for unnotarized
+rather than a real diagnosis. Publishing is the release workflow's job: push a
+`v*` tag and it signs, notarizes and staples the app and both disk images, and
+refuses to publish if the check below disagrees.
 
-```sh
-xcrun notarytool store-credentials mochi \
-  --apple-id <your Apple ID> --team-id <YOUR TEAM ID> --password <app-specific password>
-```
-
-then in `electron-builder.yml` replace `notarize: false` with
-`notarize: { teamId: <YOUR TEAM ID> }`. The app-specific password comes from
-appleid.apple.com.
-
-Until that happens, a `.dmg` built here opens only on a machine that trusts your
-certificate — everybody else gets _"Mochi is damaged and can't be opened"_, which
-is Gatekeeper's phrasing for unnotarized, not a real diagnosis.
-
-Nothing ships quietly in the meantime. `pnpm verify:signing` inspects what is
-actually in `release/`, fails on a missing stapled ticket, tells
-`Notarized Developer ID` apart from `Unnotarized Developer ID`, refuses a build
-older than the source, and exits non-zero.
+`pnpm verify:signing` reads what is actually in `release/` — Developer ID
+authority, hardened runtime, a secure timestamp, no `get-task-allow`, a stapled
+ticket, and Gatekeeper's own verdict — refuses a build older than the source, and
+exits non-zero. It is written for a build you intend to hand to somebody, so it
+will fail on an ordinary local one for the single reason that it carries no
+notarization ticket. That is the expected answer, not a broken build.
 
 ## Licence
 
