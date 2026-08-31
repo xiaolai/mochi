@@ -125,8 +125,3 @@ export function remedySentence(status: CodexStatus): string {
 export function codexPathNow(): string | null {
   return codexPath
 }
-
-/** Remember where the CLI was found. Called once, when it is resolved. */
-export function setCodexPath(path: string | null): void {
-  codexPath = path
-}

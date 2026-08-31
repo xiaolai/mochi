@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERSONA } from '@shared/persona'
-import { DEFAULT_GRANTS, WITHHELD_GRANTS } from '@shared/grants'
+import { DEFAULT_GRANTS, GRANTS, WITHHELD_GRANTS } from '@shared/grants'
 import type { WireTool } from '@shared/capability/registry'
 import { SHIPPED_PROMPTS } from '@shared/instructions'
 import { whatSheMayDo } from './what-she-may-do'
@@ -35,6 +35,16 @@ const TOOLS: readonly WireTool[] = [
 ]
 
 const NOTE = 'They take their tea without milk.'
+
+/**
+ * Every permission ALLOWED, which `DEFAULT_GRANTS` no longer is.
+ *
+ * `recall_codex` ships false — it governs reading another application's archive
+ * — so a case about "she may do everything" has to say so rather than reach for
+ * the defaults, and a case about the LAST line of the notice has to control
+ * which line that is.
+ */
+const EVERYTHING = Object.fromEntries(GRANTS.map((id) => [id, true])) as typeof DEFAULT_GRANTS
 
 describe('what goes on the wire', () => {
   it('offers everything while she may do everything', () => {
@@ -139,7 +149,7 @@ describe('what she is told', () => {
     const plain = whatSheMayDo({
       persona: DEFAULT_PERSONA,
       note: NOTE,
-      grants: DEFAULT_GRANTS,
+      grants: EVERYTHING,
       tools: TOOLS,
       prompts: SHIPPED_PROMPTS,
     })
@@ -166,7 +176,7 @@ describe('what she is told', () => {
     const { instructions } = whatSheMayDo({
       persona: DEFAULT_PERSONA,
       note: NOTE,
-      grants: { ...DEFAULT_GRANTS, ask_workspace: false },
+      grants: { ...EVERYTHING, ask_workspace: false },
       tools: TOOLS,
       prompts: SHIPPED_PROMPTS,
     })

@@ -50,11 +50,12 @@ codex        # once, to refresh the login
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | [`docs/personas.md`](docs/personas.md)                     | Making a character — the whole `persona.json` format, what each field actually changes, and what will bite you |
 | [`docs/realtime-api.md`](docs/realtime-api.md)             | What the OpenAI Realtime API exposes, which parts Mochi sends, and where the walls are                         |
+| [`docs/codex-archive.md`](docs/codex-archive.md)           | What `recall_codex` reads, what it never reads, what it writes, and how it fails                               |
 | [`docs/skills/mochi-persona/`](docs/skills/mochi-persona/) | A skill for Claude Code or Codex, so an agent can interview you and write the character file                   |
 
 ## What she can do
 
-Three tools, and each is a switch you can turn off in **What she may do**:
+Four tools, and each is a switch you can turn off in **What she may do**:
 
 - **`ask_workspace`** — press `⌃⇧K` and ask. She reads one folder you point her
   at and, when the question needs it, the web, then answers in her own words.
@@ -63,6 +64,10 @@ Three tools, and each is a switch you can turn off in **What she may do**:
   requirement rather than a burden.
 - **`remember_this`** — write a fact into her long-term note.
 - **`recall_conversations`** — search what you have actually said to her.
+- **`recall_codex`** — search what you have already said to **Codex** on this
+  machine. **Off until you turn it on**, and read-only. See
+  [Reading your Codex history](#reading-your-codex-history) below, and
+  [`docs/codex-archive.md`](docs/codex-archive.md) for the whole boundary.
 
 Her note is also rewritten for her when she goes to sleep, from the presence
 that just ended. That runs on the same Codex subscription, so remembering you
@@ -89,16 +94,69 @@ fenced and the model is told the fence contains data, the answer must fit a
 closed schema, and any entry containing a path, a URL or shell syntax is thrown
 away. Her note is a plain file you can read, edit and revert one version.
 
+## Reading your Codex history
+
+If you use the Codex CLI, this machine already holds thousands of conversations
+you have had with it — what you asked, what it answered, and which repository
+you were in. `recall_codex` lets her search them.
+
+**It is off until you turn it on.** The other three switches govern things Mochi
+does with its own state; this one governs reading **another application's**
+archive of everything you have worked on, and a permission that arrives already
+granted is not a decision anybody made.
+
+The rest of this is the honest version of four things, and it belongs beside the
+ten-day token warning above because it is the same kind of fact.
+
+**It is borrowing, not remembering.** The opening paragraph of this README says
+what she remembers is a note you can read, edit and delete. That stays true of
+her note, and it is **not** true of this: the Codex archive is uncurated, nobody
+wrote it for her, and you cannot edit it through Mochi. What you can do is switch
+it off — and switching it off deletes Mochi's copy rather than merely hiding it.
+Everything she quotes from it is attributed out loud: when it was, which
+repository it was in, and whether it was you or Codex who said it.
+
+**Reading it creates one file.** Mochi opens Codex's databases read-only and
+never writes to them. SQLite itself may still create a `state_5.sqlite-shm`
+beside them — a shared-memory index it manages and Codex recreates at will. So
+"we touch nothing" would be false, and this says so instead. Mochi's own copy
+lives under `codex-index/` in its own folder, and holds a mirror of that text
+until you revoke the switch. **It is not small**: on the machine this was built
+against, 9,381 conversations produce about **112 MB**, because the searchable
+copy is stored twice — once readable and once tokenised. It is deleted when you
+turn the switch off.
+
+**Command output is never read, and known keys are masked.** What is indexed is
+what was _said_ — your messages and Codex's replies. Everything Codex ran and
+everything it printed is excluded at the query, which is where credentials
+actually live: measured on one real archive, one key-shaped string in what is
+indexed against sixteen in what is not. On top of that, known token and key
+forms (OpenAI `sk-…` keys including `sk-proj-`, every documented GitHub token
+prefix, AWS `AKIA…`/`ASIA…` ids, PEM key blocks, and values assigned to
+well-known secret variable names) are masked out of anything she
+is handed. **That is a reduction, not a guarantee** — a password written as a
+sentence, or a token in a shape nobody has seen yet, will pass. A recall result
+is sent to OpenAI as part of the conversation, so this matters, and it is part
+of why the switch ships off.
+
+**It will break when Codex changes, and it will say so.** Mochi checks that the
+two database files are the ones it knows how to read, by name and by the shape
+of every column it touches. When Codex moves — a new schema generation, a
+renamed column — she says she cannot look, rather than going quiet or answering
+from a stale copy. "I could not look" and "I looked and there was nothing" are
+different sentences and she has both.
+
 ## Where your things are
 
 Everything is on your machine, under `~/Library/Application Support/Mochi`:
 
-|                         |                                                                                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `transcripts.db`        | Conversations, if you keep them. Deletable one at a time or all at once — and deletes are real: `secure_delete` plus a WAL checkpoint |
-| `memory/<id>.json`      | Her note about you, one file per character, editable by hand                                                                          |
-| `personas/`, `avatars/` | Characters and faces. A face is plain JSON — no code                                                                                  |
-| `grants/`, `policies/`  | What she may do, and what is kept                                                                                                     |
+|                         |                                                                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `transcripts.db`        | Conversations, if you keep them. Deletable one at a time or all at once — and deletes are real: `secure_delete` plus a WAL checkpoint           |
+| `memory/<id>.json`      | Her note about you, one file per character, editable by hand                                                                                    |
+| `personas/`, `avatars/` | Characters and faces. A face is plain JSON — no code                                                                                            |
+| `grants/`, `policies/`  | What she may do, and what is kept                                                                                                               |
+| `codex-index/`          | Mochi's searchable copy of your Codex history, if you turned that switch on. About 112 MB for 9,381 conversations. Deleted when you turn it off |
 
 Nothing is uploaded anywhere except to OpenAI, as part of the conversation you
 are having.

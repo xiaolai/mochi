@@ -102,7 +102,15 @@ import { claimShortcuts, rebindShortcut, releaseShortcuts, type ShortcutOutcome 
 import { readShortcuts, writeShortcut } from './store/keys'
 import { MOST_LANGUAGES, OFFERED_LANGUAGES } from '@shared/transcription'
 import { SHORTCUTS, SHORTCUT_NAMES, SHORTCUT_SAYS, type ShortcutId } from '@shared/shortcuts'
-import { allowsCapability, isGrant, withheldGuidance } from '@shared/grants'
+import {
+  allowsCapability,
+  isGrant,
+  offeredGrants,
+  withheldGuidance,
+  type Grant,
+} from '@shared/grants'
+import { createCodexArchive, type CodexArchive } from './codex/archive/archive'
+import { codexArchiveHome } from './codex/archive/present'
 import { avatarsRoot, resolveFaceFor } from './store/avatars'
 import { setAsideV1 } from './store/inherited'
 import { problems } from './problems'
@@ -1935,6 +1943,89 @@ problems.watch((count) => {
  */
 let archive: Transcripts | null = null
 
+/**
+ * Their Codex history, mirrored — built on demand and never on startup.
+ *
+ * ## Why it is created here and does nothing until asked
+ *
+ * `createCodexArchive` opens no file of anybody's. Every path through it asks
+ * `allowed()` first, and that reads the stored permission at the moment of
+ * asking rather than when this line ran — which is what makes "no handle on
+ * Codex's files while the switch is off" a property of the code rather than of
+ * the startup order.
+ *
+ * ## Whose permission is read
+ *
+ * `wornId()`, like every other archive read in this file, and NOT
+ * `sessionPersona`. Grants are filed per character, and the switch somebody is
+ * looking at in the settings window is the worn character's — so the build a
+ * grant change starts has to be governed by the same answer the window showed.
+ */
+let codexArchive: CodexArchive | null = null
+
+function codexHistory(): CodexArchive {
+  if (codexArchive === null) {
+    codexArchive = createCodexArchive({
+      userData: () => app.getPath('userData'),
+      home: () => codexArchiveHome(process.env, app.getPath('home')),
+      allowed: () => {
+        /*
+          THE LIVE SESSION'S character, falling back to the worn one.
+
+          This read `wornId()` alone, while the dispatch authorises a call
+          against `sessionPersona` — and the shelf can change who is worn while
+          a session is up, which is the whole reason those two are different
+          questions. Divergent, a live character with the permission could be
+          handed a tool that then refused to read anything, because a different
+          character had been selected in a window.
+
+          The fallback is what makes this answerable between sessions, where a
+          build triggered from the settings window has no live character.
+        */
+        const userData = app.getPath('userData')
+        const who = sessionPersona ?? wornId()
+        return readGrants(userData, who, legacyGrants(userData)).recall_codex
+      },
+      log: (line) => {
+        console.log(line)
+      },
+      note: (detail) => problems.note('recall', null, detail),
+      /*
+        A BUILD FINISHING CHANGES WHAT SHE MAY DO, so she is told.
+
+        The tool is not on the wire while the index is building. Without this she
+        keeps the tool list she was configured with until something else re-tells
+        her — which, for a build that started at a wake, is the wake after this
+        one: a whole session in which she has the capability and does not know.
+
+        Wired HERE rather than at each trigger, because there are two of them and
+        they had already drifted — the grant change had a `.then` and the wake
+        did not.
+      */
+      becameReady: () => {
+        tellTheSession()
+      },
+    })
+  }
+  return codexArchive
+}
+
+/**
+ * Grants whose capability cannot be performed yet, whatever was stored.
+ *
+ * ONE derivation, because three surfaces ask: the session being configured, the
+ * live session being re-told after a grant change, and the shelf's card of what
+ * she is told she can do. A second derivation would be a second answer to "is
+ * this tool on the wire", and the two would disagree exactly while an index was
+ * building.
+ */
+function unreadyGrants(): ReadonlySet<Grant> {
+  return codexHistory().ready() ? EVERYTHING_READY : CODEX_STILL_BUILDING
+}
+
+const EVERYTHING_READY: ReadonlySet<Grant> = new Set()
+const CODEX_STILL_BUILDING: ReadonlySet<Grant> = new Set(['recall_codex'])
+
 /** Whether the archive has been put down for good. See `shutDownCleanly`. */
 let shutDown = false
 let talk: Conversation | null = null
@@ -2183,6 +2274,16 @@ const capabilityDeps: CapabilityDeps = {
    * hole, and it is one enum wide.
    */
   transcripts: () => archive,
+  /*
+    REFRESHED at call time, and null for all three of "not permitted", "not
+    built yet" and "Codex's archive cannot be read".
+
+    The refresh is on this path deliberately: it is the warm one — a fingerprint
+    probe and a cursor comparison, measured in tens of milliseconds — and doing
+    it here is what makes a hit current rather than as old as the last wake. The
+    COLD build is not here; it is the background job a grant change starts.
+  */
+  codexArchive: () => codexHistory().recall(),
   /**
    * Read per call rather than held, because the shelf is files on disk and
    * somebody may add a persona while this is running. `remember_this` is called
@@ -2351,7 +2452,31 @@ ipcMain.handle('voice:config', () => {
     belongs to. Both writes are passed IN below rather than reached for, so
     the write set is this object rather than something to go looking for.
   */
-  return sessionConfig({
+  /*
+    RECONCILED HERE, in both directions, and this is the durable half of the
+    two triggers.
+
+    Granting starts the build and revoking deletes the mirror, and neither of
+    those is enough on its own. A build can be interrupted by a quit; a deletion
+    can throw, or be interrupted the same way. In both cases the switch already
+    reads what somebody chose, so nobody has a reason to touch it again — and
+    the tool would stay off the wire for ever while its switch says "allowed",
+    or their borrowed history would stay on disk for ever after they said no.
+
+    `settle()` makes the mirror match the permission, whichever way it points. A
+    wake is not startup: the answer has already been given, and this costs one
+    boolean or one `existsSync` when there is nothing to do.
+
+    ## AFTER the config, not before it, and the order is the whole correctness
+
+    The permission is filed per character and this reads the LIVE session's —
+    and `sessionPersona` is set by `sessionConfig` below, through `nowWearing`.
+    Called first, this read the character of the session that just ENDED: wear
+    a new character with the permission on and her first wake would check
+    somebody else's answer, leave the index unbuilt, and schedule nothing to
+    fix it.
+  */
+  const config = sessionConfig({
     userData: () => app.getPath('userData'),
     catalogue,
     conversation,
@@ -2371,6 +2496,7 @@ ipcMain.handle('voice:config', () => {
     },
     resting: () => resting,
     tools: toolsNow,
+    unready: unreadyGrants,
     prompts: promptsNow,
     transcripts,
     problemCount: () => problems.count(),
@@ -2383,6 +2509,24 @@ ipcMain.handle('voice:config', () => {
       console.error(line)
     },
   })
+  /*
+    Now that `sessionPersona` names this session's character, the mirror can be
+    reconciled against the permission that actually governs it. See above.
+
+    GUARDED, because this reads a file and a wake must not fail over borrowed
+    history. `readGrants` throws for a grants directory that is a symlink, and
+    `dispatch.ts` wraps the same read for the same reason. Reaching it here needs
+    `sessionConfig` to have read grants successfully first, so this is a belt
+    rather than a live hazard — but the cost of being wrong is that she does not
+    wake, which is out of all proportion to what this call is for.
+  */
+  try {
+    codexHistory().settle()
+  } catch (error: unknown) {
+    console.error('[recall-codex] the mirror could not be reconciled:', error)
+    problems.note('recall', null, `their Codex history could not be reconciled: ${String(error)}`)
+  }
+  return config
 })
 
 /**
@@ -2424,9 +2568,19 @@ listenTo('voice:call', (_event, name: unknown, callId: unknown, args: unknown) =
         const live = sessionPersona
         if (live === null) return withheldGuidance(capability)
         const at = app.getPath('userData')
-        return allowsCapability(readGrants(at, live, legacyGrants(at)), capability)
-          ? null
-          : withheldGuidance(capability)
+        /*
+          THE STORED grants, and deliberately not the offered ones.
+
+          Applying readiness here made her say the wrong thing: a capability
+          that is PERMITTED and merely still building was refused with
+          `withheldGuidance` — "They turned it off in settings" — about a
+          decision nobody had made. Readiness belongs at the wire, where it
+          decides what is offered; at a call it belongs to the handler, which
+          answers `unavailable`: "I could not look", which is true and is
+          already one of the three sentences she has.
+        */
+        const grants = readGrants(at, live, legacyGrants(at))
+        return allowsCapability(grants, capability) ? null : withheldGuidance(capability)
       },
       log: (line) => console.log(line),
       warn: (line, error) => {
@@ -2921,7 +3075,10 @@ ipcMain.handle('shelf:read', (): ShelfView => {
   const mayDo = whatSheMayDo({
     persona: worn,
     note,
-    grants: readGrants(userData, worn.id, legacyGrants(userData)),
+    // OFFERED, because this card's whole claim is that it shows what she will
+    // be told. A tool listed here and absent from the wire would be the exact
+    // disagreement the single `whatSheMayDo` call above exists to rule out.
+    grants: offeredGrants(readGrants(userData, worn.id, legacyGrants(userData)), unreadyGrants()),
     tools: toolsNow(),
     template: prompt,
     // The SAME resolver the wire uses. This card's whole claim is that it shows
@@ -3488,6 +3645,42 @@ ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
     return refuse(String(error))
   }
   console.log(`[grants] ${asked.id} ${asked.allowed ? 'allowed' : 'withheld'}`)
+  /*
+    THE ONE TRIGGER, and it is this moment rather than startup.
+
+    Granting starts the cold build; revoking throws the mirror away. Neither
+    happens when the app launches: a companion that read nine thousand of
+    somebody's conversations on every launch would be doing the most invasive
+    thing it can do at the moment nobody asked for anything.
+
+    The build is NOT awaited. It runs in slices with the event loop free between
+    them, re-reading the permission before each one, and while it runs the tool
+    stays off the wire — `unreadyGrants` is what says so, and `tellTheSession`
+    below is already about to re-tell her what she may do.
+
+    Written for the character the SWITCH was written for. `wornId()` is what
+    `codexHistory` consults too, so the build a change starts is governed by the
+    same answer the window showed.
+  */
+  if (asked.id === 'recall_codex' && writtenFor === wornId()) {
+    /*
+      `settle()` BOTH WAYS, and the revoke half is why.
+
+      This called `forget()` outright, which is wrong when more than one
+      character is in play: the mirror is one copy of this machine's Codex
+      history and the permission is per character, so revoking the WORN
+      character's switch while a different character's session is live and
+      permitted deleted the index out from under her.
+
+      `settle()` asks the archive's own `allowed()` — which reads the live
+      session's answer, falling back to the worn one — so the mirror goes only
+      when the character it belongs to has said no. `becameReady` is what
+      re-tells her when a build finishes; a `.then` here was the second half of
+      that, and having both meant one trigger told her and the other did not.
+    */
+    if (asked.allowed) void codexHistory().build()
+    else codexHistory().settle()
+  }
   /**
    * Told, or said so. The permission is on disk either way.
    *
@@ -3639,7 +3832,12 @@ function tellTheSession(): boolean {
   // She was deleted while her own session was up. There is nothing to re-tell,
   // and the next wake resolves somebody who exists.
   if (persona === undefined) return false
-  const grants = readGrants(userData, persona.id, legacyGrants(userData))
+  // OFFERED, not stored: a tool she cannot perform yet must not be on the wire,
+  // and `offeredGrants` is where that distinction is made once.
+  const grants = offeredGrants(
+    readGrants(userData, persona.id, legacyGrants(userData)),
+    unreadyGrants(),
+  )
   const mayDo = whatSheMayDo({
     persona,
     note: recall(userData, live),
@@ -4516,6 +4714,11 @@ function shutDownCleanly(why: string): void {
     closeArchive: () => {
       archive?.close()
       archive = null
+      // The mirror is a second file handle and is closed on the same path. It
+      // holds no unflushed work — every slice commits — so there is nothing to
+      // wait for here, only a descriptor to hand back.
+      codexArchive?.close()
+      codexArchive = null
     },
     note: (what, detail) => problems.note(what, null, detail),
     log: (line) => {
