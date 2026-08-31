@@ -1576,6 +1576,31 @@ async function checks(page, where = '') {
       )
       return
     }
+    /*
+      STYLED, not merely present.
+
+      A span-replacement in the stylesheet once deleted every `.about-*` rule
+      and this gate still reported all green: the rows existed, carried their
+      words and their glyphs, and were drawn as four unstyled lines. Structure
+      was checked and appearance was not, so the check passed over the page it
+      was written for being broken.
+
+      The label column is the tell. 88px is what makes three addresses share a
+      left edge, and it exists only if the rules are there.
+    */
+    const laid = await page.run(`(() => {
+      const row = document.querySelector('#machine-pane .about-link');
+      const what = document.querySelector('#machine-pane .about-what');
+      if (row === null || what === null) return null;
+      return {
+        display: getComputedStyle(row).display,
+        label: Math.round(what.getBoundingClientRect().width),
+      };
+    })()`)
+    if (laid === null || laid.display !== 'flex' || laid.label !== 88) {
+      bad('about-links', `the rows are not styled: ${JSON.stringify(laid)}`)
+      return
+    }
     if (shape.some((r) => r.glyphs !== 1)) {
       bad('about-links', `every row needs exactly one glyph: ${JSON.stringify(shape)}`)
       return

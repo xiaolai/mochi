@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { quitAcceleratorFor, trayMenuTemplate, WINDOWS_SCALES } from './tray'
+import { trayMenuTemplate, WINDOWS_SCALES } from './tray'
 
 /** Nothing wrong, nothing chosen, and only the side there is always room for. */
 const BUBBLE = { available: ['above'], asked: 'auto', using: 'above' }
@@ -146,23 +146,13 @@ describe('the only way out', () => {
   })
 
   /*
-    BOTH ANSWERS, and the second one is why this is a table.
+    The table on `quitAcceleratorFor` stood here, and its subject is gone.
 
-    The assertion was `Command+Q`, flat, on whatever platform the suite happened
-    to run -- which on a Mac is the only branch there is. `Command` is a
-    modifier macOS has and Windows does not, so the item shipped advertising a
-    key in a vocabulary that platform cannot read, and nothing here could see
-    it. The same shape as `iconFileFor`'s win32 branch, and the same fix.
+    ⌘Q named Quit on macOS because an accessory app had no application menu to
+    carry it. It has one now, and in it ⌘Q closes the window — so the tray's Quit
+    carries no accelerator, and there is no per-platform answer left to assert.
   */
-  it.each([
-    ['darwin', 'Command+Q'],
-    ['win32', undefined],
-    ['linux', undefined],
-  ] as const)('spells the shortcut on %s as %s', (platform, expected) => {
-    expect(quitAcceleratorFor(platform)).toBe(expected)
-  })
-
-  it('spells it out on macOS, because there is no application menu to carry it', () => {
+  it('offers no shortcut, because the one it used to name now closes a window', () => {
     const template = trayMenuTemplate(
       {
         personas: [],
@@ -177,9 +167,9 @@ describe('the only way out', () => {
       'Mochi',
     )
     const quit = template.find((item) => item.label === 'Quit Mochi')
-    // Against the RULE rather than a literal, so the item cannot drift back to
-    // a spelling one of the three platforms does not read.
-    expect(quit?.accelerator).toBe(quitAcceleratorFor(process.platform))
+    // `undefined`, on every platform. A menu item naming a key that does
+    // something else is checked once and believed.
+    expect(quit?.accelerator).toBeUndefined()
   })
 
   it('offers the window, which is otherwise reached only by hovering her', () => {

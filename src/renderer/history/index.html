@@ -74,7 +74,6 @@
       */
       .note {
         margin: 0;
-        max-width: 62ch;
         font-family: var(--sans);
         font-size: var(--t-sm);
         line-height: var(--leading-long);
@@ -2492,33 +2491,22 @@
       }
 
       /*
-        A SECTION'S OWN PROSE TAKES THE COLUMN, not the 62ch measure.
+        THE 62CH CAP IS GONE, and the two rules that existed to escape it went
+        with it.
 
-        `.note` is capped at 62ch, which is right where a note is a caption
-        beside or beneath something narrow. As a direct child of a section it is
-        not that: it sits under a full-width heading and above a full-width
-        control or grid, so the cap made it the one ragged element in a stack of
-        aligned ones, and it read as an accident rather than as a measure.
+        `.note` was capped at 62 characters — a real measure, and the right one
+        where a note is a caption beside something narrow. It was not the right
+        one here, and the evidence was that notes came out at 549 on six screens
+        and at the column's width on five, with nothing on screen able to say
+        which rule a given note was under. `.section > .note` and `.wake > .note`
+        were added to fix two of those, which is how a cap with exceptions turns
+        into three widths instead of one.
 
-        `.wake` for the same reason and the same shape: her instruction screen
-        puts its prose in a column block rather than in a `section`, between a
-        full-width row and a full-width editor. Two drill-down screens
-        disagreeing about the width of the same element is worse than either
-        answer.
-
-        Scoped to the direct child on purpose. A note nested deeper — inside a
-        row, beside a field — is still a caption and still keeps 62ch.
-
-        The column is what bounds the line now, and the column is already
-        bounded: 760 in the reading pane, 762 on the machine's. `measure-holds`
-        caps the transcript, a single-line field and the slider, and deliberately
-        not this — prose in a capped column is not the case that check exists
-        for.
+        The container is the measure now, and every container that holds prose
+        here is already bounded — 760 in the reading column, 762 on the
+        machine's. `measure-holds` caps the transcript, a single-line field and
+        the slider, and deliberately not this.
       */
-      .section > .note,
-      .wake > .note {
-        max-width: none;
-      }
 
       /*
         WHO MADE IT, WHERE IT LIVES, AND WHICH BUILD — four rows on About.
@@ -2602,11 +2590,21 @@
         nothing to press — an unpackaged build cannot update itself, and a dead
         control is a worse answer than no control.
       */
+      /*
+        The BUTTON hugs its words; the sentence above it does not.
+
+        `align-items: flex-start` on the column did both, and the second half is
+        wrong: a flex item that shrinks to content gives the same element two
+        widths depending on what it says. "Not checked yet." measured 98px where
+        a longer sentence measured 762.
+      */
       .about-updates {
         display: flex;
         flex-direction: column;
-        align-items: flex-start;
         gap: var(--s3);
+      }
+      .about-updates > button {
+        align-self: flex-start;
       }
 
       /* ---- the controls the sections hold ---------------------------------- */

@@ -16,6 +16,7 @@ import {
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { BUBBLE_SIDES, PERSONA_LIMITS, VOICE_NAMES } from '@shared/persona'
 import { LINKS, isLink } from '@shared/links'
+import { installMenu } from './menu'
 import { checkForUpdate, downloadUpdate, installUpdate, updateState } from './update'
 import { BUILT_IN_ID } from '@shared/parse-persona'
 import { PROMPT_SLOTS } from '@shared/instructions'
@@ -4006,6 +4007,13 @@ ipcMain.handle('history:search', (_event, query: unknown) => {
 const startup = app.whenReady().then(
   () => {
     /*
+      Before any window exists, because the menu is what binds the keys those
+      windows will be pressed with — and because Electron installs its own
+      default the moment one opens if nothing has set one.
+    */
+    installMenu()
+
+    /*
       THE OTHER HALF OF THE RECONNECT, and the one no timer can do for itself.
 
       `setTimeout` does not run while the machine is asleep and does not catch
@@ -4287,9 +4295,20 @@ process.on('unhandledRejection', (reason: unknown) => {
   problems.note('main', null, `something failed unexpectedly: ${String(reason)}`)
 })
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
+/**
+ * Closing every window does NOT end her, on any platform.
+ *
+ * This quit on Windows and Linux, which is Electron's usual advice and wrong
+ * for this application: she is a resident with a tray icon, and `tray.ts` calls
+ * that icon *"the only way out"*. Under the old line that was true on macOS and
+ * false everywhere else — Alt+F4 on the last window ended the session, closed
+ * the conversation and dropped the archive, for somebody putting a window away.
+ *
+ * So: nothing here. Quitting is the tray's item and the menu's, both of which
+ * are deliberate. If neither existed this would be a trap; both do, and
+ * `tray.ts` exists precisely because being unquittable once was the bug.
+ */
+app.on('window-all-closed', () => {})
 
 /**
  * Put the archive down cleanly, exactly once, however the app is ending.
