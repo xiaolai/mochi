@@ -34,8 +34,24 @@
       name="description"
       content="A resident desktop voice companion. She listens, answers out loud, and moves while she speaks. In development."
     />
+    <!--
+      TWO FILES, and they must not be merged back into one.
+
+      The favicon wants transparency: it lands on a browser tab that may be
+      dark, and an opaque plate there is a pale square with her inside it. The
+      Apple touch icon wants the opposite — iOS composites it onto a home screen
+      and renders any transparency BLACK, so it takes the app's own plated icon.
+
+      One file served both, and it was the plated one, so the tab got the square.
+      Fixing that by making the single file transparent would have swapped a grey
+      square on a tab for a black one on a home screen.
+
+      Both are copies of generated assets — `resources/icons/window-256.png` and
+      `resources/icons/256x256.png`. `rig/icons.test.ts` compares them byte for
+      byte, so `pnpm icons` moving the artwork cannot leave the site behind.
+    -->
     <link rel="icon" href="./art/icon.png" type="image/png" />
-    <link rel="apple-touch-icon" href="./art/icon.png" />
+    <link rel="apple-touch-icon" href="./art/icon-apple.png" />
     <meta property="og:title" content="mochi" />
     <meta
       property="og:description"

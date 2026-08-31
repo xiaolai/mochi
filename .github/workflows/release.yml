@@ -255,8 +255,12 @@ jobs:
           # `--verify-tag` so a release is never created for a tag that is not
           # there; `--notes-from-tag` because `bump` writes the summary into the
           # annotated tag and a second copy would be a second thing to keep true.
+          # NO `--repo`. `gh` refuses `--notes-from-tag` alongside it — "using
+          # `--notes-from-tag` with `--repo` is not supported" — and that
+          # combination failed the first real release of this workflow, after
+          # every expensive step had already passed. The repository is inferred
+          # from the checkout, which is this one.
           gh release create "v${VERSION}" \
-            --repo "$REPO" \
             --title "v${VERSION}" \
             --verify-tag \
             --notes-from-tag \

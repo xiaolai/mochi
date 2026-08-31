@@ -146,3 +146,40 @@ describe('what is committed is what the generator emits', () => {
     ).toBe(true)
   })
 })
+
+/**
+ * The website's two icons are the generated ones, byte for byte.
+ *
+ * `site/art/` is not under `pnpm icons` — nothing regenerates it — so a change
+ * to the artwork updates `resources/` and leaves the site showing the previous
+ * mochi until somebody notices by eye. This is the assertion that notices
+ * instead, and it is the reason the copies may stay copies rather than needing
+ * the generator taught about a second output root.
+ *
+ * WHICH source each takes is the part worth reading. A favicon lands on a
+ * browser tab that may be dark, so it takes `window-256` — her real colours on
+ * nothing. An Apple touch icon is composited onto a home screen and iOS paints
+ * any transparency BLACK, so it takes the plated app icon. One file served both
+ * and it was the plated one, which is why the tab showed a pale square.
+ */
+describe('the website wears the generated icons', () => {
+  const SITE = fileURLToPath(new URL('../../../../site/art/', import.meta.url))
+  const MADE = fileURLToPath(new URL('../../../../resources/icons/', import.meta.url))
+
+  it.each([
+    ['icon.png', 'window-256.png'],
+    ['icon-apple.png', '256x256.png'],
+  ])('site/art/%s is resources/icons/%s', (site, made) => {
+    expect(readFileSync(join(SITE, site)).equals(readFileSync(join(MADE, made)))).toBe(true)
+  })
+
+  it('takes a transparent one for the tab and an opaque one for the home screen', () => {
+    // Read straight out of the PNG rather than decoded: byte 25 of the IHDR is
+    // the colour type, and 6 is RGBA. Both are RGBA, so the alpha CHANNEL is
+    // not the question — whether it is used is, and that is what the two source
+    // treatments differ on (`background: null` against a plate).
+    const head = (name: string) => readFileSync(join(SITE, name)).subarray(0, 26)
+    expect(head('icon.png')[25]).toBe(6)
+    expect(head('icon-apple.png')[25]).toBe(6)
+  })
+})
