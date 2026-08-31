@@ -291,6 +291,40 @@ jobs:
           gh workflow run update-homebrew.yml --repo "$REPO" -f version="$VERSION"
           echo "Asked the tap to move to $VERSION"
 
+      # The SAME reason as the tap above, and it was missed here for three
+      # releases.
+      #
+      # `pages.yml` declares `on: release: [published]` and that trigger has
+      # never once fired. GitHub does not start a workflow from an event raised
+      # by the built-in `GITHUB_TOKEN` — the loop-prevention rule — and the
+      # release two steps up is created with exactly that token. So the site
+      # went on naming whatever version was current the last time somebody
+      # edited `site/`: v0.1.6, while v0.1.7, v0.1.8 and v0.1.9 shipped past it.
+      #
+      # Nothing failed. Every release run was green, `pages.yml` simply was not
+      # invited, and a workflow that never runs looks exactly like a workflow
+      # with nothing to do. The tap dodged this only because somebody had
+      # already been bitten and dispatched it explicitly; the reasoning did not
+      # get carried across to the site.
+      #
+      # After the tap, not before: both are dispatches and neither blocks, but
+      # the tap is the one people's `brew upgrade` waits on.
+      #
+      # NOT `continue-on-error`, for the tap's reason exactly — a site that
+      # silently names an old version sends every new visitor to the wrong
+      # download, and this step is the only thing that would report it.
+      - name: Ask the site to name the new version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # No input: `pages.yml` reads the newest published release itself, and
+          # the release exists by now. Passing a version would be a second copy
+          # of the same fact, free to disagree with the first.
+          gh workflow run pages.yml --repo "$REPO" --ref main
+          echo "Asked the site to redeploy naming $VERSION"
+
       # ---- and take the old ones down --------------------------------------
       #
       # Two releases, and the tags are kept forever. A release holds two disk

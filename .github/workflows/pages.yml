@@ -56,9 +56,26 @@ on:
   # the version and the download line are written in from the newest release at
   # deploy time. Without this the page would go on naming the previous one until
   # somebody happened to edit `site/`.
+  #
+  # ## This trigger does NOT cover `release.yml`, and cannot be made to
+  #
+  # GitHub refuses to start a workflow from an event raised by the built-in
+  # `GITHUB_TOKEN`, to stop a workflow triggering itself forever. `release.yml`
+  # creates the release with that token, so this never fires for the releases
+  # that actually happen — it fired zero times across v0.1.7, v0.1.8 and v0.1.9,
+  # and the site went on naming v0.1.6 the whole time. Nothing was red. The
+  # workflow was simply never invited, which looks identical to having nothing
+  # to do.
+  #
+  # `release.yml` therefore dispatches this one explicitly, the way it already
+  # did for the Homebrew tap. What is left here covers the case the dispatch
+  # does not: a release published by a person, from the web UI or with a PAT.
+  # Both paths are safe together — the `pages` concurrency group below serialises
+  # them, and a second deploy of the same tree is a no-op.
   release:
     types: [published]
-  # So a broken deploy can be re-run without an empty commit.
+  # So a broken deploy can be re-run without an empty commit, and so
+  # `release.yml` has something to dispatch.
   workflow_dispatch:
 
 permissions:
