@@ -17,10 +17,19 @@
      files by hand. Every image referenced below is asserted to exist by
      `.github/workflows/pages.yml`, so deleting one fails the deploy loudly.
 
-  2. The page CANNOT promise a download, because there is not one. She is
-     signed but deliberately not notarized, and nothing has been released.
-     Anything here that reads like a shipping product is a lie this file is
-     responsible for.
+  2. The page may promise a download, and this rule used to say the opposite.
+
+     It read "the page CANNOT promise a download, because there is not one —
+     she is signed but deliberately not notarized, and nothing has been
+     released", and it stayed there through v0.1.1 to v0.1.9 while the release
+     workflow signed, notarized, stapled and published every one of them. A
+     standing instruction not to claim something is the last thing anybody
+     re-reads once it stops being true.
+
+     What survives the correction is the rule underneath it: this page says only
+     what is true at deploy. The version is substituted in from the newest
+     published release rather than typed here, and the download row names the
+     Homebrew command and the release page, both of which exist.
 
   English is in the markup and Chinese is in `data-zh`, so a reader with no
   JavaScript gets a complete page rather than an empty one.
@@ -283,9 +292,11 @@
       /*
         The status is a first-class element, not a footnote.
 
-        There is no download. A page that buries that under a hero and three
-        feature blocks is a page that has decided the reader's disappointment
-        is a later problem.
+        It carried the bad news when there was no download — a page that buries
+        that under a hero and three feature blocks has decided the reader's
+        disappointment is a later problem. There is a download now, and the same
+        placement carries the good news for the same reason: the one fact a
+        visitor came for goes above everything written to persuade them.
       */
       .status {
         display: inline-flex;
@@ -533,9 +544,25 @@
               This said "In development · not yet released" for as long as that
               was true and for a while after it stopped being — which is what a
               status somebody has to remember to edit always does. `pages.yml`
-              substitutes the newest published release into the two `data-rel`
-              elements below and FAILS if it cannot find them, so the site
-              cannot be deployed still claiming the previous version.
+              substitutes the newest published release into the ONE element
+              below carrying the `version` hook, and FAILS if it cannot find it,
+              so the site cannot be deployed still claiming the previous
+              version.
+
+              Do not write that attribute out in full anywhere in this file
+              except on the element itself. The deploy finds it by regex, and a
+              second copy sitting in prose is a second thing that can match —
+              a substitution into a COMMENT would still satisfy the `grep` that
+              proves the version reached the page, so the deploy would go green
+              while the visible status said nothing new.
+
+              This said "the two `data-rel` elements". There was only ever one
+              substitution; the download row carried a second `data-rel` that
+              nothing read, so a comment describing deploy-time behaviour was
+              describing a hook with no consumer. The attribute is gone and the
+              download row is plain markup, which is honest — that line names a
+              Homebrew command and a `releases/latest` link, and neither needs
+              to know the version.
 
               What is committed here is the fallback, and it is written to be
               true rather than convenient: opened straight off disk, with no
@@ -760,12 +787,25 @@
             </div>
             <div>
               <dt data-zh="下载">Download</dt>
+              <!--
+                The tap prefix is load-bearing and says so out loud.
+
+                `homebrew/cask` already carries a `mochi` — a flashcards app
+                from mochi.cards — so a bare `brew install --cask mochi` fetches
+                somebody else's program and succeeds while doing it. A reader
+                who shortens the command gets no error, which is exactly why the
+                reason is written here rather than trusted to the prefix looking
+                deliberate.
+              -->
               <dd
-                data-rel="download"
-                data-zh="用 Homebrew：<code>brew install --cask xiaolai/tap/mochi</code>。构建产物经过签名与公证，磁盘映像也一样。"
+                data-zh='用 Homebrew：<code>brew install --cask xiaolai/tap/mochi</code>。<code>xiaolai/tap/</code> 这个前缀不能省 —— Homebrew 自带的 cask 里另有一个同名的 mochi，省掉前缀装到的是别人的程序。也可以直接下载<a href="https://github.com/xiaolai/mochi/releases/latest">最新版本</a>的磁盘映像。构建产物经过签名与公证，磁盘映像也一样。'
               >
-                With Homebrew: <code>brew install --cask xiaolai/tap/mochi</code>. Signed and
-                notarized — the app and the disk image both.
+                With Homebrew: <code>brew install --cask xiaolai/tap/mochi</code>. The
+                <code>xiaolai/tap/</code> prefix is not optional — Homebrew's own index carries a
+                different <code>mochi</code>, and dropping the prefix installs that one without
+                complaining. Or take the disk image from the
+                <a href="https://github.com/xiaolai/mochi/releases/latest">latest release</a>.
+                Signed and notarized — the app and the disk image both.
               </dd>
             </div>
             <!--
