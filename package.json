@@ -5,6 +5,7 @@
   "private": true,
   "description": "A realtime-voice AI companion that lives on your desktop",
   "author": "@xiaolai",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xiaolai/mochi.git"

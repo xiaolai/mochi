@@ -216,4 +216,9 @@ with her.
 
 ## Licence
 
-Not yet chosen.
+[MIT](LICENSE) — © 2026 HANDO K.K. Use it, change it, ship it. Keep the notice,
+and it carries no warranty.
+
+The grant covers this repository. Her dependencies keep their own licences, and
+what she can actually do still depends on your own ChatGPT subscription and your
+own Codex login — the licence gives you the code, not an account.
