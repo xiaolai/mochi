@@ -44,6 +44,14 @@ one the service refused. The remedy is almost always:
 codex        # once, to refresh the login
 ```
 
+## Guides
+
+|                                                            |                                                                                                                |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [`docs/personas.md`](docs/personas.md)                     | Making a character — the whole `persona.json` format, what each field actually changes, and what will bite you |
+| [`docs/realtime-api.md`](docs/realtime-api.md)             | What the OpenAI Realtime API exposes, which parts Mochi sends, and where the walls are                         |
+| [`docs/skills/mochi-persona/`](docs/skills/mochi-persona/) | A skill for Claude Code or Codex, so an agent can interview you and write the character file                   |
+
 ## What she can do
 
 Three tools, and each is a switch you can turn off in **What she may do**:
