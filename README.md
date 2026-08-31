@@ -118,12 +118,36 @@ Her note is also rewritten for her when she goes to sleep, from the presence
 that just ended. That runs on the same Codex subscription, so remembering you
 does not sit behind a second paywall.
 
+## The two keys
+
+Two global shortcuts, which work while another application has focus — that
+being the whole point of them:
+
+|       |                             |
+| ----- | --------------------------- |
+| `⌃⇧L` | Let her rest, or wake her   |
+| `⌃⇧M` | Hide her, or bring her back |
+
+Resting stops her listening. Hiding does not — that one is about the screen, not
+about her attention.
+
+`Control+Shift` rather than `Command` because the Command layer is crowded with
+system and application bindings, and these have to survive another app having
+focus. Both are **defaults, not fixtures**: change either one in settings, and a
+combination another application already holds is refused out loud rather than
+silently dropped.
+
 ## What she can reach, and what she cannot
 
 Both the workspace lookup and the sleep-time note rewriter run `codex exec` with
-`-s read-only`. **That names what the sandbox may write, not what it may read** —
-measured, `dev-docs/findings.md` §72 — and no Codex setting withholds the shell
-from a run. So a model that decides to read a file elsewhere on your disk can.
+`-s read-only`. **That names what the sandbox may write, not what it may read**,
+and no Codex setting withholds the shell from a run. So a model that decides to
+read a file elsewhere on your disk can.
+
+That is measured rather than assumed, and you can measure it yourself — point
+`codex exec -s read-only` at a throwaway directory and ask it to read something
+outside that directory. The point of saying so here is that the sandbox flag
+reads like a containment promise and is not one.
 
 Two consequences worth knowing before you point her at anything:
 
