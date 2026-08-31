@@ -1194,10 +1194,16 @@
         220px voids with no box around any of them, and the `rows` this pane
         computes from the text was ignored entirely.
       */
+      /*
+        NO `font-size` HERE. It set `--t-data`, so the twenty-seven prompt boxes
+        on this page were 12px while her instruction — the same control, the
+        same treatment, on her page — was the 13px every other field in this
+        window uses. One control at two sizes depending on which page it is on
+        is the kind of difference nobody can defend once it is pointed at.
+      */
       .prompt-box {
         width: 100%;
         resize: vertical;
-        font-size: var(--t-data);
         line-height: var(--leading);
       }
       /*

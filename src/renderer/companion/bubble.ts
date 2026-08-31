@@ -126,16 +126,6 @@ export interface BubbleColours {
    */
   readonly liftFar: string
   readonly liftNear: string
-  /**
-   * The unread-problems dot. Not themed, unlike everything else here.
-   *
-   * The rest of the colour is handed in so she can sit on a light desktop or a
-   * dark one. This one is not decoration -- it means "read me" -- and a red that
-   * politely adapts to its surroundings can lose that argument. It is `--alarm`
-   * rather than a literal now, and `tokens.css` carries the four measurements
-   * that let one value serve both schemes.
-   */
-  readonly alarm: string
 }
 
 export interface Bubble {
@@ -192,7 +182,6 @@ export interface Bubble {
     prefer: SidePreference,
     hovered: boolean,
     /** How many things main could not do, for the badge on the history control. */
-    problems?: number,
   ): boolean
   /**
    * Move the reader's position, in lines. Positive is further into the text.
@@ -496,7 +485,6 @@ function transparent(colour: string): string {
 }
 
 /** The problem badge on the history control. A dot: a digit at this size is mush. */
-const DOT = 3.5
 
 export function createBubble(): Bubble {
   let opacity = 0
@@ -609,7 +597,7 @@ export function createBubble(): Bubble {
       const { box } = laidOut
       return x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h
     },
-    draw(ctx, width, colours, text, at, her, room, prefer, hovered, problems = 0) {
+    draw(ctx, width, colours, text, at, her, room, prefer, hovered) {
       // A different utterance is a different thing to read, so the reader's
       // position goes back to following her. Without this, her next sentence
       // opens parked in the middle of the last one.
@@ -924,27 +912,21 @@ export function createBubble(): Bubble {
         )
       }
 
-      /**
-       * Something main could not do: a badge on the way into her record.
-       *
-       * This block used to draw the history icon itself when nothing was
-       * hovered, because the icon was otherwise not there and a badge on an
-       * invisible control says nothing. The controls are always drawn now, so
-       * that half of it is gone — the case it existed for (somebody edits a
-       * persona file, reloads, and sees nothing change because the file was
-       * rejected and a default took over) is served by the badge alone.
-       */
-      if (problems > 0) {
-        ctx.globalAlpha = opacity
-        ctx.fillStyle = colours.paper
-        ctx.beginPath()
-        ctx.arc(history.x + history.w - 2, history.y + 2, DOT + 1.5, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.fillStyle = colours.alarm
-        ctx.beginPath()
-        ctx.arc(history.x + history.w - 2, history.y + 2, DOT, 0, Math.PI * 2)
-        ctx.fill()
-      }
+      /*
+        THE UNREAD-PROBLEMS DOT STOOD HERE, on the history icon.
+
+        It marked "main could not do something" — a rejected persona file, a
+        face that would not load — so somebody who edited a file and saw nothing
+        change had a thread to pull. Removed on request, and it costs nothing
+        the app cannot say elsewhere: `face.troubled()` still carries the count
+        to her shoulder chip, and the shell's troubles drawer is where the
+        problems are actually readable. This surface only ever said "there is
+        something", never what.
+
+        Her bubble is what she is SAYING. A badge on it is the application
+        talking about itself over the top of her, which is a different voice in
+        the same box.
+      */
 
       /**
        * There is more, and this is not where you read it.

@@ -40,7 +40,24 @@ export function fileSection(
       // The built-in is stored as `null`; the empty string is only how a
       // `<select>` can carry that, and it is turned back at the boundary below.
       value: one.id ?? '',
-      label: one.id ?? 'Built-in',
+      /*
+        WHERE IT CAME FROM, in the option itself.
+
+        The list read `Built-in`, `mine`, `blueberry` — and nothing said that
+        the last two are files the reader put in the avatars folder themselves
+        while the first ships with the app. Somebody looking at their own
+        `mine` had no way to tell it apart from something Mochi provides, and
+        asked exactly that.
+
+        The hint beside the control already names the file that was read, but
+        that describes the CURRENT answer. This is the list you read while
+        choosing, which is the moment the question is actually being asked.
+
+        Every entry with an id is a file in the avatars folder — the built-in is
+        the only one stored as `null` — so the split is exact rather than a
+        guess about naming.
+      */
+      label: one.id === null ? 'Built-in — ships with Mochi' : `${one.id} — your file`,
     })),
   ]) {
     const option = document.createElement('option')

@@ -139,15 +139,9 @@ const HER = { left: 443, top: 267, width: 94, height: 73 }
 /** The whole canvas on screen, which is the ordinary case. */
 const ROOM = { left: 0, top: 0, right: 980, bottom: 560 }
 
-function paint(
-  bubble: ReturnType<typeof createBubble>,
-  said: string,
-  at: number,
-  hovered = false,
-  problems = 0,
-) {
+function paint(bubble: ReturnType<typeof createBubble>, said: string, at: number, hovered = false) {
   const rec = recorder()
-  const painted = bubble.draw(rec.ctx, 980, COLOURS, said, at, HER, ROOM, 'auto', hovered, problems)
+  const painted = bubble.draw(rec.ctx, 980, COLOURS, said, at, HER, ROOM, 'auto', hovered)
   return { ...rec, painted, text: rec.drawn.map((one) => one.text).join('') }
 }
 
@@ -395,12 +389,12 @@ describe('what fits on screen', () => {
 })
 
 describe('the way into her conversations', () => {
-  function shown(problems = 0, hovered = false) {
+  function shown(hovered = false) {
     const bubble = createBubble()
     seconds(bubble, 1, 0)
     return {
       bubble,
-      painted: paint(bubble, 'Hey there, this is what I said.', 30, hovered, problems),
+      painted: paint(bubble, 'Hey there, this is what I said.', 30, hovered),
     }
   }
 
@@ -460,43 +454,28 @@ describe('the way into her conversations', () => {
   })
 })
 
-describe('saying that something went wrong', () => {
-  function shown(problems: number, hovered: boolean) {
+/*
+  `saying that something went wrong` stood here — four tests on the unread
+  problems dot the bubble drew on its history icon.
+
+  The dot was removed on request, so every assertion in that block is about a
+  thing that is no longer drawn. Deleted rather than left green over an empty
+  subject, which is what `rebuild-contract.md` marks **moot**.
+
+  One of its assertions was not about the dot at all and survives below as
+  `never draws the history icon twice` — the block had grown a guard against
+  drawing that icon a second time, from the days when the badge drew its own
+  copy of it, and that is a property of the controls rather than of the badge.
+*/
+
+describe('never draws the history icon twice', () => {
+  it('paints exactly the three controls, hovered or not', () => {
     const bubble = createBubble()
     seconds(bubble, 1, 0)
-    return paint(bubble, 'Hey there, this is what I said.', 30, hovered, problems)
-  }
-
-  it('marks the control WITHOUT waiting to be hovered', () => {
-    // Everything else here is hover-only, because permanent chrome on a glance
-    // surface is chrome you stop seeing. This is the exception on purpose: the
-    // person whose edited file was rejected has no reason to hover.
-    expect(shown(1, false).arcs).toContain('#d1495b')
-  })
-
-  it('sits on a control that is drawn whether or not anything is wrong', () => {
-    // This block used to draw the history icon ITSELF when nothing was hovered,
-    // because the controls were hover-only and a badge on an invisible control
-    // says nothing. The controls are permanent now, so the icon is already
-    // there and that half of the block is gone — along with its one chance of
-    // drawing the same icon twice.
-    const quiet = shown(0, false)
-    const troubled = shown(1, false)
-    expect(iconStrokes(quiet).length).toBeGreaterThan(0)
-    expect(iconStrokes(troubled).length).toBe(iconStrokes(quiet).length)
-  })
-
-  it('marks nothing when nothing is wrong', () => {
-    expect(shown(0, false).arcs).not.toContain('#d1495b')
-    expect(shown(0, true).arcs).not.toContain('#d1495b')
-  })
-
-  it('marks it whether or not the pointer is there, and never twice', () => {
-    expect(shown(2, true).arcs).toContain('#d1495b')
-    expect(shown(2, false).arcs).toContain('#d1495b')
     // Three controls: history (3 paths), copy (1 rect + 1 path), close (2
-    // paths). An eighth would mean history had been drawn a second time.
-    expect(iconStrokes(shown(2, true)).length).toBe(7)
+    // paths). An eighth would mean one had been drawn a second time.
+    const hovered = paint(bubble, 'Hey there, this is what I said.', 30, true)
+    expect(iconStrokes(hovered).length).toBe(7)
   })
 })
 

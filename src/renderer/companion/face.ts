@@ -1021,7 +1021,6 @@ export function showFace(canvas: HTMLCanvasElement): Face {
           chipOn: palette.bubbleChipOn,
           liftFar: palette.bubbleLiftFar,
           liftNear: palette.bubbleLiftNear,
-          alarm: palette.alarm,
         },
         utterance.text(),
         utterance.at(),
@@ -1029,7 +1028,6 @@ export function showFace(canvas: HTMLCanvasElement): Face {
         roomOnScreen(canvas, windowOrigin),
         bubbleSide,
         overBubble,
-        troubles,
       )
     }
 
