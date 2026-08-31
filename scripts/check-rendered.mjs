@@ -423,6 +423,24 @@ async function openShell() {
   const companion = await waitForTarget('companion')
   if (!companion) throw new Error('the companion window never appeared')
   const bridge = await attach(companion)
+  /*
+    WAIT FOR THE BRIDGE, do not assume it.
+
+    A CDP target exists as soon as the page starts loading; `window.mochi` is
+    put there by the preload, which lands later. Calling straight into it raced
+    the renderer and crashed the whole run with "Cannot read properties of
+    undefined (reading 'history')" — intermittently, which is the worst kind:
+    the same commit passed twice and died on the third, and the failure looked
+    like the gate rather than like a race.
+
+    Polled rather than slept, for `until`'s own reason: a fixed wait answers
+    "probably by now" and this answers "yes, and it took 34ms".
+  */
+  await until(
+    bridge,
+    'window.mochi && typeof window.mochi.history === "function"',
+    'the companion to expose its bridge',
+  )
   await bridge.run('window.mochi.history()')
   bridge.close()
   const shell = await waitForTarget('history', 40)
@@ -669,9 +687,31 @@ async function firstHour(page) {
  * that is really a difference in how the two sides were measured.
  */
 async function outline(page) {
-  const { writeFileSync, mkdirSync } = await import('node:fs')
+  const { writeFileSync, mkdirSync, readdirSync, rmSync } = await import('node:fs')
   const into = join(ROOT, 'dev-docs', 'design-system-v2', 'rendered')
   mkdirSync(into, { recursive: true })
+  /*
+    EMPTIED FIRST, so a run that dies partway leaves the screens it never
+    reached ABSENT rather than stale.
+
+    This dumper writes each file as it finishes a screen, and a run that stops
+    early leaves the rest of the directory holding a previous run's output —
+    same names, plausible contents, hours old. That is not a hypothetical: a
+    dump from 12:14 was read as current at 14:40 and used to answer a question
+    about what the window draws, and the answer was wrong.
+
+    Absent is loud and stale is silent, so the failure mode is moved to the loud
+    one. The stamp below is the second half: every file now says when it was
+    taken and from which commit, so a file that survives some future partial run
+    still cannot pass itself off as fresh.
+  */
+  for (const stale of readdirSync(into).filter((one) => one.endsWith('.txt'))) {
+    rmSync(join(into, stale))
+  }
+  const taken = new Date().toISOString().replace('T', ' ').slice(0, 16)
+  const commit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT })
+    .toString()
+    .trim()
   console.log('\n  ─── the window, in the artboards\u2019 own terms ─────────────')
   /*
     EVERY SCREEN, not every TAB.
@@ -771,7 +811,11 @@ async function outline(page) {
       return lines.join(String.fromCharCode(10));
     })()`)
     const path = join(into, `${place}.txt`)
-    writeFileSync(path, `# ${place} — what the window actually renders\n\n${text}\n`)
+    writeFileSync(
+      path,
+      `# ${place} — what the window actually renders\n` +
+        `# taken ${taken} UTC, at ${commit}\n\n${text}\n`,
+    )
     console.log(
       `  ${place.padEnd(9)} ${String(text.split('\n').length).padStart(4)} nodes  -> ${path}`,
     )
@@ -3076,8 +3120,27 @@ async function main() {
 */
 let running = null
 
+/*
+  The budget is a HANG detector, and it has to know how much work it asked for.
+
+  A plain run is about 7 seconds; `--outline` adds fourteen screen dumps, each
+  with two view hops, three settles and a full `getComputedStyle` walk. Measured
+  on this machine: 130s on a good run and past 240s on a slow one, from the same
+  commit — so the old flat four minutes was not catching a hang on the outline
+  path, it was failing a run that was merely working.
+
+  That mattered more than a red line: a run killed partway used to leave the
+  screens it never reached holding a PREVIOUS run's output, and one of those was
+  read as current hours later. `outline` empties the directory first now, so the
+  answer to being killed is an absent file rather than a stale one — but the
+  budget should still fit the job.
+*/
+const BUDGET_MS = process.argv.includes('--outline') ? 600_000 : 240_000
+
 const watchdog = setTimeout(() => {
-  console.error('\nthe gate ran past 4 minutes — failing rather than hanging')
+  console.error(
+    `\nthe gate ran past ${String(BUDGET_MS / 60_000)} minutes — failing rather than hanging`,
+  )
   /*
     TAKE THE APP WITH IT. `process.exit` skips `main`'s `finally`, so a timeout
     left the detached Electron alive holding the debugging port — and the next
@@ -3092,6 +3155,6 @@ const watchdog = setTimeout(() => {
     }
   }
   process.exit(1)
-}, 240_000)
+}, BUDGET_MS)
 watchdog.unref()
 await main()

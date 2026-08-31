@@ -2491,6 +2491,35 @@
         --wake-floor: 220px;
       }
 
+      /*
+        A SECTION'S OWN PROSE TAKES THE COLUMN, not the 62ch measure.
+
+        `.note` is capped at 62ch, which is right where a note is a caption
+        beside or beneath something narrow. As a direct child of a section it is
+        not that: it sits under a full-width heading and above a full-width
+        control or grid, so the cap made it the one ragged element in a stack of
+        aligned ones, and it read as an accident rather than as a measure.
+
+        `.wake` for the same reason and the same shape: her instruction screen
+        puts its prose in a column block rather than in a `section`, between a
+        full-width row and a full-width editor. Two drill-down screens
+        disagreeing about the width of the same element is worse than either
+        answer.
+
+        Scoped to the direct child on purpose. A note nested deeper — inside a
+        row, beside a field — is still a caption and still keeps 62ch.
+
+        The column is what bounds the line now, and the column is already
+        bounded: 760 in the reading pane, 762 on the machine's. `measure-holds`
+        caps the transcript, a single-line field and the slider, and deliberately
+        not this — prose in a capped column is not the case that check exists
+        for.
+      */
+      .section > .note,
+      .wake > .note {
+        max-width: none;
+      }
+
       /* ---- the controls the sections hold ---------------------------------- */
       /*
         `select[multiple]` stood here, and it went with its control.
@@ -3177,6 +3206,23 @@
       */
       .deeper-back {
         align-self: flex-start;
+        /*
+          ROOM UNDER IT, because `#pane` has no gap to give.
+
+          That container was `flex-direction: column` with a gap once, and the
+          gap was removed for a good reason recorded above it: `#pane` had
+          exactly one child, a wrapper, so the gap styled the wrapper and
+          nothing inside it. A drill-down has TWO children — this button and the
+          screen — and with no gap the button's box ended flush against the
+          heading below it.
+
+          26px is the reading column's own rhythm, which is the stack this
+          button is part of. Carried here rather than by restoring the gap on
+          `#pane`, because a gap there would also govern the single-wrapper case
+          the note above is about, and this is the only child that needs
+          separating from what follows.
+        */
+        margin-bottom: 26px;
       }
 
       /*
