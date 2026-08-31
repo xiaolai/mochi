@@ -84,6 +84,13 @@ export interface FaceSpec {
   readonly cheekY: number
   readonly cheekR: number
 
+  /**
+   * How far a full inhale spreads her, on the squash channel.
+   *
+   * ONE-SIDED: the breath runs 0..1, so this is the whole excursion rather than
+   * a half-amplitude, and it only ever spreads her. It cannot stretch her
+   * taller than her resting silhouette -- see `rig/idle.ts`, `breathAt`.
+   */
   readonly breathAmp: number
   readonly breathMs: number
   readonly stiffness: number
@@ -370,7 +377,11 @@ export const MOCHI: FaceSpec = {
   cheekY: 0.33,
   cheekR: 12,
 
-  breathAmp: 0.045,
+  // 0.024, down from 0.045, and the two numbers are not comparable: 0.045 was a
+  // HALF-amplitude either side of rest, so the body swung 0.09 peak to peak --
+  // 9% of her height and 9% of her width, on a 94 x 73px body. This is the
+  // whole excursion, in one direction, from a resting shape she now returns to.
+  breathAmp: 0.024,
   breathMs: 3400,
   stiffness: 190,
   damping: 20,

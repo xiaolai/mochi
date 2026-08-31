@@ -13,11 +13,93 @@ import {
 } from './idle'
 
 describe('breathAt', () => {
-  it('completes one cycle per period', () => {
+  it('completes one cycle per period, resting at both ends', () => {
     expect(breathAt(0)).toBeCloseTo(0, 6)
-    expect(breathAt(BREATH_PERIOD_MS / 4)).toBeCloseTo(1, 6)
-    expect(breathAt(BREATH_PERIOD_MS * 0.75)).toBeCloseTo(-1, 6)
+    expect(breathAt(BREATH_PERIOD_MS * 0.4)).toBeCloseTo(1, 6)
     expect(breathAt(BREATH_PERIOD_MS)).toBeCloseTo(0, 6)
+    // And it repeats, rather than only being right on the first pass.
+    expect(breathAt(BREATH_PERIOD_MS * 1.4)).toBeCloseTo(1, 6)
+    expect(breathAt(BREATH_PERIOD_MS * 3)).toBeCloseTo(0, 6)
+  })
+
+  it('goes in faster than it comes out', () => {
+    /*
+      Inspiration is muscular and expiration is elastic recoil, so a resting
+      breath is not symmetric in time. Stated as WHERE the peak falls rather
+      than as the constant's value, so this survives the fraction being retuned
+      and fails if the curve is ever flattened back to one cosine.
+    */
+    const SAMPLES = 2000
+    let peakAt = 0
+    let peak = -1
+    for (let i = 0; i < SAMPLES; i++) {
+      const value = breathAt((BREATH_PERIOD_MS * i) / SAMPLES)
+      if (value > peak) {
+        peak = value
+        peakAt = i / SAMPLES
+      }
+    }
+    expect(peak).toBeCloseTo(1, 6)
+    expect(peakAt).toBeLessThan(0.5)
+    // The exhale is the long tail: half way through the cycle she is still most
+    // of the way inhaled. A symmetric breath would be back at exactly 1 here.
+    expect(breathAt(BREATH_PERIOD_MS / 2)).toBeGreaterThan(0.75)
+    expect(breathAt(BREATH_PERIOD_MS / 2)).toBeLessThan(1)
+  })
+
+  it('turns without a corner, at the peak and at the wrap alike', () => {
+    /*
+      The curve is piecewise, and the join is where a tick comes from. Both
+      halves are built to meet with ZERO SLOPE, so what has to be asserted is
+      the slope, not the value -- a corner is perfectly continuous, and a check
+      on the gap between neighbouring samples sails straight past one. This test
+      was written that way first and passed against a pair of linear ramps.
+
+      So: the second difference. Across a smooth turn adjacent steps are nearly
+      equal; at a corner the step reverses in one sample. Sampled across the
+      whole cycle rather than near the two joins, because "where is the join"
+      is exactly the thing a future retune moves.
+    */
+    const SAMPLES = 4000
+    const step = (i: number): number =>
+      breathAt((BREATH_PERIOD_MS * i) / SAMPLES) - breathAt((BREATH_PERIOD_MS * (i - 1)) / SAMPLES)
+
+    let worstStep = 0
+    let worstBend = 0
+    let previous = step(1)
+    for (let i = 2; i <= SAMPLES; i++) {
+      const current = step(i)
+      worstStep = Math.max(worstStep, Math.abs(current))
+      worstBend = Math.max(worstBend, Math.abs(current - previous))
+      previous = current
+    }
+    // Continuous: the steepest point of a raised cosine over 40% of the cycle
+    // is about 3.9 per unit phase, so ~0.001 per sample at this resolution.
+    expect(worstStep).toBeLessThan(0.005)
+    // Smooth: the cosine bends by ~2e-6 per sample here. Two linear ramps
+    // meeting at the peak reverse by ~1e-3, five hundred times more.
+    expect(worstBend).toBeLessThan(1e-5)
+  })
+
+  it('never goes negative, at any phase of any period', () => {
+    /*
+      The assertion the whole shape exists for, and it is stated over the whole
+      cycle rather than at the old trough alone -- a sine shifted by any other
+      amount would still pass a single-point check.
+
+      A negative breath drives `squash` negative, and negative squash stretches
+      her taller and NARROWER: it is the deformation `sad` and `surprised` are
+      made of, at a fraction of their strength. Her crown went pointy once every
+      3.4 seconds for exactly this reason. Rest is a floor, not a midpoint.
+    */
+    for (const periodMs of [200, BREATH_PERIOD_MS, 20_000]) {
+      for (let i = 0; i <= 400; i++) {
+        const at = (periodMs * i) / 100
+        const breath = breathAt(at, periodMs)
+        expect(breath, `t=${at} of ${periodMs}ms`).toBeGreaterThanOrEqual(0)
+        expect(breath, `t=${at} of ${periodMs}ms`).toBeLessThanOrEqual(1)
+      }
+    }
   })
 
   it('returns zero for nonsense rather than NaN', () => {

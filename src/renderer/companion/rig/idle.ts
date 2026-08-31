@@ -39,10 +39,32 @@ export const BLINK_DURATION_MS = 130
  */
 const BLINK_CLOSE_FRACTION = 0.35
 
+/**
+ * Fraction of a breath spent inhaling, the rest exhaling.
+ *
+ * Not symmetric, for the reason `BLINK_CLOSE_FRACTION` is not, and the
+ * mechanism is the same shape: inspiration is muscular and expiration is
+ * elastic recoil, so a resting breath goes in faster than it comes out. Around
+ * 1:1.5 at rest, which is this number.
+ *
+ * The gentle end of the plausible range, deliberately. A blink is over in 130ms
+ * and has to be sharp to read at all; a breath runs for 3.4 SECONDS, so the
+ * asymmetry has all the time it needs, and pushing it further makes the inhale
+ * read as a gasp -- an event, which is exactly what an idle layer must not
+ * produce.
+ */
+const BREATH_IN_FRACTION = 0.4
+
 export interface IdlePose {
   /** 0..1, where 1 is fully shut. */
   readonly blink: number
-  /** -1..1. Positive is inhaled. */
+  /**
+   * 0..1, where 0 is resting and 1 is fully inhaled. Never negative.
+   *
+   * ONE-SIDED, and the sign is the whole of it -- see `breathAt`. The resting
+   * silhouette is a floor she returns to rather than a midpoint she oscillates
+   * about.
+   */
   readonly breath: number
 }
 
@@ -124,12 +146,53 @@ export function driftAt(now: MonotonicMs, scale = 1): Drift {
 }
 
 /**
- * A sine rather than a triangle: the turnaround at each end of a breath is
- * gradual, and a linear ramp gives the body a visible tick at the top.
+ * The breath, as a fraction of a full inhale. 0 at rest, 1 fully inhaled.
+ *
+ * Raised cosines rather than ramps: the turnaround at each end is gradual, and
+ * a linear ramp gives the body a visible tick at the top. One cycle per period,
+ * starting and ending at rest, peaking at `BREATH_IN_FRACTION` of the way
+ * through.
+ *
+ * TWO half-cosines rather than one whole one, because the halves are different
+ * lengths -- see `BREATH_IN_FRACTION`. Each meets the other with zero slope, at
+ * the peak and at rest alike, so neither join is visible; at a fraction of 0.5
+ * the pair collapses exactly to the single cosine this replaced.
+ *
+ * ## ONE-SIDED, and that is the point of it
+ *
+ * This was a plain sine over -1..1, and the negative half was the defect. The
+ * breath is summed into `squash` (see `mochi.ts`), which is an area-preserving
+ * trade: positive spreads her, negative stretches her taller and NARROWER. So
+ * for half of every cycle she wore a fraction of the same deformation `sad`
+ * (-0.11) and `surprised` (-0.16) are made of -- measured at 42% of `sad`'s
+ * crown-sharpening at the extreme, on the same axis.
+ *
+ * That reads as her head going pointy on a 3.4-second loop, and it corresponds
+ * to nothing a body does: inhaling expands, exhaling returns to rest. Nothing
+ * makes you taller and thinner than resting.
+ *
+ * The crown is where it showed first because it sharpens FASTER than the body
+ * lengthens -- width a fixed distance below the apex scales as
+ * `f^(1 + 1/upperShoulder)`, about `f^1.54` at the tuned 1.86, against `f^-1`
+ * for the height. Halving the amplitude alone would therefore not have fixed
+ * it, only slowed it down; removing the negative half does, by construction.
+ *
+ * The consequence worth stating: the silhouette measured against
+ * `rig/__fixtures__/mochi-icon.png` is now a FLOOR she returns to once per
+ * cycle, rather than a midpoint she is above half the time.
  */
 export function breathAt(now: MonotonicMs, periodMs: number = BREATH_PERIOD_MS): number {
   if (!Number.isFinite(now) || !(periodMs > 0)) return 0
-  return Math.sin((2 * Math.PI * now) / periodMs)
+  // Wrapped into 0..1 rather than fed straight to a trig function, because the
+  // curve is piecewise now and the branch is chosen by phase. `%` keeps the
+  // sign of its left operand in JS, so the second modulo is what stops a
+  // negative timestamp landing in the wrong half.
+  const phase = (((now % periodMs) + periodMs) % periodMs) / periodMs
+  const rising = phase < BREATH_IN_FRACTION
+  const t = rising
+    ? phase / BREATH_IN_FRACTION
+    : (phase - BREATH_IN_FRACTION) / (1 - BREATH_IN_FRACTION)
+  return rising ? (1 - Math.cos(Math.PI * t)) / 2 : (1 + Math.cos(Math.PI * t)) / 2
 }
 
 /**

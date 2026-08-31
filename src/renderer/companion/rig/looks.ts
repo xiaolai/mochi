@@ -179,11 +179,23 @@ export const LOOKS: Readonly<Record<Emotion, Look>> = {
     mouthAlpha: 0,
     cheek: 0.22,
     gazeY: 0.34,
-    // 0.09, down from 0.19. `sleepy` is what she wears for the whole time she
-    // is asleep, which is most of her life, so it is the pose she is judged on
-    // -- and at 0.19 plus a breath she spread to 1.24 times her width and read
-    // as a puddle rather than as something resting.
-    squash: 0.09,
+    /*
+      0.11, up from 0.09, which had itself been cut from 0.19.
+
+      `sleepy` is what she wears for the whole time she is asleep, which is most
+      of her life, so it is the pose she is judged on -- and at 0.19 plus a
+      breath she spread to 1.24 times her width and read as a puddle rather than
+      as something resting. The cut was applied HERE, to the resting pose,
+      because the breath it was summed with reached +0.045 and could not be
+      argued with.
+
+      That breath is one-sided now and reaches +0.024, so the same ceiling buys
+      a fuller resting pose: 0.11 + 0.024 is 0.134, against the 0.135 the old
+      pair already peaked at. Every frame she can draw asleep is a frame the
+      previous version also drew -- which is the argument for the number, and
+      the reason it is not simply put back to 0.19.
+    */
+    squash: 0.11,
   },
 }
 

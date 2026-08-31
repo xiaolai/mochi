@@ -195,6 +195,33 @@ describe('the deformation limits the window is sized against', () => {
       expect(Math.abs(look.squash), emotion).toBeLessThanOrEqual(SQUASH_LIMIT)
     }
   })
+
+  it('no look plus a full breath does either', () => {
+    /*
+      The check above reads the table one look at a time, and the rig does not:
+      `mochi.ts` SUMS the look, the breath, any clip and any poke into one
+      squash target. So a look inside the limit on its own can still be outside
+      it while she is breathing, and nothing here noticed.
+
+      That is not hypothetical. `looks.ts` records `sleepy` being cut from 0.19
+      because "at 0.19 plus a breath she spread to 1.24 times her width" — found
+      by looking at her, because no test was watching this sum. This is the test
+      that was missing.
+
+      The breath is one-sided and positive, so it can only worsen a look that
+      already spreads her; against a negative look it pulls back toward rest,
+      which is why the two directions are checked differently rather than with
+      an absolute value.
+
+      Scoped to the built-in face's `breathAmp`. A downloaded avatar picks its
+      own within `FACE_BOUNDS`, and the render-time clamp is what holds there —
+      a data file cannot be constrained by a test in this repository.
+    */
+    for (const [emotion, look] of Object.entries(LOOKS)) {
+      expect(look.squash + MOCHI.breathAmp, `${emotion} + inhale`).toBeLessThanOrEqual(SQUASH_LIMIT)
+      expect(-look.squash, `${emotion} stretched`).toBeLessThanOrEqual(SQUASH_LIMIT)
+    }
+  })
 })
 
 describe('fitToCanvas', () => {

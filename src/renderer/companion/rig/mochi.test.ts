@@ -1253,8 +1253,10 @@ describe('asked for less movement', () => {
     return Buffer.from(r.ctx.getImageData(0, 0, WIDTH, HEIGHT).data).toString('base64')
   }
 
-  // Half a breath apart, so the idle layer is at its two extremes rather than
-  // wherever a round number happens to land.
+  // Half a breath apart, so the idle layer is far from where it started rather
+  // than wherever a round number happens to land. NOT the two extremes: the
+  // breath is asymmetric in time and peaks at 0.4 of the period, so nothing
+  // half a cycle apart sits on both ends of it. Far enough is all this needs.
   const APART = BREATH_PERIOD_MS / 2
 
   /** Sixty frames of spring settling, so a comparison is about the idle layer. */
@@ -1429,11 +1431,13 @@ describe('the breath runs at the speed the face asks for', () => {
     stayed green and the only symptom was a knob that did nothing.
 
     Pinned by PERIOD rather than by amplitude, because that is what the field
-    names. At 850ms a 3400ms breath is at its inhaled extreme and a 1700ms one
-    has come all the way back to rest, so the two bodies are different heights
-    at the same instant -- and were byte-identical before this was wired.
+    names. At 1700ms a 3400ms breath is near the top of its inhale and a 1700ms
+    one has come all the way back to rest, so the two bodies are different
+    heights at the same instant -- and were byte-identical before this was
+    wired. Near rather than exactly at the top: the breath peaks at 0.4 of its
+    period, not half way.
   */
-  const HEIGHT_AT = 850
+  const HEIGHT_AT = 1700
 
   /** Painted body height in device pixels: bottom row minus top row. */
   const paintedHeight = (breathMs: number): number => {
@@ -1479,10 +1483,11 @@ describe('the breath runs at the speed the face asks for', () => {
     /*
       Direction as well as difference, so this cannot pass on noise.
 
-      At 850ms the 3400ms breath is fully inhaled and the 1700ms one has come
-      back to rest. Inhaled is SHORTER here: `breath` positive drives `squash`
-      positive, and `squashed` trades height for width -- so she spreads rather
-      than rises. The tall, narrow half of the cycle is the exhale.
+      At 1700ms the 3400ms breath is near the top of its inhale and the 1700ms
+      one has returned to rest. Inhaled is SHORTER: `breath` drives `squash` positive,
+      and `squashed` trades height for width, so she spreads rather than rises.
+      Rest is her TALLEST -- the breath is one-sided and cannot stretch her
+      past the resting silhouette. See `breathAt`.
     */
     expect(paintedHeight(BREATH_PERIOD_MS)).toBeLessThan(paintedHeight(BREATH_PERIOD_MS / 2))
   })
