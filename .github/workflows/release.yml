@@ -45,9 +45,15 @@ on:
     tags:
       - 'v*'
 
-# Creating a release and uploading assets is a write.
+# `contents` to create the release and upload its assets. `actions` to hand the
+# version to `update-homebrew.yml` at the end — dispatching a workflow is an
+# Actions write, and with only `contents` the built-in token gets HTTP 403
+# "Resource not accessible by integration" from the dispatch endpoint. That is
+# how the first successful release ended: everything signed, notarized, verified
+# and published, and the tap never told.
 permissions:
   contents: write
+  actions: write
 
 # Never two releases of one tag at once, and never cancel one in flight: a
 # half-uploaded release is worse than a slow one, and the tap job downstream
