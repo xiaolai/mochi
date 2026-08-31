@@ -327,10 +327,38 @@ const ROOT = process.cwd()
  * "long enough on my machine", which is the same guess that makes a suite flaky
  * on a slower one. Frames are the thing actually being waited for.
  */
+/*
+  RACED AGAINST A TIMER, because frames are not guaranteed to arrive at all.
+
+  `requestAnimationFrame` does not fire in a window Chromium considers hidden or
+  occluded — another window laid over this one, the display asleep, a Space
+  switched away. The gate drives a REAL window on a REAL desktop, so that is not
+  a rare condition, it is whatever else the machine happens to be doing.
+
+  Two rAFs plus `awaitPromise: true` therefore had a state with no exit: frames
+  stopped, the promise never resolved, `Runtime.evaluate` never replied, and the
+  whole run stalled at whichever check happened to be in flight. Measured on
+  2026-08-31 at roughly one run in five, dying at check 6 once and check 26
+  another time — the randomness is what says it belongs to the window's
+  visibility rather than to any check.
+
+  The frames are still the thing waited for, and still win whenever they come:
+  the fast path is unchanged at about 93ms. The timer only decides what happens
+  when they do not. It is deliberately 20x the frame path, so a merely SLOW
+  machine still settles on frames rather than being quietly switched to a fixed
+  sleep — which is the guess this function was written to get away from.
+
+  Measurements survive the fallback. `getBoundingClientRect` and
+  `getComputedStyle` are answered from layout, and layout runs whether or not
+  anything is painted; it is the paint that stops.
+*/
 async function settle(page) {
   await page.run(
-    `new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => ` +
-      `setTimeout(() => done(true), 60))))`,
+    `Promise.race([` +
+      `new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => ` +
+      `setTimeout(() => done('frames'), 60)))), ` +
+      `new Promise((done) => setTimeout(() => done('unpainted'), 2000))` +
+      `])`,
   )
 }
 
@@ -417,27 +445,102 @@ async function waitForTarget(match, tries = 300) {
   return null
 }
 
+/*
+  How long one debugging request may go unanswered before it is a hang.
+
+  A HANG DETECTOR, not a performance budget. Every call under it is a
+  `Runtime.evaluate` over a laid-out window or an `Emulation.*` toggle, and those
+  answer in single-digit milliseconds; the heaviest thing here is a full-page
+  screenshot at 1600px, which is still comfortably under a second. Thirty seconds
+  is far enough above the real work that tripping it means no answer is coming,
+  and far enough below `BUDGET_MS` that the failing METHOD gets named instead of
+  the whole run dying anonymously at four minutes.
+*/
+const CDP_TIMEOUT_MS = 30_000
+/** Connecting is a different wait: the app is still starting. */
+const CDP_CONNECT_MS = 60_000
+
 async function attach(target) {
   const { default: WS } = await import('ws')
   const ws = new WS(target.webSocketDebuggerUrl)
   await new Promise((res, rej) => {
-    ws.onopen = res
-    ws.onerror = rej
+    // The connect had no timeout either, and an app that starts without ever
+    // accepting the socket left this awaiting forever — before the watchdog was
+    // armed, that was the silent exit 13 with no output at all.
+    const timer = setTimeout(
+      () => rej(new Error(`the debugging socket never opened in ${CDP_CONNECT_MS / 1000}s`)),
+      CDP_CONNECT_MS,
+    )
+    ws.onopen = () => {
+      clearTimeout(timer)
+      res()
+    }
+    ws.onerror = (event) => {
+      clearTimeout(timer)
+      rej(
+        new Error(`the debugging socket refused the connection: ${event?.message ?? 'no reason'}`),
+      )
+    }
   })
   let id = 0
   const pending = new Map()
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data)
-    if (message.id && pending.has(message.id)) {
-      pending.get(message.id)(message)
+    const waiting = message.id ? pending.get(message.id) : undefined
+    if (waiting) {
       pending.delete(message.id)
+      waiting.resolve(message)
     }
   }
+  /*
+    A DEAD SOCKET FAILS EVERY REQUEST WAITING ON IT.
+
+    Without this a renderer that goes away mid-run leaves each in-flight promise
+    unsettled, which is indistinguishable from a slow answer and lasts forever.
+  */
+  const abandon = (why) => {
+    for (const waiting of pending.values()) waiting.reject(new Error(why))
+    pending.clear()
+  }
+  ws.onclose = () => abandon('the debugging socket closed with a request in flight')
+  ws.onerror = (event) => abandon(`the debugging socket errored: ${event?.message ?? 'no reason'}`)
+
+  /*
+    Every request can now FAIL, and that is the whole of this change.
+
+    It was `new Promise((res) => ...)` — no reject path, no timeout, and no
+    handler for the socket dying. So a reply that never came was not an error, it
+    was a promise that stayed pending for the life of the process. Hit twice on
+    2026-08-31: once as a silent exit 13 (Node ending on an unsettled top-level
+    await, no output at all), and once as a four-minute stall entering the
+    dark-theme half of the contrast check, which is where `setEmulatedMedia` got
+    no answer.
+
+    Rejecting names the method and fails that one check. It does NOT explain why
+    a reply went missing — that cause is still unknown and not reproducible on
+    demand — but it turns an anonymous hang into a line that says which call
+    stopped answering, which is the difference between a gate that can be
+    debugged and one that can only be re-run.
+  */
   const send = (method, params = {}) =>
-    new Promise((res) => {
+    new Promise((resolve, reject) => {
       id += 1
-      pending.set(id, res)
-      ws.send(JSON.stringify({ id, method, params }))
+      const key = id
+      const timer = setTimeout(() => {
+        pending.delete(key)
+        reject(new Error(`${method} got no reply in ${CDP_TIMEOUT_MS / 1000}s`))
+      }, CDP_TIMEOUT_MS)
+      pending.set(key, {
+        resolve: (message) => {
+          clearTimeout(timer)
+          resolve(message)
+        },
+        reject: (error) => {
+          clearTimeout(timer)
+          reject(error)
+        },
+      })
+      ws.send(JSON.stringify({ id: key, method, params }))
     })
   await send('Runtime.enable')
   return {
@@ -464,7 +567,28 @@ function launch(userData) {
   // debugging port -- which the next run then attaches to, and reports on.
   const app = spawn(
     electronBinary(),
-    ['.', `--user-data-dir=${userData}`, `--remote-debugging-port=${PORT}`],
+    [
+      '.',
+      `--user-data-dir=${userData}`,
+      `--remote-debugging-port=${PORT}`,
+      /*
+        Keep the window awake even when the desktop covers it.
+
+        Chromium stops firing `requestAnimationFrame` and throttles timers for a
+        window it considers occluded or backgrounded, and the gate runs on a
+        real desktop where anything can end up on top of it. `settle` no longer
+        HANGS when that happens — it races a timer — but a settle that falls
+        back is a settle that waited 2s instead of 93ms, so these keep the fast
+        path available rather than relying on the backstop.
+
+        Flags rather than `backgroundThrottling: false` on the window: that
+        would be a change to the product for a test's benefit, and the app has
+        no reason to carry it.
+      */
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-background-timer-throttling',
+    ],
     {
       cwd: ROOT,
       env: { ...process.env, NODE_ENV: 'production' },
@@ -3434,5 +3558,35 @@ const watchdog = setTimeout(() => {
   }
   process.exit(1)
 }, BUDGET_MS)
-watchdog.unref()
-await main()
+/*
+  NOT `unref`ed, and that one word was the hole in this whole arrangement.
+
+  An unref'd timer explicitly does not keep the event loop alive. So the one
+  case the watchdog exists for — `main` hanging on something that never settles,
+  an Electron launch or a debugging-port connect that gets no answer — was the
+  case it could not catch: with nothing else pending, the loop DRAINED, and Node
+  ended the process for an unsettled top-level await before the budget was
+  anywhere near spent.
+
+  That exit code is 13, and the failure is close to silent. `pnpm` reports
+  `ELIFECYCLE Command failed with exit code 13` and nothing else, and none of
+  the text above ever prints — no budget message, no failing check, no clue that
+  a gate ran at all. Worse, the kill below is skipped too, so the detached
+  Electron survives holding the debugging port, which is the exact stale-process
+  hang the comment above says was "seen for real today, twice". A silent 13 was
+  therefore not just a lost run, it poisoned the next one.
+
+  Reproduced before changing it, at three seconds rather than four minutes:
+  `setTimeout(...).unref()` with a promise that never settles exits 13 without
+  firing; the same script without the `unref` prints its message and exits 1.
+
+  `clearTimeout` in a `finally` is what the `unref` was reaching for. A normal
+  run always ends in `process.exit`, so the timer could never have delayed one —
+  but if `main` ever returns instead, this stops a pending four-minute timer
+  holding the process open, without also disarming the watchdog.
+*/
+try {
+  await main()
+} finally {
+  clearTimeout(watchdog)
+}
