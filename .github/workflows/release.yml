@@ -290,3 +290,47 @@ jobs:
           set -euo pipefail
           gh workflow run update-homebrew.yml --repo "$REPO" -f version="$VERSION"
           echo "Asked the tap to move to $VERSION"
+
+      # ---- and take the old ones down --------------------------------------
+      #
+      # Two releases, and the tags are kept forever. A release holds two disk
+      # images and two zips — about half a gigabyte each — and nothing needs the
+      # one from four versions ago. A tag costs nothing and is the provenance:
+      # `git describe` and every "what was in that build" question reads tags,
+      # not releases, so `--cleanup-tag` is never passed.
+      #
+      # `continue-on-error`, unlike the tap dispatch above, and the difference is
+      # the stakes. A tap that does not move means people do not get the update;
+      # a release that does not get deleted means storage. The first should stop
+      # the run red, the second should not pretend the release failed.
+      - name: Keep the newest two releases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEP: '2'
+        run: |
+          set -euo pipefail
+          OLD=$(gh release list --repo "$REPO" --exclude-drafts --json tagName,publishedAt \
+            --jq "sort_by(.publishedAt) | reverse | .[${KEEP}:][].tagName")
+          if [ -z "$OLD" ]; then
+            echo "nothing older than the newest ${KEEP}"
+            exit 0
+          fi
+
+          # The cask's URLs point at ONE release, and the tap update dispatched
+          # above is asynchronous — it waits for these very assets and takes
+          # minutes, so at this moment the cask still names the PREVIOUS version.
+          # Deleting the release it names would 404 every `brew install` until
+          # the tap caught up.
+          CASK=$(gh api repos/xiaolai/homebrew-tap/contents/Casks/mochi.rb --jq '.content' 2>/dev/null \
+            | base64 -d | grep -m1 '^  version "' | sed 's/.*version "\(.*\)".*/\1/' || echo "")
+          echo "the cask currently ships: ${CASK:-unknown}"
+
+          for tag in $OLD; do
+            if [ -n "$CASK" ] && [ "$tag" = "v$CASK" ]; then
+              echo "keeping $tag — the Homebrew cask still points at it"
+              continue
+            fi
+            echo "deleting the release $tag (its tag stays)"
+            gh release delete "$tag" --repo "$REPO" --yes
+          done
