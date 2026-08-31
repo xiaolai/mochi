@@ -2360,6 +2360,9 @@ const machineHandlers: PaneHandlers = {
   showProfile: () => {
     window.mochiSettings.showProfile()
   },
+  openLink: (what) => {
+    window.mochiSettings.openLink(what)
+  },
   screen: (change) => {
     void writeMachine(() => window.mochiSettings.screen(change), 'Saved.')
   },

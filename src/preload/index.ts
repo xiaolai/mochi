@@ -1,3 +1,4 @@
+import { type Link } from '@shared/links'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   isCompanionChannel,
@@ -248,6 +249,9 @@ const settings: MochiSettingsApi = {
   },
   reveal(what: Revealable) {
     ipcRenderer.send(guardSettings('settings:reveal'), what)
+  },
+  openLink(what: Link) {
+    ipcRenderer.send(guardSettings('settings:open-link'), what)
   },
   async chooseWorkspace() {
     return (await ipcRenderer.invoke(guardSettings('settings:choose-workspace'))) as ChosenWorkspace

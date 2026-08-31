@@ -24,13 +24,15 @@ import { element } from '../../element'
 import { type Pane } from '../pane'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
-import { field } from '../pane'
+import { field, type PaneHandlers } from '../pane'
+import { AUTHOR, SITE, SOURCE, VERSION, glyphSvg, type Glyph } from '../../history/glyph'
+import { type Link } from '@shared/links'
 
 export const ABOUT: Pane = {
   id: 'about',
   label: 'About',
   attention: () => null,
-  render(view) {
+  render(view, handlers) {
     /*
       THE BUILD, AS ONE LINE — B7's `0.0.1 · arm64 · electron 33`.
 
@@ -57,6 +59,20 @@ export const ABOUT: Pane = {
     )
     return [
       build,
+      /*
+        WHERE TO FIND THE PROJECT, and which build you are holding.
+
+        Four facts that a person goes looking for and that were on no screen:
+        who made it, where the source is, where the site is, and the version —
+        the last of which was only in the build line above, run together with
+        the architecture and the Electron major, where it reads as diagnostics
+        rather than as the number you quote in an issue.
+
+        The first three OPEN; the fourth does not, and it is drawn as a row
+        anyway so the version sits with the other three rather than being the
+        one fact you have to hunt for somewhere else.
+      */
+      links(handlers, view.about.version),
       /*
         WHAT IT IS BUILT ON, which was on no screen.
 
@@ -103,4 +119,51 @@ function builtOn(electron: string): HTMLElement {
     table.append(row)
   }
   return table
+}
+
+/**
+ * The three addresses and the version, as four rows with a glyph each.
+ *
+ * ## The icon never carries the meaning
+ *
+ * Every row says its own words. The glyph is a scanning aid beside them, which
+ * is the rule the microphone mark in the top strip states — an icon alone *"is
+ * only a statement to somebody already looking at it"*. So `aria-hidden` on the
+ * graphic, and nothing here relies on recognising a picture.
+ *
+ * ## Buttons, not anchors
+ *
+ * An `<a href>` in a renderer navigates the window, and this window is the
+ * application. The three that open are `<button>`s that name a KIND, and main
+ * resolves it — see `settings:open-link`. Lucide ships no GitHub mark, so the
+ * source row wears `git-branch` and says where it goes in words.
+ */
+function links(handlers: PaneHandlers, version: string): HTMLElement {
+  const list = element('div', 'about-links')
+  const rows: readonly [Glyph, string, string, Link | null][] = [
+    [AUTHOR, 'Author', '@xiaolai · lixiaolai.com', 'author'],
+    [SOURCE, 'Source', 'github.com/xiaolai/mochi', 'repo'],
+    [SITE, 'Website', 'moch.im', 'site'],
+    [VERSION, 'Version', version, null],
+  ]
+  for (const [glyph, what, said, opens] of rows) {
+    const row = element(opens === null ? 'div' : 'button', 'about-link')
+    if (opens !== null) {
+      const button = row as HTMLButtonElement
+      button.type = 'button'
+      // The words, not "link" — a row announced as its address is a row
+      // somebody can act on without seeing the glyph beside it.
+      button.setAttribute('aria-label', `${what}: ${said}. Opens in your browser.`)
+      button.addEventListener('click', () => {
+        handlers.openLink(opens)
+      })
+    }
+    row.append(
+      glyphSvg(glyph, 15),
+      element('span', 'about-what', what),
+      element('span', 'about-said', said),
+    )
+    list.append(row)
+  }
+  return list
 }

@@ -2520,6 +2520,67 @@
         max-width: none;
       }
 
+      /*
+        WHO MADE IT, WHERE IT LIVES, AND WHICH BUILD — four rows on About.
+
+        A glyph, a word and a value. The first three open in a browser and are
+        `<button>`s, the fourth is a `<div>`; both wear the same class so the
+        column of words lines up whether or not a row happens to be pressable.
+        `button` is reset here because it arrives with a font, a border and a
+        background of its own, none of which belong on a row of text.
+
+        The 88px on the label is what makes the three addresses share a left
+        edge — the same trick `settingRow` uses, and the reason a stack of these
+        reads as a table rather than as four unrelated lines.
+      */
+      .about-links {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s1);
+        margin: var(--s3) 0 0;
+      }
+      .about-link {
+        display: flex;
+        align-items: center;
+        gap: var(--s3);
+        padding: var(--s2) 0;
+        border: 0;
+        background: transparent;
+        font: inherit;
+        color: var(--ink-2);
+        text-align: left;
+      }
+      .about-link svg {
+        flex: none;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        color: var(--ink-3);
+      }
+      .about-what {
+        flex: none;
+        width: 88px;
+        color: var(--ink-3);
+      }
+      .about-said {
+        color: var(--ink);
+      }
+      /*
+        Only the ones that go somewhere respond to the pointer. A hover on the
+        version row would promise a press that does nothing.
+      */
+      button.about-link {
+        cursor: default;
+      }
+      button.about-link:hover .about-said {
+        border-bottom: var(--s-px) solid var(--ink-3);
+      }
+      button.about-link:hover svg {
+        color: var(--ink);
+      }
+
       /* ---- the controls the sections hold ---------------------------------- */
       /*
         `select[multiple]` stood here, and it went with its control.

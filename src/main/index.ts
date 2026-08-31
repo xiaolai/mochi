@@ -15,6 +15,7 @@ import {
 } from 'electron'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { BUBBLE_SIDES, PERSONA_LIMITS, VOICE_NAMES } from '@shared/persona'
+import { LINKS, isLink } from '@shared/links'
 import { BUILT_IN_ID } from '@shared/parse-persona'
 import { PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry, type WireTool } from '@shared/capability/registry'
@@ -3826,6 +3827,27 @@ ipcMain.handle('settings:hearing', (_event, change: unknown): SettingsWrite => {
 ipcMain.handle('settings:codex-recheck', async (): Promise<SettingsCodex> => {
   console.log('[codex] re-checking on request')
   return await checkCodexNow()
+})
+
+/**
+ * Open one of the project's three addresses.
+ *
+ * The kind is checked against `LINKS` rather than the URL being trusted,
+ * because `shell.openExternal` opens anything it is given — a `file://`, a
+ * custom scheme some other application registered — and the renderer is the
+ * process that loads user content. `isLink` is the whole gate, and the list it
+ * checks is three entries long.
+ *
+ * A refusal is logged rather than thrown: nothing on screen is waiting on this,
+ * and a window that asked for a fourth address is a bug in this repository, not
+ * a state a person can be in.
+ */
+listenTo('settings:open-link', (_event, what: unknown) => {
+  if (!isLink(what)) {
+    console.error(`[settings] refusing to open an unknown link: ${String(what)}`)
+    return
+  }
+  void shell.openExternal(LINKS[what])
 })
 
 listenTo('settings:reveal', (_event, what: unknown) => {

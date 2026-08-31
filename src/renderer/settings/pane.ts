@@ -18,6 +18,7 @@ import {
   type SettingsView,
 } from '@shared/ipc'
 import { type ByPronoun } from '@shared/pronoun'
+import { type Link } from '@shared/links'
 export interface PaneHandlers {
   readonly lookup: (change: LookupChange) => void
   /**
@@ -68,6 +69,14 @@ export interface PaneHandlers {
    */
   readonly forgetEveryTalk: () => void
   readonly reveal: (what: Revealable) => void
+  /**
+   * Open one of the project's three addresses in the browser.
+   *
+   * A KIND rather than a URL, all the way down — the pane names `repo`, main
+   * looks it up in `shared/links.ts` and hands `shell.openExternal` a value the
+   * window never had. See `settings:open-link`.
+   */
+  readonly openLink: (what: Link) => void
   readonly say: (text: string, bad?: boolean) => void
 }
 

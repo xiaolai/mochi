@@ -277,6 +277,15 @@ export const SETTINGS_CHANNELS = [
   /** Show me where these files are. A KIND, never a path. */
   'settings:reveal',
   /**
+   * Open one of the project's three addresses in the browser.
+   *
+   * A KIND, never a URL, for `settings:reveal`'s reason and one that is sharper:
+   * `shell.openExternal` opens whatever it is handed, `file://` included, so a
+   * channel taking a string from the window is a channel that opens whatever
+   * ends up in that window. `shared/links.ts` holds the three.
+   */
+  'settings:open-link',
+  /**
    * Change how a lookup runs — the workspace, web search, the Codex profile.
    *
    * ONE channel carrying a partial rather than three carrying a value each.
@@ -1123,6 +1132,8 @@ export interface MochiSettingsApi {
    */
   key(change: KeyChange): Promise<SettingsWrite>
   reveal(what: Revealable): void
+  /** Open the author's site, the repository or the website. See `Link`. */
+  openLink(what: Link): void
   /**
    * Ask for the folder panel, and answer with what was saved.
    *
@@ -1278,6 +1289,7 @@ import type { CodexReadiness, Remedy } from './delegation'
 import type { FaceSpec } from './avatar-spec'
 import type { Emotion } from './avatar'
 import type { Pronoun } from './pronoun'
+import type { Link } from './links'
 import type { ThemeId } from './theme'
 
 /** What `session.update` is built from. Assembled in main; sent by the renderer. */
