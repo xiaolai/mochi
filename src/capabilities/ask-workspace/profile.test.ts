@@ -85,9 +85,10 @@ describe('seeding the profile', () => {
   })
 
   it('tells the truth about what cannot be changed from it', () => {
-    // The avatars README still tells people to run `pnpm tuner`, which does not
-    // exist. A file that lies is worse than one that is missing, and this one is
-    // written into somebody else's config directory.
+    // The avatars README told people to run `pnpm tuner`, a script this repo
+    // does not have, until it was corrected. A file that lies is worse than one
+    // that is missing, and this one is written into somebody else's config
+    // directory.
     const body = readFileSync(seedProfile(root, existsSync).path, 'utf8')
     expect(body).toContain('project_doc_fallback_filenames')
     expect(body).toContain('read-only')

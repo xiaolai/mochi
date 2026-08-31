@@ -39,8 +39,11 @@
  *   `README.txt` beside its example, which is right in a directory we own and
  *   litter in one we do not. TOML comments travel with the thing they describe
  *   and cannot be separated from it.
- * - **Every word of it true.** The avatars README still tells people to run
- *   `pnpm tuner`, which does not exist. A README that lies is worse than none.
+ * - **Every word of it true.** The avatars README told people to run `pnpm
+ *   tuner` for months; there is no such script. A README that lies is worse
+ *   than none, and it is worse still in a directory the reader did not ask you
+ *   to write in. Fixed in `store/avatars.ts` — kept here as the precedent,
+ *   because the rule is what matters and the instance is how it was learned.
  */
 
 import { writeFileSync } from 'node:fs'

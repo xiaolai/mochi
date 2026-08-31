@@ -58,8 +58,6 @@ letter. That is not decoration: the name is joined into a path.
   ${EXAMPLE_FILE}
       The built-in mochi, in this format. Copy it to something.json and edit.
 
-Design one visually with \`pnpm tuner\`; its copy button emits this same shape.
-
 Every field is required and range-checked. Colours must be hex (#8ec8a8).
 `
 
@@ -67,8 +65,18 @@ Every field is required and range-checked. Colours must be hex (#8ec8a8).
  * Write the folder somebody is meant to find, once.
  *
  * Discoverability is not a nicety here: without this the only way to learn the
- * format is to read the source or run the tuner, and a plugin system nobody
- * finds is not a plugin system.
+ * format is to read the source, and a plugin system nobody finds is not a
+ * plugin system.
+ *
+ * THE README USED TO NAME A COMMAND THAT DOES NOT EXIST. It said to design a
+ * face visually with `pnpm tuner`; there is no such script and no
+ * `vite.tuner.config.ts` in this repository. This file is written onto somebody
+ * else's disk and is the only instruction they get, so a sentence in it sending
+ * them to a command that errors is worse than the absence it was filling. The
+ * example file above it is the real answer: copy it, edit it, restart.
+ *
+ * Note that it is seeded `wx`, so an installation that already has the old
+ * README keeps it. Nothing rewrites one, deliberately -- see below.
  *
  * Serialised from the const rather than copied from a build artifact, so the
  * example and the default cannot drift -- the file written IS the default.

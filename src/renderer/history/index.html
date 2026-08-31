@@ -3043,9 +3043,17 @@
         "no control grows with the window" the self-audit asked for, applied to
         the control rather than to everything around it.
       */
+      /*
+        `textarea` is NOT in this list, and its absence is the point.
+        `tokens.css` sets `max-width: none` on one deliberately — "a multi-line
+        field is a panel, not a control" — so capping it here at a single-line
+        control's width contradicted that rule outright. It also matched
+        nothing: `.sheet` is drawn on one screen and there is no textarea on it,
+        so the contradiction was invisible. Whichever rule you believe, the one
+        that never fired was not it.
+      */
       .sheet input[type='text'],
-      .sheet select,
-      .sheet textarea {
+      .sheet select {
         max-width: var(--measure-field);
       }
       /*
@@ -3145,20 +3153,24 @@
         color: var(--ink-3);
       }
 
-      /* The only exit from a screen that is not in the view nav. */
+      /*
+        The only exit from a screen that is not in the view nav — and it now
+        looks like one.
+
+        It was a bare word: transparent, no border, `--ink-2`, at the body size.
+        That is the treatment this window gives a NOTE, so the single control
+        that leaves a drill-down was drawn as a caption about it. On a screen
+        with no other way out, a control nobody recognises is a screen people
+        get stuck on.
+
+        `btn` carries the whole appearance now — pill, hairline, `--paper`,
+        medium weight — which is the same vocabulary as New, Duplicate, Wear and
+        every other pressable word here. What is left below is the one thing
+        that is genuinely about THIS button: it sits at the start of its column
+        rather than stretching across it.
+      */
       .deeper-back {
         align-self: flex-start;
-        padding: 6px var(--s3) 6px 0;
-        border: 0;
-        background: transparent;
-        font-family: var(--sans);
-        font-size: var(--t-ui);
-        color: var(--ink-2);
-        cursor: pointer;
-      }
-
-      .deeper-back:hover {
-        color: var(--ink);
       }
 
       /*

@@ -2593,7 +2593,7 @@ function deeperScreen(shelf: ShelfView, handlers: ShelfHandlers): readonly HTMLE
     content it leaves. It is the only exit: these screens are not in the view
     nav, so closing the window is otherwise the only way out of one.
   */
-  const back = element('button', 'deeper-back', forPronoun(SAYS.backToWho, saying()))
+  const back = element('button', 'btn deeper-back', forPronoun(SAYS.backToWho, saying()))
   back.type = 'button'
   back.addEventListener('click', () => {
     deeperInto = null
