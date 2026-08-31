@@ -50,6 +50,13 @@ import {
  * measured size, which this file creates and nothing else touches — that is the
  * half a code change can regress, and the half a build can act on.
  *
+ * The fixture answered the DISK half of that argument and not the CPU half, and
+ * the CPU half is the one vitest guarantees: 174 files run across every core, so
+ * a stopwatch here was still reporting how busy the machine was. It failed at
+ * 203 ms in a full run and passed at 26 ms alone, on the same commit. See
+ * `timed` — the budgets are asserted on CPU time now, which is the quantity the
+ * code actually controls, with the measurements that settled it.
+ *
  * The live archive can still be measured, and is still bounded at ten times the
  * budget when it is — deliberately loose, to catch a **change of mechanism** on
  * the real thing (putting `sum(length(item_json))` back would be 2,044 ms and
@@ -128,11 +135,56 @@ function home(): string {
   return made
 }
 
-/** Milliseconds for one call, to the tenth. */
-function timed(work: () => void): number {
+/**
+ * CPU milliseconds for one call, to the tenth — and the wall clock beside it.
+ *
+ * ## Why the assertion is on CPU and not on the wall clock
+ *
+ * It was the wall clock, and the wall clock does not measure this code. Vitest
+ * runs 174 test files across every core, so the number a stopwatch returns here
+ * is mostly a statement about how busy the machine was. Measured on the warm
+ * refresh, the same fixture, the same commit:
+ *
+ * |                     | wall          | cpu             |
+ * | ------------------- | ------------- | --------------- |
+ * | file run alone      | 79.5–131.2 ms | 66.5–70.2 ms    |
+ * | full suite in parallel | 119–159.9 ms | 62.7–67.8 ms |
+ * | machine also running the rendered gate | 284–405 ms | — |
+ *
+ * CPU holds inside 12% across all of it; wall doubles, and triples again under
+ * a heavier load. That is the mechanism: contention makes this process WAIT, it
+ * does not make it compute more. A budget asserted on wall time therefore fails
+ * on a busy afternoon and passes on a quiet one, which is the exact property
+ * this file's own header calls "worse than no gate" — it argued it away for DISK
+ * contention by writing a fixture, and left CPU contention in place, which
+ * vitest guarantees.
+ *
+ * The number is unchanged. What changed is which quantity it is asserted
+ * against, and that is a tightening rather than a loosening in every case that
+ * matters: wall time is CPU time plus waiting, so nothing that meets the old
+ * bound fails the new one for a reason belonging to the code.
+ *
+ * ## What this gives up, and where that is covered
+ *
+ * A regression that added disk I/O without adding computation would raise wall
+ * and not CPU, and would slip past this. That half is covered structurally
+ * rather than by a stopwatch: `read.test.ts` asserts the query PLANS — a
+ * covering index for the probe, `idx_thread_items_page` for the per-thread read,
+ * and no temporary B-tree. A plan cannot be slow because the machine is busy,
+ * and a change that started reading pages it used to skip would change it.
+ */
+function timed(work: () => void): { cpu: number; wall: number } {
+  const cpuBefore = process.cpuUsage()
   const began = performance.now()
   work()
-  return Math.round((performance.now() - began) * 10) / 10
+  const wall = performance.now() - began
+  const spent = process.cpuUsage(cpuBefore)
+  return {
+    // `cpuUsage` answers in MICROseconds, and both halves count: the probe is a
+    // scan, so its system time is as much its cost as its user time.
+    cpu: Math.round((spent.user + spent.system) / 100) / 10,
+    wall: Math.round(wall * 10) / 10,
+  }
 }
 
 /**
@@ -142,12 +194,16 @@ function timed(work: () => void): number {
  * whether the warm path CAN meet it in steady state. A mean measures the other
  * processes on the machine; the spread is printed so nobody has to take the
  * winner on trust.
+ *
+ * Wall is printed too, and never asserted on. It is the number a person feels,
+ * so hiding it would make this file harder to reason about than it needs to be
+ * — but it is reported as context rather than as a verdict.
  */
 function bestOfFive(what: string, work: () => void): number {
   const runs = Array.from({ length: 5 }, () => timed(work))
-  const best = Math.min(...runs)
+  const best = Math.min(...runs.map((one) => one.cpu))
   console.log(
-    `[budget] ${what}: ${runs.map((one) => String(one)).join(' / ')} ms (best ${String(best)})`,
+    `[budget] ${what}: ${runs.map((one) => `${String(one.cpu)}cpu/${String(one.wall)}wall`).join(' ')} ms (best cpu ${String(best)})`,
   )
   return best
 }
@@ -212,7 +268,7 @@ describe('the warm refresh stays inside its budget', () => {
       const source: CodexSource = opened.source
       let report = store.refresh(source)
       const best = bestOfFive(
-        `warm refresh over ${String(THREADS)} threads (built in ${String(built)} ms)`,
+        `warm refresh over ${String(THREADS)} threads (built in ${String(built.wall)} ms wall)`,
         () => {
           report = store.refresh(source)
         },
@@ -322,10 +378,10 @@ describe('a query stays inside its budget', () => {
       hits = store.search('watcher seeing the output directory', 5).length
     })
     console.log(
-      `[budget] built ${String(CORPUS)} documents in ${String(built)} ms; ` +
-        `query ${String(query)} ms for ${String(hits)} hits`,
+      `[budget] built ${String(CORPUS)} documents in ${String(built.wall)} ms wall; ` +
+        `query ${String(query.cpu)}cpu/${String(query.wall)}wall ms for ${String(hits)} hits`,
     )
     expect(hits).toBeGreaterThan(0)
-    expect(query).toBeLessThanOrEqual(QUERY_MS)
+    expect(query.cpu).toBeLessThanOrEqual(QUERY_MS)
   }, 180_000)
 })
