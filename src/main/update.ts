@@ -62,8 +62,52 @@ export function updateState(): SettingsUpdate {
  * complains loudly when there is not one, which is every development run. A
  * dynamic import keeps that out of the startup path entirely.
  */
+/**
+ * Find `autoUpdater` on whichever shape the import gives back.
+ *
+ * `electron-updater` is CommonJS and this bundle is CommonJS, but the source
+ * says `await import(...)`, so Node's CJS→ESM interop decides what the namespace
+ * looks like. It detects named exports by STATIC ANALYSIS, and `autoUpdater` is
+ * not a static export — it is an accessor installed with
+ * `Object.defineProperty`, so the analyser cannot see it. The namespace gets
+ * `AppUpdater`, `BaseUpdater`, `CancellationToken` and the rest, and no
+ * `autoUpdater`; the real one is on `.default`.
+ *
+ * Destructuring it directly therefore yielded `undefined`, and the first thing
+ * this module did with it was assign a property:
+ *
+ *     TypeError: Cannot set properties of undefined (setting 'autoDownload')
+ *
+ * Both shapes are accepted rather than the working one being hardcoded: if a
+ * later release adds the static export, that is not a reason for this to break.
+ *
+ * A pure function, and exported, because it is the whole of what went wrong and
+ * the only part of this file that can be tested without an Electron app around
+ * it — reading `.autoUpdater` CONSTRUCTS the updater, which needs `app`.
+ */
+export interface Updater {
+  autoDownload: boolean
+  autoInstallOnAppQuit: boolean
+  logger: unknown
+  checkForUpdates: () => Promise<{ updateInfo?: { version?: string } } | null>
+  downloadUpdate: () => Promise<unknown>
+  quitAndInstall: (silent: boolean, forceRunAfter: boolean) => void
+}
+
+export function pickUpdater(module: unknown): Updater {
+  const shape = module as {
+    autoUpdater?: unknown
+    default?: { autoUpdater?: unknown }
+  }
+  const found = shape.autoUpdater ?? shape.default?.autoUpdater
+  if (found === undefined || found === null) {
+    throw new Error('electron-updater exposed no autoUpdater on either the namespace or `default`')
+  }
+  return found as Updater
+}
+
 async function updater() {
-  const { autoUpdater } = await import('electron-updater')
+  const autoUpdater = pickUpdater(await import('electron-updater'))
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
   // Its own logging is verbose and goes to a file nobody reads. What matters
