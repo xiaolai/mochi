@@ -52,5 +52,8 @@
     "vite": "^7.3.6",
     "vitest": "^4.1.10"
   },
-  "main": "./out/main/index.js"
+  "main": "./out/main/index.js",
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
 }

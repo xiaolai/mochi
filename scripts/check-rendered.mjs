@@ -1537,6 +1537,63 @@ async function checks(page, where = '') {
       )
   })
 
+  await step('about-links', async () => {
+    /* --- pressing an address asks main to open THAT address ---------------- */
+    /*
+      What cannot be established by reading the pane: that each row is wired to
+      its own link. Three buttons calling the same handler with the same
+      argument would look identical in the source and be identical on screen,
+      and the fault would only show as "Website opens the repository".
+
+      Read off `data-opens` rather than pressed. Pressing for real opens three
+      browser tabs on whoever runs the gate, and patching `openLink` to observe
+      instead does not work: `contextBridge` freezes what it exposes, so the
+      assignment fails SILENTLY and the real handler runs anyway. That was tried
+      here, and it opened the tabs it was written to avoid.
+
+      The attribute is the same value the click handler closes over, so this
+      asserts the behaviour rather than a label beside it.
+    */
+    await goTo(page, 'machine')
+    await page.run(
+      `(() => { const t = document.querySelectorAll('#nav-groups .tab')[6]; if (t) t.click(); return true })()`,
+    )
+    await settle(page)
+    const rows = `[...document.querySelectorAll('#machine-pane .about-link')]`
+    const shape = await page.run(`(() => {
+      return ${rows}.map((r) => ({
+        tag: r.tagName.toLowerCase(),
+        what: (r.querySelector('.about-what') || {}).textContent || '',
+        said: (r.querySelector('.about-said') || {}).textContent || '',
+        glyphs: r.querySelectorAll('svg').length,
+      }));
+    })()`)
+    const want = ['Author', 'Source', 'Website', 'Version']
+    if (shape.map((r) => r.what).join(',') !== want.join(',')) {
+      bad(
+        'about-links',
+        `expected ${want.join(', ')}, saw ${JSON.stringify(shape.map((r) => r.what))}`,
+      )
+      return
+    }
+    if (shape.some((r) => r.glyphs !== 1)) {
+      bad('about-links', `every row needs exactly one glyph: ${JSON.stringify(shape)}`)
+      return
+    }
+    if (shape[3].tag !== 'div') {
+      bad('about-links', 'the version row is pressable, and it goes nowhere')
+      return
+    }
+    const opens = await page.run(
+      `${rows}.filter((r) => r.tagName.toLowerCase() === 'button').map((r) => r.dataset.opens)`,
+    )
+    if (opens.join(',') !== 'author,repo,site') {
+      bad('about-links', `each row must open its own address; got ${JSON.stringify(opens)}`)
+    } else {
+      ok('about-links', `${String(shape.length)} rows, and author/repo/site each open their own`)
+    }
+  })
+
   await step('voices', async () => {
     /* --- pressing a voice actually plays that voice ------------------------ */
     /*

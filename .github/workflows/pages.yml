@@ -52,6 +52,12 @@ on:
     paths:
       - 'site/**'
       - '.github/workflows/pages.yml'
+  # A release changes what the site should SAY without changing a file in it —
+  # the version and the download line are written in from the newest release at
+  # deploy time. Without this the page would go on naming the previous one until
+  # somebody happened to edit `site/`.
+  release:
+    types: [published]
   # So a broken deploy can be re-run without an empty commit.
   workflow_dispatch:
 
@@ -74,6 +80,58 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
+
+      # The version is not kept by hand in `site/index.html`; it is written in
+      # here from the newest published release, so the page cannot go on naming
+      # the previous one. Fails closed: if the marked elements are not found, or
+      # there is no release yet, the deploy stops rather than publishing a page
+      # that says "Checking the latest release…" forever.
+      - name: Write the released version into the page
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG=$(gh release view --json tagName --jq .tagName 2>/dev/null || true)
+          if [ -z "$TAG" ]; then
+            echo "::error::no published release to name — deploy stopped"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          python3 - "$VERSION" <<'PY'
+          import re, sys
+          version = sys.argv[1]
+          path = 'site/index.html'
+          html = open(path, encoding='utf-8').read()
+
+          # The English text is the element's body; the Chinese is its `data-zh`.
+          # Both are replaced, because the language toggle swaps between them and
+          # a page that names the version in one language only is worse than one
+          # that names it in neither.
+          def swap(html, key, english, chinese):
+              pattern = re.compile(
+                  r'(<(\w+)[^>]*data-rel="' + key + r'"[^>]*>)(.*?)(</\2>)', re.S)
+              if not pattern.search(html):
+                  raise SystemExit(f'no element carries data-rel="{key}"')
+              html = pattern.sub(lambda m: m.group(1) + english + m.group(4), html, count=1)
+              zh = re.compile(r'(data-rel="' + key + r'"[^>]*data-zh=")([^"]*)(")', re.S)
+              if not zh.search(html):
+                  zh = re.compile(r'(data-zh=")([^"]*)(")[^>]*data-rel="' + key + r'"', re.S)
+              html = zh.sub(lambda m: m.group(1) + chinese + m.group(3), html, count=1)
+              return html
+
+          html = swap(html, 'version',
+                      f'v{version} \u00b7 signed and notarized',
+                      f'v{version} \u00b7 已签名并公证')
+          open(path, 'w', encoding='utf-8').write(html)
+          print(f'  wrote v{version} into the page')
+          PY
+
+          # Proof, not intent: the string has to be in the file that is about to
+          # be uploaded.
+          grep -q "v${VERSION}" site/index.html || {
+            echo "::error::the substitution reported success and changed nothing"
+            exit 1
+          }
 
       - name: Check the site is actually there
         run: |

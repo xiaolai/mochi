@@ -75,6 +75,7 @@ function settled(): SettingsView {
       platform: 'darwin',
       userData: '/u',
     },
+    update: { kind: 'idle' },
     prompts: [],
     folders: { avatars: '/u/avatars', personas: '/u/personas' },
   }

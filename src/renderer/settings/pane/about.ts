@@ -25,6 +25,8 @@ import { type Pane } from '../pane'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
 import { field, type PaneHandlers } from '../pane'
+import { section } from '../../history/sheet/row'
+import { type SettingsUpdate } from '@shared/ipc'
 import { AUTHOR, SITE, SOURCE, VERSION, glyphSvg, type Glyph } from '../../history/glyph'
 import { type Link } from '@shared/links'
 
@@ -73,6 +75,7 @@ export const ABOUT: Pane = {
         one fact you have to hunt for somewhere else.
       */
       links(handlers, view.about.version),
+      updates(view.update, handlers),
       /*
         WHAT IT IS BUILT ON, which was on no screen.
 
@@ -97,10 +100,15 @@ export const ABOUT: Pane = {
  * The four things this build stands on, and the claim that there is nothing
  * else.
  *
- * The last row is the point: "none — zero runtime dependencies" is a statement
- * somebody can check against `package.json`, and it is the reason the other
- * three are listed at all. A list of what a program depends on that omits the
- * total is a list you cannot conclude anything from.
+ * The last row is the point: it states the TOTAL, which is what makes the other
+ * three worth listing. A list of what a program depends on that omits the total
+ * is a list you cannot conclude anything from.
+ *
+ * It read "none — zero runtime dependencies" until `electron-updater` was
+ * added, and the claim came out with the same commit that made it false. That
+ * is the whole value of stating a total on screen: it cannot quietly survive
+ * the change that breaks it. The count is `dependencies` plus everything they
+ * pull in, which is the number that actually ships.
  *
  * Electron's version comes from the running process; the rest are properties of
  * the repository and are written here, beside the sentence that reads them.
@@ -112,7 +120,8 @@ function builtOn(electron: string): HTMLElement {
     ['node:sqlite', 'part of the runtime — no package of its own'],
     ['Outfit', 'SIL OFL 1.1 · bundled'],
     ['JetBrains Mono', 'SIL OFL 1.1 · bundled'],
-    ['everything else', 'none — zero runtime dependencies'],
+    ['electron-updater', 'MIT · the only runtime dependency, and what it pulls in'],
+    ['everything else', 'none — nothing else is bundled'],
   ] as const) {
     const row = element('div', 'built-row')
     row.append(element('span', 'built-what', what), element('span', 'built-detail', detail))
@@ -154,6 +163,18 @@ function links(handlers: PaneHandlers, version: string): HTMLElement {
       // The words, not "link" — a row announced as its address is a row
       // somebody can act on without seeing the glyph beside it.
       button.setAttribute('aria-label', `${what}: ${said}. Opens in your browser.`)
+      /*
+        The kind, on the element as well as in the closure.
+        
+        Not decoration and not for CSS: it is how the rendered gate can assert
+        that Website opens the site and Source opens the repository without
+        pressing anything. Pressing for real opens a browser, and a check that
+        opens three tabs on whoever runs it is a check people disable.
+        
+        It is the SAME `opens` the handler below closes over, so the attribute
+        cannot drift from the behaviour — one value, read twice.
+      */
+      button.dataset['opens'] = opens
       button.addEventListener('click', () => {
         handlers.openLink(opens)
       })
@@ -166,4 +187,76 @@ function links(handlers: PaneHandlers, version: string): HTMLElement {
     list.append(row)
   }
   return list
+}
+
+/**
+ * Whether there is a newer build, and the one press that moves it along.
+ *
+ * ## One control, three meanings
+ *
+ * Look, fetch, restart. They are three different acts with three different
+ * costs — a request, a 120MB download, and replacing the running application —
+ * and putting three buttons on screen would ask somebody to choose between
+ * verbs when only one of them is ever available. The button says what it will
+ * do next, and what it will do next is decided by what the last one found.
+ *
+ * ## Nothing happens on its own
+ *
+ * `update.ts` turns off `autoDownload` and `autoInstallOnAppQuit`. She sits on
+ * a desktop all day; fetching 120MB unasked, on a connection that may be
+ * metered, and then replacing herself at the next quit are two things nobody
+ * agreed to. So this row does nothing at all until it is pressed.
+ */
+function updates(state: SettingsUpdate, handlers: PaneHandlers): HTMLElement {
+  const said: Record<SettingsUpdate['kind'], string> = {
+    unsupported: 'Only a packaged build can update itself — this one is running from source.',
+    idle: 'Not checked yet.',
+    none: 'This is the newest build.',
+    available: 'A newer build is out.',
+    ready: 'Downloaded. It replaces this one when you restart.',
+    failed: 'Could not check.',
+  }
+  const note = element('p', 'note', said[state.kind])
+  if (state.kind === 'failed') note.textContent = `Could not check — ${state.why}`
+  if (state.kind === 'available') note.textContent = `${state.version} is out.`
+
+  const press = element('button', 'btn')
+  press.type = 'button'
+  const act: { label: string; run: () => void } | null =
+    state.kind === 'unsupported'
+      ? null
+      : state.kind === 'available'
+        ? {
+            label: `Download ${state.version}`,
+            run: () => {
+              press.disabled = true
+              press.textContent = 'Downloading…'
+              void handlers.downloadUpdate()
+            },
+          }
+        : state.kind === 'ready'
+          ? {
+              label: `Restart and install ${state.version}`,
+              run: () => {
+                handlers.installUpdate()
+              },
+            }
+          : {
+              label: 'Check for updates',
+              run: () => {
+                press.disabled = true
+                press.textContent = 'Checking…'
+                void handlers.checkUpdate()
+              },
+            }
+
+  const body: HTMLElement[] = [note]
+  if (act !== null) {
+    press.textContent = act.label
+    press.addEventListener('click', act.run)
+    body.push(press)
+  }
+  const wrap = element('div', 'about-updates')
+  wrap.append(...body)
+  return section('Updates', state.kind === 'none' ? 'up to date' : '', wrap)
 }

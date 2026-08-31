@@ -2363,6 +2363,22 @@ const machineHandlers: PaneHandlers = {
   openLink: (what) => {
     window.mochiSettings.openLink(what)
   },
+  checkUpdate: async () => {
+    const found = await window.mochiSettings.checkUpdate()
+    // RE-READ rather than patch the held view, for `recheckCodex`'s reason: the
+    // status decides what the button says and what the row reads, and writing
+    // one into the view by hand leaves whichever of those nobody remembered.
+    await loadMachine()
+    return found
+  },
+  downloadUpdate: async () => {
+    const found = await window.mochiSettings.downloadUpdate()
+    await loadMachine()
+    return found
+  },
+  installUpdate: () => {
+    window.mochiSettings.installUpdate()
+  },
   screen: (change) => {
     void writeMachine(() => window.mochiSettings.screen(change), 'Saved.')
   },

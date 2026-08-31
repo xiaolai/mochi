@@ -2571,14 +2571,42 @@
         Only the ones that go somewhere respond to the pointer. A hover on the
         version row would promise a press that does nothing.
       */
+      /*
+        POINTER, which is a deliberate exception to this window's own rule.
+
+        `button.btn` sets `cursor: default`, because a pill already looks
+        pressable and the arrow is what the rest of the interface uses. These
+        rows are not pills — they are a line of text with a glyph beside it, and
+        the only thing that can say "this goes somewhere" before you press it is
+        the cursor and the underline below.
+
+        The version row is a `<div>` and gets neither, because a hover that
+        promises a press it cannot honour is worse than no affordance.
+      */
       button.about-link {
-        cursor: default;
+        cursor: pointer;
+      }
+      button.about-link .about-said {
+        border-bottom: var(--s-px) solid var(--rule-2);
       }
       button.about-link:hover .about-said {
         border-bottom: var(--s-px) solid var(--ink-3);
       }
       button.about-link:hover svg {
         color: var(--ink);
+      }
+
+      /*
+        The update row: a sentence and, when there is something to do, one
+        button under it. The button is absent rather than disabled when there is
+        nothing to press — an unpackaged build cannot update itself, and a dead
+        control is a worse answer than no control.
+      */
+      .about-updates {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--s3);
       }
 
       /* ---- the controls the sections hold ---------------------------------- */

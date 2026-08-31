@@ -527,7 +527,23 @@
             >
               A small companion who lives on your desktop and talks back.
             </p>
-            <p class="status" data-zh="开发中 · 尚未发布">In development · not yet released</p>
+            <!--
+              THE VERSION IS WRITTEN IN AT DEPLOY, not kept by hand.
+
+              This said "In development · not yet released" for as long as that
+              was true and for a while after it stopped being — which is what a
+              status somebody has to remember to edit always does. `pages.yml`
+              substitutes the newest published release into the two `data-rel`
+              elements below and FAILS if it cannot find them, so the site
+              cannot be deployed still claiming the previous version.
+
+              What is committed here is the fallback, and it is written to be
+              true rather than convenient: opened straight off disk, with no
+              deploy step, this file cannot know what is released, and says so.
+            -->
+            <p class="status" data-rel="version" data-zh="正在读取最新版本…">
+              Checking the latest release…
+            </p>
           </div>
           <img
             src="./art/mochi-awake.png"
@@ -745,10 +761,11 @@
             <div>
               <dt data-zh="下载">Download</dt>
               <dd
-                data-zh="还没有。构建产物已签名，但公证（notarization）是有意还没做 —— 那一步会把二进制上传给苹果，得先有人决定。"
+                data-rel="download"
+                data-zh="用 Homebrew：<code>brew install --cask xiaolai/tap/mochi</code>。构建产物经过签名与公证，磁盘映像也一样。"
               >
-                None yet. Builds are signed, but notarization is deliberately not run — that step
-                uploads the binary to Apple, and it is a decision rather than a build step.
+                With Homebrew: <code>brew install --cask xiaolai/tap/mochi</code>. Signed and
+                notarized — the app and the disk image both.
               </dd>
             </div>
             <!--

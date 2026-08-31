@@ -286,6 +286,17 @@ export const SETTINGS_CHANNELS = [
    */
   'settings:open-link',
   /**
+   * Ask the release page whether there is a newer build.
+   *
+   * Three channels rather than one taking a verb, because they are three
+   * different acts with three different costs: a request, a 120MB download, and
+   * replacing the running application. A single channel would make them look
+   * interchangeable to the next reader.
+   */
+  'settings:check-update',
+  'settings:download-update',
+  'settings:install-update',
+  /**
    * Change how a lookup runs — the workspace, web search, the Codex profile.
    *
    * ONE channel carrying a partial rather than three carrying a value each.
@@ -580,6 +591,22 @@ export interface KeyChange {
 }
 
 /** What this build is, and where the rest of it went. */
+/**
+ * Whether there is a newer build, as one of six answers.
+ *
+ * `unsupported` is not a failure: an unpackaged build has no `app-update.yml`
+ * and nothing to verify a download against, and saying so is better than a red
+ * error in a development window. `none` carries WHEN it was checked, because
+ * "no update" with no date is a claim that ages badly and cannot be judged.
+ */
+export type SettingsUpdate =
+  | { readonly kind: 'unsupported' }
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'none'; readonly checkedAt: number }
+  | { readonly kind: 'available'; readonly version: string }
+  | { readonly kind: 'ready'; readonly version: string }
+  | { readonly kind: 'failed'; readonly why: string }
+
 export interface SettingsAbout {
   readonly name: string
   readonly version: string
@@ -1035,6 +1062,8 @@ export interface SettingsView {
   readonly prompts: readonly SettingsPrompt[]
   readonly keys: readonly SettingsKey[]
   readonly about: SettingsAbout
+  /** Whether there is a newer build. See `SettingsUpdate`. */
+  readonly update: SettingsUpdate
   /** Named for display. Opening one goes through `settings:reveal` by kind. */
   readonly folders: Readonly<Record<Revealable, string>>
 }
@@ -1134,6 +1163,12 @@ export interface MochiSettingsApi {
   reveal(what: Revealable): void
   /** Open the author's site, the repository or the website. See `Link`. */
   openLink(what: Link): void
+  /** Look. Answers with what it found; nothing is fetched. */
+  checkUpdate(): Promise<SettingsUpdate>
+  /** Fetch it. Resolves when the download has landed, not when it starts. */
+  downloadUpdate(): Promise<SettingsUpdate>
+  /** Quit and install what was downloaded. Returns only if it declined to. */
+  installUpdate(): void
   /**
    * Ask for the folder panel, and answer with what was saved.
    *

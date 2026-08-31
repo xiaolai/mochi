@@ -16,6 +16,7 @@ import {
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { BUBBLE_SIDES, PERSONA_LIMITS, VOICE_NAMES } from '@shared/persona'
 import { LINKS, isLink } from '@shared/links'
+import { checkForUpdate, downloadUpdate, installUpdate, updateState } from './update'
 import { BUILT_IN_ID } from '@shared/parse-persona'
 import { PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry, type WireTool } from '@shared/capability/registry'
@@ -51,6 +52,7 @@ import {
   type PersonaChange,
   type Revealable,
   type SettingsView,
+  type SettingsUpdate,
   type SettingsWrite,
 } from '@shared/ipc'
 import { type HistoryExport, type ShelfView } from '@shared/history-window'
@@ -2632,6 +2634,7 @@ ipcMain.handle('settings:read', (): SettingsView => {
       resolvedFor(SHORTCUT_SAYS, userData),
       SHORTCUTS,
     ),
+    update: updateState(),
     about: {
       name: app.getName(),
       version: app.getVersion(),
@@ -3842,6 +3845,12 @@ ipcMain.handle('settings:codex-recheck', async (): Promise<SettingsCodex> => {
  * and a window that asked for a fourth address is a bug in this repository, not
  * a state a person can be in.
  */
+ipcMain.handle('settings:check-update', async (): Promise<SettingsUpdate> => checkForUpdate())
+ipcMain.handle('settings:download-update', async (): Promise<SettingsUpdate> => downloadUpdate())
+listenTo('settings:install-update', () => {
+  void installUpdate()
+})
+
 listenTo('settings:open-link', (_event, what: unknown) => {
   if (!isLink(what)) {
     console.error(`[settings] refusing to open an unknown link: ${String(what)}`)

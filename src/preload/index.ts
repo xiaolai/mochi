@@ -19,6 +19,7 @@ import {
   type HearingChange,
   type ScreenChange,
   type SettingsCodex,
+  type SettingsUpdate,
   type SettingsView,
   type SettingsWrite,
   type SessionConfig,
@@ -252,6 +253,15 @@ const settings: MochiSettingsApi = {
   },
   openLink(what: Link) {
     ipcRenderer.send(guardSettings('settings:open-link'), what)
+  },
+  async checkUpdate() {
+    return (await ipcRenderer.invoke(guardSettings('settings:check-update'))) as SettingsUpdate
+  },
+  async downloadUpdate() {
+    return (await ipcRenderer.invoke(guardSettings('settings:download-update'))) as SettingsUpdate
+  },
+  installUpdate() {
+    ipcRenderer.send(guardSettings('settings:install-update'))
   },
   async chooseWorkspace() {
     return (await ipcRenderer.invoke(guardSettings('settings:choose-workspace'))) as ChosenWorkspace

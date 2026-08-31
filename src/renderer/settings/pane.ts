@@ -15,6 +15,7 @@ import {
   type Revealable,
   type ScreenChange,
   type SettingsCodex,
+  type SettingsUpdate,
   type SettingsView,
 } from '@shared/ipc'
 import { type ByPronoun } from '@shared/pronoun'
@@ -77,6 +78,18 @@ export interface PaneHandlers {
    * window never had. See `settings:open-link`.
    */
   readonly openLink: (what: Link) => void
+  /**
+   * Three acts, three handlers, and the two that take time are PROMISES.
+   *
+   * `recheckCodex`'s reason: a control that returned at once would look like it
+   * had done nothing on the one machine where the answer is slow, and the pane
+   * disables itself for exactly as long as the work is outstanding. Downloading
+   * resolves when the file has landed rather than when the request goes out,
+   * which is what lets one button say "Downloading…" and then become "Restart".
+   */
+  readonly checkUpdate: () => Promise<SettingsUpdate>
+  readonly downloadUpdate: () => Promise<SettingsUpdate>
+  readonly installUpdate: () => void
   readonly say: (text: string, bad?: boolean) => void
 }
 
