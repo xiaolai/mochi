@@ -68,7 +68,7 @@ const KEY_WORDS: Readonly<Record<string, readonly string[]>> = {
   hide: ['hide', 'show', 'bring back', 'off screen', 'dismiss'],
 }
 
-export function keyField(key: SettingsKey): Field {
+function keyField(key: SettingsKey): Field {
   return {
     id: `key-${key.id}`,
     label: key.name,

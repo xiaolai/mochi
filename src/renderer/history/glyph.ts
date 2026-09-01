@@ -53,15 +53,6 @@ export const RAN_FOR: Glyph = {
   paths: ['M12 6v6l4 2'],
 }
 
-/** `scissors` — lucide-static 1.31.0. How many of her turns were cut off. */
-export const CUT: Glyph = {
-  circles: [
-    { cx: 6, cy: 6, r: 3 },
-    { cx: 6, cy: 18, r: 3 },
-  ],
-  paths: ['M8.12 8.12 12 12', 'M20 4 8.12 15.88', 'M14.8 14.8 20 20'],
-}
-
 /** `at-sign` — lucide-static 1.31.0. Who made it. */
 export const AUTHOR: Glyph = {
   circles: [{ cx: 12, cy: 12, r: 4 }],

@@ -390,7 +390,7 @@ export const PROMPT_SLOTS = ['style', 'address', 'notes', 'brief', 'faces'] as c
 export type PromptSlot = (typeof PROMPT_SLOTS)[number]
 
 /** `{style}`, `{notes}` — the same one-pair-of-braces shape as `{name}`. */
-export function slotToken(slot: PromptSlot): string {
+function slotToken(slot: PromptSlot): string {
   return `{${slot}}`
 }
 

@@ -100,26 +100,27 @@ export function writeTextAtomically(path: string, text: string): void {
   }
 }
 
-/** Why a file could not be turned into a value, in the caller's words. */
-export type ReadProblem =
-  | { readonly kind: 'absent' }
-  | { readonly kind: 'unreadable'; readonly detail: string }
-  | { readonly kind: 'malformed'; readonly detail: string }
-
-export type JsonRead =
-  | { readonly ok: true; readonly value: unknown }
-  | { readonly ok: false; readonly problem: ReadProblem }
-
 /*
   `readJsonFile` was here, and every store uses `readBounded` instead.
 
   Exported, documented, and covered by seven tests that all passed — with no
-  caller anywhere. `readBounded` answers the same three outcomes AND caps the
-  read, which is why it won; this one simply outlived the migration.
+  caller anywhere. `readBounded` answers the outcomes AND caps the read, which
+  is why it won; this one simply outlived the migration.
 
-  `JsonRead` and `ReadProblem` stay: `readBounded` answers in the same shape,
-  and two vocabularies for "absent, unreadable, malformed" is how the next
-  reader comes to disagree with this one about what a missing file means.
+  ITS TYPES HAVE NOW GONE TOO, and the argument for keeping them was wrong on
+  the facts. It read: "`JsonRead` and `ReadProblem` stay: `readBounded` answers
+  in the same shape, and two vocabularies for 'absent, unreadable, malformed'
+  is how the next reader comes to disagree with this one about what a missing
+  file means." `readBounded` does not answer in that shape. It answers
+  `BoundedRead`, whose failure arm is `reason` rather than `problem` and whose
+  `BoundedReadProblem` has four kinds rather than three — `not-a-file` and
+  `too-large` instead of `malformed`, because it reads bytes and does not
+  parse them.
+
+  So the second vocabulary the comment warned about was the pair it was
+  defending: two names for one idea, agreeing on neither their arms nor their
+  field, and reachable by nobody. The hazard is real and deleting them is what
+  answers it.
 */
 
 /**

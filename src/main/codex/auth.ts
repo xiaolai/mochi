@@ -169,7 +169,7 @@ export async function readAuthJson(home: string): Promise<AuthFileRead> {
  * directory, which is a username. An errno says as much as the reader can act
  * on and nothing about where the machine keeps things.
  */
-export function describeReadFailure(error: unknown): string {
+function describeReadFailure(error: unknown): string {
   const code = (error as NodeJS.ErrnoException | null)?.code
   if (code === 'EACCES' || code === 'EPERM') return 'permission denied'
   if (code === 'EISDIR' || code === 'ENOTDIR') return 'the path is not a file'

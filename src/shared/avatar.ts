@@ -49,7 +49,7 @@ export type Emotion = (typeof EMOTIONS)[number]
  * Consonants are deliberately absent. VRM defines no consonant presets, and
  * inventing some would produce a set no model can render.
  */
-export const VISEMES = ['aa', 'ih', 'ou', 'ee', 'oh'] as const
+const VISEMES = ['aa', 'ih', 'ou', 'ee', 'oh'] as const
 
 export type Viseme = (typeof VISEMES)[number]
 

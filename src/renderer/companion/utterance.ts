@@ -76,7 +76,7 @@ const MAX_HELD = 20_000
  * questions: "is she still in this utterance" tolerates a pause, "is she saying
  * a word right now" does not.
  */
-export const SOUNDING_S = 0.25
+const SOUNDING_S = 0.25
 
 export function createUtterance(): Utterance {
   let text = ''

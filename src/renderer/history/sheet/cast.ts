@@ -104,7 +104,7 @@ export function castActions(view: ShelfView, handlers: ShelfHandlers): readonly 
  * her name either — a second "Mochi" is the one name that makes the list
  * useless.
  */
-export const NEW_NAME = 'New character'
+const NEW_NAME = 'New character'
 
 /**
  * Removing a character, and putting the built-in back.

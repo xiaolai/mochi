@@ -14,7 +14,7 @@
  * behind the CLI.
  */
 
-export const RESERVED_KINDS = ['agents-md', 'execpolicy', 'skills', 'subagents'] as const
+const RESERVED_KINDS = ['agents-md', 'execpolicy', 'skills', 'subagents'] as const
 export type ReservedKind = (typeof RESERVED_KINDS)[number]
 
 /**
@@ -129,7 +129,7 @@ export type CodexReadiness = (typeof CODEX_READINESS)[number]
  */
 export const CONFINEMENT_MEASURED_AGAINST = '0.148.0'
 
-export const REMEDIES = ['install', 'reinstall', 'login', 'retry'] as const
+const REMEDIES = ['install', 'reinstall', 'login', 'retry'] as const
 export type Remedy = (typeof REMEDIES)[number]
 
 /**

@@ -30,7 +30,7 @@ import { writeJsonAtomically } from './json-file'
 
 export const PROMPTS_FILE = 'prompts.json'
 
-export function promptsPath(userData: string): string {
+function promptsPath(userData: string): string {
   return join(userData, PROMPTS_FILE)
 }
 

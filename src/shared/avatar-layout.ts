@@ -78,8 +78,10 @@ export const BASE_UNIT_SCALE = 0.94
  *
  * The numbers come from the worst case rather than from taste:
  *
- * - A bubble is at most `BUBBLE_ROOM` tall (eight wrapped lines, plus its gap
- *   and tail) and about 404 wide (its text column, padding and controls).
+ * - A bubble is at most about 190 tall — the eight-line box this window was
+ *   sized against, plus its gap and tail; `bubble.ts` has since capped it at
+ *   five, so the allowance is generous rather than wrong — and about 404 wide
+ *   (its text column, padding and controls).
  * - She is at most 188 x 147, at 200%.
  * - Vertically: a bubble above, her, and a bubble below — and `FEET_FROM_TOP`
  *   is chosen so both fit at every size she can be set to.
@@ -203,12 +205,9 @@ export const WINDOW_H = 560
  * Fixed rather than a fraction of the canvas, so that changing her size moves
  * her head and not her feet — the ground stays where it is, which is what
  * "standing on something" means. Leaves 340 above her feet and 220 below them,
- * and both clear `BUBBLE_ROOM` at every size in `SIZE_PERCENT`.
- */
-export const FEET_FROM_TOP = 340
-
-/**
- * How high in her own canvas she can stand, and why she ever needs to.
+ * and both clear a full bubble at every size in `SIZE_PERCENT`.
+ *
+ * ## A DEFAULT, not a fixed point, and macOS is why
  *
  * **macOS pins a window's top edge to the work area.** It will not let one sit
  * under the menu bar, and unlike the other three edges there is no overhang
@@ -220,16 +219,10 @@ export const FEET_FROM_TOP = 340
  * So her standing height moves. When the window is against the top of the
  * screen she stands near the top of her canvas instead, which puts her where
  * the cursor asked and leaves the room BELOW her — which is where the bubble
- * then goes. The two facts are the same fact.
- *
- * The floor is her own clearance: she may stand at the very top of the canvas
- * and no higher, because above that she is not drawn at all.
+ * then goes. The two facts are the same fact. `feetY` clamps it and
+ * `MochiAvatar.setFeet` is how the moved value arrives.
  */
-export function minimumFeet(bodyHeight: number, clearance: number): number {
-  return bodyHeight + clearance
-}
-/** The tallest a bubble gets, including the gap and tail that reach for her. */
-export const BUBBLE_ROOM = 190
+export const FEET_FROM_TOP = 340
 
 /**
  * Where she stands inside a canvas of a given height.

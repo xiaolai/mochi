@@ -56,7 +56,7 @@ import { SAYS } from '../panes-says'
  * written pair here would be a second answer that goes stale the day a third
  * one is added.
  */
-export function folderField(kind: Revealable): Field {
+function folderField(kind: Revealable): Field {
   return { id: `folder-${kind}`, label: kind, keywords: ['folder', 'files', 'on disk', 'reveal'] }
 }
 

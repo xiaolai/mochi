@@ -75,7 +75,7 @@ export function fileSection(
 }
 
 /** Where her face actually resolved to, not where it was asked to look. */
-export function resolvedFace(view: ShelfView, worn: ShelfCharacter): string {
+function resolvedFace(view: ShelfView, worn: ShelfCharacter): string {
   if (view.faceSource !== null) return `reading ${view.faceSource}`
   // A named avatar that resolved to nothing fell back to the built-in, and
   // saying so is the whole point — "the app ignored my file" is the least

@@ -116,7 +116,7 @@ export async function checkCodexNow(): Promise<SettingsCodex> {
 }
 
 /** The remedy as words, or nothing when there is none. See `REMEDY_SAYS`. */
-export function remedySentence(status: CodexStatus): string {
+function remedySentence(status: CodexStatus): string {
   const remedy = remedyFor(status)
   return remedy === null ? '' : REMEDY_SAYS[remedy]
 }

@@ -25,7 +25,7 @@
 import { opendirSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const LEGACY_CAPABILITIES_DIR = 'capabilities'
+const LEGACY_CAPABILITIES_DIR = 'capabilities'
 
 /** Where one used to go. Named here so the string is not typed twice. */
 export function legacyCapabilitiesRoot(userData: string): string {

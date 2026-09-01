@@ -415,7 +415,7 @@ export function listScreen(rest: {
  * Minutes` still validates whatever is on disk, because the file is
  * hand-editable and this list is not the only way in.
  */
-export const SLEEP_AFTER_CHOICES: readonly number[] = [0, 5, 10, 15, 30, 60]
+const SLEEP_AFTER_CHOICES: readonly number[] = [0, 5, 10, 15, 30, 60]
 
 /**
  * Fold a page's request about the screen into calls main will make.

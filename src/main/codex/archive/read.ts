@@ -217,7 +217,7 @@ export const HEADER_PROBE_SQL = `
  * the deletion signal: Codex's own trigger treats a dropped row here as the end
  * of that thread's projected life and cascades it to `thread_realtime_items`.
  */
-export const CURSOR_SQL = `
+const CURSOR_SQL = `
   SELECT thread_id, next_rollout_ordinal, next_rollout_byte_offset
     FROM thread_history_projection_state
 `
@@ -295,7 +295,7 @@ export const ITEM_PROBE_SQL = `
  * fingerprint, not a hash, and the table it guards holds session markers rather
  * than prose.
  */
-export const REALTIME_PROBE_SQL = `
+const REALTIME_PROBE_SQL = `
   SELECT thread_id,
          count(*) AS items,
          sum(rollout_ordinal) AS ordinal_sum,
@@ -326,7 +326,7 @@ export const ITEMS_SQL = `
 `
 
 /** The same read, for the newer realtime projection. See `realtimeIn`. */
-export const REALTIME_SQL = `
+const REALTIME_SQL = `
   SELECT ${columnsOf('thread_realtime_items').join(', ')}
     FROM thread_realtime_items
    WHERE thread_id = ?
@@ -350,7 +350,7 @@ function headerSql(count: number): string {
  * assembled. SQLite's own parameter limit is far higher; this is about the
  * duration of the read, not about what the parser will accept.
  */
-export const HEADER_SLICE = 200
+const HEADER_SLICE = 200
 
 /**
  * The text inside one `item_json`, whatever shape it is in.
@@ -408,7 +408,7 @@ export function speakerOfItem(itemType: string): CodexSpeaker {
  * not say" from "this row says nobody". Only the two values Codex uses are
  * accepted; anything else is not a speaker this build can name.
  */
-export function roleOfItem(json: string): CodexSpeaker | null {
+function roleOfItem(json: string): CodexSpeaker | null {
   let held: unknown
   try {
     held = JSON.parse(json)

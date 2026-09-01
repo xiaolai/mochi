@@ -6,7 +6,7 @@
  * returning null, because a missing id is a broken build and a silent null
  * surfaces much later as "one panel does nothing".
  */
-export function need<T extends Element>(id: string, kind: new () => T): T {
+function need<T extends Element>(id: string, kind: new () => T): T {
   const found = document.querySelector(`#${id}`)
   // Fail loud. Rendering into nothing is indistinguishable from a slow start,
   // and `documents.test.ts` is what stops this being discovered at runtime.
@@ -90,15 +90,7 @@ export const troublesBodyEl = need('troubles-body', HTMLElement)
 /** The body's column track, which differs per view. See `.spread` in the sheet. */
 export const spreadEl = need('spread', HTMLElement)
 
-/** What the view on screen needs in its head: search, and the day strip. */
-export const viewHeadEl = need('view-head', HTMLElement)
-
 export const findingEl = need('finding', HTMLElement)
-
-/** The reading column, and the margin apparatus sits in. */
-export const readingEl = need('reading', HTMLElement)
-
-export const marginEl = need('margin', HTMLElement)
 
 /** View III's body: what she is permitted to do, for THIS character. */
 export const permitsEl = need('permits', HTMLElement)

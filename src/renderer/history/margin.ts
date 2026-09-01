@@ -20,7 +20,7 @@
 import { element } from '../element'
 
 /** A hairline between two blocks. */
-export function marginRule(): HTMLElement {
+function marginRule(): HTMLElement {
   return element('div', 'margin-rule')
 }
 

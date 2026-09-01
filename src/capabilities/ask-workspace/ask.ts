@@ -51,7 +51,7 @@ import type { RunHandle } from './spawn'
  * sentence, and asking her to summarise it again would be a second model call
  * to undo the first one's format.
  */
-export const ANSWER_SCHEMA = {
+const ANSWER_SCHEMA = {
   type: 'object',
   properties: {
     spoken: {

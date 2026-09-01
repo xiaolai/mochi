@@ -37,7 +37,7 @@ import { writeJsonAtomically } from './json-file'
  * enforces, asked here rather than restated.
  */
 
-export const USAGE_FILE = 'usage.json'
+const USAGE_FILE = 'usage.json'
 
 export function usagePath(userData: string): string {
   return join(userData, USAGE_FILE)

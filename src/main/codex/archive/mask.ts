@@ -55,7 +55,7 @@ export const REDACTED = '[redacted]'
  * Nothing here is on a hunch — a pattern nobody can point at a real format for
  * is a pattern that will one day eat a sentence.
  */
-export const MASKED_SHAPES: readonly RegExp[] = [
+const MASKED_SHAPES: readonly RegExp[] = [
   /*
     OpenAI keys, including the hyphenated modern prefixes.
 

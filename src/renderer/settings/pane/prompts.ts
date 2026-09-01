@@ -60,7 +60,7 @@ import { type SettingsPrompt } from '@shared/ipc'
  * `prompt.key` also splits usefully: a query of "remember" matches
  * `rememberThis.kept` as a substring, which is the case this had to keep.
  */
-export function promptField(prompt: SettingsPrompt): Field {
+function promptField(prompt: SettingsPrompt): Field {
   return {
     id: `prompt-${prompt.key}`,
     label: prompt.title,

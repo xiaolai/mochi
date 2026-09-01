@@ -372,7 +372,7 @@ export type SummariseResult =
  * The schema is what keeps the note inside `PERSONA_LIMITS.memory` without a
  * third length check anywhere -- see `renderNote`.
  */
-export const SUMMARY_SCHEMA = {
+const SUMMARY_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: [...SECTIONS],
@@ -405,11 +405,7 @@ export const SUMMARY_SCHEMA = {
  * character's id no matter who asked for it. The fence reduces the chance of a
  * bad answer; the parser is what stops one reaching the file.
  */
-export function summarisePrompt(
-  turns: readonly Turn[],
-  currentNote: string,
-  instruction: string,
-): string {
+function summarisePrompt(turns: readonly Turn[], currentNote: string, instruction: string): string {
   return [
     instruction,
     '',

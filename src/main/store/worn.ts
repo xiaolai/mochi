@@ -283,7 +283,7 @@ export function writeResting(userData: string, changes: Partial<Resting>): void 
  * failure into four permanent refusals nobody made. Two separate checks would
  * be two chances to get "was this readable" subtly differently.
  */
-export function readGrantsState(userData: string): {
+function readGrantsState(userData: string): {
   readonly readable: boolean
   readonly grants: Grants
 } {
@@ -572,10 +572,10 @@ export function readProfile(userData: string): string | null {
  * first. `0` is the opt-out and is the one value that is not a duration, which
  * is why it is checked separately rather than clamped into the range.
  */
-export const SLEEP_AFTER_MAX = 60
+const SLEEP_AFTER_MAX = 60
 export const DEFAULT_SLEEP_AFTER_MINUTES = 15
 
-export function isSleepAfterMinutes(value: unknown): value is number {
+function isSleepAfterMinutes(value: unknown): value is number {
   return (
     typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= SLEEP_AFTER_MAX
   )

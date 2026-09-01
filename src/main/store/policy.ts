@@ -23,7 +23,7 @@ import { type BoundedRead, logBoundedRead, readBounded } from './read-bounded'
 import { rawObject } from './json-file'
 import { problems } from '../problems'
 
-export const POLICY_DIR = 'policies'
+const POLICY_DIR = 'policies'
 
 export function policyRoot(userData: string): string {
   return storeRoot(userData, POLICY_DIR)

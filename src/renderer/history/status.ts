@@ -41,7 +41,7 @@ import { said, type Write } from '../rules/said'
  * when its content changes is not announced, so setting the words first and
  * revealing after is a message a screen reader never hears.
  */
-export function hush(): void {
+function hush(): void {
   saidEl.hidden = true
   saidShutEl.hidden = true
   saidWhatEl.textContent = ''

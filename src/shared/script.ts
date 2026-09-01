@@ -78,7 +78,7 @@ export const MEASURED_DENSE =
  * whole of the honesty available: the two constants carry the same number
  * today and the day somebody times one of these, only one of them moves.
  */
-export const UNSPACED_UNMEASURED =
+const UNSPACED_UNMEASURED =
   '\\p{Script_Extensions=Hangul}\\p{Script=Thai}\\p{Script=Lao}' +
   '\\p{Script=Khmer}\\p{Script=Myanmar}\\p{Script=Tibetan}\\u3000-\\u303F\\uFF00-\\uFFEF'
 
@@ -107,7 +107,7 @@ export function isDense(glyph: string): boolean {
  * land between 14.7 and 18.7 cost-units per second of sound, with no
  * language separation in the spread.
  */
-export const CJK_COST = 15.1 / 4.1
+const CJK_COST = 15.1 / 4.1
 
 /**
  * What an unspaced script that nobody has timed is charged.

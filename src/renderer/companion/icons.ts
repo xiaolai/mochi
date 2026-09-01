@@ -19,7 +19,7 @@
  */
 
 /** Lucide's grid. Everything below is in these units. */
-export const ICON_GRID = 24
+const ICON_GRID = 24
 
 export interface Icon {
   /** SVG path data, on the 24×24 grid. */
