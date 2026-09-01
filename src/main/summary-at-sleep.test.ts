@@ -50,6 +50,33 @@ function theRewrite(): string {
 }
 
 /**
+ * How both housekeeping jobs configure Codex, which is one function now.
+ *
+ * `rewriteNote` and `titleUntitled` built the same deps object each, and the
+ * settings and the held child are `housekeepingDeps`'. The assertions that
+ * used to read them out of `rewriteNote` follow them here rather than being
+ * dropped — the same move this file already made once, when the release check
+ * went to `running.test.ts`.
+ *
+ * Both halves are checked: that the deps say the right thing, AND that the
+ * rewrite is what asks for them. Either alone would pass over a rewrite that
+ * had quietly stopped calling it.
+ */
+function theRelease(): string {
+  const from = MAIN.indexOf('function releaseHousekeeping(')
+  expect(from, 'releaseHousekeeping is gone').toBeGreaterThan(-1)
+  const body = MAIN.slice(from)
+  return body.slice(0, body.indexOf('\n}\n') + 2)
+}
+
+function theHousekeepingDeps(): string {
+  const from = MAIN.indexOf('function housekeepingDeps(')
+  expect(from, 'housekeepingDeps is gone').toBeGreaterThan(-1)
+  const body = MAIN.slice(from)
+  return body.slice(0, body.indexOf('\n}\n') + 2)
+}
+
+/**
  * The four checks that decide whether a finished summary may be written.
  *
  * They were written out inside `rewriteNote` and are their own function now:
@@ -229,8 +256,12 @@ describe('the presence that just ended is summarised into her note', () => {
   })
 
   it('removes its scratch directory whatever happened', () => {
+    // The `finally` calls `releaseHousekeeping`, which both jobs share; the
+    // removal is asserted there. Both halves, so a rewrite that stopped calling
+    // it cannot pass on the strength of the other job still doing so.
     const rewrite = theRewrite()
-    expect(rewrite.slice(rewrite.indexOf('} finally {'))).toContain('rmSync(scratch')
+    expect(rewrite.slice(rewrite.indexOf('} finally {'))).toContain('releaseHousekeeping(scratch')
+    expect(theRelease()).toContain('rmSync(scratch')
   })
 
   it('holds its Codex child so quitting kills it', () => {
@@ -245,7 +276,8 @@ describe('the presence that just ended is summarised into her note', () => {
       because the failure is invisible from inside the app: it happens after
       the app is gone.
     */
-    expect(theRewrite()).toContain('running.holdUntilDone(handle)')
+    expect(theRewrite()).toContain('housekeepingDeps(codexPath, workspace)')
+    expect(theHousekeepingDeps()).toContain('running.holdUntilDone(handle)')
   })
 
   it('does not write over a note somebody edited while it ran', () => {
@@ -316,7 +348,8 @@ describe('the presence that just ended is summarised into her note', () => {
     // `finally` clears it rather than in the gap before it.
     const taken = rewrite.indexOf('rewritingNote = true')
     expect(taken).toBeLessThan(rewrite.indexOf('mkdtempSync('))
-    expect(rewrite.slice(rewrite.indexOf('} finally {'))).toContain('if (scratch !== null)')
+    expect(rewrite.slice(rewrite.indexOf('} finally {'))).toContain('releaseHousekeeping(scratch')
+    expect(theRelease()).toContain('if (scratch === null) return')
   })
 
   it('releases the hold when the child finishes', () => {
@@ -334,7 +367,8 @@ describe('the presence that just ended is summarised into her note', () => {
       The release is asserted where it now lives, in `running.test.ts`, which
       can watch it happen rather than read that it was written.
     */
-    expect(theRewrite()).toContain('running.holdUntilDone(handle)')
+    expect(theRewrite()).toContain('housekeepingDeps(codexPath, workspace)')
+    expect(theHousekeepingDeps()).toContain('running.holdUntilDone(handle)')
   })
 })
 
@@ -352,7 +386,15 @@ describe('only one note is rewritten at a time', () => {
     const finallyAt = rewrite.indexOf('} finally {')
     expect(taken).toBeGreaterThan(-1)
     expect(finallyAt).toBeGreaterThan(taken)
-    expect(rewrite.slice(finallyAt)).toContain('rewritingNote = false')
+    expect(rewrite.slice(finallyAt)).toContain('releaseHousekeeping(scratch')
+    /*
+      And cleared FIRST inside it, before anything that can throw. `rmSync` on a
+      directory somebody has chmod'd is a throw, and the flag left set by one is
+      a flag left set for the life of the process.
+    */
+    const release = theRelease()
+    expect(release).toContain('rewritingNote = false')
+    expect(release.indexOf('rewritingNote = false')).toBeLessThan(release.indexOf('rmSync('))
   })
 
   it('does not hold the flag across the early returns', () => {

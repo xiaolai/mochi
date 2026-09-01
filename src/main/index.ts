@@ -29,7 +29,7 @@ import { sessionConfig } from './voice/session-config'
 import { migrateBubbleSide as runBubbleSideMigration } from './migrations/bubble-side'
 import { shutDown as shutDown_ } from './shutdown'
 import { running } from '../capabilities/ask-workspace/capability'
-import { runSchema } from '../capabilities/ask-workspace/ask'
+import { runSchema, type AskDeps } from '../capabilities/ask-workspace/ask'
 import { SUBJECT_SCHEMA, subjectFrom, subjectPrompt } from './memory/subject'
 import { spawnCodex } from '../capabilities/ask-workspace/spawn'
 import { summarise } from './memory/summarise'
@@ -508,6 +508,112 @@ function conversationFlushed(): void {
 const SUMMARY_TIMEOUT_MS = 240_000
 
 /**
+ * How the two housekeeping jobs run Codex, in one place.
+ *
+ * `rewriteNote` and `titleUntitled` both call `runSchema` by themselves, every
+ * time she goes to sleep, with nobody waiting on the answer. They had the same
+ * settings, the same held child and the same deadline written out twice — and
+ * the second copy's comments said so, three times over: "as it is for the note
+ * rewriter", "`rewriteNote` states this and it is the same reasoning",
+ * "`rewriteNote` says the same about its own run". Prose acknowledging a
+ * duplicate is not a substitute for removing it; the reasoning below is
+ * security-relevant and only ONE of the two copies ever carried all of it.
+ *
+ * ## Why each setting is what it is
+ *
+ * **No web.** Neither job needs it. A note is written from turns and a title
+ * from one conversation, so the search could only be a route to content the
+ * output is not allowed to be about — and which `FORBIDDEN` would then reject
+ * every entry for.
+ *
+ * **No framing.** The instruction IS the prompt for both. A lookup's framing is
+ * about reading somebody's files, which neither of these does.
+ *
+ * **No profile.** The user's lookup profile configures LOOKUPS. Layering it
+ * over note maintenance or titling would apply a choice made about one job to
+ * another they were never asked about.
+ *
+ * ## `ignoreUserConfig`, and what it does NOT buy
+ *
+ * Said first, because the honest half is the useful half. §72 measured that
+ * `-s read-only` names what the sandbox may WRITE: a run with an empty `-C`
+ * read a canary file elsewhere on the disk and returned its contents. And
+ * `--strict-config` shows there is no key that withholds the shell —
+ * `tools.web_search` is real, `tools.shell` is not.
+ *
+ * So an injection carried in a transcript is not sandboxed away, and this
+ * comment is not going to pretend otherwise. What stands between one and her
+ * note is `fenced()`, an instruction saying the fenced blocks are data, a
+ * closed output schema, `FORBIDDEN` rejecting paths and URLs and shell syntax,
+ * 200-character entries, and a note the user can read and revert. A short plain
+ * secret would pass all of it.
+ *
+ * The one thing that IS closed here: THE USER\'S CONFIG IS NOT LOADED AT ALL.
+ * `profile: null` only omits `-p`; the base `config.toml` still loads, and §65
+ * measured that its `mcp_servers` are launched as the user, before
+ * authentication, outside `-s read-only`. That is a feature for a lookup
+ * somebody asked for. These run by themselves every time she sleeps, and need
+ * no tools at all.
+ *
+ * ## HELD, so quitting kills it
+ *
+ * `running.ts` exists because `will-quit` closed the archive and left every
+ * Codex child alive — "the app disappears from the Dock and a Codex process
+ * goes on reading somebody\'s workspace with no window, no tray icon and
+ * nothing to say it is there". Both these paths spawn the same binary and
+ * reached it through a different door.
+ *
+ * `hold` and not `begin`: the slot count bounds LOOKUPS against each other, and
+ * housekeeping must neither refuse somebody\'s question nor be refused by one.
+ * What this needs from that module is only the part that makes a child
+ * killable; `rewritingNote` is what bounds these paths to one at a time.
+ */
+/**
+ * Let the next housekeeping run start, and take the scratch directory with it.
+ *
+ * The `finally` for both jobs, which had it written out twice and differing
+ * only in the log prefix. Both halves matter and neither is obvious:
+ *
+ * **The flag is cleared FIRST**, before anything that can throw. It is what
+ * bounds these paths to one at a time, and a throw above it would disable every
+ * later run for the life of the process rather than for this one.
+ *
+ * **The removal is caught.** This is a `finally` on a promise nobody awaits, so
+ * a throw here becomes an unhandled rejection out of the sleep path. A
+ * temporary directory that outlives us is a smaller problem than that.
+ */
+function releaseHousekeeping(scratch: string | null, tag: string): void {
+  rewritingNote = false
+  if (scratch === null) return
+  summaryScratch.delete(scratch)
+  try {
+    rmSync(scratch, { recursive: true, force: true })
+  } catch (error: unknown) {
+    console.warn(`${tag} the scratch directory could not be removed:`, error)
+  }
+}
+
+function housekeepingDeps(codexPath: string, workspace: string): AskDeps {
+  return {
+    codexPath,
+    workspace,
+    settings: {
+      webSearch: 'disabled',
+      framing: '',
+      model: null,
+      profile: null,
+      ignoreUserConfig: true,
+    },
+    run: (path, args, input) => {
+      const handle = spawnCodex(path, args, input)
+      running.holdUntilDone(handle)
+      return handle
+    },
+    timeoutMs: SUMMARY_TIMEOUT_MS,
+  }
+}
+
+/**
  * End the presence, and think about what was said in it.
  *
  * ## `summarise` existed for weeks and nothing called it
@@ -850,73 +956,7 @@ async function rewriteNote(personaId: string): Promise<void> {
     const before = recall(userData, personaId)
     const result = await summarise(turns, before, {
       ask: async (prompt, schema) => {
-        const run = await runSchema(prompt, schema, {
-          codexPath,
-          workspace,
-          settings: {
-            // Nothing here needs the web, and the note may not contain a URL —
-            // `FORBIDDEN` refuses one — so offering the search is offering a
-            // route to content every entry would then be rejected for.
-            webSearch: 'disabled',
-            // The instruction IS the prompt here. A lookup's framing is about
-            // reading somebody's files, which this does not do.
-            framing: '',
-            model: null,
-            // The user's lookup profile configures lookups. Layering it over
-            // note maintenance would apply a choice made about one job to
-            // another one they were never asked about.
-            profile: null,
-            /*
-              WHAT THIS DOES NOT BUY, said first.
-
-              §72 measured that `-s read-only` names what the sandbox may WRITE:
-              a run with an empty `-C` read a canary file elsewhere on the disk
-              and returned its contents. And `--strict-config` shows there is no
-              key that withholds the shell — `tools.web_search` is real,
-              `tools.shell` is not.
-
-              So an injection carried in a transcript is not sandboxed away, and
-              this comment is not going to pretend otherwise. What stands
-              between one and her note is `fenced()`, an instruction saying the
-              fenced blocks are data, a closed output schema, `FORBIDDEN`
-              rejecting paths and URLs and shell syntax, 200-character entries,
-              and a note the user can read and revert. A short plain secret
-              would pass all of it.
-
-              The one thing that IS closed here:
-
-              AND THE USER'S CONFIG NOT LOADED AT ALL.
-
-              `profile: null` only omits `-p`; the base `config.toml` still
-              loads, and §65 measured that its `mcp_servers` are launched as
-              the user, before authentication, outside `-s read-only`. That is
-              a feature for a lookup somebody asked for. This runs by itself
-              every time she sleeps, and needs no tools at all.
-            */
-            ignoreUserConfig: true,
-          },
-          /*
-            HELD, so quitting kills it.
-
-            `running.ts` exists because `will-quit` closed the archive and left
-            every Codex child alive — "the app disappears from the Dock and a
-            Codex process goes on reading somebody's workspace with no window,
-            no tray icon and nothing to say it is there". This path spawns the
-            same binary and reached it through a different door.
-
-            `hold` and not `begin`: the slot count bounds LOOKUPS against each
-            other, and a summary must not be able to refuse somebody's question
-            — nor be refused by one. What this needs from that module is only
-            the part that makes a child killable, and `rewritingNote` above is
-            what bounds this path to one.
-          */
-          run: (path, args, input) => {
-            const handle = spawnCodex(path, args, input)
-            running.holdUntilDone(handle)
-            return handle
-          },
-          timeoutMs: SUMMARY_TIMEOUT_MS,
-        })
+        const run = await runSchema(prompt, schema, housekeepingDeps(codexPath, workspace))
         if (!run.ok) {
           console.warn(`[summary] ${run.why}`)
           return null
@@ -986,18 +1026,7 @@ async function rewriteNote(personaId: string): Promise<void> {
     console.error('[summary] the note could not be rewritten:', error)
     problems.note('memory', personaId, `the note could not be rewritten: ${String(error)}`)
   } finally {
-    rewritingNote = false
-    if (scratch !== null) {
-      summaryScratch.delete(scratch)
-      try {
-        rmSync(scratch, { recursive: true, force: true })
-      } catch (error: unknown) {
-        // Caught, because this is a `finally` on a promise nobody awaits: a
-        // throw here becomes an unhandled rejection out of the sleep path. A
-        // temporary directory that outlives us is a smaller problem than that.
-        console.warn('[summary] the scratch directory could not be removed:', error)
-      }
-    }
+    releaseHousekeeping(scratch, '[summary]')
   }
 }
 
@@ -1098,43 +1127,11 @@ async function titleConversations(personaId: string): Promise<void> {
       // reads and asking a model about nothing is a subprocess spent to be
       // told so.
       if (turns.length === 0) continue
-      const run = await runSchema(subjectPrompt(turns, instruction), SUBJECT_SCHEMA, {
-        codexPath,
-        workspace,
-        settings: {
-          // Nothing here needs the web. A conversation is titled from what is
-          // in it, and offering the search is offering a route to content the
-          // title is not allowed to be about.
-          webSearch: 'disabled',
-          // The instruction IS the prompt, as it is for the note rewriter. A
-          // lookup's framing is about reading somebody's files.
-          framing: '',
-          model: null,
-          // The user's lookup profile configures LOOKUPS. Layering it over
-          // titling would apply a choice made about one job to another they
-          // were never asked about — `rewriteNote` states this and it is the
-          // same reasoning.
-          profile: null,
-          // It runs by itself every time she sleeps and needs no tools at all.
-          // `rewriteNote` says the same about its own run.
-          ignoreUserConfig: true,
-        },
-        /*
-          HELD, so quitting kills it.
-
-          `running.ts` exists because `will-quit` closed the archive and left
-          every Codex child alive. This path spawns the same binary through the
-          same door the note rewriter does, and `hold` rather than `begin` for
-          its reason: the slot count bounds LOOKUPS against each other, and
-          titling must neither refuse somebody's question nor be refused by one.
-        */
-        run: (path, args, input) => {
-          const handle = spawnCodex(path, args, input)
-          running.holdUntilDone(handle)
-          return handle
-        },
-        timeoutMs: SUMMARY_TIMEOUT_MS,
-      })
+      const run = await runSchema(
+        subjectPrompt(turns, instruction),
+        SUBJECT_SCHEMA,
+        housekeepingDeps(codexPath, workspace),
+      )
       const subject = subjectFrom(answerOf(run))
       if (subject === null) {
         console.warn(`[subject] nothing usable came back for one conversation; left untitled`)
@@ -1153,15 +1150,7 @@ async function titleConversations(personaId: string): Promise<void> {
     // where an unhandled rejection is an unhandled rejection in going to sleep.
     console.error('[subject] conversations could not be titled:', error)
   } finally {
-    rewritingNote = false
-    if (scratch !== null) {
-      summaryScratch.delete(scratch)
-      try {
-        rmSync(scratch, { recursive: true, force: true })
-      } catch (error: unknown) {
-        console.warn('[subject] the scratch directory could not be removed:', error)
-      }
-    }
+    releaseHousekeeping(scratch, '[subject]')
   }
 }
 
