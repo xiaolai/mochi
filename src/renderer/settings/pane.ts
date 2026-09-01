@@ -18,7 +18,17 @@ import {
   type SettingsUpdate,
   type SettingsView,
 } from '@shared/ipc'
-import { type ByPronoun } from '@shared/pronoun'
+import { label as paneLabel, type ByPronoun } from '@shared/pronoun'
+/*
+  Re-exported rather than moved out of reach.
+
+  `Field` and `anchor` are the whole window's vocabulary now — her sheet uses
+  them too, which is why they live in `renderer/field.ts` beside `element` — but
+  a pane declaring its fields still wants one import, and every pane already
+  imports this file for `Pane` and `field`.
+*/
+import { anchor, type Field } from '../field'
+export { anchor, type Field } from '../field'
 import { type Link } from '@shared/links'
 export interface PaneHandlers {
   readonly lookup: (change: LookupChange) => void
@@ -99,6 +109,15 @@ export interface Pane {
   readonly label: string | ByPronoun
   /** Why this group needs looking at, or null. Drives the dot in the nav. */
   readonly attention: (view: SettingsView) => string | null
+  /**
+   * Everything on this pane somebody could search for, in the order it is drawn.
+   *
+   * A FUNCTION of the view rather than a constant, because two panes hold lists
+   * that come from the store: the prompt editors are one per catalogued prompt,
+   * and the keys are one per binding. A constant would have to guess at both,
+   * and guessing wrongly is exactly the drift this declaration exists to stop.
+   */
+  readonly fields: (view: SettingsView) => readonly Field[]
   readonly render: (view: SettingsView, handlers: PaneHandlers) => readonly Node[]
 }
 
@@ -122,13 +141,24 @@ export interface Pane {
  * occupies nothing.
  */
 export function field(
-  label: string,
+  spec: Field,
+  view: SettingsView,
   control: HTMLElement,
   extra?: { readonly hint?: string; readonly note?: string },
 ): HTMLElement {
   const body: HTMLElement[] = [control]
   if (extra?.note !== undefined) body.push(element('p', 'note', extra.note))
-  return section(label, extra?.hint ?? '', ...body)
+  /*
+    THE DESCRIPTOR, not a string — and the pronoun is read here rather than at
+    the call site.
+
+    Every one of these labels was a bare literal, so a name about her would have
+    had to be spelled `forPronoun(SAYS.x, view.pronoun)` by each caller and any
+    caller that forgot would say "her" whoever is worn. That is the failure
+    `SettingsView.pronoun` records: validated, stored, migrated, never rendered.
+    One place reads the table now, so there is no call site left to forget.
+  */
+  return anchor(spec, section(paneLabel(spec.label, view.pronoun), extra?.hint ?? '', ...body))
 }
 
 /**

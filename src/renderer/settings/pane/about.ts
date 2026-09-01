@@ -22,18 +22,51 @@
  */
 import { element } from '../../element'
 import { type Pane } from '../pane'
-import { forPronoun } from '@shared/pronoun'
+import { forPronoun, label as paneLabel } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
-import { field, type PaneHandlers } from '../pane'
+import { anchor, field, type Field, type PaneHandlers } from '../pane'
 import { section } from '../../history/sheet/row'
-import { type SettingsUpdate } from '@shared/ipc'
+import { type SettingsUpdate, type SettingsView } from '@shared/ipc'
 import { AUTHOR, SITE, SOURCE, VERSION, glyphSvg, type Glyph } from '../../history/glyph'
 import { type Link } from '@shared/links'
+
+/**
+ * What this group holds, named once. See `Field`.
+ *
+ * Four, and the first three are not settings. That is deliberate: this is the
+ * group somebody lands on when they cannot find something, and the things they
+ * arrive for — the version to quote in an issue, the button that updates, the
+ * address of the source — are facts and acts rather than controls. A search that
+ * indexed only what can be CHANGED would miss every one of them.
+ */
+const FIELDS: Readonly<Record<'build' | 'links' | 'updates' | 'builtOn', Field>> = {
+  build: {
+    id: 'build',
+    label: 'Build',
+    keywords: ['version', 'architecture', 'arm64', 'intel', 'electron', 'which build'],
+  },
+  links: {
+    id: 'links',
+    label: 'Author, source and website',
+    keywords: ['github', 'repository', 'licence', 'license', 'homepage', 'issue', 'version'],
+  },
+  updates: {
+    id: 'updates',
+    label: 'Updates',
+    keywords: ['upgrade', 'newer', 'download', 'check for updates', 'install'],
+  },
+  builtOn: {
+    id: 'built-on',
+    label: 'What it is built on',
+    keywords: ['dependencies', 'sqlite', 'fonts', 'typefaces', 'licences', 'licenses'],
+  },
+}
 
 export const ABOUT: Pane = {
   id: 'about',
   label: 'About',
   attention: () => null,
+  fields: () => [FIELDS.build, FIELDS.links, FIELDS.updates, FIELDS.builtOn],
   render(view, handlers) {
     /*
       THE BUILD, AS ONE LINE — B7's `0.0.1 · arm64 · electron 33`.
@@ -48,7 +81,7 @@ export const ABOUT: Pane = {
       The Electron version is cut to its major. `43.3.0` is a number nobody can
       act on; `electron 43` is the one people quote.
     */
-    const build = element('div', 'build')
+    const build = anchor(FIELDS.build, element('div', 'build'))
     build.append(
       element('div', 'build-name', view.about.name),
       element(
@@ -75,7 +108,7 @@ export const ABOUT: Pane = {
         one fact you have to hunt for somewhere else.
       */
       links(handlers, view.about.version),
-      updates(view.update, handlers),
+      updates(view.update, view.pronoun, handlers),
       /*
         WHAT IT IS BUILT ON, which was on no screen.
 
@@ -86,7 +119,7 @@ export const ABOUT: Pane = {
         build reports, and `node:sqlite` has no version of its own because it is
         part of the runtime.
       */
-      field('What it is built on', builtOn(view.about.electron), {
+      field(FIELDS.builtOn, view, builtOn(view.about.electron), {
         note: forPronoun(SAYS.typefaces, view.pronoun),
       }),
       // Where the rest of her went, said once, here — because this is the group
@@ -148,7 +181,7 @@ function builtOn(electron: string): HTMLElement {
  * source row wears `git-branch` and says where it goes in words.
  */
 function links(handlers: PaneHandlers, version: string): HTMLElement {
-  const list = element('div', 'about-links')
+  const list = anchor(FIELDS.links, element('div', 'about-links'))
   const rows: readonly [Glyph, string, string, Link | null][] = [
     [AUTHOR, 'Author', '@xiaolai · lixiaolai.com', 'author'],
     [SOURCE, 'Source', 'github.com/xiaolai/mochi', 'repo'],
@@ -207,7 +240,11 @@ function links(handlers: PaneHandlers, version: string): HTMLElement {
  * metered, and then replacing herself at the next quit are two things nobody
  * agreed to. So this row does nothing at all until it is pressed.
  */
-function updates(state: SettingsUpdate, handlers: PaneHandlers): HTMLElement {
+function updates(
+  state: SettingsUpdate,
+  pronoun: SettingsView['pronoun'],
+  handlers: PaneHandlers,
+): HTMLElement {
   const said: Record<SettingsUpdate['kind'], string> = {
     unsupported: 'Only a packaged build can update itself — this one is running from source.',
     idle: 'Not checked yet.',
@@ -258,5 +295,22 @@ function updates(state: SettingsUpdate, handlers: PaneHandlers): HTMLElement {
   }
   const wrap = element('div', 'about-updates')
   wrap.append(...body)
-  return section('Updates', state.kind === 'none' ? 'up to date' : '', wrap)
+  /*
+    THE HEADING COMES FROM THE DECLARATION, not from a literal beside it.
+
+    It was `section('Updates', …)` written two lines from `FIELDS.updates.label`,
+    which is exactly the drift the declaration exists to stop: rename the field
+    and the search result says one thing while the heading it scrolls to says
+    another. Read through `paneLabel` because a label may be a `ByPronoun` table
+    — this one is not, and going through the helper keeps that a property of the
+    data rather than of this call site.
+  */
+  return anchor(
+    FIELDS.updates,
+    section(
+      paneLabel(FIELDS.updates.label, pronoun),
+      state.kind === 'none' ? 'up to date' : '',
+      wrap,
+    ),
+  )
 }

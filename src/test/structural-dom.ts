@@ -44,28 +44,101 @@ export interface FakeNode {
    * tested and setting it crashes the fake.
    */
   readonly style: Record<string, string>
+  /**
+   * `data-*`, recorded the way a real element records it.
+   *
+   * The same bag as `style` and for the same reason: `about.ts` writes
+   * `dataset.opens` so the rendered gate can tell which address a row opens
+   * without pressing it, and a builder that sets it must be constructible here.
+   */
+  readonly dataset: Record<string, string>
   title: string
   textContent: string
-  append: (...nodes: readonly FakeNode[]) => void
-  replaceChildren: (...nodes: readonly FakeNode[]) => void
+  /**
+   * Nodes, or plain strings — which the real one turns into text nodes.
+   *
+   * It took nodes only, and a builder that appends a sentence beside an element
+   * is ordinary: `storage.ts` writes `where.append(forPronoun(…), element('code',
+   * …))`. That stored a bare string among the children, so anything walking the
+   * tree afterwards met something with no `children` and threw — which is a
+   * failure of this double rather than of the builder.
+   */
+  append: (...nodes: readonly (FakeNode | string)[]) => void
+  replaceChildren: (...nodes: readonly (FakeNode | string)[]) => void
   setAttribute: (name: string, value: string) => void
+  /**
+   * RECORDED AND NEVER FIRED, which is the whole of what this promises.
+   *
+   * The file's line above says this double claims nothing about events, and
+   * that still holds: nothing here dispatches, bubbles, or captures. What it
+   * does is let a builder that BINDS be constructed at all — and almost every
+   * builder binds, so without this the settings panes could not be rendered in
+   * a test even to ask what they drew.
+   *
+   * A test that wants to know what a click DOES should not reach for this. The
+   * decisions worth testing are pulled out as pure functions with their
+   * dependencies injected — `whatWasPressed`, `editing`, `readinessOf` — which
+   * is the rule `vitest.config.ts` states and the reason those three exist.
+   */
+  addEventListener: (type: string, listener: unknown, options?: unknown) => void
+  /** Enough of `classList` for a builder that adds or removes a name. */
+  readonly classList: {
+    add: (...names: readonly string[]) => void
+    remove: (...names: readonly string[]) => void
+    contains: (name: string) => boolean
+  }
+}
+
+/** A string becomes a text node, exactly as `Element.append` does. */
+function asNode(given: FakeNode | string): FakeNode {
+  if (typeof given !== 'string') return given
+  const made = node('#text')
+  made.textContent = given
+  return made
 }
 
 function node(tag: string): FakeNode {
+  const names = (): Set<string> => new Set(self.className.split(' ').filter((one) => one !== ''))
   const self: FakeNode = {
     tag,
     children: [],
     attributes: new Map<string, string>(),
     style: {},
+    dataset: {},
+    /*
+      Backed by `className` rather than by a set of its own.
+
+      Two stores for one fact is how a fake starts disagreeing with itself: a
+      builder that sets `className` and then calls `classList.add` would, with a
+      separate set, produce a node whose class depended on which of the two the
+      assertion happened to read.
+    */
+    classList: {
+      add: (...added) => {
+        const has = names()
+        for (const one of added) has.add(one)
+        self.className = [...has].join(' ')
+      },
+      remove: (...gone) => {
+        const has = names()
+        for (const one of gone) has.delete(one)
+        self.className = [...has].join(' ')
+      },
+      contains: (name) => names().has(name),
+    },
+    addEventListener: () => {
+      // Deliberately nothing. See the declaration: bindings are permitted so a
+      // builder can be constructed, never so behaviour can be asserted.
+    },
     className: '',
     title: '',
     textContent: '',
     append: (...nodes) => {
-      self.children.push(...nodes)
+      self.children.push(...nodes.map(asNode))
     },
     replaceChildren: (...nodes) => {
       self.children.length = 0
-      self.children.push(...nodes)
+      self.children.push(...nodes.map(asNode))
     },
     setAttribute: (name, value) => {
       self.attributes.set(name, value)

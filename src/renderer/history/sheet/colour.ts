@@ -15,6 +15,8 @@ import { type ShelfHandlers, section } from './row'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { forPronoun } from '@shared/pronoun'
 import { THEME_IDS, applyTheme } from '@shared/theme'
+import { anchor } from '../../field'
+import { HER_FIELDS } from './fields'
 /**
  * Her colour, drawn as her.
  *
@@ -35,7 +37,7 @@ export function colourSection(
 ): HTMLElement {
   if (view.faceSource !== null) {
     const said = element('p', 'note', forPronoun(SAYS.colourAuthored, view.pronoun))
-    return section('Appearance', view.faceSource, said)
+    return anchor(HER_FIELDS.colour, section('Appearance', view.faceSource, said))
   }
   /*
     Named a file and did not get it, so there is nobody to paint.
@@ -47,7 +49,7 @@ export function colourSection(
   */
   if (worn.face === undefined) {
     const said = element('p', 'note bad', forPronoun(SAYS.colourMissing, view.pronoun))
-    return section('Appearance', worn.avatarId ?? 'missing', said)
+    return anchor(HER_FIELDS.colour, section('Appearance', worn.avatarId ?? 'missing', said))
   }
 
   const grid = element('div', 'themes')
@@ -91,5 +93,19 @@ export function colourSection(
     heading answers "which one is in force", and a path answers a question the
     apparatus column is already answering.
   */
-  return section('Appearance', worn.theme ?? forPronoun(SAYS.ownAppearance, view.pronoun), ...body)
+  /*
+    ANCHORED ON ALL THREE PATHS, which is why the wrap is written out three
+    times rather than once around the function.
+
+    This section has three shapes -- an authored face, a named file that
+    resolved to nothing, and the ordinary swatch grid -- and every one of them
+    is still "Appearance" to somebody looking for it. Anchoring only the common
+    path would make the setting findable on most machines and not on the two
+    where something is already wrong, which are the machines where finding it
+    matters.
+  */
+  return anchor(
+    HER_FIELDS.colour,
+    section('Appearance', worn.theme ?? forPronoun(SAYS.ownAppearance, view.pronoun), ...body),
+  )
 }

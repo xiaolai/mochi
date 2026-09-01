@@ -306,8 +306,13 @@ describe('the vocabulary that is declared and not yet spoken', () => {
       `--duration-fast` came off this list when the switch's knob started
       moving. It is the window's first CSS motion, which also means the reduced
       motion block at the foot of `tokens.css` finally protects something.
+
+      `--duration` followed it, for the mark that says where finding a setting
+      landed you. Both halves of the motion vocabulary are spoken now, and the
+      reduced-motion block covers both — which is what makes the mark's fade
+      safe to remove on `animationend` rather than on a timer: at zero duration
+      the event still fires, and a timer would have had to guess.
     */
-    '--duration': 'no CSS motion exists yet; the rig gates its own',
     /*
       The ring's geometry, which IS bound — by the check above, not at runtime.
 

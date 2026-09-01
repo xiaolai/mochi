@@ -30,12 +30,60 @@
  * are exactly the ones that already do something.
  */
 import { element } from '../../element'
-import { type Pane, type PaneHandlers } from '../pane'
+import { anchor, type Pane, type Field, type PaneHandlers } from '../pane'
 import { type SettingsKey } from '@shared/ipc'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
 import { keyGlyphs } from '../../rules/key-glyphs'
 import { whatWasPressed } from './pressed'
+
+/**
+ * One field per binding, built FROM the binding. See `Field`.
+ *
+ * Not a hand written pair. There are two shortcuts today and `SHORTCUTS`
+ * decides that, so a literal list here would be a second answer to how many
+ * there are — wrong on the first release that adds a third, and wrong silently,
+ * because a missing field looks exactly like a setting search has not been
+ * taught about.
+ *
+ * ## `key.what` IS NOT A KEYWORD, and that was a bug
+ *
+ * It was one, on the reasoning that the sentence is what people remember. The
+ * sentence is "Let her rest, or wake her" — `SHORTCUT_SAYS` is a `ByPronoun`
+ * table and `listKeys` resolves it — so the index held "her" on a machine
+ * wearing `she` and "him" on one wearing `he`. That is exactly what
+ * `Field.keywords` forbids, and why: a keyword is matched against typed text, so
+ * a gendered one makes the same setting findable by different words per
+ * character.
+ *
+ * `pronoun-copy.test.ts` did not catch it because it scans SOURCE for gendered
+ * literals and this one arrived as a runtime value. The fix is neutral terms for
+ * the same acts, written here where they can be read and checked.
+ *
+ * The accelerator stays. `Control+Shift+L` is a string somebody genuinely types
+ * while hunting for which key does what, and it carries no pronoun.
+ */
+const KEY_WORDS: Readonly<Record<string, readonly string[]>> = {
+  rest: ['sleep', 'wake', 'rest', 'listening', 'stop listening'],
+  hide: ['hide', 'show', 'bring back', 'off screen', 'dismiss'],
+}
+
+export function keyField(key: SettingsKey): Field {
+  return {
+    id: `key-${key.id}`,
+    label: key.name,
+    keywords: [
+      'shortcut',
+      'keyboard',
+      'hotkey',
+      'accelerator',
+      key.accelerator,
+      // Nothing for a shortcut this build has no words for, which is better
+      // than falling back to the sentence that carries a pronoun.
+      ...(KEY_WORDS[key.id] ?? []),
+    ],
+  }
+}
 
 export const KEYS: Pane = {
   id: 'keys',
@@ -45,6 +93,7 @@ export const KEYS: Pane = {
     if (taken.length === 0) return null
     return `${taken.map((one) => one.accelerator).join(' and ')} could not be claimed.`
   },
+  fields: (view) => view.keys.map(keyField),
   render(view, handlers) {
     return [
       ...view.keys.map((key) => row(key, view.about.platform, handlers)),
@@ -61,7 +110,7 @@ export const KEYS: Pane = {
 }
 
 function row(key: SettingsKey, platform: string, handlers: PaneHandlers): HTMLElement {
-  const line = element('div', 'folder')
+  const line = anchor(keyField(key), element('div', 'folder'))
   const left = element('div')
   /*
     A NAME, then what it does — B5's two lines.

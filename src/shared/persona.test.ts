@@ -1660,10 +1660,18 @@ describe('when a change to her bubble lands', () => {
 
   it('is said by the section that holds them, not by the one about her voice', () => {
     const shelf = sheetSurface()
-    // Its own heading, so the hint above it can cover both halves honestly.
-    expect(shelf).toContain("section(\n    'Speech bubble',")
+    /*
+      TWO SECTIONS WITH TWO HINTS, which is the property — not the indentation.
+
+      This pinned `section(\n    'Speech bubble',` with the leading whitespace
+      written out, so wrapping either builder re-indented its arguments and the
+      assertion failed over a fact it was not about. What it is about is that
+      the bubble has a heading of its own and Voice keeps a hint that is true of
+      everything left under it.
+    */
+    expect(shelf).toMatch(/section\(\s*'Speech bubble',/)
     // And Voice keeps its own, which is true of everything left in it.
-    expect(shelf).toMatch(/section\('Voice', forPronoun\(SAYS\.nextWake/)
+    expect(shelf).toMatch(/section\(\s*'Voice',\s*forPronoun\(SAYS\.nextWake/)
   })
 })
 

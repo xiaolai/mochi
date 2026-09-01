@@ -4,6 +4,8 @@ import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../shelf-says'
 import type { ShelfCharacter, ShelfView } from '@shared/history-window'
 import { FACE_BOUNDS } from '@shared/avatar-spec'
+import { anchor } from '../../field'
+import { HER_FIELDS } from './fields'
 
 /**
  * How big she is drawn, and the way back to her own answer.
@@ -127,10 +129,13 @@ export function sizeSection(
   const row = element('div', 'size-row')
   row.append(slider, reading)
 
-  return section(
-    forPronoun(SAYS.sizeHeading, view.pronoun),
-    forPronoun(chosen === null ? SAYS.sizeAsFaceAsks : SAYS.sizeYours, view.pronoun),
-    row,
-    back,
+  return anchor(
+    HER_FIELDS.size,
+    section(
+      forPronoun(SAYS.sizeHeading, view.pronoun),
+      forPronoun(chosen === null ? SAYS.sizeAsFaceAsks : SAYS.sizeYours, view.pronoun),
+      row,
+      back,
+    ),
   )
 }

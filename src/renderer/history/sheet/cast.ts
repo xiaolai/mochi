@@ -13,6 +13,8 @@ import { element } from '../../element'
 import { section, type ShelfHandlers } from './row'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { type Pronoun, forPronoun } from '@shared/pronoun'
+import { anchor } from '../../field'
+import { herDangerous } from './fields'
 /**
  * Making a character, from the rail.
  *
@@ -112,11 +114,21 @@ export const NEW_NAME = 'New character'
  * the sentence that has to be read before the button beneath it, which is why
  * it is above it and not a tooltip on it.
  */
+/*
+  `HTMLElement`, NOT `HTMLElement | null`.
+
+  Nothing here has ever returned null: the built-in offers "put back" and a
+  character with a file offers "delete", and those two cases are exhaustive. The
+  nullable type made `characterSheet` guard on a branch that could not be taken,
+  and made `sheet/fields.ts` write a paragraph explaining why it was listing this
+  section unconditionally anyway. A type that permits a state nothing produces
+  costs a guard at every call site and buys nothing.
+*/
 export function castDangerous(
   worn: ShelfCharacter,
   pronoun: Pronoun,
   handlers: ShelfHandlers,
-): HTMLElement | null {
+): HTMLElement {
   const row = element('div', 'row')
   const guarded: HTMLButtonElement[] = []
   const once = (act: () => void): void => {
@@ -159,5 +171,8 @@ export function castDangerous(
     guarded.push(remove)
   }
 
-  return section('This character', 'a character is a folder · deleting one takes its memory', row)
+  return anchor(
+    herDangerous(worn),
+    section('This character', 'a character is a folder · deleting one takes its memory', row),
+  )
 }

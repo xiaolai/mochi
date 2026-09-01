@@ -29,10 +29,44 @@
 import { sectionHead } from '../../history/sheet/row'
 import { element } from '../../element'
 import { editing } from '../../rules/editing'
-import { type Pane } from '../pane'
+import { anchor, type Pane, type Field } from '../pane'
 import { SAYS } from '../panes-says'
 import { forPronoun } from '@shared/pronoun'
 import { canSave, lengthNote } from './prompt-edit'
+import { type SettingsPrompt } from '@shared/ipc'
+
+/**
+ * One field per catalogued prompt, built FROM the prompt. See `Field`.
+ *
+ * This pane is the reason the search exists. It draws thirty editors into one
+ * scrolling column with nothing to filter them by, so knowing which text you
+ * want has never been the same as being able to reach it — the header comment
+ * below says as much about the two facts it had to add, and this is the third.
+ *
+ * ## `purpose` IS NOT A KEYWORD, and that was a bug
+ *
+ * It was one, on the reasoning that a sentence is how somebody describes what
+ * they are after when they cannot remember the name. The sentences are about
+ * HER — "Introduces what she has been asked to remember", "Said when a search
+ * of her notes finds nothing" — so the index carried "she" and "her" for all
+ * thirty prompts, and a machine wearing `he` needed different words to find the
+ * same editor. `Field.keywords` forbids exactly this.
+ *
+ * The KEY carries the search instead, and it carries it well: `recall.nothing`,
+ * `askWorkspace.hazards`, `rememberThis.tooLong` are pronoun-free, and each is
+ * made of the words somebody would type. The title is still the label, and
+ * titles are neutral by construction — they name the message, not her.
+ *
+ * `prompt.key` also splits usefully: a query of "remember" matches
+ * `rememberThis.kept` as a substring, which is the case this had to keep.
+ */
+export function promptField(prompt: SettingsPrompt): Field {
+  return {
+    id: `prompt-${prompt.key}`,
+    label: prompt.title,
+    keywords: ['prompt', 'wording', 'text', 'instructions', prompt.key],
+  }
+}
 export const PROMPTS: Pane = {
   id: 'prompts',
   // A TABLE, because the name has a pronoun in it. It was the one pane label
@@ -47,6 +81,7 @@ export const PROMPTS: Pane = {
     const worrying = view.prompts.filter((one) => one.missing.length > 0).length
     return worrying === 0 ? null : String(worrying)
   },
+  fields: (view) => view.prompts.map(promptField),
   render(view, handlers) {
     /*
       HOW MANY, AND HOW MANY HAVE MOVED — B3's "27 texts · 2 changed from
@@ -194,7 +229,7 @@ export const PROMPTS: Pane = {
       const actions = element('div', 'row')
       actions.append(save, reset)
       nodes.push(actions)
-      const block = element('div', 'prompt-block')
+      const block = anchor(promptField(one), element('div', 'prompt-block'))
       block.append(...nodes)
       blocks.push(block)
     }

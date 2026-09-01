@@ -2,15 +2,44 @@
 
 import { SAYS } from '../panes-says'
 import { element } from '../../element'
-import { type Pane, field, options } from '../pane'
+import { type Pane, type Field, field, options } from '../pane'
 import { HALO_LABELS } from '../panes-says'
 import { forPronoun } from '@shared/pronoun'
+
+/**
+ * The three settings this group holds, named once.
+ *
+ * Keywords are what somebody TYPES, which is rarely what the setting is called:
+ * nobody hunting for the ring around her face types "halo", and nobody looking
+ * for how long she waits before sleeping types "rest". See `Field`.
+ */
+const FIELDS: Readonly<Record<'halo' | 'chip' | 'rest', Field>> = {
+  halo: {
+    id: 'halo',
+    label: 'Halo',
+    // `microphone` and `listening` because this ring is the one surface that
+    // says the microphone is open — which is the whole argument for why its
+    // choices are three rather than an off switch, twenty lines below.
+    keywords: ['ring', 'glow', 'microphone', 'listening', 'hide'],
+  },
+  chip: {
+    id: 'shoulder-button',
+    label: 'Shoulder button',
+    keywords: ['chip', 'settings button', 'bubble'],
+  },
+  rest: {
+    id: 'rest',
+    label: 'Rest',
+    keywords: ['sleep', 'idle', 'timeout', 'disconnect', 'after minutes'],
+  },
+}
 
 /** Where she sits, and where her words go when she has any. */
 export const ON_SCREEN: Pane = {
   id: 'on-screen',
   label: 'On screen',
   attention: () => null,
+  fields: () => [FIELDS.halo, FIELDS.chip, FIELDS.rest],
   render(view, handlers) {
     /*
       THREE answers, so a select rather than a switch.
@@ -112,9 +141,9 @@ export const ON_SCREEN: Pane = {
       the workspace under "Codex profile".
     */
     return [
-      field('Halo', halo, { note: forPronoun(SAYS.halo, view.pronoun) }),
-      field('Shoulder button', chipSwitch, { note: forPronoun(SAYS.chip, view.pronoun) }),
-      field('Rest', rest, { note: forPronoun(SAYS.rests, view.pronoun) }),
+      field(FIELDS.halo, view, halo, { note: forPronoun(SAYS.halo, view.pronoun) }),
+      field(FIELDS.chip, view, chipSwitch, { note: forPronoun(SAYS.chip, view.pronoun) }),
+      field(FIELDS.rest, view, rest, { note: forPronoun(SAYS.rests, view.pronoun) }),
     ]
   },
 }

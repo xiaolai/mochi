@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { MOCHI } from '@shared/avatar-spec'
 import type { SettingsView } from '@shared/ipc'
 import { CODEX_READINESS } from '@shared/delegation'
 import { PANES } from './panes'
+import { settledView as settled } from '../../test/settings-view'
+import { PRONOUNS, label as paneLabel } from '@shared/pronoun'
 
 /**
  * The six groups, and the one rule that decides when one wears a dot.
@@ -12,77 +13,6 @@ import { PANES } from './panes'
  * — `plan-shell.md` says so, and `documents.test.ts` covers the mechanical half
  * of that. This covers the half that is a decision.
  */
-
-/** Everything fine: nothing withheld, the CLI present, both keys claimed. */
-function settled(): SettingsView {
-  return {
-    face: MOCHI,
-    pronoun: 'she',
-    capabilities: [{ name: 'ask_workspace', description: 'Look something up.' }],
-    grants: [
-      { id: 'speak_first', allowed: true, lastUsed: { kind: 'not-recorded' } },
-      { id: 'ask_workspace', allowed: true, lastUsed: { kind: 'never' } },
-      { id: 'remember_this', allowed: true, lastUsed: { kind: 'at', at: 1_700_000_000_000 } },
-      // Off, which is what a settled installation actually looks like: this one
-      // ships withheld because it reads another application's archive.
-      { id: 'recall_codex', allowed: false, lastUsed: { kind: 'never' } },
-    ],
-    lookup: {
-      workspace: '/w',
-      workspaceIsDefault: false,
-      webSearch: 'follow',
-      webSearchModes: ['follow'],
-      profile: null,
-      profilePath: null,
-      profileExists: false,
-      codex: { readiness: 'ready', remedy: null, version: null, checkedAt: null },
-    },
-    hearing: {
-      languages: [],
-      choices: [
-        { code: 'en', label: 'English' },
-        { code: 'zh', label: 'Chinese' },
-      ],
-      most: 6,
-    },
-    screen: {
-      halo: 'always',
-      haloChoices: ['always', 'listening', 'never'],
-      shoulderChip: true,
-      sleepAfterMinutes: 15,
-      sleepAfterChoices: [0, 5, 15],
-    },
-    keys: [
-      {
-        id: 'rest',
-        name: 'Talk to her',
-        what: 'Let her rest',
-        accelerator: 'Control+Shift+L',
-        refused: null,
-        edited: false,
-      },
-      {
-        id: 'hide',
-        name: 'Show or hide her',
-        what: 'Hide her',
-        accelerator: 'Control+Shift+M',
-        refused: null,
-        edited: false,
-      },
-    ],
-    about: {
-      name: 'Mochi',
-      version: '0.0.1',
-      electron: '43.0.0',
-      arch: 'arm64',
-      platform: 'darwin',
-      userData: '/u',
-    },
-    update: { kind: 'idle' },
-    prompts: [],
-    folders: { avatars: '/u/avatars', personas: '/u/personas' },
-  }
-}
 
 describe('the groups this page holds', () => {
   it('is seven, in the order they are drawn, and does not include her grants', () => {
@@ -136,7 +66,17 @@ describe('the groups this page holds', () => {
     // Voice is a `Persona` field and retention is filed under her id, so both
     // are per character and live on the shelf; Sound would be empty, and an
     // empty pane is a pane people learn to skip. `plan-shell.md` settles it.
-    const labels = PANES.map((one) => one.label)
+    /*
+      RESOLVED, because a label is `string | ByPronoun`.
+
+      These compared the raw values, so a group whose name is a table — and one
+      of them is, "What she is told" — was an object among strings: it could
+      never match `toContain`, and a pane renamed INTO one of the forbidden
+      names as a table would have slipped through the `not.toContain` half
+      entirely. What is being asserted is what the nav says, so it has to be
+      read the way the nav reads it.
+    */
+    const labels = PANES.map((one) => paneLabel(one.label, 'she'))
     expect(labels).not.toContain('Voice')
     expect(labels).not.toContain('Sound')
     expect(labels).not.toContain('What is kept')
@@ -146,9 +86,21 @@ describe('the groups this page holds', () => {
     expect(labels).toContain('About')
   })
 
-  it('gives every group its own id and its own label', () => {
+  it('gives every group its own id and its own name, in every pronoun', () => {
     expect(new Set(PANES.map((one) => one.id)).size).toBe(PANES.length)
-    expect(new Set(PANES.map((one) => one.label)).size).toBe(PANES.length)
+    /*
+      RESOLVED, and once per pronoun.
+
+      This compared `string | ByPronoun` by identity, so two panes with different
+      table objects carrying the same words counted as distinct — a nav with two
+      identical entries would have passed. And two names can collide in one
+      pronoun while differing in another, which is a nav that reads fine on the
+      machine it was written on.
+    */
+    for (const pronoun of PRONOUNS) {
+      const said = PANES.map((one) => paneLabel(one.label, pronoun))
+      expect(new Set(said).size, `two groups read alike as "${pronoun}"`).toBe(PANES.length)
+    }
   })
 })
 

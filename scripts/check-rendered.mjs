@@ -1464,6 +1464,44 @@ async function photograph(page) {
     writeFileSync(join(into, `${place}.png`), Buffer.from(data, 'base64'))
     console.log(`  shot  dev-docs/shots/${place}.png  showing: ${showing}`)
   }
+  /*
+    AND THE PANEL, which is a surface rather than a place.
+
+    It rises over whichever page is up, so it belongs to none of the four above
+    and would be photographed by none of them. Shown with something typed: an
+    empty one is a box and a line of prose, and what wants looking at is a list
+    of results -- whether the group beside each label reads as apparatus or as
+    clutter, and whether the current row is legible at a glance.
+  */
+  await goTo(page, 'cast')
+  await page.run(`(() => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
+    const q = document.getElementById('jump-q');
+    q.value = 'her';
+    q.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`)
+  /*
+    THE PANEL IS THERE BEFORE THE SHUTTER, checked rather than waited out.
+
+    This slept and shot whatever was on screen, so a key that stopped opening the
+    panel produced an ordinary page screenshot under the panel's filename -- a
+    photograph of the feature being broken, filed as a photograph of the feature.
+    `until` throws when the condition never arrives, which is what makes the file
+    mean what its name says.
+  */
+  await until(
+    page,
+    `document.getElementById('jump').open && document.querySelectorAll('#jump-found .jump-row').length > 0`,
+    'the find-a-setting panel to open with results',
+  )
+  await settle(page)
+  const panel = await page.send('Page.captureScreenshot', { format: 'png' })
+  const drawn = panel.result?.data
+  if (drawn) {
+    writeFileSync(join(into, 'find-a-setting.png'), Buffer.from(drawn, 'base64'))
+    console.log('  shot  dev-docs/shots/find-a-setting.png  showing: find a setting')
+  }
+  await page.run(`document.getElementById('jump').close()`)
 }
 
 /* ---- the checks --------------------------------------------------------- */
@@ -2814,6 +2852,294 @@ async function checks(page, where = '') {
       )
   })
 
+  await step('jump-lands', async () => {
+    /* --- finding a setting by name takes you to it ------------------------- */
+    /*
+    The whole feature, end to end, and NONE of it is checkable in vitest: the
+    key is bound on the window, the panel is a modal dialog in the top layer,
+    and "landed on it" means an element is actually in view. The ranking is a
+    pure function and `jump.test.ts` owns that; this owns the half that is only
+    true once a browser has laid the window out.
+
+    Dispatched as a real keydown on the window rather than by calling the
+    opener, for `rail-lands`' reason: the binding IS the thing under test, and a
+    check that calls the function it is checking passes on a key that is not
+    bound at all.
+
+    It starts from HER page on purpose. The panel has to reach a setting on the
+    machine's page from somewhere that is not the machine's page — opening the
+    page, opening the group and scrolling are three separate steps and only the
+    first is obvious when it fails.
+
+    THE TARGET IS A PROMPT DEEP IN THE LONG PANE, and both halves of that were
+    forced by measurement.
+
+    It first aimed at "Rest", on a pane holding three settings, and that hid a
+    real bug: removing the wait that lets the pane finish drawing before the
+    scroll left this check GREEN, because a pane that short shows all of its
+    settings without scrolling at all. "In view" proved nothing there. The
+    prompts pane draws thirty editors down one column, so a prompt near the end
+    is in view only if the scroll actually ran.
+
+    And the query has to match exactly ONE of them. It first typed a phrase two
+    prompt titles share, so the panel jumped to the first while this asserted on
+    the second -- passing on an element it had never navigated to, which is the
+    same wrong-reason green in a subtler costume.
+  */
+    await goTo(page, 'cast')
+    const opened = await page.run(`(() => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
+    const box = document.getElementById('jump');
+    return { open: box.open, focused: document.activeElement === document.getElementById('jump-q') };
+  })()`)
+    await settle(page)
+    if (opened.open !== true) {
+      bad('jump-lands', 'the key did not open the panel, so nothing else here means anything')
+      return
+    }
+    if (opened.focused !== true) bad('jump-lands', 'the panel opened without focusing its field')
+    /*
+      Typed as an INPUT event, because that is what the field listens for.
+
+      Setting `.value` alone changes what is on screen and tells nothing, which
+      would leave this asserting against a list drawn from an empty query.
+    */
+    await page.run(`(() => {
+    const q = document.getElementById('jump-q');
+    q.value = 'already kept';
+    q.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`)
+    /*
+      THE WAIT COMES BEFORE THE SNAPSHOT, which is the whole of its value.
+
+      It was after: the rows were read immediately, asserted on, and only then
+      did this wait for the list to settle -- so the assertions ran against
+      whatever draw happened to be up and the wait could not change any of them.
+      An audit called it partial and was right. Reading after the list has
+      settled is what makes a broken redraw fail here.
+    */
+    await until(
+      page,
+      `document.querySelectorAll('#jump-found .jump-row').length === 1`,
+      'the panel to narrow to one result',
+    )
+    const listed = await page.run(`(() => {
+    const q = document.getElementById('jump-q');
+    const rows = [...document.querySelectorAll('#jump-found .jump-row')];
+    return {
+      rows: rows.length,
+      first: (rows[0] || {}).textContent || '',
+      chosen: rows.filter((r) => r.getAttribute('aria-selected') === 'true').length,
+      names: q.getAttribute('aria-activedescendant'),
+    };
+  })()`)
+    /*
+      Two prompts share this phrasing -- one for each kind of recall -- so this
+      also exercises the case somebody is actually in when they search thirty
+      near-identical texts: more than one answer, and the arrow keys to choose.
+    */
+    if (listed.rows === 0) {
+      bad('jump-lands', 'typing a prompt title matched nothing, so the prompts are unreachable')
+      return
+    }
+    if (listed.chosen !== 1)
+      bad('jump-lands', listed.chosen + ' rows are marked current; exactly one must be')
+    if (!listed.names) bad('jump-lands', 'the field does not name its current row for a reader')
+    /*
+      Enter is DISPATCHED, and nothing is asserted about the dispatch itself.
+
+      This read a value the page expression hard-coded to `true` and then checked
+      it — an assertion that could not fail, which an audit caught. Whether Enter
+      did anything is what the landing checks below measure; there is nothing for
+      a return value to add.
+    */
+    await page.run(`document.getElementById('jump-q')
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`)
+    /*
+      WAIT FOR THE PAGE, not for a number of milliseconds.
+
+      Jumping opens a page, opens a group and awaits a read of the settings off
+      disk before it can scroll. `goTo` makes the same argument about the same
+      problem: the condition is knowable, so waiting on it beats waiting on a
+      number somebody picked on one machine.
+    */
+    await until(
+      page,
+      `document.getElementById('page-machine').getClientRects().length > 0`,
+      'the machine page to open after a jump',
+    )
+    await settle(page)
+    /*
+      THE MARK IS CHECKED TWICE, and the timing of each was measured rather than
+      assumed.
+
+      It is up HERE: settle waits about a hundred milliseconds and the mark runs
+      for two turns of the motion duration, which is 440. Asserting it had
+      already gone at this point was tried, and it failed three times out of
+      three -- against code that was working.
+
+      And it is gone by the WAIT below, which is the half that lasts. A block
+      left permanently tinted reads as a state the setting is in, and the
+      removal rides on an animationend that a stranded animation never fires --
+      so the failure this catches is invisible except as a page that slowly
+      collects highlights.
+    */
+    const arrived = await page.run(`(() => {
+    const box = document.getElementById('jump');
+    const target = [...document.querySelectorAll('[data-field]')].find((e) => e.dataset.field === 'prompt-rememberThis.alreadyThere');
+    if (!target) return { missing: true, shut: !box.open };
+    const seen = target.getBoundingClientRect();
+    const pane = document.getElementById('machine-pane').getBoundingClientRect();
+    return {
+      shut: !box.open,
+      group: (document.querySelector('#nav-groups .tab[aria-current="true"] .tab-label') || {}).textContent,
+      /* In view means inside the pane that scrolls it, not merely in the document. */
+      inView: seen.top >= pane.top - 1 && seen.bottom <= pane.bottom + 1,
+      /* Nothing is left marked -- see the note above this query. */
+      /* The mark is still up at this point -- see the note above, and the wait below. */
+      marked: target.classList.contains('landed'),
+      /* How far the setting's own top sits from the top of the pane it was scrolled in. */
+      offBy: Math.round(seen.top - pane.top),
+      /*
+        Whether the pane could have scrolled further. It decides whether offBy
+        means anything: an element at the very end of a scroller cannot reach
+        the top, so a large offBy there would be the container's floor rather
+        than a bad landing.
+      */
+      canScrollMore: document.getElementById('machine-pane').scrollTop <
+        document.getElementById('machine-pane').scrollHeight - document.getElementById('machine-pane').clientHeight - 2,
+    };
+  })()`)
+    if (arrived.missing === true)
+      bad('jump-lands', 'the jump finished with no element carrying that prompt on the page')
+    else if (arrived.shut !== true)
+      bad('jump-lands', 'the panel stayed open over the page it opened')
+    else if (arrived.inView !== true)
+      bad(
+        'jump-lands',
+        'the prompt was reached but left outside the scrolling pane — the page opened and the scroll did not',
+      )
+    else if (arrived.marked !== true)
+      bad('jump-lands', 'nothing marked where the jump landed, so the page moved and said nothing')
+    else if (arrived.canScrollMore !== true)
+      bad(
+        'jump-lands',
+        'the pane is scrolled to its end, so where this landed proves nothing -- pick a target further from the bottom',
+      )
+    else if (Math.abs(arrived.offBy) > 4)
+      /*
+        AT THE TOP, not merely somewhere on screen, and this is the assertion
+        that protects the wait for a frame.
+
+        "In view" was all this checked, and it passed with that wait removed:
+        the scroll ran against a layout that had not settled, landed 281px from
+        where it asked to be, and the setting was still visible because a pane
+        is taller than one block. A jump that puts you a screenful away from the
+        thing you asked for is a jump people stop trusting, and nothing about it
+        looks broken in a screenshot.
+      */
+      bad(
+        'jump-lands',
+        'the setting landed ' +
+          arrived.offBy +
+          'px from the top of the pane, with room to scroll -- the scroll ran against a layout that had not settled',
+      )
+    else {
+      /*
+        Bounded, and it is an ASSERTION rather than a pause: until throws when
+        the condition never comes true, so a mark that strands takes this check
+        red instead of being waited out.
+      */
+      await until(
+        page,
+        `document.querySelectorAll('.landed').length === 0`,
+        'the landing mark to fade',
+      )
+      ok(
+        'jump-lands',
+        'typing a prompt title from her page opens ' +
+          JSON.stringify((arrived.group || '').trim()) +
+          ' and scrolls one of its 30 editors into view (' +
+          listed.rows +
+          ' matched), marks it, and clears the mark',
+      )
+    }
+  })
+
+  await step('jump-census', async () => {
+    /* --- every setting search offers is a setting the page draws ----------- */
+    /*
+    THE HALF vitest CANNOT SEE, for her page.
+
+    The machine's panes are checked in `fields.test.ts`, which renders each one
+    and compares the anchors it drew against the fields it declared, both
+    directions. Her sheet cannot be checked that way: its builders reach for
+    HTMLInputElement and querySelector, which a node test has no honest way to
+    provide -- and a fake that answered them would be asserting against a tree
+    the browser never builds.
+
+    So her half is checked HERE, against the real one. A declared field that is
+    never drawn is a search result that scrolls nowhere, and nothing about it
+    looks wrong: the panel offers the row, the page changes, and the setting is
+    not there. That is precisely the failure that accumulates one new section at
+    a time until people stop trusting the search.
+
+    The list is written out rather than read from the module, deliberately. This
+    script runs against the BUILT window and importing renderer source into it
+    would check the source against itself. A manifest is the same shape
+    `documents.test.ts` uses for the ids this window cannot start without, and
+    it has the same forcing property: a new section has to be added here.
+
+    IT IS BOUND TO THE INDEX BY A UNIT TEST, and that binding is what makes it
+    worth anything. On its own this compared the manifest only to the DOM, so
+    deleting an entry from `herFields()` left the anchor drawn, this list
+    satisfied and the check green while search had lost the setting.
+    `fields.test.ts` parses this array and asserts it equals `herFields()`; it
+    caught a missing entry the first time it ran.
+  */
+    await goTo(page, 'cast')
+    const hers = [
+      'her-who',
+      'her-appearance',
+      'her-size',
+      'her-voice',
+      'her-speech-bubble',
+      'her-conversations',
+      'her-face-file',
+      'her-expressions',
+      'her-memory',
+      'her-instruction',
+      'her-this-character',
+    ]
+    const drawn = await page.run(
+      `[...document.querySelectorAll('#page-hers [data-field]')].map((e) => e.dataset.field)`,
+    )
+    const missing = hers.filter((one) => !drawn.includes(one))
+    /*
+      AND THE OTHER DIRECTION. An anchor on the page that search does not know
+      about is a setting nobody can find, which is the quieter of the two and
+      the one that would never be noticed.
+    */
+    const unlisted = drawn.filter((one) => !hers.includes(one))
+    if (missing.length > 0)
+      bad(
+        'jump-census',
+        missing.length + ' setting(s) search offers are not drawn: ' + JSON.stringify(missing),
+      )
+    else if (unlisted.length > 0)
+      bad(
+        'jump-census',
+        unlisted.length +
+          ' setting(s) on her page are not in the index: ' +
+          JSON.stringify(unlisted),
+      )
+    else
+      ok(
+        'jump-census',
+        'all ' + hers.length + ' of her sheet\u2019s settings are drawn and indexed',
+      )
+  })
+
   await step('one-masthead', async () => {
     /* --- the masthead is one component ------------------------------------- */
     /*
@@ -3099,10 +3425,91 @@ async function checks(page, where = '') {
       return parseFloat(s.transitionDuration) > 0 || parseFloat(s.animationDuration) > 0;
     }).length)()`)
     if (moving === 0) {
-      // Vacuous today and deliberately not a failure: this shell declares no
-      // transitions at all. The check is here so that the first one added has to
-      // answer for itself rather than shipping unguarded.
-      ok('reduced-motion', 'nothing declares motion, so there is nothing to still')
+      /*
+        NOTHING IS MOVING RIGHT NOW, which is not the same as nothing moving.
+
+        This said "this shell declares no transitions at all", and that stopped
+        being true twice: the switch's knob moves on the fast duration, and the
+        mark that says where finding a setting landed you animates on the slow
+        one. Both are TRANSIENT -- a knob only animates while it is being
+        thrown, and the landing mark is on an element for 440ms -- so a scan of
+        what is drawn at one instant sees neither, and reporting that as "no
+        motion exists" is a claim about the stylesheet made from a snapshot.
+
+        So the branch checks what it actually can: that the vocabulary the
+        motion is declared in collapses when the system asks. Both durations are
+        tokens, both are zeroed by one block at the foot of tokens.css, and a
+        transition that stops honouring the preference does so by being written
+        with a literal duration instead of a token -- which is what this makes
+        visible the moment it happens.
+      */
+      await page.send('Emulation.setEmulatedMedia', {
+        features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+      })
+      await settle(page)
+      /*
+        THE TOKENS AND EVERY DECLARATION THAT USES ONE.
+
+        Checking the two root tokens alone was not enough, and an audit said so:
+        a rule written with a literal duration honours nothing, and motion on a
+        pseudo-element is invisible to a scan of elements. So this reads the
+        tokens AND walks every rule in every stylesheet for a non-zero duration
+        that is not a token reference -- which reaches ::before and ::after,
+        hidden pages, and anything not currently drawn.
+
+        Same-origin only, so the try/catch is not defensive noise: cssRules
+        throws on a cross-origin sheet and there is no way to ask first.
+      */
+      const stilled = await page.run(`(() => {
+      const root = getComputedStyle(document.documentElement);
+      const tokens = ['--duration', '--duration-fast']
+        .map((one) => [one, root.getPropertyValue(one).trim()])
+        .filter(([, value]) => parseFloat(value) !== 0);
+      const literals = [];
+      /*
+        A STYLE RULE ALSO HAS cssRules, and assuming otherwise made this find
+        nothing at all.
+
+        Since CSS nesting, Chromium's CSSStyleRule implements CSSGroupingRule --
+        so every ordinary rule carries an EMPTY cssRules list, which is an object
+        and therefore truthy. A walk written as "if it has children, recurse and
+        move on" recursed into nothing for every rule in the sheet and never read
+        a single declaration. It reported zero literal durations against a
+        stylesheet with one deliberately planted in it, and looked exactly like a
+        pass.
+
+        So both are done: read this rule's own declarations, THEN descend into
+        whatever children it actually has.
+      */
+      const walk = (list) => {
+        for (const rule of list) {
+          if (rule.cssRules && rule.cssRules.length > 0) walk(rule.cssRules);
+          if (!rule.style) continue;
+          for (const prop of ['animation-duration', 'transition-duration']) {
+            const value = rule.style.getPropertyValue(prop);
+            if (!value) continue;
+            const seconds = value.split(',').map((one) => parseFloat(one) || 0);
+            if (seconds.some((one) => one > 0))
+              literals.push((rule.selectorText || rule.cssText.slice(0, 40)) + ' :: ' + prop + ': ' + value);
+          }
+        }
+      };
+      for (const sheet of document.styleSheets) {
+        let rules;
+        try { rules = sheet.cssRules } catch { continue }
+        walk(rules);
+      }
+      return [...tokens, ...literals.slice(0, 5)];
+    })()`)
+      await page.send('Emulation.setEmulatedMedia', { features: [] })
+      await settle(page)
+      if (stilled.length > 0)
+        bad('reduced-motion', 'motion survives the preference: ' + JSON.stringify(stilled))
+      else
+        ok(
+          'reduced-motion',
+          'nothing is mid-motion; both durations zero and no rule hard-codes one',
+        )
     } else {
       await page.send('Emulation.setEmulatedMedia', {
         features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],

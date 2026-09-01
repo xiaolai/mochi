@@ -3,6 +3,8 @@ import { PRONOUNS, forPronoun } from '@shared/pronoun'
 import { element } from '../../element'
 import { SAYS } from '../shelf-says'
 import { type ShelfHandlers, chooser, savedField, section, settingRow } from './row'
+import { anchor } from '../../field'
+import { HER_FIELDS } from './fields'
 
 /**
  * Who she is: her name, the words she takes, and what she calls you.
@@ -80,10 +82,13 @@ export function whoSection(
     ),
   )
 
-  return section(
-    forPronoun(SAYS.whoHead, view.pronoun),
-    forPronoun(SAYS.whoHint, view.pronoun),
-    settingRow(forPronoun(SAYS.herName, view.pronoun), named),
-    settingRow('Calls you', called, 'often left empty'),
+  return anchor(
+    HER_FIELDS.who,
+    section(
+      forPronoun(SAYS.whoHead, view.pronoun),
+      forPronoun(SAYS.whoHint, view.pronoun),
+      settingRow(forPronoun(SAYS.herName, view.pronoun), named),
+      settingRow('Calls you', called, 'often left empty'),
+    ),
   )
 }

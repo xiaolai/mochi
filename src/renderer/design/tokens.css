@@ -927,7 +927,14 @@ textarea:focus-visible {
  * `tokens.css` finally protects something". The foot of the file went on saying
  * it protected nothing.
  *
- * One is still nearly none, and the vocabulary is here for the second.
+ * THE SECOND ARRIVED, and it is why this block now covers both halves of the
+ * vocabulary rather than one. `--duration` drives the mark that says where
+ * finding a setting scrolled you to — `[data-field].landed` in the shell.
+ *
+ * That mark is removed on `animationend` rather than on a timer, and this block
+ * is what makes that safe rather than clever: at `0ms` the animation still runs
+ * and still ends, so the preference shortens the mark instead of stranding it.
+ * A timer would have had to guess the same number twice.
  *
  * The motion in this app is HERS, and it is a canvas: the breath, the drift,
  * the blink schedule and the ambient loops. `rig/mochi.ts` gates all of it on

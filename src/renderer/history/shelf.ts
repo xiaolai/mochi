@@ -8,10 +8,12 @@ import { colourSection } from './sheet/colour'
 import { whoSection } from './sheet/who'
 import { fileSection } from './sheet/file'
 import { type ShelfHandlers } from './sheet/row'
-import { bubbleSection } from './sheet/saving'
+import { bubbleSection, savingSection } from './sheet/saving'
 import { voiceSection } from './sheet/voice'
 import { sizeSection } from './sheet/size'
 import { wakeCount } from './wake-count'
+import { anchor } from '../field'
+import { HER_FIELDS } from './sheet/fields'
 
 /**
  * The characters half of the shelf.
@@ -109,12 +111,32 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
     history last. `Her file` joins them only when there is one, which is what A2
     draws and what "the built-in only — she has no file to delete" says on A1.
   */
+  /*
+    `savingSection` IS DRAWN, and it was not.
+
+    It was written, exported, given a pronoun table, a note and a working save
+    path — `handlers.save({ keeps })` reaches `writePolicy`, and main sends
+    `worn.keeps` on every read — and then no caller. So the one control in this
+    application that decides whether anything she says is written to disk at all
+    existed in full and was on no screen.
+
+    Its own header says where it goes: *"Per character, and on her sheet."*
+    `storage.ts` says the same from the other side, listing retention among the
+    things deliberately NOT on the machine's page because they belong beside the
+    character they are filed under. Both comments described an arrangement the
+    code did not have.
+
+    After the bubble and before her file: the order runs from what she IS toward
+    what is done with her, and whether her words are kept is the last thing about
+    her rather than the first thing about her files.
+  */
   page.append(
     whoSection(view, worn, handlers),
     colourSection(view, worn, handlers),
     sizeSection(view, worn, handlers),
     voiceSection(view, worn, handlers),
     bubbleSection(view, worn, handlers),
+    savingSection(view, worn, handlers),
     fileSection(view, worn, handlers),
     deeper(view, worn),
   )
@@ -127,8 +149,7 @@ export function characterSheet(view: ShelfView, handlers: ShelfHandlers): HTMLEl
     runs from what she IS toward what can be done to her, and nothing below it
     would be read after somebody has decided to remove her.
   */
-  const dangerous = castDangerous(worn, view.pronoun, handlers)
-  if (dangerous !== null) page.append(dangerous)
+  page.append(castDangerous(worn, view.pronoun, handlers))
   return page
 }
 
@@ -407,26 +428,39 @@ export function assembledPanel(
  * door people stop trying.
  */
 function deeper(view: ShelfView, worn: ShelfCharacter): HTMLElement {
+  /*
+    THE DOOR IS WHAT SEARCH REACHES, not the screen behind it.
+
+    Her expressions, her notes and her instruction are SCREENS of their own —
+    each with its own title and apparatus column — reached by pressing one of
+    these rows. Search takes somebody to the row rather than through it, and
+    that is the honest stopping point: opening a drill-down from a search box
+    would leave them somewhere with no memory of how they arrived, and this
+    window already has one way in that they can see.
+  */
   const rows = [
     {
       to: 'faces' as const,
+      field: HER_FIELDS.faces,
       name: forPronoun(SAYS.deeperFaces, view.pronoun),
       fact: `${String(worn.faces.length)} of 8 allowed`,
     },
     {
       to: 'notes' as const,
+      field: HER_FIELDS.notes,
       name: forPronoun(SAYS.deeperNotes, view.pronoun),
       fact: countOf(view.note.text),
     },
     {
       to: 'instruction' as const,
+      field: HER_FIELDS.instruction,
       name: forPronoun(SAYS.deeperInstruction, view.pronoun),
       fact: forPronoun(SAYS.sentAtWake, view.pronoun),
     },
   ]
   const wrap = element('div', 'deeper')
   for (const one of rows) {
-    const row = element('button', 'deeper-row')
+    const row = anchor(one.field, element('button', 'deeper-row'))
     row.type = 'button'
     row.dataset.opens = one.to
     row.append(element('span', 'deeper-name', one.name), element('span', 'deeper-fact', one.fact))

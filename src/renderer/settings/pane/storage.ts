@@ -37,14 +37,41 @@
  * it is left out rather than estimated.
  */
 import { element } from '../../element'
-import { field, type Pane, type PaneHandlers } from '../pane'
-import { type Revealable } from '@shared/ipc'
-import { forPronoun } from '@shared/pronoun'
+import { anchor, field, type Pane, type Field, type PaneHandlers } from '../pane'
+import { type Revealable, type SettingsView } from '@shared/ipc'
+import { forPronoun, label as paneLabel } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
+
+/**
+ * What this group holds, named once. See `Field`.
+ *
+ * The folders are one field EACH rather than one for the heading above them,
+ * and that is the difference between a search that works and one that looks
+ * like it does: somebody types "personas" because that is the word on the row,
+ * not "on disk", which is the word on the heading. A single anchor for the
+ * group would land them at a heading and leave them scanning.
+ *
+ * `folderField` builds them from the kind for the same reason `render` maps
+ * over `view.folders`: the store decides which folders there are, and a hand
+ * written pair here would be a second answer that goes stale the day a third
+ * one is added.
+ */
+export function folderField(kind: Revealable): Field {
+  return { id: `folder-${kind}`, label: kind, keywords: ['folder', 'files', 'on disk', 'reveal'] }
+}
+
+const FIELDS: Readonly<Record<'onDisk' | 'everything', Field>> = {
+  onDisk: { id: 'on-disk', label: SAYS.onDisk, keywords: ['storage', 'where', 'files'] },
+  everything: {
+    id: 'forget-everything',
+    label: 'Every conversation, every character',
+    keywords: ['delete', 'erase', 'forget', 'wipe', 'remove all', 'clear history'],
+  },
+}
 
 /** One folder, and the button that opens it. */
 function folder(kind: Revealable, path: string, handlers: PaneHandlers): HTMLElement {
-  const row = element('div', 'folder')
+  const row = anchor(folderField(kind), element('div', 'folder'))
   const left = element('div')
   left.append(element('div', undefined, kind), element('code', undefined, path))
   const open = element('button', 'btn', 'Show')
@@ -67,11 +94,17 @@ function folder(kind: Revealable, path: string, handlers: PaneHandlers): HTMLEle
  * is exactly why it cannot live beside a character: there is no character it is
  * about.
  */
-function everything(handlers: PaneHandlers): HTMLElement {
-  const wrap = element('div', 'folder')
+function everything(pronoun: SettingsView['pronoun'], handlers: PaneHandlers): HTMLElement {
+  const wrap = anchor(FIELDS.everything, element('div', 'folder'))
   const left = element('div')
+  /*
+    THE TITLE COMES FROM THE DECLARATION. It was a literal here and a second
+    copy in `FIELDS.everything.label`, so the row and the search result that
+    scrolls to it could be renamed apart — the drift the declaration exists to
+    stop, on the one row in this window that cannot be undone.
+  */
   left.append(
-    element('div', undefined, 'Every conversation, every character'),
+    element('div', undefined, paneLabel(FIELDS.everything.label, pronoun)),
     element(
       'code',
       undefined,
@@ -93,6 +126,14 @@ export const STORAGE: Pane = {
   id: 'storage',
   label: 'Storage',
   attention: () => null,
+  // `onDisk` first, then a field per folder, then the deletion — the order they
+  // are drawn in, which is what `Pane.fields` promises and what lets the test
+  // compare the two lists position by position rather than as sets.
+  fields: (view) => [
+    FIELDS.onDisk,
+    ...(Object.keys(view.folders) as Revealable[]).map(folderField),
+    FIELDS.everything,
+  ],
   render(view, handlers) {
     const where = element('p', 'note')
     where.append(
@@ -115,12 +156,12 @@ export const STORAGE: Pane = {
       ),
     )
     return [
-      field(forPronoun(SAYS.onDisk, view.pronoun), disk),
+      field(FIELDS.onDisk, view, disk),
       where,
       // Last, and under everything it acts on. The rows above say what is
       // there; this one is the only way to make them all empty, and reading
       // what it will take before reaching it is the point of the order.
-      everything(handlers),
+      everything(view.pronoun, handlers),
       // What is NOT here, and why — her memory and her conversations are per
       // character and live with the character they belong to.
       element('p', 'note', forPronoun(SAYS.kept, view.pronoun)),

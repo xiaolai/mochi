@@ -36,6 +36,9 @@ import { promptSection } from './sheet/prompt'
 import { characterRows } from './parts/rail'
 import { characterSubject } from './parts/masthead'
 import { machineNav } from './parts/machine-nav'
+import { jumpRows, rowId } from './parts/jump-panel'
+import { destinations, matching, type Destination } from '../settings/jump'
+import { opensJump } from '../rules/jump-key'
 import { castActions } from './sheet/cast'
 import { faceTile } from './sheet/face-tile'
 import { type ShelfHandlers } from './sheet/row'
@@ -87,6 +90,10 @@ import {
   subjectEl,
   spreadEl,
   marginPermitsEl,
+  jumpEl,
+  jumpQEl,
+  jumpFoundEl,
+  jumpSaidEl,
 } from './elements'
 import { receipt, say } from './status'
 import { element } from '../element'
@@ -2513,6 +2520,71 @@ async function loadMachine(): Promise<void> {
   // View III draws from the same read. Without this it keeps whatever it had
   // when the write went out, which is the state somebody just changed.
   if (place === 'permits') renderPermits()
+  drewMachine()
+}
+
+/**
+ * Anybody waiting for the machine's pages to have been DRAWN, once.
+ *
+ * ## Why this is not just the promise `loadMachine` returns
+ *
+ * `loadMachine` resolves whether or not it rendered: `freshness` makes any read
+ * that is no longer the newest return early, so awaiting one guarantees only
+ * that A read finished, not that the pane on screen came from it. Finding a
+ * setting scrolls to an element immediately afterwards, and a scroll into a
+ * pane that has not been drawn silently does nothing.
+ *
+ * So the signal is the RENDER, not the read. `loadMachine` calls `drewMachine`
+ * on its way out, and everyone waiting is released together.
+ */
+let drawnWaiters: ((drawn: boolean) => void)[] = []
+
+function drewMachine(): void {
+  const waiting = drawnWaiters
+  // Emptied BEFORE they run: a waiter that starts another read would otherwise
+  // be resolved twice by the render its own read causes.
+  drawnWaiters = []
+  for (const done of waiting) done(true)
+}
+
+/**
+ * Read the machine's settings, and resolve when the pane has actually been drawn.
+ *
+ * The reason for the timeout is `loadMachine`'s failure path: a read that
+ * throws tears down the nav and prints the error, and never renders — so a
+ * waiter with no bound would hang the caller forever on the one machine where
+ * the settings cannot be read. Two seconds is long enough that it is never
+ * reached by a slow disk and short enough that a caller which times out is
+ * still acting on the same intent.
+ */
+async function machineDrawn(): Promise<boolean> {
+  let settle: (drawn: boolean) => void = () => {}
+  const drawn = new Promise<boolean>((done) => {
+    settle = done
+    drawnWaiters.push(done)
+  })
+  /*
+    THE TIMEOUT ANSWERS `false`, AND TAKES ITS WAITER WITH IT.
+
+    Both halves were wrong first time round and an audit caught them. It
+    resolved indistinguishably from a real render, so a caller could not tell
+    "the pane is drawn" from "it never was" and proceeded either way; and the
+    resolver stayed in `drawnWaiters` after the race was over, so every timeout
+    left one behind and the list grew for the life of the window.
+
+    Deregistering here rather than in `drewMachine` because this is the only
+    place that knows the wait is over. A resolver called twice is harmless — a
+    settled promise ignores it — but a list nothing ever removes from is a leak
+    whatever it holds.
+  */
+  const spent = new Promise<boolean>((done) => {
+    setTimeout(() => {
+      drawnWaiters = drawnWaiters.filter((one) => one !== settle)
+      done(false)
+    }, 2000)
+  })
+  void loadMachine()
+  return Promise.race([drawn, spent])
 }
 
 function renderMachine(): void {
@@ -2802,6 +2874,20 @@ window.mochiHistory.onShow((asked) => {
  * still leaves the conversations loading. The two are independent everywhere
  * except in the order they run.
  */
+/*
+  THE MACHINE'S SETTINGS, READ ONCE AT STARTUP.
+
+  Not for the machine's page, which reads on arrival and says why. For the key
+  that opens "find a setting": `rules/jump-key.ts` is given the platform rather
+  than sniffing one — `key-glyphs.ts`'s rule — and until a read has landed there
+  is no platform, so the rule answers no and the key does nothing.
+
+  Cheap enough to do unconditionally: `settings:read` is synchronous in main and
+  touches local files only. It starts no child process — the Codex readiness it
+  reports is the cached one, and probing is a separate call behind a button.
+*/
+void loadMachine()
+
 void readEverything({
   characters: async () => {
     await readShelf()
@@ -2811,6 +2897,337 @@ void readEverything({
   characterTrouble: (error) => {
     empty(charactersEl, `Could not read the characters: ${String(error)}`)
   },
+})
+
+/* ---- find a setting ----------------------------------------------------- */
+
+/**
+ * Reaching a setting by name, from wherever the window happens to be.
+ *
+ * ## Why this is worth a surface
+ *
+ * Ten groups across two pages, and the count alone would not justify one: three
+ * settings under a named heading is a list, not a haystack. One group is a
+ * haystack — `prompts.ts` draws thirty editors into a single scrolling column,
+ * and its own comment concedes that the pane "opened straight into the first of
+ * twenty-seven editors". Knowing which text you want has never been the same as
+ * being able to reach it.
+ *
+ * ## It moves you; it changes nothing
+ *
+ * Every entry is a place, and pressing one opens the page, opens the group, and
+ * scrolls the setting into view. No control is operated and nothing is written
+ * — which is why it is not a command palette, and why the panel can close on
+ * the way rather than staying up to report anything.
+ *
+ * ## The keystroke, and the one control it must not steal
+ *
+ * The keys pane binds a global `keydown` on `window` IN THE CAPTURE PHASE while
+ * somebody is choosing a shortcut, and swallows every combination — deliberately,
+ * because no combination may be off limits to capture, `Command+W` included.
+ *
+ * So the listener below is on `window` in the BUBBLE phase, and that is not a
+ * detail. `stopPropagation` during window's capture pass ends the dispatch
+ * before the bubble pass reaches window at all, so the keys pane shields this
+ * without either file naming the other. A capture-phase listener here would
+ * fire alongside it — `stopPropagation` does not silence other listeners on the
+ * same object in the same pass — and pressing the panel's own key while binding
+ * a shortcut would both capture the combination AND open the panel over it.
+ */
+let jumpFound: readonly Destination[] = []
+/** Which row Enter would take. An index, because the list is rebuilt per keystroke. */
+let jumpAt = 0
+
+function jumpSay(text: string): void {
+  jumpSaidEl.textContent = text
+}
+
+function redrawJump(): void {
+  const view = machine
+  /*
+    The settings have to be READ before anything can be found in them.
+
+    `machine` is null until this window has visited the machine's page or view
+    III, and this panel opens from anywhere. Saying so beats an empty list,
+    which is indistinguishable from "nothing matched what you typed".
+  */
+  if (view === null) {
+    /*
+      EVERYTHING DERIVED IS CLEARED, not just the rows.
+
+      This emptied the list and left `jumpFound`, `jumpAt` and the two ARIA
+      attributes holding the previous read's answer — so Enter still navigated,
+      to a result that was no longer on screen, and a screen reader was told the
+      field owned an active row in an empty list. A cleared view has to clear
+      everything that was derived from the old one.
+    */
+    jumpFound = []
+    jumpAt = 0
+    jumpFoundEl.replaceChildren()
+    jumpQEl.setAttribute('aria-expanded', 'false')
+    jumpQEl.removeAttribute('aria-activedescendant')
+    jumpSay('Still reading the settings\u2026')
+    return
+  }
+  jumpFound = matching(destinations(view, shelf), jumpQEl.value)
+  // Clamped rather than reset to 0: somebody who has arrowed down two rows and
+  // typed one more letter usually still means something near where they were,
+  // and a selection that jumps back to the top on every keystroke is one people
+  // stop using the arrow keys with.
+  jumpAt = Math.min(jumpAt, Math.max(0, jumpFound.length - 1))
+  jumpFoundEl.replaceChildren(...jumpRows(jumpFound, jumpAt, (one) => void jumpTo(one)))
+  jumpQEl.setAttribute('aria-expanded', String(jumpFound.length > 0))
+  const chosen = jumpFound[jumpAt]
+  if (chosen === undefined) jumpQEl.removeAttribute('aria-activedescendant')
+  else jumpQEl.setAttribute('aria-activedescendant', rowId(jumpAt))
+  if (jumpQEl.value.trim() === '') jumpSay('Type part of a setting\u2019s name.')
+  else if (jumpFound.length === 0) jumpSay(`Nothing matches \u201c${jumpQEl.value.trim()}\u201d.`)
+  else jumpSay('')
+}
+
+/** Move the selection, keeping it inside the list and scrolling it into view. */
+function jumpMove(by: number): void {
+  if (jumpFound.length === 0) return
+  /*
+    WRAPS, which is what `alongViews` decided for the same reason: arrowing off
+    the end of a short list is a dead key otherwise, and the lists here are
+    short enough that somebody reaches the end while still typing.
+  */
+  jumpAt = (jumpAt + by + jumpFound.length) % jumpFound.length
+  redrawJump()
+  // `nearest`, so moving one row does not recentre a list somebody is reading.
+  jumpFoundEl.querySelector(`#${rowId(jumpAt)}`)?.scrollIntoView({ block: 'nearest' })
+}
+
+/**
+ * Open the page, open the group, and put the setting where it can be seen.
+ *
+ * ASYNC because the pane's content comes from a read that `showPlace` only
+ * STARTS — it calls `void loadMachine()`. Scrolling before that lands would
+ * look for an element the window has not drawn yet and silently do nothing,
+ * which is the one failure here that leaves no trace: the panel closes, the
+ * page changes, and the setting is somewhere below the fold.
+ */
+async function jumpTo(one: Destination): Promise<void> {
+  jumpEl.close()
+  if (one.paneId !== null) openGroup = one.paneId
+  /*
+    A DRILL-DOWN IS CLOSED FIRST, and only her page needs saying.
+
+    Her expressions, her notes and her instruction are screens drawn INTO the
+    same column as her sheet, and `showPlace` clears them only when the window
+    LEAVES her page — so jumping from inside one of them to "Voice", which is on
+    her page too, would leave the drill-down over the section it had just
+    scrolled to. `showPlace` makes exactly this argument about arriving with a
+    sub-screen still open; this is the same fault from the other direction.
+
+    `openCharacter` redraws the sheet from the cleared state, which is what
+    `showPlace` also calls on arrival.
+  */
+  if (one.place === 'cast' && (deeperInto !== null || !showingCharacter)) {
+    deeperInto = null
+    showingCharacter = false
+    openCharacter()
+  }
+  if (place !== one.place) showPlace(one.place)
+  /*
+    ONE READ, AWAITED — and the awaited one has to be the one that DREW.
+
+    This started two. `showPlace` fires `void loadMachine()` on its way into the
+    machine's page or view III, and this awaited a second; `freshness` then made
+    the first bail, so one read was always wasted. Worse, the guarantee it
+    looked like it had was not one: `freshness` discards whichever answer is
+    OLDER, so a third read landing in between — another window's write, a
+    recheck — makes the awaited call return without rendering, and the scroll
+    below then runs against a pane that has not been drawn.
+
+    `machineDrawn` resolves when a render actually happens, whichever read
+    caused it, which is the condition this code needs and the one a promise
+    from `loadMachine` cannot give.
+  */
+  /*
+    AND WHETHER IT WAS ACTUALLY DRAWN is acted on, not discarded.
+
+    A read that fails tears down the pane and prints the error — `loadMachine`
+    says so — and never renders, so the wait can end without the setting being
+    on the page. Saying which of the two happened beats scrolling into a page
+    that is showing an error and reporting nothing: the lookup below would find
+    no anchor and blame a missing field, which is a different fault entirely.
+  */
+  if (one.place !== 'cast' && !(await machineDrawn())) {
+    say(`${one.label} could not be opened — the settings could not be read.`, true)
+    return
+  }
+  /*
+    FOUND BY WALKING, not by a selector built from the id.
+
+    A prompt's key becomes part of its field id — `prompt-notes.heading` — and a
+    key is a value from the store rather than a literal in this file. Building
+    `[data-field="..."]` from one puts store content inside a selector, which is
+    an injection surface for the sake of saving a loop over about fifty nodes.
+  */
+  const target = [...document.querySelectorAll('[data-field]')].find(
+    (each) => each instanceof HTMLElement && each.dataset['field'] === one.fieldId,
+  )
+  if (!(target instanceof HTMLElement)) {
+    // Said rather than swallowed. This is reachable only if a field is declared
+    // and never drawn, which `fields.test.ts` exists to make impossible — so if
+    // it ever happens, the assertion that should have caught it has stopped.
+    say(`${one.label} could not be found on the page.`, true)
+    return
+  }
+  /*
+    `start`, NOT `center`, and the difference was measured rather than argued.
+
+    A prompt editor is about 255px tall. Centring one puts its heading a hundred
+    pixels down the pane, so somebody who asked for a setting by name arrives
+    looking at the middle of a text box — and on the prompts pane, where thirty
+    of them look alike, the middle of a text box says nothing about which one
+    this is. `start` puts the name at the top of the pane, which is how a
+    setting is read: from what it is called, downward.
+
+    The gate holds it. `jump-lands` measures the landed element's top against
+    the pane's own top and refuses more than 4px, having first checked the pane
+    could have scrolled further — an element at the scroller's floor cannot
+    reach the top, and a large miss there would be the container rather than a
+    bad landing.
+
+    A wait for the next animation frame stood here, on the theory that
+    `loadMachine` leaves the layout dirty. It was removed after the gate showed
+    the landing is identical with and without it: `scrollIntoView` flushes
+    layout itself, and the miss that prompted the theory was `center` doing
+    exactly what `center` does.
+  */
+  target.scrollIntoView({ block: 'start' })
+  /*
+    Whatever was marked LAST is unmarked first, and that is the fail-safe.
+
+    The removal below rides on `animationend`, which is right — it cannot
+    disagree with the stylesheet about how long the mark lasts, and under
+    reduced motion the duration is 0ms and the event still fires. But an event
+    that never arrives would leave a tinted block on the page permanently, and
+    a background nobody can clear reads as a state the setting is in. Clearing
+    the previous one on the way in bounds that to a single element and ends it
+    at the next jump, without a timer having to guess the same number twice.
+  */
+  for (const stale of document.querySelectorAll('.landed')) stale.classList.remove('landed')
+  /*
+    Marked for a moment, then let go.
+
+    A page that scrolls without saying where it stopped leaves somebody hunting
+    the thing they just asked for — worst on the prompts pane, where thirty
+    blocks look alike. Removed on the animation ending rather than on a timer,
+    so the two cannot disagree about how long it lasts; `prefers-reduced-motion`
+    zeroes the duration and the event still fires.
+  */
+  target.classList.add('landed')
+  target.addEventListener(
+    'animationend',
+    () => {
+      target.classList.remove('landed')
+    },
+    { once: true },
+  )
+}
+
+function openJump(): void {
+  if (jumpEl.open) return
+  /*
+    NOT OVER A QUESTION SOMEBODY IS BEING ASKED.
+
+    `#sure` is the only irreversible thing in this application and it is a modal
+    dialog. A second modal opens on top of it perfectly happily, and then this
+    panel would navigate the window to another page while a deletion is still
+    waiting to be answered — leaving the confirmation buried under a page it is
+    not about, with its snapshot still armed.
+
+    Refused rather than queued: somebody who presses this while being asked
+    about a deletion has almost certainly not read the question yet.
+  */
+  if (sureEl.open) return
+  /*
+    The box is EMPTIED on the way in, unlike the archive's search.
+
+    That one is hidden rather than cleared so a query survives a trip away and
+    back — right there, because the results are the page. Here the panel is a
+    way through to somewhere else, so what was typed belongs to the trip that
+    ended, and reopening onto a stale list is reopening onto somebody else's
+    question.
+  */
+  jumpQEl.value = ''
+  jumpAt = 0
+  redrawJump()
+  jumpEl.showModal()
+  jumpQEl.focus()
+  /*
+    Read on opening, because the settings come from disk and from the OTHER
+    window's writes — `loadMachine`'s own comment says a cached copy is stale
+    when it matters. Not awaited: the list is drawn from whatever is already
+    known, and redrawn when the read lands, so the panel is usable at once on
+    the ordinary path where nothing has changed.
+  */
+  void loadMachine().then(
+    () => {
+      if (jumpEl.open) redrawJump()
+    },
+    () => {
+      // `loadMachine` reports its own failure into the machine pane. Saying it
+      // twice, once in a panel that is about to be closed, is noise.
+    },
+  )
+}
+
+jumpQEl.addEventListener('input', () => {
+  jumpAt = 0
+  redrawJump()
+})
+
+jumpQEl.addEventListener('keydown', (event: KeyboardEvent) => {
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    jumpMove(1)
+    return
+  }
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    jumpMove(-1)
+    return
+  }
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const chosen = jumpFound[jumpAt]
+    if (chosen !== undefined) void jumpTo(chosen)
+  }
+  /*
+    ESCAPE IS NOT HANDLED, deliberately.
+
+    `<dialog>` closes on it without a line being written, which is one of the
+    three reasons this is a dialog at all — the other two being the focus trap
+    and the top layer. Handling it here would be a second answer to the same
+    key, and the kind that stops agreeing with the first the day a browser
+    changes what a dialog does.
+  */
+})
+
+/*
+  The key, on the window, in the BUBBLE phase — see this section's header for
+  why the phase is the load-bearing part.
+
+  WHICH combination is `rules/jump-key.ts`, and it is a rule rather than a
+  clause here because the version written inline was wrong in a way that read
+  as right: `metaKey || ctrlKey`, under a comment claiming one per platform. On
+  macOS that fired on `Control+K` — kill-to-end-of-line — and called
+  `preventDefault` on it, inside the thirty prompt editors this panel exists to
+  reach. Four ways to be subtly wrong belong somewhere a test can see them.
+
+  The platform is GIVEN rather than sniffed, which is `key-glyphs.ts`'s rule
+  and the reason the settings are read at startup: until that read lands the
+  rule answers no, and no is the safe direction.
+*/
+window.addEventListener('keydown', (event: KeyboardEvent) => {
+  if (!opensJump(event, machine?.about.platform ?? null)) return
+  event.preventDefault()
+  openJump()
 })
 
 /*

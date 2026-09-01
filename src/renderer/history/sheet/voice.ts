@@ -13,6 +13,8 @@ import { element } from '../../element'
 import { type ShelfHandlers, chooser, section } from './row'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { forPronoun } from '@shared/pronoun'
+import { anchor } from '../../field'
+import { HER_FIELDS } from './fields'
 
 /*
   The ten samples, resolved by the bundler rather than by string arithmetic.
@@ -126,5 +128,8 @@ export function voiceSection(
     play((pressed.textContent ?? '').trim())
   })
 
-  return section('Voice', forPronoun(SAYS.nextWake, view.pronoun), pills, how)
+  return anchor(
+    HER_FIELDS.voice,
+    section('Voice', forPronoun(SAYS.nextWake, view.pronoun), pills, how),
+  )
 }

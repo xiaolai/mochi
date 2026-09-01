@@ -45,14 +45,29 @@
  * build cannot enumerate, which a fixed twenty-four is not.
  */
 import { element } from '../../element'
-import { type Pane } from '../pane'
+import { type Pane, type Field } from '../pane'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
 import { field } from '../pane'
+/**
+ * The one setting this group holds, named once. See `Field`.
+ *
+ * Its label is a table, because the heading is about HER — "Languages she
+ * listens for" rather than "Languages spoken", which is the difference between
+ * a heading about the world and a setting. `field` reads the table, so search
+ * and the pane cannot end up saying different words for it.
+ */
+const LANGUAGES: Field = {
+  id: 'languages',
+  label: SAYS.languagesHead,
+  keywords: ['language', 'accent', 'english', 'chinese', 'transcription', 'speech'],
+}
+
 export const HEARING: Pane = {
   id: 'hearing',
   label: 'Hearing you',
   attention: () => null,
+  fields: () => [LANGUAGES],
   render(view, handlers) {
     const chosen = new Set(view.hearing.languages)
     /*
@@ -147,7 +162,7 @@ export const HEARING: Pane = {
       noun is the one kind of apparatus text a reader has to guess at.
     */
     const parts: Node[] = [
-      field(forPronoun(SAYS.languagesHead, view.pronoun), languages, {
+      field(LANGUAGES, view, languages, {
         hint: `${String(chosen.size)} chosen · ${String(view.hearing.most)} at most`,
         note: forPronoun(chosen.size === 0 ? SAYS.noLanguages : SAYS.someLanguages, view.pronoun),
       }),

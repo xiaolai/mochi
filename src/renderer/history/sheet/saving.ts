@@ -14,6 +14,8 @@ import { type ShelfHandlers, section, settingRow } from './row'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { SIDE_NAMES } from '@shared/persona'
 import { type ByPronoun, forPronoun } from '@shared/pronoun'
+import { anchor } from '../../field'
+import { HER_FIELDS } from './fields'
 /**
  * Her words on your desktop: whether they are drawn, and where.
  *
@@ -73,11 +75,14 @@ export function savingSection(
   const row = element('div', 'row')
   row.append(keeps, label)
 
-  return section(
-    'Conversations',
-    forPronoun(SAYS.keeps, view.pronoun),
-    row,
-    element('p', 'note', forPronoun(SAYS.keptAlready, view.pronoun)),
+  return anchor(
+    HER_FIELDS.conversations,
+    section(
+      'Conversations',
+      forPronoun(SAYS.keeps, view.pronoun),
+      row,
+      element('p', 'note', forPronoun(SAYS.keptAlready, view.pronoun)),
+    ),
   )
 }
 
@@ -121,18 +126,21 @@ export function bubbleSection(
   side.addEventListener('change', () => {
     handlers.save({ id: worn.id, bubbleSide: side.value })
   })
-  return section(
-    'Speech bubble',
-    forPronoun(SAYS.bubbleWhen, view.pronoun),
-    row,
-    /*
-      `settingRow`, not a `.field` of its own — A1 draws this as an 82px label
-      beside the chooser, which is the shape every setting on her page has and
-      the reason that helper exists. It was the last user of the Machine tab's
-      150px label-beside-control grid, so one row on her page was composed by
-      the other page's rule.
-    */
-    settingRow('Which side', side),
-    element('p', 'note', forPronoun(SAYS.bubbleSide, view.pronoun)),
+  return anchor(
+    HER_FIELDS.bubble,
+    section(
+      'Speech bubble',
+      forPronoun(SAYS.bubbleWhen, view.pronoun),
+      row,
+      /*
+        `settingRow`, not a `.field` of its own — A1 draws this as an 82px label
+        beside the chooser, which is the shape every setting on her page has and
+        the reason that helper exists. It was the last user of the Machine tab's
+        150px label-beside-control grid, so one row on her page was composed by
+        the other page's rule.
+      */
+      settingRow('Which side', side),
+      element('p', 'note', forPronoun(SAYS.bubbleSide, view.pronoun)),
+    ),
   )
 }

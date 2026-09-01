@@ -126,6 +126,12 @@ const DOCUMENTS: readonly {
       'margin-permits',
       'nav-groups',
       'machine-pane',
+      // Find a setting. A surface of its own rather than part of a page, like
+      // `sure` and the troubles drawer — it rises over whichever page is up.
+      'jump',
+      'jump-q',
+      'jump-found',
+      'jump-said',
     ],
   },
 ]

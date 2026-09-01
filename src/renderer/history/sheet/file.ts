@@ -9,6 +9,8 @@
  */
 import { type ShelfHandlers, section } from './row'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
+import { anchor } from '../../field'
+import { HER_FIELDS } from './fields'
 /**
  * Which avatar file she wears.
  *
@@ -69,7 +71,7 @@ export function fileSection(
   file.addEventListener('change', () => {
     handlers.save({ id: worn.id, avatarId: file.value === '' ? null : file.value })
   })
-  return section('Face', resolvedFace(view, worn), file)
+  return anchor(HER_FIELDS.file, section('Face', resolvedFace(view, worn), file))
 }
 
 /** Where her face actually resolved to, not where it was asked to look. */

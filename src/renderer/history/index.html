@@ -616,6 +616,168 @@
       }
 
       /*
+        FIND A SETTING — a panel near the top, not a box in the middle.
+
+        Centred vertically it would sit over the thing somebody is trying to
+        reach, and the list grows downward as they type, so a centred panel also
+        moves while it is being read. Anchored near the top it grows into empty
+        space and the page stays where it was.
+
+        520 is `#sure`'s width and this is deliberately the same: they are the
+        two surfaces in this window that rise over a page, and two floating
+        panels at two widths read as two systems.
+      */
+      #jump {
+        top: 12vh;
+        max-width: 520px;
+        width: 520px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--r-panel);
+        background: var(--paper);
+        box-shadow: var(--lift-top);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: var(--t-body);
+        overflow: hidden;
+      }
+
+      #jump::backdrop {
+        background: light-dark(rgb(10 10 11 / 28%), rgb(0 0 0 / 55%));
+      }
+
+      /*
+        The field is the panel's head, so it carries the padding and the rule
+        under it rather than a border of its own.
+
+        `input[type='search']` is styled generally in this window, and a box
+        inside a box at 520px reads as a control that has been dropped into a
+        panel instead of being the top of it — the same argument `#q` makes
+        about the search on her page.
+      */
+      #jump > input[type='search'] {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        margin: 0;
+        padding: var(--s4) var(--s5);
+        border: 0;
+        border-bottom: var(--s-px) solid var(--rule);
+        border-radius: 0;
+        background: transparent;
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: var(--t-lead);
+      }
+
+      #jump > input[type='search']:focus {
+        outline: 0;
+      }
+
+      /*
+        Bounded, and scrolling INSIDE the panel.
+
+        Fifty-five settings match a single letter often enough that an unbounded
+        list would run off the bottom of the window, and a panel taller than the
+        screen cannot be scrolled back to its own field.
+      */
+      #jump-found {
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: var(--s2) 0;
+      }
+
+      #jump-found:empty {
+        display: none;
+      }
+
+      /*
+        One row: what it is called, and the group it is in.
+
+        The group is not decoration. "Rest" and "Workspace" mean nothing on
+        their own in a list of fifty, and the group is the fact that tells
+        somebody which of two similar-sounding settings they are about to be
+        taken to — the same reason `machine-nav.ts` numbers its rows.
+      */
+      .jump-row {
+        display: flex;
+        gap: var(--s3);
+        align-items: baseline;
+        padding: var(--s2) var(--s5);
+        cursor: default;
+      }
+
+      .jump-what {
+        flex: 1;
+        overflow: hidden;
+        color: var(--ink);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .jump-where {
+        flex: none;
+        color: var(--ink-off);
+        font-family: var(--mono);
+        font-size: var(--t-data);
+      }
+
+      /*
+        `aria-selected`, NOT a class.
+
+        The state is one a screen reader has to be told about anyway, so a class
+        beside it would be the same fact written twice — and this window has a
+        standing rule that a class it toggles at runtime must never be a bare
+        selector, precisely because two meanings of one name have collided here
+        before. An attribute selector cannot collide.
+      */
+      #jump-found [aria-selected='true'] {
+        background: var(--chosen);
+      }
+
+      #jump-said {
+        margin: 0;
+        padding: var(--s3) var(--s5);
+      }
+
+      #jump-said:empty {
+        display: none;
+      }
+
+      /*
+        WHERE YOU LANDED, marked for a moment.
+
+        Jumping scrolls a setting into view and then stops, and a page that
+        scrolls without saying where it stopped leaves somebody hunting the
+        thing they just asked for — worst on the prompts pane, where thirty
+        blocks look alike and the scroll is long. It fades rather than latching:
+        a mark that stayed would be read as a state the setting is in.
+
+        `landed`, NOT `found` — which this window already uses, for the line
+        over the archive's results saying how much matched. That is the ninth
+        collision of one name meaning two things in this stylesheet and the
+        first one caught before it shipped: `stylesheets.test.ts` refuses a
+        runtime-toggled class that is also a bare selector, and `.found` is one.
+
+        Compounded on the attribute rather than written bare, which is that same
+        rule for any class the renderer adds at runtime.
+      */
+      [data-field].landed {
+        animation: landed var(--duration) ease-out 2;
+        border-radius: var(--r-part);
+      }
+
+      @keyframes landed {
+        from {
+          background: var(--her-veil);
+        }
+
+        to {
+          background: transparent;
+        }
+      }
+
+      /*
         A 520px PANEL over its own trigger — C1's — not a bar across the window.
 
         It was `left: 32px; right: 32px`, so 1216px at the default size for a
@@ -4570,6 +4732,58 @@
         <button class="btn" id="sure-export" type="button">Save a copy first</button>
         <button class="btn bad" id="sure-yes" type="button">Delete</button>
       </div>
+    </dialog>
+    <!--
+      FIND A SETTING, over whatever page is showing.
+
+      ## Why this exists at all
+
+      Ten groups over two pages, and the count is not the problem: three
+      settings under a named heading is a list, not a haystack. One group is —
+      `prompts.ts` draws thirty editors into a single scrolling column, and its
+      own comment concedes that the pane "opened straight into the first of
+      twenty-seven editors". Reaching one has meant knowing roughly where it
+      sits and scrolling.
+
+      So this is a way to reach a setting by NAME. It changes nothing and runs
+      nothing: it moves you to where the setting lives and leaves you looking at
+      it, which is why the verb is jump and not command. See `settings/jump.ts`,
+      which also records why it is not called search — this window already has
+      one of those, over what she has SAID, and a second thing by that name in
+      one document is the collision half this stylesheet's comments are about.
+
+      ## A `<dialog>`, for the same three reasons `#sure` is one
+
+      Modal, focus-trapped, and Escape closes it — none of which is written
+      anywhere. It is also in the top layer, so it cannot be trapped under the
+      pane it rises over. Nothing here is destructive, so unlike `#sure` it has
+      no snapshot to take: what it shows is read when it opens and thrown away
+      when it shuts.
+
+      A combobox over a listbox, rather than a list of buttons: the field keeps
+      focus while the arrow keys move a selection inside it, which is what lets
+      somebody keep typing without leaving the control they are typing in. The
+      current row is named by `aria-activedescendant` rather than focused.
+    -->
+    <dialog id="jump" aria-label="Find a setting">
+      <input
+        id="jump-q"
+        type="search"
+        role="combobox"
+        placeholder="Find a setting&#8230;"
+        aria-controls="jump-found"
+        aria-autocomplete="list"
+        aria-expanded="false"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <div id="jump-found" role="listbox" aria-label="Settings found"></div>
+      <!--
+        WHAT THE BOX IS FOR when it is empty, and what happened when nothing
+        matched. One line, in the same place, because two lines in two places is
+        how an empty state comes to mean "still loading".
+      -->
+      <p id="jump-said" class="note-mono" role="status" aria-live="polite"></p>
     </dialog>
     <script type="module" src="./main.ts"></script>
   </body>

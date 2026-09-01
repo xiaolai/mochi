@@ -8,7 +8,7 @@
  * answers about an empty folder.
  */
 import { element } from '../../element'
-import { type Pane, type PaneHandlers } from '../pane'
+import { type Pane, type Field, type PaneHandlers, anchor } from '../pane'
 import { CODEX_SAYS, REMEDY_SAYS } from '@shared/delegation'
 import { type SettingsCodex, type SettingsView } from '@shared/ipc'
 import { readinessOf, type Certainty, type ReadinessAction } from '../../rules/readiness'
@@ -143,6 +143,38 @@ function showConfig(view: SettingsView, handlers: PaneHandlers): HTMLElement | n
   return open
 }
 
+/**
+ * What this group holds, named once. See `Field`.
+ *
+ * The Codex card is one of them even though it is not a setting anybody
+ * changes. It is the thing people arrive at this pane looking for — "why can
+ * she not look anything up" — and a search that finds the three controls
+ * beneath it while skipping the one block that answers the question would send
+ * somebody past their own answer.
+ */
+const FIELDS: Readonly<Record<'codex' | 'workspace' | 'search' | 'profile', Field>> = {
+  codex: {
+    id: 'codex',
+    label: 'Codex',
+    keywords: ['cli', 'installed', 'sign in', 'login', 'not working', 'version'],
+  },
+  workspace: {
+    id: 'workspace',
+    label: 'Workspace',
+    keywords: ['folder', 'directory', 'project', 'path', 'reads from'],
+  },
+  search: {
+    id: 'web-search',
+    label: 'Web search',
+    keywords: ['internet', 'online', 'browse'],
+  },
+  profile: {
+    id: 'codex-profile',
+    label: 'Codex profile',
+    keywords: ['config', 'model', 'toml'],
+  },
+}
+
 export const LOOKING: Pane = {
   id: 'looking',
   label: 'Looking things up',
@@ -169,6 +201,7 @@ export const LOOKING: Pane = {
     readinessOf({ readiness: view.lookup.codex.readiness, checking: false }).certainty === 'usable'
       ? null
       : `${CODEX_SAYS[view.lookup.codex.readiness]} ${forPronoun(SAYS.noCli, view.pronoun)}`,
+  fields: () => [FIELDS.codex, FIELDS.workspace, FIELDS.search, FIELDS.profile],
   render(view, handlers) {
     const wherever = workspacePicker(view, handlers)
 
@@ -218,13 +251,13 @@ export const LOOKING: Pane = {
       that decides everything she can read, was left with no sentence at all.
     */
     return [
-      codexBlock(view.lookup.codex, view.pronoun, handlers),
-      field('Workspace', wherever, {
+      anchor(FIELDS.codex, codexBlock(view.lookup.codex, view.pronoun, handlers)),
+      field(FIELDS.workspace, view, wherever, {
         hint: view.lookup.workspaceIsDefault ? 'nobody has chosen one' : '',
         note: forPronoun(SAYS.workspaceNote, view.pronoun),
       }),
-      field('Web search', search),
-      field('Codex profile', chosen, {
+      field(FIELDS.search, view, search),
+      field(FIELDS.profile, view, chosen, {
         note:
           view.lookup.profile === null
             ? forPronoun(SAYS.profileDefault, view.pronoun)

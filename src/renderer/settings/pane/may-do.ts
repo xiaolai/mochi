@@ -9,9 +9,9 @@
  */
 import { element } from '../../element'
 import { sectionHead } from '../../history/sheet/row'
-import { type Pane } from '../pane'
+import { anchor, type Pane, type Field } from '../pane'
 import { GRANT_SPECS } from '@shared/grants'
-import { type GrantUse } from '@shared/ipc'
+import { type GrantUse, type SettingsGrant } from '@shared/ipc'
 import { forPronoun } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
 /**
@@ -40,15 +40,39 @@ function lastUsedLabel(use: GrantUse, when: string): string {
   return `${used} · ${when}`
 }
 
+/**
+ * One field per grant, built FROM the grant. See `Field`.
+ *
+ * The label comes out of `GRANT_SPECS` rather than being restated, for the
+ * reason the spec table exists at all: the word beside the switch and the word
+ * search finds have to be the same word, and two literals are two words waiting
+ * to disagree.
+ *
+ * `detail` is a `ByPronoun` table and is deliberately NOT flattened into a
+ * keyword here. Keywords are matched against typed text and a sentence about
+ * her would put the worn pronoun into a search index — so a machine wearing
+ * `he` would need different words to find the same switch. The grant's id and
+ * the plain nouns below carry the search; the sentence stays on the row.
+ */
+export function grantField(grant: SettingsGrant): Field {
+  const spec = GRANT_SPECS.find((one) => one.id === grant.id)
+  return {
+    id: `grant-${grant.id}`,
+    label: spec?.label ?? grant.id,
+    keywords: ['permission', 'allow', 'withhold', 'grant', 'may do', grant.id],
+  }
+}
+
 /** 5b's four standing grants, and everything she is told she can do. */
 export const MAY_DO: Pane = {
   id: 'may-do',
   label: SAYS.mayDo,
   attention: () => null,
+  fields: (view) => view.grants.map(grantField),
   render(view, handlers) {
     const rows = view.grants.map((grant) => {
       const spec = GRANT_SPECS.find((one) => one.id === grant.id)
-      const row = element('div', 'grant')
+      const row = anchor(grantField(grant), element('div', 'grant'))
 
       const left = element('div')
       left.append(

@@ -108,3 +108,20 @@ export const marginHersEl = need('margin-hers', HTMLElement)
 
 /** View III's margin: the capability descriptions, which are not editable. */
 export const marginPermitsEl = need('margin-permits', HTMLElement)
+
+/*
+  The find-a-setting panel, its field, its results and its one line of prose.
+
+  A `<dialog>` for `#sure`'s reasons — modal, focus-trapped, Escape closes it,
+  top layer — so the type is `HTMLDialogElement` rather than `HTMLElement`:
+  `showModal` and `close` are the whole of what this window calls on it, and a
+  looser type would make a missing dialog surface as an undefined method at the
+  moment somebody presses the key.
+*/
+export const jumpEl = need('jump', HTMLDialogElement)
+
+export const jumpQEl = need('jump-q', HTMLInputElement)
+
+export const jumpFoundEl = need('jump-found', HTMLElement)
+
+export const jumpSaidEl = need('jump-said', HTMLElement)
