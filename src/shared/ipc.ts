@@ -148,16 +148,6 @@ export const SHELF_CHANNELS = [
   /** Everything that went wrong, for the window that can show it. */
   'history:problems',
   /**
-   * Main → the shell: show this place.
-   *
-   * A deep link into one of the window's three places, used by the problems
-   * chip. The menu bar no longer offers a second entry alongside it: settings
-   * stopped being a window when the six groups became a tab, so two items
-   * opening one window was two doors into one room. One-way and one string —
-   * the shell decides what to do with it, and an unknown place is ignored.
-   */
-  'shell:show',
-  /**
    * Write everything she has for the worn persona to a file the person chooses.
    *
    * Here rather than in the settings window because this is about her

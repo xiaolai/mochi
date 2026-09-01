@@ -99,7 +99,7 @@ import { receipt, say } from './status'
 import { element } from '../element'
 import { empty, facts, iconButton, marked } from './bits'
 import { freshness } from './freshness'
-import { PLACES, VIEWS, alongViews, isHers, type Place } from './tabs'
+import { VIEWS, alongViews, isHers, type Place } from './tabs'
 import { marginBlock, marginColumn, marginFacts } from './margin'
 import { sureExportEl } from './elements'
 import { offerACopyFirst } from './keep-a-copy'
@@ -2849,19 +2849,6 @@ queryEl.addEventListener('input', () => {
 afresh(window, readProblemCount)
 renderPlaces()
 showPlace('cast')
-
-/*
-  Main asking for a place — the menu bar's "Settings…", and the shelf's old
-  button before it was removed.
-
-  Checked HERE rather than in the bridge: what counts as a place is this
-  window's business, and an unknown one is ignored rather than throwing, because
-  a newer main talking to an older window should degrade to doing nothing.
-*/
-window.mochiHistory.onShow((asked) => {
-  const known = PLACES.find((one) => one.id === asked)
-  if (known !== undefined) showPlace(known.id)
-})
 
 /**
  * The characters FIRST, then the conversations. Sequenced, not raced.

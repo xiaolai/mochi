@@ -59,12 +59,6 @@ export interface View {
  */
 export const VIEWS: readonly View[] = [{ id: 'cast' }, { id: 'archive' }, { id: 'permits' }]
 
-/** Every place, including the one that is not about her. */
-export const PLACES: readonly { readonly id: Place }[] = [
-  ...VIEWS.map((one) => ({ id: one.id })),
-  { id: 'machine' },
-]
-
 /** Whether a place is one of her views, rather than the machine's page. */
 export function isHers(place: Place): boolean {
   return VIEWS.some((one) => one.id === place)

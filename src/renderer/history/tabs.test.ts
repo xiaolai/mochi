@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PLACES, VIEWS, alongRail, alongViews, isHers } from './tabs'
+import { VIEWS, alongRail, alongViews, isHers } from './tabs'
 
 /**
  * Arrowing around the window.
@@ -83,11 +83,6 @@ describe('her views never reach the machine', () => {
     for (const key of ['ArrowRight', 'ArrowLeft', 'Home', 'End']) {
       expect(alongViews(key, 'machine'), key).toBeNull()
     }
-  })
-
-  it('is still a place, and still the last one', () => {
-    expect(PLACES.map((one) => one.id)).toContain('machine')
-    expect(PLACES[PLACES.length - 1]?.id).toBe('machine')
   })
 })
 

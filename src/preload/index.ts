@@ -186,29 +186,6 @@ const history: MochiHistoryApi = {
   async problems() {
     return (await ipcRenderer.invoke(guardShelf('history:problems'))) as readonly HistoryProblem[]
   },
-  onShow(run: (place: string) => void) {
-    // The value is passed through as a plain string and checked by the shell,
-    // not here: the bridge's job is the channel, and what counts as a place is
-    // the window's business.
-    const channel = guardShelf('shell:show')
-    const listener = (_event: unknown, place: unknown): void => {
-      if (typeof place === 'string') run(place)
-    }
-    ipcRenderer.on(channel, listener)
-    /*
-      The way back off, which `onSend` on the companion bridge has and this did
-      not.
-
-      `ipcRenderer.on` has no lifetime of its own. Today there is exactly one
-      caller and it subscribes once at module scope, so nothing accumulates —
-      but the asymmetry is the defect: two bridges, one hazard, and only one of
-      them offering the answer. The next caller to subscribe from inside a
-      redraw finds no way off and no sign that they need one.
-    */
-    return () => {
-      ipcRenderer.removeListener(channel, listener)
-    }
-  },
   async exportAll() {
     return (await ipcRenderer.invoke(guardShelf('history:export'))) as HistoryExport
   },

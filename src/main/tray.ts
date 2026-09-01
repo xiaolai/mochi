@@ -160,9 +160,11 @@ export function trayMenuTemplate(
      * so — the more so now that the window holds two pages rather than three
      * tabs, and no one of them can name it either.
      *
-     * The deep link is NOT deleted with the item. `shell:show` still exists and
-     * the problems chip still uses it; what has gone is a second way to open a
-     * window that was already open at the top of the list.
+     * The deep link went WITH the item. `shell:show` outlived this menu entry
+     * by several releases as a channel main declared, preload bridged and the
+     * window subscribed to — with nothing anywhere that sent one. The comment
+     * here said the problems chip still used it; the chip is a popover the
+     * window opens for itself and never was a listener.
      */
     { label: 'Main Window', click: handlers.onOpen },
     { type: 'separator' },
