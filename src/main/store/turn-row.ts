@@ -94,7 +94,19 @@ export interface Session {
   readonly opening: string | null
 }
 
-/** One capability, and how many times it was called in one conversation. */
+/**
+ * One capability, and how many times it was called in one conversation.
+ *
+ * THE STORE'S SIDE of a shape `@shared/history-window` also declares, for the
+ * window. Two declarations rather than one import, because this file is
+ * deliberately a leaf — "below both the store and the archive, and importing
+ * neither" — and reaching into the window's API for a two-field type would put
+ * the whole shelf bridge behind a storage row.
+ *
+ * What keeps them honest is the `history:list` handler, which now annotates its
+ * mapping as `HistoryConversation`. Before that nothing did, and these could
+ * have drifted apart in silence.
+ */
 export interface ToolUse {
   readonly name: string
   readonly uses: number

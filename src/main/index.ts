@@ -56,7 +56,11 @@ import {
   type SettingsUpdate,
   type SettingsWrite,
 } from '@shared/ipc'
-import { type HistoryExport, type ShelfView } from '@shared/history-window'
+import {
+  type HistoryConversation,
+  type HistoryExport,
+  type ShelfView,
+} from '@shared/history-window'
 import { forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
 import { SAYS } from './says'
 import { CAPABILITIES } from '../capabilities'
@@ -2639,7 +2643,24 @@ ipcMain.handle('history:list', () => {
     persona,
     conversations: transcripts()
       .sessions(persona)
-      .map((one) => ({
+      /*
+        ANNOTATED, so the two shapes are checked against each other.
+
+        `Session` in `store/turn-row.ts` and `HistoryConversation` in
+        `@shared/history-window` describe the same seven facts — one as it is
+        stored, one as it crosses the wire — and each declares its own
+        `ToolUse`, byte-identical down to the doc comment. `ipcMain.handle`
+        returns `unknown`, so this hand-written mapping was the only thing
+        holding them together and NOTHING checked it: a field added to the
+        store and forgotten here, or a `ToolUse` that gained a third property
+        on one side, compiled cleanly and arrived at the window missing.
+
+        Two declarations is the right shape — a storage row and a wire type
+        must be free to differ, and `turn-row.ts` is deliberately a leaf that
+        imports nothing. What was missing is the place where they are made to
+        agree, and this is it.
+      */
+      .map((one): HistoryConversation => ({
         token: one.token,
         startedAt: one.startedAt,
         endedAt: one.endedAt,

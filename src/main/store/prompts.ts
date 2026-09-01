@@ -108,7 +108,18 @@ export function resolvePrompts(
   }
 }
 
-/** What the pane draws: the default, the override, and anything worrying. */
+/**
+ * What the pane draws: the default, the override, and anything worrying.
+ *
+ * THE STORE'S SIDE of `SettingsPrompt` in `@shared/ipc`, which declares the
+ * same seven fields for the window. Two declarations, one per side of the
+ * wire — and unlike most such pairs this one is CHECKED: the `settings:read`
+ * handler is annotated `(): SettingsView`, so a field that appears here and
+ * not there stops compiling rather than arriving missing.
+ *
+ * The notes below and `SettingsPrompt`'s are two wordings of one rule. If you
+ * change what `missing` or `limit` mean, change both.
+ */
 export interface PromptRow {
   readonly key: string
   readonly title: string
