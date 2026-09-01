@@ -10,6 +10,7 @@
  *     pnpm rendered --list            the names, and nothing else
  *     pnpm rendered --only fits,A6    just those
  *     pnpm rendered --grep rail       everything whose name matches
+ *     pnpm rendered --quiet           do not let the window take the screen
  *     pnpm rendered --outline         also dump all 14 screens for diffing
  *     pnpm rendered --film            record the run as dev-docs/artifacts/rendered-gate.mp4
  *
@@ -19,6 +20,23 @@
  * before it left up, and `editable` was caught reporting 1 control, then 0, then
  * 1. Under that arrangement a filter lies, and a filter that lies is worse than
  * no filter.
+ *
+ * ## `--quiet`, for running it while you are working
+ *
+ * This gate opens the real app on the real desktop, and `bringForward` makes an
+ * accessory app frontmost — so by default every run pulls a window in front of
+ * whatever you were doing. That is right for a gate you run before a commit and
+ * wrong for one you run while editing.
+ *
+ * `--quiet` passes `--mochi-quiet` to the app, which shows the window with
+ * `showInactive` and leaves the activation policy alone. The window is still
+ * shown, because a hidden window in an accessory app is never composited and
+ * never paints — see `window.ts` — so the checks still measure something real.
+ *
+ * NOT the default, deliberately. The checks below are written against a window
+ * that behaves the way a user's does, and the one before a commit should be the
+ * arrangement that ships. `--quiet` is a convenience for the inner loop, and if
+ * a check ever disagrees between the two, the loud run is the one to believe.
  *
  * It costs about four seconds to launch, seed and tear down whatever you ask
  * for, and about a tenth of a second per check on top. So `--only` takes a run
@@ -145,6 +163,8 @@ function argOf(flag) {
   and says so on the last card.
 */
 const FILMING = process.argv.includes('--film')
+/** Show the window without letting it take the screen. See the header. */
+const QUIET = process.argv.includes('--quiet')
 /** Where frames accumulate, and what was running when each was taken. */
 const film = { page: null, frames: [], label: 'starting up', timer: null }
 
@@ -638,6 +658,8 @@ function launch(userData) {
       '--disable-backgrounding-occluded-windows',
       '--disable-renderer-backgrounding',
       '--disable-background-timer-throttling',
+      // Read by `window.ts`, not by Chromium. See `--quiet` in the header.
+      ...(QUIET ? ['--mochi-quiet'] : []),
     ],
     {
       cwd: ROOT,

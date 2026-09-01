@@ -403,11 +403,52 @@ let history: BrowserWindow | null = null
  * the window opens behind whatever is in front, on an app that cannot be
  * activated by clicking it, and the only way back is the control on her bubble.
  */
+/**
+ * Open the window WITHOUT taking the screen. Off by default; opt in with
+ * `--mochi-quiet`.
+ *
+ * For the rendered gate, and for nothing a user does. `pnpm verify:rendered`
+ * launches this app on a real desktop — that is the point of it, and the reason
+ * it can measure a real window — but `bringForward` then does exactly what it
+ * says: it makes an accessory app frontmost and pulls the window in front of
+ * whatever somebody was working in. A gate that interrupts you every time it
+ * runs is a gate you stop running.
+ *
+ * ## Why an argv flag and not a change to the window
+ *
+ * `launch()` in `scripts/check-rendered.mjs` already passes three Chromium
+ * switches, and states the rule this follows: "Flags rather than
+ * `backgroundThrottling: false` on the window: that would be a change to the
+ * product for a test's benefit, and the app has no reason to carry it."
+ *
+ * The same rule allows this and forbids the alternative. Absent the flag every
+ * line below runs exactly as it did; the flag is never passed by anything a
+ * user launches, and the packaged bundle cannot receive it. What it changes is
+ * only which of two `show` calls this app already makes is used here.
+ *
+ * ## Why it is still SHOWN, and shown rather than hidden
+ *
+ * `showInactive`, not `show` — the call her own window has always used, for
+ * this reason stated at its two call sites: a launch must not steal focus from
+ * whatever somebody is doing. And shown rather than left hidden, because this
+ * file's own history is that a hidden window in an accessory app is never
+ * composited and therefore never paints. The gate would then measure a window
+ * that had drawn nothing, and report it as a layout.
+ *
+ * `becomeOrdinary` is skipped with it. That call is what puts the app in the
+ * Dock and makes it switchable, which is the visible half of the interruption
+ * — and its only other job, the Dock icon, is furniture nothing measures.
+ */
+const QUIET = process.argv.includes('--mochi-quiet')
+
 function bringForward(window: BrowserWindow): void {
-  becomeOrdinary(window)
-  window.show()
-  if (process.platform === 'darwin') app.focus({ steal: true })
-  window.focus()
+  if (QUIET) window.showInactive()
+  else {
+    becomeOrdinary(window)
+    window.show()
+    if (process.platform === 'darwin') app.focus({ steal: true })
+    window.focus()
+  }
   /**
    * Logged HERE, not at the call sites, because there are two of each now — a
    * control on her bubble and an item in the menu bar.
