@@ -25,6 +25,9 @@
  * - continue over a red `pnpm verify` or a failed `pnpm build`, and it puts the
  *   version back when it stops, so a red gate leaves nothing behind
  * - commit anything but the one line — the diff is checked, not assumed
+ * - take a `--notes` file that does not open with the release subject: it is
+ *   the commit message as well as the release body, and a file starting with
+ *   prose retitles the release commit with it
  * - write a lightweight tag
  * - push, unless asked
  *
@@ -110,6 +113,43 @@ if (here !== '') stop(`${TAG} already exists here`)
 const there = git('ls-remote', '--tags', 'origin', TAG)
 if (there !== '') stop(`${TAG} already exists on the remote — pick another version`)
 good(`${TAG} is free, here and on the remote`)
+
+/*
+  A NOTES FILE CARRIES ITS OWN SUBJECT, and this refuses one that does not.
+
+  The file is used VERBATIM, as both the commit message and the tag annotation.
+  The annotation is deliberate — `release.yml` publishes it with
+  `--notes-from-tag`, and a summary rewritten here would be a second copy to
+  keep true. The commit message riding along was not: a file opening with prose
+  produces a release commit titled with that prose. v0.1.14 was first committed
+  as "### Find a setting by name", in a history of `chore(release): vX`.
+
+  Refused rather than prepended. Prepending would put the line into the tag too,
+  and the tag is what people read on the releases page; writing two different
+  messages would let the commit and the release disagree.
+
+  HERE, with the other refusals, rather than beside the code that writes the
+  message. Down there it is reached only after `pnpm verify` and `pnpm build`
+  have run, so the answer to a wrong first line arrives forty seconds late and
+  after an `undo()` — and never at all under `--dry-run`, which stops before it.
+  A refusal that costs a full gate to hear is one people work around.
+*/
+if (NOTES !== null) {
+  let opening
+  try {
+    opening = readFileSync(NOTES, 'utf8').split('\n')[0].trim()
+  } catch (error) {
+    stop(`could not read the notes file at ${NOTES}: ${error.message}`)
+  }
+  if (opening !== `chore(release): ${TAG}`) {
+    stop(
+      `the notes file must begin with "chore(release): ${TAG}" — it is the\n` +
+        `          commit subject as well as the release body. Its first line is:\n` +
+        `          ${JSON.stringify(opening)}`,
+    )
+  }
+  good('the notes file opens with the release subject')
+}
 
 /*
   The range, and the no-tag case is not an error.
@@ -199,10 +239,26 @@ if (NOTES === null) {
 
 try {
   git('add', 'package.json')
-  git('commit', '-F', messageAt)
+  /*
+    `--cleanup=verbatim`, and without it the file is not verbatim at all.
+
+    Git's default cleanup strips every line beginning with `#`, because in an
+    interactive message those are the instructions it printed. A notes file is
+    not that file — it is markdown, and `###` is a heading. v0.1.14 was first
+    tagged with all three of its headings silently gone, so the release body on
+    GitHub ran four paragraphs together with nothing between them.
+
+    Nothing warns. The commit succeeds, the tag is written, and the loss is
+    visible only by reading the published release beside the file it came from.
+
+    It applies to the COMMIT as well as the tag: they are written from one file
+    and any cleanup that treated them differently would put two different
+    messages on one release.
+  */
+  git('commit', '--cleanup=verbatim', '-F', messageAt)
   // ANNOTATED. A lightweight tag carries no date, no author and no message, and
   // `release.yml` reads the annotation for the release notes.
-  git('tag', '-a', TAG, '-F', messageAt)
+  git('tag', '-a', '--cleanup=verbatim', TAG, '-F', messageAt)
 } finally {
   rmSync(scratch, { recursive: true, force: true })
 }
