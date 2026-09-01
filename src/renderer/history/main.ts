@@ -109,6 +109,7 @@ import { VIEWS, alongViews, isHers, type Place } from './tabs'
 import { marginBlock, marginColumn, marginFacts } from './margin'
 import { sureExportEl } from './elements'
 import { offerACopyFirst } from './keep-a-copy'
+import { exportAllSaying } from './export-all'
 import { afresh } from '../rules/afresh'
 import { latest } from '../rules/latest'
 import { writes } from '../rules/writes'
@@ -2792,26 +2793,15 @@ exportEl.addEventListener('click', () => {
   // One timer, not one per export. Two within six seconds and the first one's
   // timer wiped the second one's result.
   if (exportReset !== null) clearTimeout(exportReset)
-  void window.mochiHistory
-    .exportAll()
-    .then((result) => {
-      if (result.ok) {
-        exportEl.textContent = `Exported ${String(result.conversations)}`
-        say(`Exported ${String(result.conversations)} to ${result.path}`)
-      } else if (!result.cancelled) {
-        say(`Could not export: ${result.why}`, true)
-      }
-    })
-    .catch((error: unknown) => {
-      say(`Could not export: ${String(error)}`, true)
-    })
-    .finally(() => {
-      exportEl.disabled = false
-      exportReset = window.setTimeout(() => {
-        exportReset = null
-        exportEl.textContent = 'Export…'
-      }, 6000)
-    })
+  void exportAllSaying((conversations) => {
+    exportEl.textContent = `Exported ${String(conversations)}`
+  }).finally(() => {
+    exportEl.disabled = false
+    exportReset = window.setTimeout(() => {
+      exportReset = null
+      exportEl.textContent = 'Export…'
+    }, 6000)
+  })
 })
 
 /**

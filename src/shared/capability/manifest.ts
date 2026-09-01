@@ -50,6 +50,8 @@
  * the model will fill with something we cannot read.
  */
 
+import { isRecord } from '../is-record'
+
 /** A single declared argument. Strings only — see the header. */
 export interface CapabilityProperty {
   readonly type: 'string'
@@ -76,6 +78,29 @@ export interface CapabilityParameters {
   readonly type: 'object'
   readonly properties: Readonly<Record<string, CapabilityProperty>>
   readonly required: readonly string[]
+}
+
+/**
+ * The parameters for a capability that takes ONE required string.
+ *
+ * All four built-ins are this shape — `ask_workspace` takes a question,
+ * `remember_this` a note, and the two recall capabilities a query — and each
+ * had written the five-line object out for itself. The NAME and the DESCRIPTION
+ * are what actually differ between them, so those are the arguments and the
+ * rest is said once.
+ *
+ * Not a general schema builder. `parseManifest` already refuses a manifest with
+ * no properties or more than a handful, and a capability that genuinely needs
+ * two arguments should write its own object rather than grow this into one —
+ * the moment this takes a list, it stops being easier to read than the literal
+ * it replaced.
+ */
+export function oneStringParameter(name: string, description: string): CapabilityParameters {
+  return {
+    type: 'object',
+    properties: { [name]: { type: 'string', description } },
+    required: [name],
+  }
 }
 
 export interface CapabilityManifest {
@@ -184,10 +209,6 @@ const RESERVED_PROPERTY = 'description'
  */
 const MAX_ENUM_VALUES = 32
 const MAX_ENUM_VALUE_CHARS = 64
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 export function parseManifest(value: unknown): ManifestResult {
   if (!isRecord(value)) return { ok: false, problem: { kind: 'not-an-object' } }

@@ -15,23 +15,17 @@
 import { recallPayloadFor, unavailable } from '../../main/memory/answer'
 import { toMatchQuery } from '../../main/store/segment'
 import type { Capability } from '../kind'
+import { oneStringParameter } from '@shared/capability/manifest'
 
 export const capability: Capability = {
   manifest: {
     name: 'recall_conversations',
     description:
       'Search what was actually said in your earlier conversations with this person. Answers immediately, so there is no need to say you are checking. Use it when they refer to something from an earlier conversation, or when you would otherwise be guessing at what was said. Each result says when it was said; attribute it to that conversation rather than presenting it as your own knowledge, and say plainly when nothing was found.',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description:
-            'The words to search for. Use the words they are likely to have actually said.',
-        },
-      },
-      required: ['query'],
-    },
+    parameters: oneStringParameter(
+      'query',
+      'The words to search for. Use the words they are likely to have actually said.',
+    ),
   },
   kind: 'immediate',
   handler: (args, deps) => {

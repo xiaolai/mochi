@@ -3,7 +3,7 @@ import { layoutFor } from '@shared/avatar-layout'
 import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { forPronoun } from '@shared/pronoun'
-import { element } from '../../element'
+import { checkbox, element } from '../../element'
 import { permitted } from '../../rules/expressions'
 import { faceTile } from './face-tile'
 import { type ShelfHandlers, section } from './row'
@@ -94,21 +94,23 @@ export function expressionsSection(
     tile.append(element('div', 'face-name', NAMES[emotion]))
     tile.append(element('p', 'face-when', WHEN[emotion]))
 
-    const allow = element('input')
-    allow.type = 'checkbox'
-    allow.id = `allow-${emotion}`
-    allow.checked = permitted([...allowed], emotion)
-    const label = element('label', 'face-allow', allow.checked ? 'Allowed' : 'Withheld')
-    label.htmlFor = allow.id
-    allow.addEventListener('change', () => {
+    /*
+      THE WORD SAYS THE STATE, so it is written from the same value the box is
+      set from and rewritten from the same value the box changes to. Read back
+      off the element it would be two facts that merely happen to agree.
+    */
+    const permittedNow = permitted([...allowed], emotion)
+    const label = element('label', 'face-allow', permittedNow ? 'Allowed' : 'Withheld')
+    const allow = checkbox(`allow-${emotion}`, permittedNow, (on) => {
       // Mutated, not copied — see the set above.
-      if (allow.checked) allowed.add(emotion)
+      if (on) allowed.add(emotion)
       else allowed.delete(emotion)
-      label.textContent = allow.checked ? 'Allowed' : 'Withheld'
+      label.textContent = on ? 'Allowed' : 'Withheld'
       // In `EMOTIONS` order, always. The manifest is read by people, and a list
       // whose order records the sequence somebody clicked in is noise on disk.
       handlers.save({ id: worn.id, faces: EMOTIONS.filter((one) => allowed.has(one)) })
     })
+    label.htmlFor = allow.id
     const row = element('div', 'row')
     row.append(allow, label)
     tile.append(row)

@@ -5,6 +5,7 @@ import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
 import { BUBBLE_SIDES, type BubbleSide } from '@shared/persona'
 import { isHaloWhen, type HaloWhen } from '@shared/ipc'
 import { readLanguages } from '@shared/transcription'
+import { isRecord } from '@shared/is-record'
 import { DEFAULT_GRANTS, WITHHELD_GRANTS, parseGrants, type Grants } from '@shared/grants'
 import { logBoundedRead, readBounded } from './read-bounded'
 import { writeJsonAtomically } from './json-file'
@@ -174,9 +175,7 @@ export function writeMerged(userData: string, changes: Record<string, unknown>):
   if (read.ok) {
     try {
       const value: unknown = JSON.parse(read.text)
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        existing = value as Record<string, unknown>
-      }
+      if (isRecord(value)) existing = value
     } catch {
       // Unreadable JSON is REPLACED, not merged into. There is nothing to
       // preserve in a file nothing can parse, and refusing to write would

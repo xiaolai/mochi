@@ -1,7 +1,7 @@
 /** The "on-screen" group of settings. One pane per file; `panes.ts` keeps only the order. */
 
 import { SAYS } from '../panes-says'
-import { element } from '../../element'
+import { checkbox, element } from '../../element'
 import { type Pane, type Field, field, options } from '../pane'
 import { HALO_LABELS } from '../panes-says'
 import { forPronoun } from '@shared/pronoun'
@@ -75,12 +75,8 @@ export const ON_SCREEN: Pane = {
       inside her bubble, and the menu bar opens the same window — so there is no
       half to hold back.
     */
-    const chip = element('input')
-    chip.type = 'checkbox'
-    chip.checked = view.screen.shoulderChip
-    chip.id = 'shoulder-chip'
-    chip.addEventListener('change', () => {
-      handlers.screen({ shoulderChip: chip.checked })
+    const chip = checkbox('shoulder-chip', view.screen.shoulderChip, (on) => {
+      handlers.screen({ shoulderChip: on })
     })
     const chipLabel = element('label', undefined, forPronoun(SAYS.chipSwitch, view.pronoun))
     chipLabel.htmlFor = chip.id

@@ -17,6 +17,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { authModeOf, readAuthJson, readTokenState, type AuthMode, type TokenState } from './auth'
 import { isLocated, locateCodex } from '../../capabilities/ask-workspace/locate'
+import { codexHome } from '../../capabilities/ask-workspace/profile'
 
 export type CodexStatus =
   | { readonly kind: 'not-installed'; readonly searched: readonly string[] }
@@ -135,12 +136,6 @@ export interface CodexProbe {
 
 function defaults(): CodexProbe {
   return { platform: process.platform, env: process.env, home: homedir() }
-}
-
-/** `CODEX_HOME` if set, else `~/.codex`. Codex itself honours the variable. */
-export function codexHome(probe: CodexProbe = defaults()): string {
-  const configured = probe.env['CODEX_HOME']
-  return configured !== undefined && configured !== '' ? configured : join(probe.home, '.codex')
 }
 
 /**
@@ -375,7 +370,7 @@ async function judgeToken(version: string, path: string, probe: CodexProbe): Pro
   // file, and the copy that used to live here had already drifted: it reported
   // a missing file and a permission error identically, and built its message
   // with `String(error)`, which carries the absolute path.
-  const auth = await readAuthJson(codexHome(probe))
+  const auth = await readAuthJson(codexHome(probe.env, probe.home))
   const token: TokenState = auth.ok
     ? readTokenState(auth.value, Date.now())
     : auth.missing

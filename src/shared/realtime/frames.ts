@@ -22,6 +22,8 @@
  * at the moment it happens.
  */
 
+import { isRecord } from '../is-record'
+
 export type ServerFrame =
   /** The session opened. `expires_at` is absolute Unix seconds (findings §21). */
   | { readonly kind: 'session-created'; readonly expiresAt: number }
@@ -179,10 +181,6 @@ const BUFFER_PHASE: Readonly<Record<string, 'started' | 'stopped' | 'cleared'>> 
   'output_audio_buffer.started': 'started',
   'output_audio_buffer.stopped': 'stopped',
   'output_audio_buffer.cleared': 'cleared',
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function missingFrom(frame: Record<string, unknown>, fields: readonly string[]): string[] {

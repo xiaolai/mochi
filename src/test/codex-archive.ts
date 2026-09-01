@@ -33,6 +33,27 @@ import { HISTORY_FILE, STATE_FILE } from '../main/codex/archive/present'
  * Copied from `~/.codex` on 2026-08-31, Codex CLI 0.151.0.
  */
 
+/**
+ * The bookkeeping table sqlx writes into BOTH databases.
+ *
+ * One copy, interpolated into each. It is not a table this feature reads — it
+ * is there because `present.ts` checks that a file is a Codex database rather
+ * than any SQLite file that happens to have the right columns, and a fixture
+ * missing it would be a fixture the real check would reject.
+ *
+ * It was written out twice, identically, which for a fixture is worse than for
+ * production code: a fixture that drifts from what Codex actually creates makes
+ * the tests agree with themselves about a database nobody has.
+ */
+const MIGRATIONS_DDL = `CREATE TABLE _sqlx_migrations (
+    version BIGINT PRIMARY KEY,
+    description TEXT NOT NULL DEFAULT '',
+    installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    success BOOLEAN NOT NULL DEFAULT 1,
+    checksum BLOB NOT NULL DEFAULT x'00',
+    execution_time BIGINT NOT NULL DEFAULT 0
+  );`
+
 /** The subset of `state_5.sqlite` this feature reads. */
 export const STATE_DDL = `
   CREATE TABLE threads (
@@ -48,14 +69,7 @@ export const STATE_DDL = `
     created_at_ms INTEGER,
     updated_at_ms INTEGER
   );
-  CREATE TABLE _sqlx_migrations (
-    version BIGINT PRIMARY KEY,
-    description TEXT NOT NULL DEFAULT '',
-    installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    success BOOLEAN NOT NULL DEFAULT 1,
-    checksum BLOB NOT NULL DEFAULT x'00',
-    execution_time BIGINT NOT NULL DEFAULT 0
-  );
+  ${MIGRATIONS_DDL}
 `
 
 /** The subset of `thread_history_1.sqlite` this feature reads. */
@@ -95,14 +109,7 @@ export const HISTORY_DDL = `
     item_json TEXT NOT NULL,
     PRIMARY KEY (thread_id, item_id)
   );
-  CREATE TABLE _sqlx_migrations (
-    version BIGINT PRIMARY KEY,
-    description TEXT NOT NULL DEFAULT '',
-    installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    success BOOLEAN NOT NULL DEFAULT 1,
-    checksum BLOB NOT NULL DEFAULT x'00',
-    execution_time BIGINT NOT NULL DEFAULT 0
-  );
+  ${MIGRATIONS_DDL}
 `
 
 export interface ThreadRow {

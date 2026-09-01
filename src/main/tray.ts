@@ -29,6 +29,7 @@ import { Menu, Tray, app, nativeImage } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 import { SIDE_NAMES } from '@shared/persona'
 import { forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
+import { shippedPath } from './shipped'
 
 export interface TrayModel {
   /** Everyone she could be, and who she is. */
@@ -278,18 +279,9 @@ function iconFile(): string {
   return iconFileFor(process.platform)
 }
 
-/**
- * Where it lives — ONE path, decided by whether this is packaged, never a list
- * of candidates tried in order.
- *
- * Guessing at runtime hides exactly the failure that matters: a packaging
- * mistake leaving the asset out of the bundle is invisible while a development
- * copy is still findable, so it only appears on somebody else's machine.
- */
+/** The `tray` half of `shippedPath`, which holds the reasoning. */
 function iconPath(file: string): string {
-  return app.isPackaged
-    ? join(process.resourcesPath, 'tray', file)
-    : join(app.getAppPath(), 'resources/tray', file)
+  return shippedPath('tray', file)
 }
 
 /**

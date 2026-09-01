@@ -4,6 +4,7 @@ import { app, BrowserWindow, nativeImage, nativeTheme, screen } from 'electron'
 import { FEET_FROM_TOP, WINDOW_H, WINDOW_W, fullPad, originHolding } from '@shared/avatar-layout'
 import { containToWorkArea, KEEP_ON_SCREEN } from './drag'
 import { letDevToolsInspect } from './inspect'
+import { shippedPath } from './shipped'
 
 /**
  * How long after the last move or resize the window's place is written.
@@ -441,18 +442,9 @@ function bringForward(window: BrowserWindow): void {
  */
 const ordinary = new Set<BrowserWindow>()
 
-/**
- * Where a shipped icon lives — ONE path, decided by whether this is packaged.
- *
- * The tray's rule, applied to the other folder in `extraResources`. Guessing at
- * runtime hides exactly the failure that matters: a packaging mistake leaving
- * the asset out of the bundle is invisible while a development copy is still
- * findable, so it only appears on somebody else's machine.
- */
+/** The `icons` half of `shippedPath`, which holds the reasoning. */
 function iconPath(file: string): string {
-  return app.isPackaged
-    ? join(process.resourcesPath, 'icons', file)
-    : join(app.getAppPath(), 'resources/icons', file)
+  return shippedPath('icons', file)
 }
 
 /**

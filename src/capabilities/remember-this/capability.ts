@@ -50,6 +50,7 @@ import { entryProblem, MAX_ENTRY_CHARS, noteWith } from '../../main/memory/summa
 import { recallState, remember } from '../../main/store/memory'
 import { fill } from '@shared/prompts'
 import type { Capability } from '../kind'
+import { oneStringParameter } from '@shared/capability/manifest'
 
 function cannot(guidance: string): { status: 'refused'; guidance: string } {
   return { status: 'refused', guidance }
@@ -60,16 +61,10 @@ export const capability: Capability = {
     name: 'remember_this',
     description:
       'Write one short fact into your long-term notes about this person. Call this ONLY when they have asked you to remember something, in those words or plainly meaning it. Do not call it because something seemed interesting or worth keeping — everything said is already reviewed later. Record what is true about them, not what was said in this conversation.',
-    parameters: {
-      type: 'object',
-      properties: {
-        note: {
-          type: 'string',
-          description: 'The single fact to keep, as one plain sentence about the person.',
-        },
-      },
-      required: ['note'],
-    },
+    parameters: oneStringParameter(
+      'note',
+      'The single fact to keep, as one plain sentence about the person.',
+    ),
   },
   kind: 'immediate',
   handler: (args, deps) => {

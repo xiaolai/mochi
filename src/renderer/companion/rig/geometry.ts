@@ -34,6 +34,7 @@
 // silently, so give it a gate that runs the generator rather than restoring the
 // relative path and hoping.
 import { SHEAR_GAIN } from '@shared/avatar-layout'
+import { clamp01 } from '@shared/avatar'
 
 export interface Point {
   readonly x: number
@@ -198,13 +199,9 @@ export function placeFeature(
   gripX: number,
   gripY: number,
 ): Point {
-  const width = base.halfWidth + (squashedShape.halfWidth - base.halfWidth) * clamp(gripX)
-  const height = base.height + (squashedShape.height - base.height) * clamp(gripY)
+  const width = base.halfWidth + (squashedShape.halfWidth - base.halfWidth) * clamp01(gripX)
+  const height = base.height + (squashedShape.height - base.height) * clamp01(gripY)
   const y = normalisedY * height
   const frame: BodyShape = { ...squashedShape, halfWidth: width, height }
   return { x: normalisedX * width + shearAt(frame, y), y }
-}
-
-function clamp(value: number): number {
-  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0
 }

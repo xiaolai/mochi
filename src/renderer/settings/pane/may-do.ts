@@ -7,7 +7,7 @@
  * used" about a microphone somebody has been talking into all morning would be
  * making a claim rather than admitting a gap.
  */
-import { element } from '../../element'
+import { checkbox, element } from '../../element'
 import { sectionHead } from '../../history/sheet/row'
 import { anchor, type Pane, type Field } from '../pane'
 import { GRANT_SPECS } from '@shared/grants'
@@ -80,12 +80,8 @@ export const MAY_DO: Pane = {
         element('p', 'desc', spec === undefined ? '' : forPronoun(spec.detail, view.pronoun)),
       )
 
-      const allowed = element('input')
-      allowed.type = 'checkbox'
-      allowed.checked = grant.allowed
-      allowed.id = `grant-${grant.id}`
-      allowed.addEventListener('change', () => {
-        handlers.grant({ id: grant.id, allowed: allowed.checked })
+      const allowed = checkbox(`grant-${grant.id}`, grant.allowed, (on) => {
+        handlers.grant({ id: grant.id, allowed: on })
       })
       /*
         THE WORD SAYS THE STATE, and it said "Allowed" whatever the state was.

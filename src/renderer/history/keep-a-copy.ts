@@ -1,5 +1,5 @@
 import { sureExportEl, sureYesEl } from './elements'
-import { say } from './status'
+import { exportAllSaying } from './export-all'
 
 /**
  * Saving a copy from inside the confirmation, at the moment it is wanted.
@@ -17,22 +17,11 @@ export function offerACopyFirst(): void {
   sureExportEl.addEventListener('click', () => {
     sureExportEl.disabled = true
     sureYesEl.disabled = true
-    void window.mochiHistory
-      .exportAll()
-      .then((result) => {
-        if (result.ok) {
-          sureExportEl.textContent = `Saved ${String(result.conversations)}`
-          say(`Exported ${String(result.conversations)} to ${result.path}`)
-        } else if (!result.cancelled) {
-          say(`Could not export: ${result.why}`, true)
-        }
-      })
-      .catch((error: unknown) => {
-        say(`Could not export: ${String(error)}`, true)
-      })
-      .finally(() => {
-        sureExportEl.disabled = false
-        sureYesEl.disabled = false
-      })
+    void exportAllSaying((conversations) => {
+      sureExportEl.textContent = `Saved ${String(conversations)}`
+    }).finally(() => {
+      sureExportEl.disabled = false
+      sureYesEl.disabled = false
+    })
   })
 }

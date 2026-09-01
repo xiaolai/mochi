@@ -35,6 +35,7 @@ import { MAX_HITS } from '../../main/memory/answer'
 import { toMatchQuery } from '../../main/store/segment'
 import type { Capability } from '../kind'
 import type { CodexRecall } from '../../main/codex/archive/index-store'
+import { oneStringParameter } from '@shared/capability/manifest'
 
 /**
  * How many hits are asked of the index, against the five that survive.
@@ -67,17 +68,10 @@ export const capability: Capability = {
     name: 'recall_codex',
     description:
       'Search their earlier sessions with Codex, the coding tool they use on this machine — both what they asked it and what it answered, including documents they pasted into it. This is their history with a tool, not your conversations with them, so use it when they refer to something they worked on, asked Codex about, or were told by Codex, and say where each result came from rather than presenting it as your own knowledge. Answers immediately, so there is no need to say you are checking. Say plainly when nothing was found, and plainly when you could not look.',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description:
-            'The words to search for. Use the words they are likely to have actually typed or said.',
-        },
-      },
-      required: ['query'],
-    },
+    parameters: oneStringParameter(
+      'query',
+      'The words to search for. Use the words they are likely to have actually typed or said.',
+    ),
   },
   kind: 'immediate',
   handler: (args, deps) => {

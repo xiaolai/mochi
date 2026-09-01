@@ -34,6 +34,7 @@ import { MOST_AT_ONCE, createRunning, type Running } from './running'
  */
 export const running: Running = createRunning()
 import { guardWorkspace } from './workspace'
+import { oneStringParameter } from '@shared/capability/manifest'
 
 /**
  * A refusal she can say out loud, with the reason.
@@ -51,13 +52,7 @@ export const capability: Capability = {
     name: 'ask_workspace',
     description:
       'Look something up: read the files in the workspace, and search the web when the question needs current information. Returns immediately and the answer arrives later, usually within a minute — say you are going to look, then carry on talking. The answer names where it came from; pass that on rather than presenting it as your own knowledge. Report what comes back in your own words, including when it found nothing, and never invent an answer you did not receive or quietly replace one with something you remember.',
-    parameters: {
-      type: 'object',
-      properties: {
-        question: { type: 'string', description: 'What to find out.' },
-      },
-      required: ['question'],
-    },
+    parameters: oneStringParameter('question', 'What to find out.'),
   },
   kind: 'deferred',
   handler: async (args, deps) => {

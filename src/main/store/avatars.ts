@@ -157,6 +157,37 @@ export function avatarsRoot(userData: string): string {
 }
 
 /**
+ * Turn the bytes of one face file into a verdict, named by the file.
+ *
+ * ONE of these, because there were two: `resolveAvatarById` reads `<id>.json`
+ * from the avatars folder and `readFaceFor` reads `face.json` from a package,
+ * and after the read they had the same eleven lines written out twice —
+ * `JSON.parse` in a try, the same wording for a parse failure, and the same
+ * two-armed answer from `parseFaceSpec`.
+ *
+ * The file NAME is the only thing that differed, so it is the parameter. Every
+ * failure falls back to the built-in and says which file was at fault, which is
+ * this module's rule throughout: silently drawing the wrong face is the outcome
+ * a user cannot diagnose.
+ */
+function faceFromJson(text: string, file: string): ResolvedAvatar {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch (error: unknown) {
+    return {
+      face: MOCHI,
+      source: null,
+      problems: [{ file, reason: `could not be read as JSON: ${String(error)}` }],
+    }
+  }
+  const result = parseFaceSpec(parsed)
+  return result.ok
+    ? { face: result.face, source: file, problems: [] }
+    : { face: MOCHI, source: null, problems: [{ file, reason: result.problems.join('; ') }] }
+}
+
+/**
  * The avatar a persona names, or the built-in.
  *
  * `id` is a filename STEM and has already passed the persona grammar, which
@@ -189,20 +220,7 @@ export function resolveAvatarById(root: string, id: string | null): ResolvedAvat
   if (!read.ok) {
     return { face: MOCHI, source: null, problems: [{ file, reason: logBoundedRead(read.reason) }] }
   }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(read.text)
-  } catch (error: unknown) {
-    return {
-      face: MOCHI,
-      source: null,
-      problems: [{ file, reason: `could not be read as JSON: ${String(error)}` }],
-    }
-  }
-  const result = parseFaceSpec(parsed)
-  return result.ok
-    ? { face: result.face, source: file, problems: [] }
-    : { face: MOCHI, source: null, problems: [{ file, reason: result.problems.join('; ') }] }
+  return faceFromJson(read.text, file)
 }
 
 /** The face a package carries, if it carries one. */
@@ -275,24 +293,7 @@ function readFaceFor(
     const read = readBounded(join(packageFolder, PACKAGE_FACE))
     // Absent is ordinary: most packages will name a shared avatar or none.
     if (read.ok) {
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(read.text)
-      } catch (error: unknown) {
-        return {
-          face: MOCHI,
-          source: null,
-          problems: [{ file: PACKAGE_FACE, reason: `could not be read as JSON: ${String(error)}` }],
-        }
-      }
-      const result = parseFaceSpec(parsed)
-      return result.ok
-        ? { face: result.face, source: PACKAGE_FACE, problems: [] }
-        : {
-            face: MOCHI,
-            source: null,
-            problems: [{ file: PACKAGE_FACE, reason: result.problems.join('; ') }],
-          }
+      return faceFromJson(read.text, PACKAGE_FACE)
     }
     if (read.reason.kind !== 'absent') {
       return {

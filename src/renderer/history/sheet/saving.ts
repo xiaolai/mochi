@@ -9,7 +9,7 @@
  */
 
 import { SAYS } from '../shelf-says'
-import { element } from '../../element'
+import { checkbox, element } from '../../element'
 import { type ShelfHandlers, section, settingRow } from './row'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { SIDE_NAMES } from '@shared/persona'
@@ -63,12 +63,8 @@ export function savingSection(
   worn: ShelfCharacter,
   handlers: ShelfHandlers,
 ): HTMLElement {
-  const keeps = element('input')
-  keeps.type = 'checkbox'
-  keeps.checked = worn.keeps
-  keeps.id = 'keeps'
-  keeps.addEventListener('change', () => {
-    handlers.save({ id: worn.id, keeps: keeps.checked })
+  const keeps = checkbox('keeps', worn.keeps, (on) => {
+    handlers.save({ id: worn.id, keeps: on })
   })
   const label = element('label', undefined, 'Save new conversations')
   label.htmlFor = keeps.id
@@ -91,12 +87,8 @@ export function bubbleSection(
   worn: ShelfCharacter,
   handlers: ShelfHandlers,
 ): HTMLElement {
-  const bubble = element('input')
-  bubble.type = 'checkbox'
-  bubble.checked = worn.bubble
-  bubble.id = 'bubble'
-  bubble.addEventListener('change', () => {
-    handlers.save({ id: worn.id, bubble: bubble.checked })
+  const bubble = checkbox('bubble', worn.bubble, (on) => {
+    handlers.save({ id: worn.id, bubble: on })
   })
   const label = element('label', undefined, 'Show it')
   label.htmlFor = bubble.id
