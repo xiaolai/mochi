@@ -2953,6 +2953,29 @@ async function checks(page, where = '') {
       did anything is what the landing checks below measure; there is nothing for
       a return value to add.
     */
+    /*
+      THE MARK IS WATCHED FOR, not looked at afterwards.
+
+      Reading it after the fact was a race and it lost on CI. The mark runs for
+      two turns of the motion duration -- 440ms -- and settle waits about a
+      hundred, so locally the mark was always still up when this looked. On a
+      slower runner more than 440ms passes between the keypress and the read,
+      the mark has correctly finished, and the check called a working feature
+      broken. That is the shape of assertion that has to be paid for later: it
+      passed thirty times here and failed the first time it ran anywhere else.
+
+      An observer records that the class was EVER applied, which is the durable
+      fact. Installed before the keypress, so there is no window it can miss.
+    */
+    await page.run(`(() => {
+    window.__landedSeen = false;
+    new MutationObserver((records) => {
+      for (const record of records) {
+        const marked = record.target.classList;
+        if (marked && marked.contains('landed')) window.__landedSeen = true;
+      }
+    }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+  })()`)
     await page.run(`document.getElementById('jump-q')
       .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`)
     /*
@@ -2970,19 +2993,16 @@ async function checks(page, where = '') {
     )
     await settle(page)
     /*
-      THE MARK IS CHECKED TWICE, and the timing of each was measured rather than
-      assumed.
+      THE MARK IS CHECKED TWICE, and neither check may depend on when this runs.
 
-      It is up HERE: settle waits about a hundred milliseconds and the mark runs
-      for two turns of the motion duration, which is 440. Asserting it had
-      already gone at this point was tried, and it failed three times out of
-      three -- against code that was working.
+      That it APPEARED is the observer's business, installed before the keypress
+      -- see above for why reading the class here instead cost a release.
 
-      And it is gone by the WAIT below, which is the half that lasts. A block
-      left permanently tinted reads as a state the setting is in, and the
-      removal rides on an animationend that a stranded animation never fires --
-      so the failure this catches is invisible except as a page that slowly
-      collects highlights.
+      That it GOES is the wait below, and it is the half that lasts. A block left
+      permanently tinted reads as a state the setting is in, and the removal
+      rides on an animationend that a stranded animation never fires, so the
+      failure it catches is invisible except as a page slowly collecting
+      highlights.
     */
     const arrived = await page.run(`(() => {
     const box = document.getElementById('jump');
@@ -2996,8 +3016,8 @@ async function checks(page, where = '') {
       /* In view means inside the pane that scrolls it, not merely in the document. */
       inView: seen.top >= pane.top - 1 && seen.bottom <= pane.bottom + 1,
       /* Nothing is left marked -- see the note above this query. */
-      /* The mark is still up at this point -- see the note above, and the wait below. */
-      marked: target.classList.contains('landed'),
+      /* Whether the mark was EVER applied -- recorded by the observer above. */
+      marked: window.__landedSeen === true,
       /* How far the setting's own top sits from the top of the pane it was scrolled in. */
       offBy: Math.round(seen.top - pane.top),
       /*
