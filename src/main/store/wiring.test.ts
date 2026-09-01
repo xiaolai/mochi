@@ -70,17 +70,22 @@ const SRC = join(process.cwd(), 'src')
 /**
  * MEMOISED, and that is a correctness matter rather than a nicety.
  *
- * This is called once per (surface x file): `isCalled` scans every file for
- * every surface, and `receiversOf` scans them all again for every method. At
- * 209 files and 86 surfaces that is roughly eighteen thousand reads of the
- * same two hundred files, each followed by two regex passes over the whole
- * text -- and it grew past vitest's 5s default the week the rig gained its
- * motion library, so the guard began FAILING BY TIMEOUT on a healthy tree.
+ * It was once called per (surface x file) — `isCalled` scanned every file for
+ * every surface and `receiversOf` scanned them all again for every method,
+ * roughly eighteen thousand reads of the same two hundred files — and it grew
+ * past vitest's 5s default the week the rig gained its motion library, so the
+ * guard began FAILING BY TIMEOUT on a healthy tree.
  *
  * A timeout is the worst way for a guard to break: it says nothing about what
  * it was guarding, and the obvious fix is to raise the limit, which buys green
- * by making the guard slower to notice the next thing. The work was simply
- * repeated; the cache removes the repetition and changes no answer.
+ * by making the guard slower to notice the next thing.
+ *
+ * The cache answered the READS and left the SCANS, so it came back: 4.19s
+ * against the 5s budget, green, and one new module away from timing out again.
+ * `wiring()` below is what answered it properly, by reading the tree once
+ * instead of once per surface. This cache still earns its place — `surfaces()`
+ * and `wiring()` both walk the same files — and it is now a small saving rather
+ * than the thing standing between this guard and a red clock.
  *
  * Safe because this is a test process reading a tree nothing mutates while it
  * runs. If that ever stops being true, this cache is the first thing to
@@ -222,25 +227,95 @@ const KNOWN_DEBT: readonly string[] = [
  * `Transcripts.close` passed because `peer.close()` exists in the renderer --
  * the guard certifying the exact defect it was written to catch.
  */
-const RECEIVERS = new Map<string, Set<string>>()
+/**
+ * Every call and every annotation in shipped source, read ONCE.
+ *
+ * ## Why the shape changed, and the answer did not
+ *
+ * `stripped` and `tsFilesUnder` above were memoised when this guard first grew
+ * past vitest's 5s default, and their comments say why. That fixed the READS.
+ * It left the SCANS: `isCalled` built a regex per surface and ran it over all
+ * 209 files, and `receiversOf` did the same per type — about eighteen thousand
+ * regex executions over full file texts, plus a `new RegExp` per file inside
+ * the method loop. Caching the file contents only made the repeated work
+ * cheaper to repeat.
+ *
+ * So it came back. Measured at 4.19s against a 5s budget — 84% spent, green,
+ * and one new module away from failing by timeout again. That is the failure
+ * this file already names as the worst kind: "it says nothing about what it was
+ * guarding, and the obvious fix is to raise the limit, which buys green by
+ * making the guard slower to notice the next thing."
+ *
+ * The fix is to invert the loop. The three patterns below are the same ones
+ * that were built per surface, with the SURFACE NAME replaced by a capture
+ * group — the lookarounds never depended on the name, which is what makes the
+ * inversion exact rather than approximate. One pass collects what every file
+ * calls and annotates; each surface is then a Set lookup. O(files) instead of
+ * O(files x surfaces), and the same answer: `KNOWN_DEBT` is unchanged, which is
+ * this test's own proof of it.
+ */
 
 /**
- * Memoised per TYPE, not per surface. `Transcripts` has a dozen methods and
- * each one was re-scanning every file to rediscover the same receivers.
+ * A call with no dot before it — a free function.
+ *
+ * The `...` alternative is load-bearing and was a real defect: the leading `.`
+ * exclusion rejects `obj.name(`, correctly, but a spread's third dot is a dot,
+ * so `...toTurn(` was read as a property access and `toTurn` was reported
+ * uncalled while three lines called it.
  */
-function receiversOf(surfaceType: string): Set<string> {
-  const held = RECEIVERS.get(surfaceType)
-  if (held !== undefined) return held
-  const names = new Set<string>()
-  const annotated = new RegExp(
-    `([A-Za-z][A-Za-z0-9_$]*)\\s*(?:\\([^)]*\\))?\\s*:\\s*(?:Pick<)?${surfaceType}\\b`,
-    'g',
-  )
-  for (const path of tsFilesUnder(SRC)) {
-    for (const match of stripped(path).matchAll(annotated)) names.add(match[1] ?? '')
+const FREE_CALL =
+  /(?:(?<!function )(?<![A-Za-z0-9_$.])|(?<=\.\.\.))([A-Za-z][A-Za-z0-9_$]*)(?=\s*\()/g
+
+/**
+ * A call WITH a dot, capturing the receiver and the method.
+ *
+ * THE METHOD NAME IS IN A LOOKAHEAD, and that is the whole correctness of this
+ * inversion. Consuming it loses chained calls: `deps.conversation().file(...)`
+ * matches once as `(deps, conversation)`, and a consuming pattern then resumes
+ * PAST the dot that `file` hangs off — so `Conversation.file` and
+ * `Conversation.wear` were both reported uncalled while `voice/reported.ts` and
+ * `voice/session-config.ts` called them four times between them. The
+ * per-surface regex this replaced never had the problem, because it searched
+ * for one literal name and could therefore start anywhere.
+ *
+ * Consuming only as far as the dot leaves the next link's receiver unread, so
+ * `conversation().file(` matches on the following pass.
+ */
+const METHOD_CALL = /([A-Za-z][A-Za-z0-9_$]*)(?:\(\))?\??\s*\.\s*(?=([A-Za-z][A-Za-z0-9_$]*)\s*\()/g
+
+/** `name: Type` and `name(): Type`, including through a `Pick<`. */
+const ANNOTATION =
+  /([A-Za-z][A-Za-z0-9_$]*)\s*(?:\([^)]*\))?\s*:\s*(?:Pick<)?(?=([A-Za-z][A-Za-z0-9_$]*)\b)/g
+
+interface Wiring {
+  /** Names called without a receiver. */
+  readonly free: ReadonlySet<string>
+  /** Method name to the receivers it was called on. */
+  readonly onReceiver: ReadonlyMap<string, Set<string>>
+  /** Type name to the identifiers the type system says hold one. */
+  readonly annotated: ReadonlyMap<string, Set<string>>
+}
+
+let WIRING: Wiring | null = null
+
+function wiring(): Wiring {
+  if (WIRING !== null) return WIRING
+  const free = new Set<string>()
+  const onReceiver = new Map<string, Set<string>>()
+  const annotated = new Map<string, Set<string>>()
+  const into = (map: Map<string, Set<string>>, key: string, value: string): void => {
+    const held = map.get(key)
+    if (held === undefined) map.set(key, new Set([value]))
+    else held.add(value)
   }
-  RECEIVERS.set(surfaceType, names)
-  return names
+  for (const path of tsFilesUnder(SRC)) {
+    const text = stripped(path)
+    for (const match of text.matchAll(FREE_CALL)) free.add(match[1] ?? '')
+    for (const match of text.matchAll(METHOD_CALL)) into(onReceiver, match[2] ?? '', match[1] ?? '')
+    for (const match of text.matchAll(ANNOTATION)) into(annotated, match[2] ?? '', match[1] ?? '')
+  }
+  WIRING = { free, onReceiver, annotated }
+  return WIRING
 }
 
 /**
@@ -252,27 +327,13 @@ function receiversOf(surfaceType: string): Set<string> {
  * `dev-docs/plan-conversations.md`.
  */
 function isCalled(surface: Surface): boolean {
-  const pattern =
-    surface.kind === 'function'
-      ? // The leading `.` exclusion is there to reject `obj.name(` -- a method
-        // call is not a call to the free function of the same name. But it also
-        // rejected `...name(`, because a spread's third dot is a dot: `toTurn`
-        // was called three times and reported as having no caller at all. The
-        // alternative branch lets a spread through without letting a property
-        // access through.
-        new RegExp(`(?:(?<!function )(?<![A-Za-z0-9_$.])|(?<=\\.\\.\\.))${surface.name}\\s*\\(`)
-      : new RegExp(`([A-Za-z][A-Za-z0-9_$]*)(?:\\(\\))?\\??\\s*\\.\\s*${surface.name}\\s*\\(`)
-  const receivers = surface.kind === 'method' ? receiversOf(surface.owner) : null
-  for (const path of tsFilesUnder(SRC)) {
-    const text = stripped(path)
-    if (surface.kind === 'function') {
-      if (pattern.test(text)) return true
-      continue
-    }
-    for (const match of text.matchAll(new RegExp(pattern, 'g'))) {
-      if (receivers?.has(match[1] ?? '') === true) return true
-    }
-  }
+  const found = wiring()
+  if (surface.kind === 'function') return found.free.has(surface.name)
+  const receivers = found.annotated.get(surface.owner)
+  if (receivers === undefined) return false
+  const calledOn = found.onReceiver.get(surface.name)
+  if (calledOn === undefined) return false
+  for (const one of calledOn) if (receivers.has(one)) return true
   return false
 }
 
