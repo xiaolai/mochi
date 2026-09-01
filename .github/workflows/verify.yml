@@ -61,7 +61,7 @@ jobs:
       # to locate its store. The version is not written here: `action-setup`
       # reads `packageManager` from `package.json`, so the pin lives in one
       # place and this file cannot drift from it.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v5
         with:

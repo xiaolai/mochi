@@ -117,7 +117,7 @@ jobs:
           echo "version=$TAG" >> "$GITHUB_OUTPUT"
           echo "Releasing $TAG"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v5
         with:
