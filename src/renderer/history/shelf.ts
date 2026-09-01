@@ -1,5 +1,5 @@
 import type { ShelfCharacter, ShelfView } from '@shared/history-window'
-import { forPronoun } from '@shared/pronoun'
+import { forPronoun, label as copyFor } from '@shared/pronoun'
 import { castDangerous } from './sheet/cast'
 import { element } from '../element'
 import { editing } from '../rules/editing'
@@ -409,7 +409,7 @@ export function assembledPanel(
     actions,
     // Said before the box goes dead, so the freeze reads as a rule rather than
     // as the window hanging. See `editing.ts` for the lock it describes.
-    element('p', 'note', forPronoun(SAYS.whileSaving, view.pronoun)),
+    element('p', 'note', copyFor(SAYS.whileSaving, view.pronoun)),
   ]
 }
 

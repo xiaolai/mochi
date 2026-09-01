@@ -13,7 +13,7 @@ import { CODEX_SAYS, REMEDY_SAYS } from '@shared/delegation'
 import { type SettingsCodex, type SettingsView } from '@shared/ipc'
 import { readinessOf, type Certainty, type ReadinessAction } from '../../rules/readiness'
 import { checkedLabel } from '../../rules/freshness'
-import { forPronoun } from '@shared/pronoun'
+import { forPronoun, label as copyFor } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
 import { field, options } from '../pane'
 
@@ -260,8 +260,8 @@ export const LOOKING: Pane = {
       field(FIELDS.profile, view, chosen, {
         note:
           view.lookup.profile === null
-            ? forPronoun(SAYS.profileDefault, view.pronoun)
-            : forPronoun(SAYS.profileChosen, view.pronoun),
+            ? copyFor(SAYS.profileDefault, view.pronoun)
+            : copyFor(SAYS.profileChosen, view.pronoun),
       }),
     ]
   },

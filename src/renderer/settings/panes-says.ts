@@ -22,13 +22,13 @@ export const SAYS = {
     withheld it everywhere. The switches are the same; what changed is who they
     are about, and a pane that does not say that is a pane that misleads.
   */
-  grantInForce: { she: 'in force now', he: 'in force now', it: 'in force now' },
+  grantInForce: 'in force now',
   grantAtWake: {
     she: 'applies from her next wake',
     he: 'applies from his next wake',
     it: 'applies from its next wake',
   },
-  mayDoHead: { she: 'What you permit', he: 'What you permit', it: 'What you permit' },
+  mayDoHead: 'What you permit',
   atOnce: {
     she:
       'Turning one off takes effect at once, and she is told — she will say she can no longer ' +
@@ -140,17 +140,14 @@ export const SAYS = {
     he: 'What he is told',
     it: 'What it is told',
   },
-  onDisk: { she: 'On disk', he: 'On disk', it: 'On disk' },
+  onDisk: 'On disk',
   languagesHead: {
     she: 'Languages she listens for',
     he: 'Languages he listens for',
     it: 'Languages it listens for',
   },
-  typefaces: {
-    she: 'Outfit and JetBrains Mono, both under the SIL Open Font License, bundled rather than fetched. CJK comes from the operating system — bundling a face for せんせい would be tens of megabytes to replace what the system already ships.',
-    he: 'Outfit and JetBrains Mono, both under the SIL Open Font License, bundled rather than fetched. CJK comes from the operating system — bundling a face for せんせい would be tens of megabytes to replace what the system already ships.',
-    it: 'Outfit and JetBrains Mono, both under the SIL Open Font License, bundled rather than fetched. CJK comes from the operating system — bundling a face for せんせい would be tens of megabytes to replace what the system already ships.',
-  },
+  typefaces:
+    'Outfit and JetBrains Mono, both under the SIL Open Font License, bundled rather than fetched. CJK comes from the operating system — bundling a face for せんせい would be tens of megabytes to replace what the system already ships.',
   workspaceNote: {
     she: 'The one folder she may read. Nothing above it is reachable.',
     he: 'The one folder he may read. Nothing above it is reachable.',
@@ -164,18 +161,11 @@ export const SAYS = {
     that confinement. Somebody about to type a profile name here should know
     that before they type it, not after.
   */
-  profileDefault: {
-    she: 'Nobody has chosen one, so this is the default. A profile can carry its own MCP servers, which read-only does not confine.',
-    he: 'Nobody has chosen one, so this is the default. A profile can carry its own MCP servers, which read-only does not confine.',
-    it: 'Nobody has chosen one, so this is the default. A profile can carry its own MCP servers, which read-only does not confine.',
-  },
+  profileDefault:
+    'Nobody has chosen one, so this is the default. A profile can carry its own MCP servers, which read-only does not confine.',
   /* The same warning, once a profile IS chosen — which is when it matters most,
      and when the sentence above stops being true. */
-  profileChosen: {
-    she: 'A profile can carry its own MCP servers, which read-only does not confine.',
-    he: 'A profile can carry its own MCP servers, which read-only does not confine.',
-    it: 'A profile can carry its own MCP servers, which read-only does not confine.',
-  },
+  profileChosen: 'A profile can carry its own MCP servers, which read-only does not confine.',
   workspacePlaceholder: {
     she: 'a folder she may read',
     he: 'a folder he may read',
@@ -310,7 +300,7 @@ export const SAYS = {
       'remembers about you — is on the shelf, with the character it belongs to. This ' +
       'window holds only what is true whoever is worn.',
   },
-} as const satisfies Readonly<Record<string, ByPronoun>>
+} as const satisfies Readonly<Record<string, ByPronoun | string>>
 
 /**
  * What each halo answer is called on screen.

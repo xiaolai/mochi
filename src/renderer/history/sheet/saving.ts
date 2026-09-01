@@ -13,7 +13,7 @@ import { element } from '../../element'
 import { type ShelfHandlers, section, settingRow } from './row'
 import { type ShelfCharacter, type ShelfView } from '@shared/history-window'
 import { SIDE_NAMES } from '@shared/persona'
-import { type ByPronoun, forPronoun } from '@shared/pronoun'
+import { forPronoun, label as copyFor, type ByPronoun } from '@shared/pronoun'
 import { anchor } from '../../field'
 import { HER_FIELDS } from './fields'
 /**
@@ -81,7 +81,7 @@ export function savingSection(
       'Conversations',
       forPronoun(SAYS.keeps, view.pronoun),
       row,
-      element('p', 'note', forPronoun(SAYS.keptAlready, view.pronoun)),
+      element('p', 'note', copyFor(SAYS.keptAlready, view.pronoun)),
     ),
   )
 }

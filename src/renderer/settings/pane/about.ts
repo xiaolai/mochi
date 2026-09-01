@@ -22,7 +22,7 @@
  */
 import { element } from '../../element'
 import { type Pane } from '../pane'
-import { forPronoun, label as paneLabel } from '@shared/pronoun'
+import { forPronoun, label as copyFor, label as paneLabel } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
 import { anchor, field, type Field, type PaneHandlers } from '../pane'
 import { section } from '../../history/sheet/row'
@@ -120,7 +120,7 @@ export const ABOUT: Pane = {
         part of the runtime.
       */
       field(FIELDS.builtOn, view, builtOn(view.about.electron), {
-        note: forPronoun(SAYS.typefaces, view.pronoun),
+        note: copyFor(SAYS.typefaces, view.pronoun),
       }),
       // Where the rest of her went, said once, here — because this is the group
       // somebody lands on when they cannot find something.

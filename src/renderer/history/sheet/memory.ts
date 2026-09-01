@@ -13,7 +13,7 @@ import { element } from '../../element'
 import { type ShelfHandlers, section } from './row'
 import { undoing } from '../../rules/undoing'
 import { type ShelfView } from '@shared/history-window'
-import { forPronoun } from '@shared/pronoun'
+import { forPronoun, label as copyFor } from '@shared/pronoun'
 /**
  * What she remembers, with the one step back.
  *
@@ -144,7 +144,7 @@ export function memorySection(view: ShelfView, handlers: ShelfHandlers): HTMLEle
     element('span', 'grow'),
     undo,
     forget,
-    element('span', 'hint', forPronoun(SAYS.eraseAsks, view.pronoun)),
+    element('span', 'hint', copyFor(SAYS.eraseAsks, view.pronoun)),
   )
 
   /*
@@ -161,7 +161,7 @@ export function memorySection(view: ShelfView, handlers: ShelfHandlers): HTMLEle
     wrap,
     section(
       forPronoun(SAYS.fenceHead, view.pronoun),
-      forPronoun(SAYS.fenceWhere, view.pronoun),
+      copyFor(SAYS.fenceWhere, view.pronoun),
       element('p', 'note', forPronoun(SAYS.fenceWhy, view.pronoun)),
     ),
   )

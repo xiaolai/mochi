@@ -12,7 +12,7 @@ import { sectionHead } from '../../history/sheet/row'
 import { anchor, type Pane, type Field } from '../pane'
 import { GRANT_SPECS } from '@shared/grants'
 import { type GrantUse, type SettingsGrant } from '@shared/ipc'
-import { forPronoun } from '@shared/pronoun'
+import { forPronoun, label as copyFor } from '@shared/pronoun'
 import { SAYS } from '../panes-says'
 /**
  * When it was last used, and when a change to it takes effect.
@@ -129,7 +129,7 @@ export const MAY_DO: Pane = {
         about when a tool last ran read as a caption for the control, right-
         aligned in a 120px column against text set left in a 600px one.
       */
-      const bites = forPronoun(grant.allowed ? SAYS.grantAtWake : SAYS.grantInForce, view.pronoun)
+      const bites = copyFor(grant.allowed ? SAYS.grantAtWake : SAYS.grantInForce, view.pronoun)
       left.append(element('div', 'used', lastUsedLabel(grant.lastUsed, bites)))
 
       const right = element('div', 'right')
@@ -158,7 +158,7 @@ export const MAY_DO: Pane = {
       count restated two inches apart is a count that can be seen to disagree
       with itself while a save is in flight.
     */
-    const permits = sectionHead(forPronoun(SAYS.mayDoHead, view.pronoun), '')
+    const permits = sectionHead(copyFor(SAYS.mayDoHead, view.pronoun), '')
 
     const note = element('p', 'note', forPronoun(SAYS.atOnce, view.pronoun))
 

@@ -20,21 +20,13 @@ export const SAYS = {
   },
 
   marginFacesHead: { she: 'Her expressions', he: 'His expressions', it: 'Its expressions' },
-  marginStored: { she: 'Stored at', he: 'Stored at', it: 'Stored at' },
+  marginStored: 'Stored at',
   marginBuiltIn: {
     she: 'built-in · no file of her own',
     he: 'built-in · no file of his own',
     it: 'built-in · no file of its own',
   },
-  marginTalkHead: { she: 'This conversation', he: 'This conversation', it: 'This conversation' },
-  marginAbout: { she: 'What it was about', he: 'What it was about', it: 'What it was about' },
-  marginNoSummary: {
-    she: 'No summary was made. That is normal — the summary is a separate call that often does not run.',
-    he: 'No summary was made. That is normal — the summary is a separate call that often does not run.',
-    it: 'No summary was made. That is normal — the summary is a separate call that often does not run.',
-  },
-  marginUsedHead: { she: 'Capabilities used', he: 'Capabilities used', it: 'Capabilities used' },
-  marginUsedNone: { she: 'none', he: 'none', it: 'none' },
+  marginUsedNone: 'none',
 
   /*
     The three views of her page.
@@ -98,17 +90,6 @@ export const SAYS = {
     he: 'Made, and worn. He will be this character from his next wake.',
     it: 'Made, and worn. It will be this character from its next wake.',
   },
-  /**
-   * The fallback speaker label, when the character whose conversation this is
-   * has gone from the shelf.
-   *
-   * Her NAME is what a transcript uses, and what this build shipped instead was
-   * the object pronoun: a paragraph headed "HIM" above a paragraph headed "YOU",
-   * which is not how anybody writes down a conversation. The name is only
-   * missing if the persona was deleted while a transcript of hers was open, and
-   * then this is better than a blank.
-   */
-  spoke: { she: 'her', he: 'him', it: 'it' },
   cutEarly: {
     she: 'interrupted before she got a word out',
     he: 'interrupted before he got a word out',
@@ -134,16 +115,8 @@ export const SAYS = {
     talking to an archive that was never going to fill.
   */
   /* Said where the day strip would be, when no day has anything on it. */
-  noDay: {
-    she: 'no day has anything in it',
-    he: 'no day has anything in it',
-    it: 'no day has anything in it',
-  },
-  noTalksWhy: {
-    she: 'keeping conversations is',
-    he: 'keeping conversations is',
-    it: 'keeping conversations is',
-  },
+  noDay: 'no day has anything in it',
+  noTalksWhy: 'keeping conversations is',
   /* Said after a face is worn from the mood tiles. The face's own name comes
      first — "Done" over eight tiles that look alike at 56px says nothing
      anybody can check — and this is the tail. */
@@ -178,30 +151,21 @@ export const SAYS = {
      count beside it is the part that moves. */
   /* The month picker on a fresh archive: nothing to choose, said rather than
      drawn as twelve dead buttons with no explanation. */
-  monthNoneKept: {
-    she: 'Nothing has been kept in this year, so none of these opens anything.',
-    he: 'Nothing has been kept in this year, so none of these opens anything.',
-    it: 'Nothing has been kept in this year, so none of these opens anything.',
-  },
-  railCast: { she: 'Characters', he: 'Characters', it: 'Characters' },
-  talkUsedNothing: {
-    she: 'no capabilities used',
-    he: 'no capabilities used',
-    it: 'no capabilities used',
-  },
-  keptHead: { she: 'Lines kept', he: 'Lines kept', it: 'Lines kept' },
-  keptSizeHead: { she: 'Written', he: 'Written', it: 'Written' },
-  keptWhereHead: { she: 'Stored at', he: 'Stored at', it: 'Stored at' },
+  monthNoneKept: 'Nothing has been kept in this year, so none of these opens anything.',
+  railCast: 'Characters',
+  keptHead: 'Lines kept',
+  keptSizeHead: 'Written',
+  keptWhereHead: 'Stored at',
   /* A8's "Right now", per state. `saving` is not a synonym for either of the
      others: while a save is in flight the box and both buttons are dead, and
      reporting that as "unsaved" would describe the freeze as an edit. */
-  promptSaved: { she: 'saved', he: 'saved', it: 'saved' },
-  promptUnsaved: { she: 'unsaved', he: 'unsaved', it: 'unsaved' },
-  promptSaving: { she: 'saving…', he: 'saving…', it: 'saving…' },
-  drawnHead: { she: 'Drawn', he: 'Drawn', it: 'Drawn' },
-  allowedHead: { she: 'Allowed', he: 'Allowed', it: 'Allowed' },
-  wearingHead: { she: 'Wearing now', he: 'Wearing now', it: 'Wearing now' },
-  drawnAtHead: { she: 'Drawn at', he: 'Drawn at', it: 'Drawn at' },
+  promptSaved: 'saved',
+  promptUnsaved: 'unsaved',
+  promptSaving: 'saving…',
+  drawnHead: 'Drawn',
+  allowedHead: 'Allowed',
+  wearingHead: 'Wearing now',
+  drawnAtHead: 'Drawn at',
   drawnAtOwn: {
     she: 'her desktop size',
     he: 'his desktop size',
@@ -212,34 +176,22 @@ export const SAYS = {
     he: 'Sent at his next wake',
     it: 'Sent at its next wake',
   },
-  promptWhereHead: { she: 'Stored at', he: 'Stored at', it: 'Stored at' },
+  promptWhereHead: 'Stored at',
   /* A7's apparatus column: who the grants apply to, how many are withheld, and
      when a change to one takes effect. */
-  permitsForHead: { she: 'In force for', he: 'In force for', it: 'In force for' },
-  permitsForWhom: {
-    she: 'the worn character · the live one',
-    he: 'the worn character · the live one',
-    it: 'the worn character · the live one',
-  },
-  permitsWithheldHead: { she: 'Withheld', he: 'Withheld', it: 'Withheld' },
+  permitsForHead: 'In force for',
+  permitsForWhom: 'the worn character · the live one',
+  permitsWithheldHead: 'Withheld',
   permitsWhenHead: {
     she: 'Sent at her next wake',
     he: 'Sent at his next wake',
     it: 'Sent at its next wake',
   },
-  permitsWhen: {
-    she: 'off takes effect at once',
-    he: 'off takes effect at once',
-    it: 'off takes effect at once',
-  },
-  marginNow: { she: 'Right now', he: 'Right now', it: 'Right now' },
-  marginAsleep: { she: 'asleep', he: 'asleep', it: 'asleep' },
-  marginLastAwake: { she: 'Last awake', he: 'Last awake', it: 'Last awake' },
-  marginNeverAwake: {
-    she: 'never · nothing kept yet',
-    he: 'never · nothing kept yet',
-    it: 'never · nothing kept yet',
-  },
+  permitsWhen: 'off takes effect at once',
+  marginNow: 'Right now',
+  marginAsleep: 'asleep',
+  marginLastAwake: 'Last awake',
+  marginNeverAwake: 'never · nothing kept yet',
   keptErased: {
     she: 'Erased. Everything she had kept about you is gone.',
     he: 'Erased. Everything he had kept about you is gone.',
@@ -266,4 +218,4 @@ export const SAYS = {
     he: 'Things he could not load since he woke up. Each one fell back to a working default, so nothing here stopped him — but a file you edited may not be the one he is using.',
     it: 'Things it could not load since it woke up. Each one fell back to a working default, so nothing here stopped it — but a file you edited may not be the one it is using.',
   },
-} as const satisfies Readonly<Record<string, ByPronoun>>
+} as const satisfies Readonly<Record<string, ByPronoun | string>>

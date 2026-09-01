@@ -29,9 +29,6 @@ export const SAYS = {
   /* The name field's hint. It shows for one keystroke when the name is cleared
      before `change` puts it back, which is the only time anybody sees it. */
   herName: { she: 'Her name', he: 'His name', it: 'Its name' },
-  herWords: { she: 'Her words', he: 'His words', it: 'Its words' },
-  /* The hint beside Appearance when she carries her own hue rather than one of
-     the eight. */
   /* A2b's second section. The fence is a safety boundary, so the screen that
      shows her notes is where it has to be explained. */
   fenceHead: {
@@ -46,11 +43,7 @@ export const SAYS = {
     somebody on this screen needs — A2b puts the fence's own words here, because
     the boundary is the point and where it is stored is a detail of it.
   */
-  fenceWhere: {
-    she: 'data, not instructions',
-    he: 'data, not instructions',
-    it: 'data, not instructions',
-  },
+  fenceWhere: 'data, not instructions',
   fenceWhy: {
     she:
       'These lines reach her wrapped in a fence that says they are background DATA, not ' +
@@ -105,16 +98,6 @@ export const SAYS = {
     he: 'yours, not his face’s',
     it: 'yours, not its face’s',
   },
-  /* The tail of a mood tile's tooltip: "See happy" + this. A SUFFIX, which is
-     the shape `everythingOf` already uses in the settings copy — the variable
-     sits in the middle of the sentence and a slot mechanism for one string
-     would be a second way of doing this. */
-  seeMoodOn: { she: ' on her', he: ' on him', it: ' on it' },
-  noFile: {
-    she: 'the built-in, with no file of her own',
-    he: 'the built-in, with no file of his own',
-    it: 'the built-in, with no file of its own',
-  },
   nextWake: {
     she: 'ten · lands on her next wake',
     he: 'ten · lands on his next wake',
@@ -130,35 +113,12 @@ export const SAYS = {
     he: 'What he is told and what he says are written to this machine, and stay there until you delete them.',
     it: 'What it is told and what it says are written to this machine, and stay there until you delete them.',
   },
-  keptAlready: {
-    she: 'Turning this off stops NEW conversations being written. It does not delete the ones already here — the Archive is where those are removed.',
-    he: 'Turning this off stops NEW conversations being written. It does not delete the ones already here — the Archive is where those are removed.',
-    it: 'Turning this off stops NEW conversations being written. It does not delete the ones already here — the Archive is where those are removed.',
-  },
+  keptAlready:
+    'Turning this off stops NEW conversations being written. It does not delete the ones already here — the Archive is where those are removed.',
   bubbleSide: {
     she: 'A side that will not fit is not honoured — dragged into a corner she puts her words wherever there is room.',
     he: 'A side that will not fit is not honoured — dragged into a corner he puts his words wherever there is room.',
     it: 'A side that will not fit is not honoured — dragged into a corner it puts its words wherever there is room.',
-  },
-  moods: {
-    she: 'eight drawn · what she is told she has',
-    he: 'eight drawn · what he is told he has',
-    it: 'eight drawn · what it is told it has',
-  },
-  moodsHow: {
-    she: 'Which expressions this character claims. Nothing changes her face on its own except falling asleep and waking up, so today this only decides what she is told about herself — and which tiles you can try below. The tool that let her choose was removed after 275 sessions in which she never used it.',
-    he: 'Which expressions this character claims. Nothing changes his face on its own except falling asleep and waking up, so today this only decides what he is told about himself — and which tiles you can try below. The tool that let him choose was removed after 275 sessions in which he never used it.',
-    it: 'Which expressions this character claims. Nothing changes its face on its own except falling asleep and waking up, so today this only decides what it is told about itself — and which tiles you can try below. The tool that let it choose was removed after 275 sessions in which it never used it.',
-  },
-  noMoods: {
-    she: 'None left on. She will be told she has one face and cannot change it.',
-    he: 'None left on. He will be told he has one face and cannot change it.',
-    it: 'None left on. It will be told it has one face and cannot change it.',
-  },
-  colour: {
-    she: 'eight themes · retints this window and her',
-    he: 'eight themes · retints this window and him',
-    it: 'eight themes · retints this window and it',
   },
   colourAuthored: {
     she: 'Her avatar file names its own five colours, so a theme would overwrite what somebody drew. Clear the file below to choose one.',
@@ -214,11 +174,7 @@ export const SAYS = {
   },
   /* Beside the erase control, saying what pressing it costs before it is
      pressed. D2's sheet is the thing this describes. */
-  eraseAsks: {
-    she: 'asks once, and offers a copy first',
-    he: 'asks once, and offers a copy first',
-    it: 'asks once, and offers a copy first',
-  },
+  eraseAsks: 'asks once, and offers a copy first',
   /* The destructive control on her notes. Named, because "Erase everything" on
      its own does not say everything of WHAT — and the sheet it opens says the
      rest. */
@@ -285,15 +241,12 @@ export const SAYS = {
     he: 'The one in focus is the one he is wearing. Eight themes, and only he changes — this window stays as it is.',
     it: 'The one in focus is the one it is wearing. Eight themes, and only it changes — this window stays as it is.',
   },
+  /* The hint beside Appearance when she carries her own hue rather than one of
+     the eight. */
   ownHue: {
     she: 'She wears a hue of her own; none of the eight is stored.',
     he: 'He wears a hue of his own; none of the eight is stored.',
     it: 'It wears a hue of its own; none of the eight is stored.',
-  },
-  deleting: {
-    she: 'her notes and her conversations',
-    he: 'his notes and his conversations',
-    it: 'its notes and its conversations',
   },
   /* A8's title for this screen. It was "System prompt", which names the
      mechanism; the row that opens it, the rail's own vocabulary and the
@@ -310,14 +263,11 @@ export const SAYS = {
   },
   /* Why the box goes dead for a moment — said before it happens, so the freeze
      reads as a rule rather than as the window hanging. */
-  whileSaving: {
-    she: 'While a save is in flight, both of these and the text itself are unavailable — there is one document and two writers, and the honest resolution is that one of them waits.',
-    he: 'While a save is in flight, both of these and the text itself are unavailable — there is one document and two writers, and the honest resolution is that one of them waits.',
-    it: 'While a save is in flight, both of these and the text itself are unavailable — there is one document and two writers, and the honest resolution is that one of them waits.',
-  },
+  whileSaving:
+    'While a save is in flight, both of these and the text itself are unavailable — there is one document and two writers, and the honest resolution is that one of them waits.',
   assembled: {
     she: 'Write the prompt; Sent is the exact string she is handed once her character and her notes are folded in; Tools is the rest of what she is told, which is not editable. Saving lands on her next wake.',
     he: 'Write the prompt; Sent is the exact string he is handed once his character and his notes are folded in; Tools is the rest of what he is told, which is not editable. Saving lands on his next wake.',
     it: 'Write the prompt; Sent is the exact string it is handed once its character and its notes are folded in; Tools is the rest of what it is told, which is not editable. Saving lands on its next wake.',
   },
-} as const satisfies Readonly<Record<string, ByPronoun>>
+} as const satisfies Readonly<Record<string, ByPronoun | string>>

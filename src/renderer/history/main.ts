@@ -9,7 +9,13 @@ import type {
   ShelfView,
   ToolUse,
 } from '@shared/history-window'
-import { DEFAULT_PRONOUN, forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
+import {
+  DEFAULT_PRONOUN,
+  forPronoun,
+  label as copyFor,
+  type ByPronoun,
+  type Pronoun,
+} from '@shared/pronoun'
 import { EMOTIONS } from '@shared/avatar'
 import { applyAccent } from '../design/apply-accent'
 import { MAY_DO } from '../settings/pane/may-do'
@@ -461,7 +467,7 @@ function renderCards(): void {
   */
   const many = shelf.characters.length
   charactersCountEl.replaceChildren(
-    element('span', undefined, forPronoun(SAYS.railCast, saying())),
+    element('span', undefined, copyFor(SAYS.railCast, saying())),
     element('span', 'rail-count', String(many)),
   )
   /*
@@ -542,18 +548,18 @@ function renderPermits(): void {
   marginPermitsEl.replaceChildren(
     ...marginColumn(
       marginBlock(
-        forPronoun(SAYS.permitsForHead, saying()),
-        marginFacts(wornName() ?? forPronoun(SAYS.permitsForWhom, saying())),
+        copyFor(SAYS.permitsForHead, saying()),
+        marginFacts(wornName() ?? copyFor(SAYS.permitsForWhom, saying())),
       ),
       marginBlock(
-        forPronoun(SAYS.permitsWithheldHead, saying()),
+        copyFor(SAYS.permitsWithheldHead, saying()),
         marginFacts(`${String(withheld)} of ${String(grants.length)}`),
       ),
       marginBlock(
         forPronoun(SAYS.permitsWhenHead, saying()),
         marginFacts(
           lines === null
-            ? forPronoun(SAYS.permitsWhen, saying())
+            ? copyFor(SAYS.permitsWhen, saying())
             : `${String(lines)} line${lines === 1 ? '' : 's'}`,
         ),
       ),
@@ -615,7 +621,7 @@ function renderTalkHead(turns: readonly HistoryTurn[], tools: readonly ToolUse[]
   const span = lengthLabel(first, last)
   if (span !== null) facts.push(span)
   if (cut > 0) facts.push(`${String(cut)} interrupted`)
-  facts.push(used.length === 0 ? forPronoun(SAYS.marginUsedNone, her) : `used ${used.join(' · ')}`)
+  facts.push(used.length === 0 ? copyFor(SAYS.marginUsedNone, her) : `used ${used.join(' · ')}`)
   const head = element('div', 'talk-head')
   head.append(
     element('span', 'talk-when', clockLabel(first)),
@@ -677,13 +683,13 @@ function renderHerMargin(): void {
   const stored = worn?.source ?? null
   marginHersEl.replaceChildren(
     ...marginColumn(
-      marginBlock(forPronoun(SAYS.marginNow, her), marginFacts(forPronoun(SAYS.marginAsleep, her))),
+      marginBlock(copyFor(SAYS.marginNow, her), marginFacts(copyFor(SAYS.marginAsleep, her))),
       marginBlock(
-        forPronoun(SAYS.marginLastAwake, her),
-        marginFacts(lastAwakeOf() ?? forPronoun(SAYS.marginNeverAwake, her)),
+        copyFor(SAYS.marginLastAwake, her),
+        marginFacts(lastAwakeOf() ?? copyFor(SAYS.marginNeverAwake, her)),
       ),
       marginBlock(
-        forPronoun(SAYS.marginStored, her),
+        copyFor(SAYS.marginStored, her),
         // The path, or the honest answer that there is not one. A built-in with
         // no file of her own is a real state, not a missing value.
         marginFacts(stored ?? forPronoun(SAYS.marginBuiltIn, her)),
@@ -696,8 +702,14 @@ function renderHerMargin(): void {
   )
 }
 
-/** What A8's first block says, per state. See `PromptState`. */
-const PROMPT_STATE_SAYS: Readonly<Record<PromptState, ByPronoun>> = {
+/**
+ * What A8's first block says, per state. See `PromptState`.
+ *
+ * `ByPronoun | string`, because all three of these are the same word whoever is
+ * worn — "saved", "unsaved", "saving…". They are read with `copyFor`, which
+ * takes either kind.
+ */
+const PROMPT_STATE_SAYS: Readonly<Record<PromptState, ByPronoun | string>> = {
   saved: SAYS.promptSaved,
   unsaved: SAYS.promptUnsaved,
   saving: SAYS.promptSaving,
@@ -717,13 +729,13 @@ function deeperMargin(words: Pronoun, worn: ShelfCharacter | undefined): readonl
     // one — the count somebody reads has to agree with the list beside it.
     const kept = text === '' ? 0 : text.split('\n').length
     return [
-      marginBlock(forPronoun(SAYS.keptHead, words), marginFacts(String(kept))),
+      marginBlock(copyFor(SAYS.keptHead, words), marginFacts(String(kept))),
       marginBlock(
-        forPronoun(SAYS.keptSizeHead, words),
+        copyFor(SAYS.keptSizeHead, words),
         marginFacts(`${String(text.length)} characters`),
       ),
       marginBlock(
-        forPronoun(SAYS.keptWhereHead, words),
+        copyFor(SAYS.keptWhereHead, words),
         // The file, not the whole path — this column is 224px. A2b draws
         // `mochi/memory.json`, which is the last two segments and enough to
         // find it.
@@ -752,13 +764,13 @@ function deeperMargin(words: Pronoun, worn: ShelfCharacter | undefined): readonl
       unexplained.
     */
     return [
-      marginBlock(forPronoun(SAYS.drawnHead, words), marginFacts(String(EMOTIONS.length))),
+      marginBlock(copyFor(SAYS.drawnHead, words), marginFacts(String(EMOTIONS.length))),
       marginBlock(
-        forPronoun(SAYS.allowedHead, words),
+        copyFor(SAYS.allowedHead, words),
         marginFacts(`${String(worn?.faces.length ?? 0)} of ${String(EMOTIONS.length)}`),
       ),
       marginBlock(
-        forPronoun(SAYS.wearingHead, words),
+        copyFor(SAYS.wearingHead, words),
         /*
           The FALLBACK and her state, which is what "wearing now" resolves to
           while she is asleep — A2c's own caption for `neutral` is "what she
@@ -767,10 +779,10 @@ function deeperMargin(words: Pronoun, worn: ShelfCharacter | undefined): readonl
           separate window and the shelf carries what is stored, not what is on
           her face this second.
         */
-        marginFacts(`${EMOTIONS[0]} · ${forPronoun(SAYS.marginAsleep, words)}`),
+        marginFacts(`${EMOTIONS[0]} · ${copyFor(SAYS.marginAsleep, words)}`),
       ),
       marginBlock(
-        forPronoun(SAYS.drawnAtHead, words),
+        copyFor(SAYS.drawnAtHead, words),
         // Her own size is a real answer and not a missing one — the slider on
         // A1 has a button that puts it back to exactly this.
         marginFacts(
@@ -784,15 +796,15 @@ function deeperMargin(words: Pronoun, worn: ShelfCharacter | undefined): readonl
   const lines = shelf === null ? 0 : shelf.assembled.split('\n').length
   return [
     marginBlock(
-      forPronoun(SAYS.marginNow, words),
-      marginFacts(forPronoun(PROMPT_STATE_SAYS[promptState], words)),
+      copyFor(SAYS.marginNow, words),
+      marginFacts(copyFor(PROMPT_STATE_SAYS[promptState], words)),
     ),
     marginBlock(
       forPronoun(SAYS.sentAtWakeHead, words),
       marginFacts(`${String(lines)} line${lines === 1 ? '' : 's'}`),
     ),
     marginBlock(
-      forPronoun(SAYS.promptWhereHead, words),
+      copyFor(SAYS.promptWhereHead, words),
       // The FILE, not the full path: this column is 224px and a temporary
       // directory is longer than it. The whole path is on the screen beside it.
       marginFacts(shelf?.prompt.path.split('/').pop() ?? forPronoun(SAYS.marginBuiltIn, words)),
@@ -1811,7 +1823,7 @@ function monthPicker(year: number, month: number): HTMLElement {
     'p',
     'note month-note',
     live === 0
-      ? forPronoun(SAYS.monthNoneKept, saying())
+      ? copyFor(SAYS.monthNoneKept, saying())
       : `${String(live)} ${live === 1 ? 'month has' : 'months have'} something in them. ` +
           `The rest are not buttons — choosing one would open an empty column.`,
   )
@@ -1881,7 +1893,7 @@ function renderCalendar(now: number): void {
   strip.className = 'strip'
   if (conversations.length === 0) {
     strip.classList.add('strip-empty')
-    strip.textContent = forPronoun(SAYS.noDay, saying())
+    strip.textContent = copyFor(SAYS.noDay, saying())
     calEl.replaceChildren(head, strip)
     return
   }
@@ -1963,7 +1975,7 @@ function renderList(now: number): void {
     const keeps = shelf?.characters.find((one) => one.id === shelf?.wornId)?.keeps ?? true
     empty(listEl, forPronoun(SAYS.noTalks, saying()))
     listEl.append(
-      element('p', 'note', `${forPronoun(SAYS.noTalksWhy, saying())} ${keeps ? 'ON' : 'OFF'}`),
+      element('p', 'note', `${copyFor(SAYS.noTalksWhy, saying())} ${keeps ? 'ON' : 'OFF'}`),
     )
     talkEl.replaceChildren()
     return
