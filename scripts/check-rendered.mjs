@@ -3153,8 +3153,29 @@ async function checks(page, where = '') {
       'her-instruction',
       'her-this-character',
     ]
+    /*
+      `#pane`, NOT `#page-hers` — and the difference is a check that passed
+      because of the order the run happened to visit things in.
+
+      Her page holds three bodies and hides two of them: `#pane` is her sheet,
+      `.talk` is the archive, `#permits` is view III. Hidden is not emptied, so
+      once view III has been drawn its four grant anchors stay in `#page-hers`
+      for the rest of the session — and `hers` below is `herFields()`, which
+      deliberately does not list them ("her grants are not here... they ARE a
+      `Pane`, MAY_DO", and `fields.test.ts` checks every pane both directions).
+
+      So this reported four unlisted settings in any run that had opened view III
+      first, and passed in every run that had not. A plain run never had;
+      `--shot` photographs all four places and does, which is the only reason it
+      surfaced. That is the exact failure this file's header is about: a check
+      that measures whatever the run before it left up.
+
+      Scoping to the body the manifest is about fixes it at the cause. Nothing is
+      lost in the other direction — a stray anchor in view III is a pane's
+      anchor, and panes are `fields.test.ts`'s job.
+    */
     const drawn = await page.run(
-      `[...document.querySelectorAll('#page-hers [data-field]')].map((e) => e.dataset.field)`,
+      `[...document.querySelectorAll('#pane [data-field]')].map((e) => e.dataset.field)`,
     )
     const missing = hers.filter((one) => !drawn.includes(one))
     /*
