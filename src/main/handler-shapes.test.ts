@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import { COMPANION_CHANNELS, SETTINGS_CHANNELS, SHELF_CHANNELS } from '@shared/ipc'
+
 /**
  * What main SENDS and what the renderer BELIEVES it gets, bound by the compiler.
  *
@@ -45,7 +47,24 @@ import { describe, expect, it } from 'vitest'
  * unspoken tokens: a list that has to be argued into, so a new unbound handler
  * cannot join it quietly.
  */
-const MAIN = readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf8')
+const RAW = readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf8')
+
+/**
+ * The file with its PROSE removed, because this one is more than half prose.
+ *
+ * Everything below counts occurrences of `ipcMain.handle(` and compares two
+ * counts against each other. In a repository where decisions are argued next to
+ * the code that implements them, a comment naming the call it is about is
+ * ordinary — and against the raw text it would inflate one count, disagree with
+ * the other, and take the suite red over a sentence. That is the false red this
+ * project has already paid for once, in `jump-lands`.
+ *
+ * Comments only. STRINGS ARE KEPT, and have to be: the channel name is a string
+ * literal and is the thing being read. The `(^|[^:])` guard on the line-comment
+ * pattern is what stops `https://` inside one being treated as the start of a
+ * comment — the same guard every other source-reading check here carries.
+ */
+const MAIN = RAW.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1 ')
 
 /**
  * Bound by something the compiler can still see, and what that something is.
@@ -114,6 +133,34 @@ describe('every IPC handler declares the shape it sends', () => {
       declared,
     )
     expect(handlers.map((one) => one.channel)).toContain('history:problems')
+  })
+
+  it('reads a channel name every allowlist agrees exists', () => {
+    /*
+      A SECOND source of truth, and one this file does not own.
+
+      Both counts above are patterns over one text, so both are wrong together
+      if the pattern is. `@shared/ipc` declares every channel independently and
+      is checked by its own tests, so a name the parse invented — or mangled by
+      capturing the wrong group — cannot be a member of it.
+    */
+    /*
+      `Set<string>`, explicitly. Inferred, the element type is the union of every
+      channel LITERAL, and `has` then refuses a plain string — which is exactly
+      what this is handed, since the channel was read out of source text. The
+      widening is the point of the check rather than a concession to it: a name
+      that is not in the union is the thing being looked for.
+    */
+    const allowed = new Set<string>([
+      ...COMPANION_CHANNELS,
+      ...SHELF_CHANNELS,
+      ...SETTINGS_CHANNELS,
+    ])
+    const unknown = handlers.map((one) => one.channel).filter((one) => !allowed.has(one))
+    expect(
+      unknown,
+      `${unknown.join(', ')} is handled in main and declared in no allowlist`,
+    ).toEqual([])
   })
 
   it.each(handlers.map((one) => [one.channel, one.annotated]))('%s', (channel, annotated) => {
