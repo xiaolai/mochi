@@ -3031,6 +3031,15 @@ async function checks(page, where = '') {
         if (marked && marked.contains('landed')) window.__landedSeen = true;
       }
     }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+    /*
+      DID THE ANIMATION EVER START. Both events bubble, so one listener on the
+      document catches the mark's whichever element carries it, and the pair
+      tells apart the two faults a stranded mark can have: an animation that
+      never began, and one that began and never ended.
+    */
+    window.__anim = { started: [], ended: [] };
+    addEventListener('animationstart', (e) => window.__anim.started.push(e.animationName), true);
+    addEventListener('animationend', (e) => window.__anim.ended.push(e.animationName), true);
   })()`)
     await page.run(`document.getElementById('jump-q')
       .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`)
@@ -3163,6 +3172,10 @@ async function checks(page, where = '') {
           iterations: marked[0] ? getComputedStyle(marked[0]).animationIterationCount : '(no mark)',
           animations: running.slice(0, 4),
           visibility: document.visibilityState,
+          started: window.__anim.started,
+          ended: window.__anim.ended,
+          reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
+          rendered: marked[0] ? marked[0].getClientRects().length > 0 : false,
         };
       })()`)
         bad(
