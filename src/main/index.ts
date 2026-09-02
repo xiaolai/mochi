@@ -59,6 +59,9 @@ import {
 import {
   type HistoryConversation,
   type HistoryExport,
+  type HistoryHit,
+  type HistoryProblem,
+  type HistoryTurn,
   type ShelfView,
 } from '@shared/history-window'
 import { forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
@@ -2672,7 +2675,7 @@ ipcMain.handle('history:list', () => {
   }
 })
 
-ipcMain.handle('history:turns', (_event, token: unknown) => {
+ipcMain.handle('history:turns', (_event, token: unknown): readonly HistoryTurn[] => {
   const persona = wornId()
   // Checked here, not trusted from the page. A token is a string; anything else
   // is a caller that built the wrong object, and passing it through would reach
@@ -2683,7 +2686,7 @@ ipcMain.handle('history:turns', (_event, token: unknown) => {
     .map((one) => ({ at: one.at, who: one.who, text: one.text, cut: one.cut }))
 })
 
-ipcMain.handle('history:problems', () => problems.all())
+ipcMain.handle('history:problems', (): readonly HistoryProblem[] => problems.all())
 
 /**
  * Everything she has, written where the person says.
@@ -4214,7 +4217,7 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
   return { ok: true, gone, pending: archive.scrubPending(), why: null }
 })
 
-ipcMain.handle('history:search', (_event, query: unknown) => {
+ipcMain.handle('history:search', (_event, query: unknown): readonly HistoryHit[] => {
   const persona = wornId()
   if (typeof query !== 'string') return []
   return transcripts()

@@ -54,7 +54,7 @@ function lastUsedLabel(use: GrantUse, when: string): string {
  * `he` would need different words to find the same switch. The grant's id and
  * the plain nouns below carry the search; the sentence stays on the row.
  */
-export function grantField(grant: SettingsGrant): Field {
+function grantField(grant: SettingsGrant): Field {
   const spec = GRANT_SPECS.find((one) => one.id === grant.id)
   return {
     id: `grant-${grant.id}`,
