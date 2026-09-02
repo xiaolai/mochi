@@ -1657,6 +1657,18 @@
         are different widths, so paging a month slid the `›` arrow and all
         thirty-one day cells sideways under the pointer that was pressing them.
         A fixed slot is what makes the strip hold still while it changes.
+
+        A FIXED SLOT IS ALSO A CLAIM THAT EVERY LABEL FITS IT, and one did not.
+        "September 2026" is about 105px at this size, so the long form ran out
+        of its own button and painted over the `›` beside it — a control with a
+        month name lying across it. `monthLabel` is the short form now, which is
+        the picker's own vocabulary and comfortably inside 78.
+
+        `overflow: hidden` is the guard rather than the fix, and it is here
+        because the label is `toLocaleDateString`'s: the fix holds for English
+        and the next locale with a longer abbreviation would be the same defect
+        again. Contained and ellipsed is a bad label; spilling across the arrow
+        is a broken control.
       */
       .daystrip .month {
         width: 78px;
@@ -1670,6 +1682,8 @@
         color: var(--ink);
         text-align: center;
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         cursor: pointer;
       }
       /* C2 rings it while the picker it opens is up — the only time a reader

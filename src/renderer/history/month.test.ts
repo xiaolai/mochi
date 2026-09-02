@@ -65,10 +65,27 @@ describe('stepping months', () => {
 })
 
 describe('what the labels say', () => {
-  it('names the month and the year', () => {
+  it('names the month and the year, abbreviated', () => {
     expect(monthLabel(2026, 7)).toBe(
-      new Date(2026, 7, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+      new Date(2026, 7, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
     )
+  })
+
+  /*
+    SHORTER THAN THE LONG FORM, said as a comparison rather than as a literal.
+
+    The slot it goes in is a fixed 78px and the long form does not fit — that is
+    the defect this abbreviation exists for. Asserting "Aug 2026" would only
+    hold on a machine whose language is English, and the label is the platform's:
+    what has to be true in every locale is that this is the short form and the
+    short form is not the long one.
+  */
+  it('is not the long form', () => {
+    const long = new Date(2026, 8, 1).toLocaleDateString(undefined, {
+      month: 'long',
+      year: 'numeric',
+    })
+    expect(monthLabel(2026, 8).length).toBeLessThanOrEqual(long.length)
   })
 
   it('names the weekday over a day of conversations', () => {

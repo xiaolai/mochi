@@ -1709,8 +1709,23 @@ async function checks(page, where = '') {
       one moment a control must not move. A6 gives the slot `width: 78px` and
       that width is the whole point of it.
 
-      Measured across a month whose name is SHORT and one whose name is LONG,
-      because two months of similar width would agree by luck.
+      IT USED TO MEASURE THE NAMES, and it cannot any more.
+
+      The guard was "the longest name and the shortest differ in characters,
+      or nothing was tested" — a proxy for "their natural widths differ", which
+      was true while the label was "May 2026" against "September 2026". The long
+      form did not fit the 78px slot it was given and painted over the `›`
+      beside it, so `monthLabel` is the short form now, and every English month
+      abbreviates to three letters. The guard can never be satisfied again, and
+      a guard that cannot pass is a check that reports nothing.
+
+      So it measures the MECHANISM instead, which is stricter than the proxy
+      was: the slot's own width has to be identical across five pagings. A
+      shrink-to-fit slot fails that on "Sep" against "May" — a couple of pixels,
+      well under what a character count could ever have seen — and the original
+      defect, at twenty-seven pixels, fails it enormously. The vacuity guard is
+      now that the month actually CHANGED, which is the thing that would
+      silently stop this check paging at all.
     */
     /*
       IT PUTS THE MONTH BACK, and that is not tidiness.
@@ -1743,6 +1758,7 @@ async function checks(page, where = '') {
         if (!strip || !label || !on) return { why: 'the day strip has no month navigation' };
         seen.push({
           month: (label.textContent || '').trim(),
+          slot: Math.round(label.getBoundingClientRect().width),
           left: Math.round(strip.getBoundingClientRect().left),
         });
         on.click();
@@ -1754,14 +1770,19 @@ async function checks(page, where = '') {
       }
       const names = seen.map((o) => o.month);
       const lefts = [...new Set(seen.map((o) => o.left))];
-      return { names, lefts, widest: Math.max(...names.map((n) => n.length)),
-               narrowest: Math.min(...names.map((n) => n.length)) };
+      const slots = [...new Set(seen.map((o) => o.slot))];
+      return { names, lefts, slots, paged: new Set(names).size };
     })()`)
     if (held.why) bad('strip-holds', held.why)
-    else if (held.widest === held.narrowest)
+    else if (held.paged < 2)
       bad(
         'strip-holds',
-        `every month name was ${held.widest} characters, so nothing was tested: ${JSON.stringify(held.names)}`,
+        `the month never changed across five pagings, so nothing was tested: ${JSON.stringify(held.names)}`,
+      )
+    else if (held.slots.length > 1)
+      bad(
+        'strip-holds',
+        `the month's slot resizes with its name — ${JSON.stringify(held.names)} measured ${JSON.stringify(held.slots)}, so the days have nothing holding them`,
       )
     else if (held.lefts.length > 1)
       bad(

@@ -77,9 +77,27 @@ export function stepMonth(
   return { year: moved.getFullYear(), month: moved.getMonth() }
 }
 
-/** "August 2026", in whatever the platform calls it. */
+/**
+ * "Aug 2026", in whatever the platform calls it.
+ *
+ * SHORT, and the reason is the slot it goes in. `.daystrip .month` is a fixed
+ * 78px so that paging a month does not slide the forward arrow and all
+ * thirty-one day cells sideways under the pointer pressing them — and the long
+ * form does not fit it. "September 2026" measured about 105px at 14.5/500, so
+ * it ran out of its own button and painted over the `›` beside it.
+ *
+ * The abbreviation is the picker's own vocabulary: `monthNames` below is
+ * already `month: 'short'`, so the grid says "Sep" on the pill you press and
+ * the slot said "September" about the same month.
+ *
+ * The button's `aria-label` is built from this too, deliberately. WCAG 2.5.3
+ * asks that the accessible name CONTAIN the visible label, and "Sep 2026" is
+ * not a substring of "September 2026" — so a long accessible name over a short
+ * visible one would be a control a voice-control user cannot say the name of.
+ * One string, both places.
+ */
 export function monthLabel(year: number, month: number): string {
-  return new Date(year, month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  return new Date(year, month, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
 }
 
 /** "Thursday, 14 August" — the heading over one day's conversations. */
