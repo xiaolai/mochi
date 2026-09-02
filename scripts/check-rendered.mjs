@@ -3200,6 +3200,98 @@ async function checks(page, where = '') {
     }
   })
 
+  await step('jump-still', async () => {
+    /* --- the landing mark still lands, and still clears, with motion reduced */
+    /*
+      THE ONE ENVIRONMENT NOBODY RAN IT IN, and it cost three releases.
+
+      The mark was removed on `animationend`, and `main.ts` said in as many
+      words that "`prefers-reduced-motion` zeroes the duration and the event
+      still fires". It does not. Chromium creates NO ANIMATION for a
+      zero-duration one -- `getAnimations()` empty, `animationstart` never
+      fired -- so the class went on and nothing took it off, and every person
+      with Reduce Motion turned on got a settings block tinted for good.
+
+      `jump-lands` above caught it on every CI run and could only say "gave up
+      waiting for the landing mark to fade", which reads like a slow machine.
+      The macOS runner reports reduced motion; this laptop does not. That is the
+      whole of why it never reproduced here.
+
+      So the preference is EMULATED rather than waited for. A check that depends
+      on the machine it runs on having an accessibility setting turned on is a
+      check that runs nowhere on purpose.
+
+      ## Both halves, because either alone passes for the wrong reason
+
+      That it CLEARS is the fix. That it APPEARED is the vacuity guard, and it
+      is not hypothetical: the first fix attempted here removed the class in the
+      same task when no animation existed, which cleared the mark perfectly and
+      silently deleted the feature for exactly the people this check is about.
+      `animationstart` firing for `landed` is the durable evidence that the mark
+      was really drawn and really animated.
+    */
+    await goTo(page, 'cast')
+    await page.send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+    })
+    await page.run(`(() => {
+    window.__mark = [];
+    addEventListener('animationstart', (e) => window.__mark.push(e.animationName), true);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
+    const q = document.getElementById('jump-q');
+    q.value = 'already kept';
+    q.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`)
+    await until(
+      page,
+      `document.querySelectorAll('#jump-found .jump-row').length === 1`,
+      'the panel to narrow, with motion reduced',
+    )
+    await page.run(`document.getElementById('jump-q')
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`)
+    await until(
+      page,
+      `document.getElementById('page-machine').getClientRects().length > 0`,
+      'the machine page to open, with motion reduced',
+    )
+    let cleared = true
+    try {
+      await until(
+        page,
+        `document.querySelectorAll('.landed').length === 0`,
+        'the landing mark to fade with motion reduced',
+      )
+    } catch {
+      cleared = false
+    }
+    const still = await page.run(`(() => {
+    const marked = [...document.querySelectorAll('.landed')];
+    return {
+      marks: marked.length,
+      animated: (window.__mark || []).includes('landed'),
+      duration: marked[0] ? getComputedStyle(marked[0]).animationDuration : '(none left)',
+      reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    };
+  })()`)
+    // Put the media state back before anything is reported, so a failure here
+    // cannot leave the preference on for every check after it.
+    await page.send('Emulation.setEmulatedMedia', { features: [] })
+    if (still.reduced !== true)
+      bad('jump-still', 'the preference never applied, so this checked nothing')
+    else if (still.animated !== true)
+      bad(
+        'jump-still',
+        'nothing animated where the jump landed: with motion reduced the mark is not drawn at all, ' +
+          'so the people it is for are the only ones who do not get it',
+      )
+    else if (!cleared)
+      bad(
+        'jump-still',
+        'the landing mark never cleared with motion reduced: ' + JSON.stringify(still),
+      )
+    else ok('jump-still', 'with motion reduced the mark is still drawn and still clears')
+  })
+
   await step('jump-census', async () => {
     /* --- every setting search offers is a setting the page draws ----------- */
     /*
@@ -3670,8 +3762,28 @@ async function checks(page, where = '') {
         features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
       })
       await settle(page)
+      /*
+        ONE EXEMPTION, named here rather than left to timing.
+
+        `.landed` — the mark that says where finding a setting put you — keeps a
+        duration when the preference is set, deliberately: it is a background
+        tint dissolving on a block that does not move, and the reduced-motion
+        guidance is about vestibular triggers, not about colour. `--duration-
+        mark` in `tokens.css` argues it in full.
+
+        Written down because it would otherwise be true by luck. The mark lives
+        for 440ms after a jump and this check runs long after `jump-lands`, so
+        today it is never on screen here — and the day some check jumps
+        immediately before this one, the gate would go red on a thing that is
+        correct, which is the failure that has already cost this project three
+        releases.
+
+        Exempting it by NAME keeps the rest strict. Anything else that still
+        moves is still a failure.
+      */
       const stilled = await page.run(`(() => [...document.querySelectorAll('*')]
       .filter((e) => e.getClientRects().length > 0)
+      .filter((e) => !e.classList.contains('landed'))
       .filter((e) => {
         const s = getComputedStyle(e);
         return parseFloat(s.transitionDuration) > 0 || parseFloat(s.animationDuration) > 0;

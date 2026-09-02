@@ -777,8 +777,17 @@
         Compounded on the attribute rather than written bare, which is that same
         rule for any class the renderer adds at runtime.
       */
+      /*
+        `--duration-mark`, NOT `--duration`, and the difference is the
+        reduced-motion policy rather than the number — see the token.
+
+        Zeroed, this animation does not exist at all in Chromium, and the mark
+        that rides on it never came off. That is a settings block left
+        permanently tinted for anybody with Reduce Motion on, and it stopped
+        three releases before it was read correctly.
+      */
       [data-field].landed {
-        animation: landed var(--duration) ease-out 2;
+        animation: landed var(--duration-mark) ease-out 2;
         border-radius: var(--r-part);
       }
 

@@ -3105,18 +3105,55 @@ async function jumpTo(one: Destination): Promise<void> {
 
     A page that scrolls without saying where it stopped leaves somebody hunting
     the thing they just asked for — worst on the prompts pane, where thirty
-    blocks look alike. Removed on the animation ending rather than on a timer,
-    so the two cannot disagree about how long it lasts; `prefers-reduced-motion`
-    zeroes the duration and the event still fires.
+    blocks look alike. Let go when the animation FINISHES rather than after a
+    number of milliseconds, so the mark and the stylesheet cannot disagree about
+    how long it lasts.
+
+    ## `animationend` was the wrong way to hear that, and it stranded the mark
+
+    This listened for `animationend`, on the stated reasoning that
+    "`prefers-reduced-motion` zeroes the duration and the event still fires".
+    That is false, and it was false in the one environment nobody had run it in.
+
+    Under `prefers-reduced-motion: reduce` the duration token is `0ms`, and
+    Chromium creates NO ANIMATION AT ALL for a zero-duration one: measured in
+    the running window with the media state emulated, `getAnimations()` is
+    empty, `animationstart` never fires and neither does `animationend`. So the
+    class went on and nothing ever took it off — a settings block left
+    permanently tinted for every person who has Reduce Motion turned on, which
+    reads as a state that setting is in.
+
+    It cost three releases before it was read correctly. `jump-lands` in the
+    rendered gate caught it every time and reported only "gave up waiting for
+    the landing mark to fade", which was taken for a slow runner. The macOS
+    GitHub runner reports reduced motion; that is why it failed there and never
+    here.
+
+    ## Asking the element instead
+
+    `getAnimations()` answers what is actually running on this element, after
+    the style flush the call itself forces. None means there is nothing to wait
+    for and the mark can go now — which is the correct behaviour under reduced
+    motion anyway, where a mark that is asked to last no time should last none.
+    Otherwise the mark goes when they finish.
+
+    `allSettled`, because `finished` REJECTS on a cancelled animation — a second
+    jump to the same element cancels the first — and a rejection that removed
+    nothing would strand the mark exactly as before. Whatever happens to the
+    animation, the class comes off.
+
+    Still no timer, so the original argument survives intact: nothing here
+    guesses a number the stylesheet also knows.
   */
   target.classList.add('landed')
-  target.addEventListener(
-    'animationend',
-    () => {
-      target.classList.remove('landed')
-    },
-    { once: true },
-  )
+  const playing = target.getAnimations()
+  if (playing.length === 0) {
+    target.classList.remove('landed')
+    return
+  }
+  void Promise.allSettled(playing.map((one) => one.finished)).then(() => {
+    target.classList.remove('landed')
+  })
 }
 
 function openJump(): void {

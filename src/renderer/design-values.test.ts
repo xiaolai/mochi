@@ -305,14 +305,25 @@ describe('the vocabulary that is declared and not yet spoken', () => {
     /*
       `--duration-fast` came off this list when the switch's knob started
       moving. It is the window's first CSS motion, which also means the reduced
-      motion block at the foot of `tokens.css` finally protects something.
+      motion block at the foot of `tokens.css` finally protects something. It is
+      now spoken by five more rules — a row's fill, the tab lozenge, a
+      conversation, a day, and every button.
 
-      `--duration` followed it, for the mark that says where finding a setting
-      landed you. Both halves of the motion vocabulary are spoken now, and the
-      reduced-motion block covers both — which is what makes the mark's fade
-      safe to remove on `animationend` rather than on a timer: at zero duration
-      the event still fires, and a timer would have had to guess.
+      `--duration` came off it too, for the mark that says where finding a
+      setting landed you, and it is BACK. The claim written here at the time —
+      "the reduced-motion block covers both, which is what makes the mark's fade
+      safe to remove on `animationend`: at zero duration the event still fires"
+      — is false. Chromium creates no animation at all for a zero-duration one,
+      so nothing fired, nothing removed the class, and the mark stayed on the
+      page for good for anybody with Reduce Motion on. It stopped three
+      releases.
+
+      The mark is on `--duration-mark` now, which is deliberately outside the
+      reduced-motion block because a tint dissolving in place is not motion.
+      That leaves `--duration` the slow MOTION rung with nothing yet spending
+      it, which is what this list is for.
     */
+    '--duration': 'the slow motion rung; the landing mark moved to --duration-mark',
     /*
       The ring's geometry, which IS bound — by the check above, not at runtime.
 

@@ -529,6 +529,40 @@
 
   --duration-fast: 120ms;
   --duration: 220ms;
+  /*
+   * A TINT DISSOLVING IS NOT MOTION, which is why this is a third name for a
+   * number the two above already hold.
+   *
+   * The reduced-motion block at the foot of this file zeroes `--duration` and
+   * `--duration-fast`, and that is right for both: a knob that slides and a
+   * fill that arrives are things travelling across the screen. The landing mark
+   * is neither — it is a background colour on a block that does not move,
+   * fading out. WCAG's reduced-motion guidance is about vestibular triggers:
+   * parallax, zoom, travel. A colour dissolving in place is none of them.
+   *
+   * Two names for one value, and the justification is the one `--chosen` and
+   * `--chosen-2` make: they are the same number under different policy, and the
+   * policy is the whole point. Zeroing this one is what broke it.
+   *
+   * ## What zeroing it did
+   *
+   * Chromium creates NO ANIMATION for a zero-duration one. Measured in the
+   * running window with the media state emulated: `getAnimations()` empty,
+   * `animationstart` never fired, `animationend` never fired. The mark was
+   * removed on `animationend`, so with Reduce Motion turned on the class went
+   * on and never came off, and a settings block stayed tinted for good.
+   *
+   * It cost three releases. The rendered gate caught it every time — the macOS
+   * runner reports reduced motion — and reported only "gave up waiting for the
+   * landing mark to fade", which read like a slow machine.
+   *
+   * The removal no longer depends on this number at all (see `main.ts`), so the
+   * bug cannot come back through this token. What this token protects now is
+   * the FEATURE: with it zeroed, the mark is correct and invisible, and the
+   * person who most benefits from a still indicator is the one who stops
+   * getting one.
+   */
+  --duration-mark: 220ms;
 }
 
 /*
