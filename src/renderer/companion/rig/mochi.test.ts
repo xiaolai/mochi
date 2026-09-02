@@ -1538,8 +1538,24 @@ describe('she breathes while she sleeps, and visibly', () => {
     return widest
   }
 
+  /*
+    COMPUTED ONCE, for the two assertions that read it.
+
+    This is the most expensive thing in the suite: `BREATH_PERIOD_MS * 2` of
+    warm-up plus another of sampling, at 60fps, is about 816 full rasterisations
+    of her — and it was run twice, once per test, for two assertions about the
+    same two numbers. Nothing in it varies: a fresh rig, a fixed clock, no
+    randomness, no I/O.
+
+    Memoised rather than hoisted into a `beforeAll`, so a filtered run of either
+    test still pays for it and neither depends on the other having run. What is
+    shared is two numbers, not a rig.
+  */
+  let spread: { travel: number; widest: number } | null = null
+
   /** The widest and narrowest she gets over one asleep cycle. */
   function asleepSpread(): { travel: number; widest: number } {
+    if (spread !== null) return spread
     const r = rig()
     r.avatar.setAsleep(true)
     // Her asleep period is longer than the waking one, so sample over the
@@ -1555,7 +1571,8 @@ describe('she breathes while she sleeps, and visibly', () => {
       r.avatar.render(when)
       seen.push(paintedWidth(r.ctx))
     }
-    return { travel: Math.max(...seen) - Math.min(...seen), widest: Math.max(...seen) }
+    spread = { travel: Math.max(...seen) - Math.min(...seen), widest: Math.max(...seen) }
+    return spread
   }
 
   it('moves far enough asleep to be seen, not merely far enough to differ', () => {
