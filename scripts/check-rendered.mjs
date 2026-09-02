@@ -374,7 +374,20 @@ const ROOT = process.cwd()
   anything is painted; it is the paint that stops.
 */
 async function settle(page) {
-  await page.run(
+  /*
+    THE ANSWER IS RETURNED NOW, and it was thrown away.
+
+    This has always known which of the two branches it took, and every caller
+    ignored it. "frames" and "unpainted" are not the same state to be in: a
+    measurement is fine either way — layout runs regardless, which is the whole
+    argument above — but anything that waits on an ANIMATION is not, because an
+    animation with no frames never starts and therefore never ends.
+
+    `jump-lands` waited on exactly that and gave up after four seconds with
+    nothing to say about why. It is the caller that needs this; returning it
+    costs nothing and no other caller has to change.
+  */
+  return await page.run(
     `Promise.race([` +
       `new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => ` +
       `setTimeout(() => done('frames'), 60)))), ` +
@@ -3034,7 +3047,7 @@ async function checks(page, where = '') {
       `document.getElementById('page-machine').getClientRects().length > 0`,
       'the machine page to open after a jump',
     )
-    await settle(page)
+    const painting = await settle(page)
     /*
       THE MARK IS CHECKED TWICE, and neither check may depend on when this runs.
 
@@ -3112,19 +3125,64 @@ async function checks(page, where = '') {
         Bounded, and it is an ASSERTION rather than a pause: until throws when
         the condition never comes true, so a mark that strands takes this check
         red instead of being waited out.
+
+        WHEN IT GIVES UP IT NOW SAYS WHAT IT SAW. This threw
+        `gave up waiting for the landing mark to fade after 4000ms` and nothing
+        else, four releases running, and that sentence is compatible with two
+        completely different faults: a mark that really is stranded, and an
+        animation that never started because the window is producing no frames.
+        `settle` above already knows which — it races a double `requestAnimation
+        Frame` against a two-second fallback and has always returned the answer
+        to nobody.
+
+        So the timeout is caught and the page is asked, once, what state the
+        animation is actually in. A failure that names the mechanism is worth
+        more than a failure that names the deadline.
       */
-      await until(
-        page,
-        `document.querySelectorAll('.landed').length === 0`,
-        'the landing mark to fade',
-      )
+      let faded = true
+      try {
+        await until(
+          page,
+          `document.querySelectorAll('.landed').length === 0`,
+          'the landing mark to fade',
+        )
+      } catch {
+        faded = false
+      }
+      if (!faded) {
+        const stuck = await page.run(`(() => {
+        const marked = [...document.querySelectorAll('.landed')];
+        const running = document.getAnimations().map((a) => ({
+          name: a.animationName || '(none)',
+          state: a.playState,
+          at: a.currentTime,
+        }));
+        return {
+          marks: marked.length,
+          duration: marked[0] ? getComputedStyle(marked[0]).animationDuration : '(no mark)',
+          iterations: marked[0] ? getComputedStyle(marked[0]).animationIterationCount : '(no mark)',
+          animations: running.slice(0, 4),
+          visibility: document.visibilityState,
+        };
+      })()`)
+        bad(
+          'jump-lands',
+          'the landing mark never faded in 4000ms. settle() reported ' +
+            JSON.stringify(painting) +
+            '; the page reports ' +
+            JSON.stringify(stuck),
+        )
+        return
+      }
       ok(
         'jump-lands',
         'typing a prompt title from her page opens ' +
           JSON.stringify((arrived.group || '').trim()) +
           ' and scrolls one of its 30 editors into view (' +
           listed.rows +
-          ' matched), marks it, and clears the mark',
+          ' matched), marks it, and clears the mark [' +
+          painting +
+          ']',
       )
     }
   })
