@@ -1,7 +1,7 @@
 {
   "name": "mochi",
   "productName": "Mochi",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "description": "A realtime-voice AI companion that lives on your desktop",
   "author": "@xiaolai",
