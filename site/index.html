@@ -799,22 +799,23 @@
             <div>
               <dt data-zh="下载">Download</dt>
               <!--
-                The tap prefix is load-bearing and says so out loud.
+                The token is `mochi-app` and the app is still called Mochi.
 
                 `homebrew/cask` already carries a `mochi` — a flashcards app
-                from mochi.cards — so a bare `brew install --cask mochi` fetches
-                somebody else's program and succeeds while doing it. A reader
-                who shortens the command gets no error, which is exactly why the
-                reason is written here rather than trusted to the prefix looking
-                deliberate.
+                from mochi.cards — and the Caskroom is keyed by BARE token, so
+                while this shipped as `mochi` the two were one entry to
+                Homebrew and `brew upgrade` swapped one program for the other.
+                Saying so here was not enough; the command that triggered it was
+                the correct fully-qualified one. Hence the rename.
               -->
               <dd
-                data-zh='用 Homebrew：<code>brew install --cask xiaolai/tap/mochi</code>。<code>xiaolai/tap/</code> 这个前缀不能省 —— Homebrew 自带的 cask 里另有一个同名的 mochi，省掉前缀装到的是别人的程序。也可以直接下载<a href="https://github.com/xiaolai/mochi/releases/latest">最新版本</a>的磁盘映像。构建产物经过签名与公证，磁盘映像也一样。'
+                data-zh='用 Homebrew：<code>brew install --cask xiaolai/tap/mochi-app</code>。名字是 <code>mochi-app</code> 而不是 <code>mochi</code> —— Homebrew 自带的 cask 里另有一个 mochi（mochi.cards 的记忆卡片程序），而 Homebrew 按裸名字记账，两者曾经共用一条记录，<code>brew upgrade</code> 会把其中一个换成另一个。程序本身仍然叫 Mochi。也可以直接下载<a href="https://github.com/xiaolai/mochi/releases/latest">最新版本</a>的磁盘映像。构建产物经过签名与公证，磁盘映像也一样。'
               >
-                With Homebrew: <code>brew install --cask xiaolai/tap/mochi</code>. The
-                <code>xiaolai/tap/</code> prefix is not optional — Homebrew's own index carries a
-                different <code>mochi</code>, and dropping the prefix installs that one without
-                complaining. Or take the disk image from the
+                With Homebrew: <code>brew install --cask xiaolai/tap/mochi-app</code>. The token is
+                <code>mochi-app</code>, not <code>mochi</code> — Homebrew's own index carries a
+                different <code>mochi</code>, and the Caskroom is keyed by bare token, so sharing it
+                let <code>brew upgrade</code> swap one program for the other. The app is still
+                called Mochi. Or take the disk image from the
                 <a href="https://github.com/xiaolai/mochi/releases/latest">latest release</a>.
                 Signed and notarized — the app and the disk image both.
               </dd>

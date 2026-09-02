@@ -13,13 +13,32 @@ window.
 ## Install
 
 ```sh
-brew install --cask xiaolai/tap/mochi
+brew install --cask xiaolai/tap/mochi-app
 ```
 
-**The `xiaolai/tap/` prefix is not optional.** Homebrew's own cask index already
-carries a `mochi` — a flashcards app from mochi.cards — so a bare
-`brew install --cask mochi` fetches that one instead, and succeeds while doing
-it. There is no error to notice.
+**The token is `mochi-app`, not `mochi`, and the app is still called Mochi.**
+Homebrew's own cask index already carries a `mochi` — a flashcards app from
+mochi.cards — and the Caskroom is keyed by BARE token, so while this shipped as
+`mochi` the two were one entry to Homebrew. Whichever you upgraded last replaced
+the other's `/Applications/Mochi.app`, in either direction, with no error to
+notice. Documenting the trap was not enough: the command that triggers it is the
+correct, fully-qualified one.
+
+Separate tokens means separate Caskroom entries, so that cannot happen now. Both
+casks still install an app called `Mochi.app`, so you cannot have both programs
+at once — but that is a conflict Homebrew has to resolve out loud rather than a
+swap it performs quietly.
+
+**If you installed before 0.1.18** you are under the old token, and it is one
+command to move:
+
+```sh
+brew uninstall --cask mochi          # leaves ~/Library/Application Support/Mochi alone
+brew install --cask xiaolai/tap/mochi-app
+```
+
+Uninstall is not `zap`: her characters, transcripts and memory are untouched and
+the new install finds all of it.
 
 Or take the disk image from the
 [latest release](https://github.com/xiaolai/mochi/releases/latest):
@@ -37,20 +56,23 @@ She checks for updates from **About Mochi**, and installs them herself. Through
 Homebrew, the ordinary commands do the right thing:
 
 ```sh
-brew upgrade                              # safe — leaves her alone
-brew upgrade --cask --greedy              # safe
-brew upgrade --cask xiaolai/tap/mochi     # safe — the prefix resolves to her
+brew upgrade                                  # safe — leaves her alone
+brew upgrade --cask --greedy                  # safe
+brew upgrade --cask xiaolai/tap/mochi-app     # safe
+brew upgrade --cask mochi                     # not her — that is the flashcards app
 ```
 
-**The one command never to run is `brew upgrade --cask mochi`.** Homebrew keys
-the Caskroom by bare token, so once she is installed she and the flashcards app
-are one entry to it: without the prefix it resolves the token to mochi.cards and
-offers `0.1.9 -> 26.8.2`. That is a different program replacing this one, not an
-update — and `brew outdated` does not list it, so nothing warns you first.
+The fourth is no longer dangerous, and that is the whole point of the rename.
+While she shipped as `mochi` it was the command that swapped her for a different
+program, and `brew outdated` did not list it, so nothing warned you first. She
+is not installed under that token any more, so it now finds either the
+flashcards app or nothing at all.
 
-All four of those were measured with `--dry-run` on 2026-08-31, not reasoned
-about. Only the fourth is dangerous; the blanket upgrade most people actually
-run is not, which is why this is a footnote rather than a reason to rename her.
+The first three were measured with `--dry-run` on 2026-08-31 and the fourth on
+2026-09-02, on a machine where the swap had just happened — `mochi 0.1.17 ->
+26.8.2`, one program offered as an update to another. It was reported as a bug
+rather than found by the measurement, which is why the rename came after the
+documentation rather than instead of it.
 
 One exception, permanent: **0.1.8's update button is broken.** `electron-updater`
 hides its `autoUpdater` behind `.default` under CommonJS interop, so the app

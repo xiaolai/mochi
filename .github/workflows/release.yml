@@ -356,7 +356,16 @@ jobs:
           # minutes, so at this moment the cask still names the PREVIOUS version.
           # Deleting the release it names would 404 every `brew install` until
           # the tap caught up.
-          CASK=$(gh api repos/xiaolai/homebrew-tap/contents/Casks/mochi.rb --jq '.content' 2>/dev/null \
+          # `mochi-app.rb`, not `mochi.rb`. The token was renamed because
+          # Homebrew's own cask index already carries a `mochi` — a flashcards
+          # app from mochi.cards — and the Caskroom is keyed by BARE token, so
+          # the two shared one entry and `brew upgrade` swapped one program for
+          # the other in whichever direction it happened to run.
+          #
+          # Reading the wrong path here fails quietly and in the expensive
+          # direction: `|| echo ""` leaves CASK empty, the guard below stops
+          # protecting the release the cask points at, and it gets deleted.
+          CASK=$(gh api repos/xiaolai/homebrew-tap/contents/Casks/mochi-app.rb --jq '.content' 2>/dev/null \
             | base64 -d | grep -m1 '^  version "' | sed 's/.*version "\(.*\)".*/\1/' || echo "")
           echo "the cask currently ships: ${CASK:-unknown}"
 

@@ -70,7 +70,7 @@ jobs:
       - name: Refuse to move the tap backwards
         run: |
           set -euo pipefail
-          CURRENT=$(grep '^  version "' homebrew-tap/Casks/mochi.rb 2>/dev/null \
+          CURRENT=$(grep '^  version "' homebrew-tap/Casks/mochi-app.rb 2>/dev/null \
             | head -1 | awk -F'"' '{print $2}' || true)
           if [ -z "$CURRENT" ]; then
             echo "No mochi cask in the tap yet — this is the first publish."
@@ -143,8 +143,8 @@ jobs:
           SHA256_X64: ${{ steps.sha256.outputs.sha256_x64 }}
         run: |
           set -euo pipefail
-          cat > homebrew-tap/Casks/mochi.rb << RUBY
-          cask "mochi" do
+          cat > homebrew-tap/Casks/mochi-app.rb << RUBY
+          cask "mochi-app" do
             version "${VERSION}"
 
             on_arm do
@@ -188,8 +188,8 @@ jobs:
           end
           RUBY
 
-          echo "----- Casks/mochi.rb -----"
-          cat homebrew-tap/Casks/mochi.rb
+          echo "----- Casks/mochi-app.rb -----"
+          cat homebrew-tap/Casks/mochi-app.rb
 
       - name: Commit it
         run: |
@@ -197,6 +197,6 @@ jobs:
           cd homebrew-tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/mochi.rb
+          git add Casks/mochi-app.rb
           git commit -m "Update mochi to ${VERSION}"
           git push
