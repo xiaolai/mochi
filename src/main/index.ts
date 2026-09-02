@@ -6,7 +6,6 @@ import {
   BrowserWindow,
   clipboard,
   dialog,
-  ipcMain,
   Menu,
   powerMonitor,
   screen,
@@ -22,6 +21,7 @@ import { BUILT_IN_ID } from '@shared/parse-persona'
 import { PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry, type WireTool } from '@shared/capability/registry'
 import { grantOutcome } from './grant-outcome'
+import { answer } from './ipc/answer'
 import { listener } from './ipc/listen'
 import { DRIFT_PX, createHerPlace } from './window/her-place'
 import { createIdleSleep } from './idle-sleep'
@@ -52,18 +52,9 @@ import {
   type PersonaAction,
   type PersonaChange,
   type Revealable,
-  type SettingsView,
-  type SettingsUpdate,
   type SettingsWrite,
 } from '@shared/ipc'
-import {
-  type HistoryConversation,
-  type HistoryExport,
-  type HistoryHit,
-  type HistoryProblem,
-  type HistoryTurn,
-  type ShelfView,
-} from '@shared/history-window'
+import { type HistoryConversation } from '@shared/history-window'
 import { forPronoun, type ByPronoun, type Pronoun } from '@shared/pronoun'
 import { SAYS } from './says'
 import { CAPABILITIES } from '../capabilities'
@@ -124,7 +115,7 @@ import { problems } from './problems'
 import { leftoverCapabilities, legacyCapabilitiesRoot } from './capability/legacy'
 import type { CapabilityDeps } from '../capabilities/kind'
 import { EMOTIONS } from '@shared/avatar'
-import type { ChosenWorkspace, Forgotten, KeyChange, SettingsCodex } from '@shared/ipc'
+import type { Forgotten, KeyChange } from '@shared/ipc'
 import {
   codexHome,
   profileFile,
@@ -2350,7 +2341,7 @@ const nextSession = createNextSession({
   },
 })
 
-ipcMain.handle('voice:open', async () => {
+answer('voice:open', async () => {
   const bearer = readBearer()
   if (!bearer.ok) {
     const why = describeProblem(bearer.problem)
@@ -2408,7 +2399,7 @@ ipcMain.handle('voice:open', async () => {
   return { ok: true, session, model: result.value.model }
 })
 
-ipcMain.handle('voice:sdp', async (_event, offer: unknown, session: unknown) => {
+answer('voice:sdp', async (_event, offer: unknown, session: unknown) => {
   if (typeof offer !== 'string' || offer.length === 0) return { ok: false, why: 'no offer' }
   const claimed = mint.claim(session)
   if (!claimed.ok) {
@@ -2438,7 +2429,7 @@ ipcMain.handle('voice:sdp', async (_event, offer: unknown, session: unknown) => 
  * amnesia about the person, which is the failure this project is least able to
  * notice, so it is not defaulted and not skipped.
  */
-ipcMain.handle('voice:config', () => {
+answer('voice:config', () => {
   /*
     The registration is here and the reading is in `voice/session-config.ts`.
 
@@ -2640,7 +2631,7 @@ listenTo('history:open', () => {
   showHistoryWindow()
 })
 
-ipcMain.handle('history:list', () => {
+answer('history:list', () => {
   const persona = wornId()
   return {
     persona,
@@ -2675,7 +2666,7 @@ ipcMain.handle('history:list', () => {
   }
 })
 
-ipcMain.handle('history:turns', (_event, token: unknown): readonly HistoryTurn[] => {
+answer('history:turns', (_event, token: unknown) => {
   const persona = wornId()
   // Checked here, not trusted from the page. A token is a string; anything else
   // is a caller that built the wrong object, and passing it through would reach
@@ -2686,7 +2677,7 @@ ipcMain.handle('history:turns', (_event, token: unknown): readonly HistoryTurn[]
     .map((one) => ({ at: one.at, who: one.who, text: one.text, cut: one.cut }))
 })
 
-ipcMain.handle('history:problems', (): readonly HistoryProblem[] => problems.all())
+answer('history:problems', () => problems.all())
 
 /**
  * Everything she has, written where the person says.
@@ -2701,7 +2692,7 @@ ipcMain.handle('history:problems', (): readonly HistoryProblem[] => problems.all
  * this application's authority, which is the same rule `settings:reveal`
  * follows for reading.
  */
-ipcMain.handle('history:export', async (): Promise<HistoryExport> => {
+answer('history:export', async () => {
   const persona = wornId()
   const suggested = `mochi-${persona}-${new Date().toISOString().slice(0, 10)}.json`
   const chosen = await dialog.showSaveDialog({
@@ -2752,7 +2743,7 @@ ipcMain.handle('history:export', async (): Promise<HistoryExport> => {
  * between opening this window and looking at it. A cached answer would make
  * this window the second place a persona lives.
  */
-ipcMain.handle('settings:read', (): SettingsView => {
+answer('settings:read', () => {
   const userData = app.getPath('userData')
   return {
     // Her colour, for the window to derive its accent from. Resolved the same
@@ -2877,7 +2868,7 @@ function wearPersona(id: unknown): SettingsWrite {
  * rather than stored: the file is a map, and an unknown key would sit in it for
  * ever answering a question nothing asks.
  */
-ipcMain.handle('settings:prompt', (_event, key: unknown, text: unknown): SettingsWrite => {
+answer('settings:prompt', (_event, key: unknown, text: unknown) => {
   if (typeof key !== 'string') return { ok: false, why: 'That does not name a prompt.' }
   if (text !== null && typeof text !== 'string') {
     return { ok: false, why: 'A prompt has to be text.' }
@@ -2938,7 +2929,7 @@ ipcMain.handle('settings:prompt', (_event, key: unknown, text: unknown): Setting
  * `ok: true` would put "Saved." over a dead combination. The sentence says both
  * halves, and the row redraws under it carrying the same refusal.
  */
-ipcMain.handle('settings:key', (_event, change: unknown): SettingsWrite => {
+answer('settings:key', (_event, change: unknown) => {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
   const asked = applyKey(change as KeyChange, boundKeys(), SHORTCUTS)
   if (!asked.ok) return refuse(asked.why)
@@ -3057,7 +3048,7 @@ ipcMain.handle('settings:key', (_event, change: unknown): SettingsWrite => {
   return { ok: true }
 })
 
-ipcMain.handle('shelf:wear', (_event, id: unknown): SettingsWrite => wearPersona(id))
+answer('shelf:wear', (_event, id: unknown) => wearPersona(id))
 
 /**
  * Everything the shelf's character half draws, answered in one call.
@@ -3068,7 +3059,7 @@ ipcMain.handle('shelf:wear', (_event, id: unknown): SettingsWrite => wearPersona
  * second rendering of the prompt — 1b's card is literally that string, and a
  * card that re-assembled it would be the place the two quietly diverge.
  */
-ipcMain.handle('shelf:read', (): ShelfView => {
+answer('shelf:read', () => {
   const userData = app.getPath('userData')
   const catalog = catalogue(userData)
   const worn = activePersona(catalog, readWornPersonaId(userData)).persona
@@ -3166,7 +3157,7 @@ ipcMain.handle('shelf:read', (): ShelfView => {
  * an overlay for the built-in, the package itself for everyone else. Neither
  * decision is the renderer's, and neither is made twice.
  */
-ipcMain.handle('shelf:save', (_event, change: unknown): SettingsWrite => {
+answer('shelf:save', (_event, change: unknown) => {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
   const asked = change as PersonaChange
   if (typeof asked.id !== 'string') return refuse('That change does not name a persona.')
@@ -3252,7 +3243,7 @@ ipcMain.handle('shelf:save', (_event, change: unknown): SettingsWrite => {
  * the one that already owns its own validation, so nothing here re-states a
  * rule that lives in the store.
  */
-ipcMain.handle('settings:lookup', (_event, change: unknown): SettingsWrite => saveLookup(change))
+answer('settings:lookup', (_event, change: unknown) => saveLookup(change))
 
 /**
  * Check a lookup change and write the parts of it that survive.
@@ -3314,7 +3305,7 @@ function saveLookup(change: unknown): SettingsWrite {
  * toast for changing your mind is a toast that teaches people to stop reading
  * them.
  */
-ipcMain.handle('settings:choose-workspace', async (event): Promise<ChosenWorkspace> => {
+answer('settings:choose-workspace', async (event) => {
   /*
     Attached to the window that asked, so it opens as a sheet rather than
     floating loose. `history:export` does not do this and predates the shell:
@@ -3389,7 +3380,7 @@ listenTo('settings:show-profile', () => {
  * `remember` THROWS rather than overwrite a note it could not read, so a corrupt
  * file is reported here instead of being silently replaced by an empty one.
  */
-ipcMain.handle('shelf:memory', (_event, action: unknown): SettingsWrite => {
+answer('shelf:memory', (_event, action: unknown) => {
   if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
   const kind = (action as { kind?: unknown }).kind
   if (kind !== 'restore' && kind !== 'clear') return refuse('That is not something to do.')
@@ -3473,7 +3464,7 @@ ipcMain.handle('shelf:memory', (_event, action: unknown): SettingsWrite => {
  * already displaying is a different thing from taking whatever somebody copied
  * out of their password manager a moment ago.
  */
-ipcMain.handle('shelf:copy', (_event, text: unknown): SettingsWrite => {
+answer('shelf:copy', (_event, text: unknown) => {
   if (typeof text !== 'string') return refuse('That is not something to copy.')
   if (text === '') return refuse('There is nothing to copy.')
   if (text.length > PERSONA_LIMITS.memory) return refuse('That is too long to copy.')
@@ -3490,7 +3481,7 @@ ipcMain.handle('shelf:copy', (_event, text: unknown): SettingsWrite => {
  * renderer choosing whose memory and whose conversations a new character
  * inherits, which is the whole reason `deriveId` is told about pending deletions.
  */
-ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
+answer('shelf:persona', (_event, action: unknown) => {
   if (typeof action !== 'object' || action === null) return refuse('That is not something to do.')
   const asked = action as PersonaAction
   const userData = app.getPath('userData')
@@ -3636,7 +3627,7 @@ ipcMain.handle('shelf:persona', (_event, action: unknown): SettingsWrite => {
  * rather than a tool, and only the renderer held it; `@shared/grants` records
  * why that switch is gone.
  */
-ipcMain.handle('settings:grant', (_event, change: unknown): SettingsWrite => {
+answer('settings:grant', (_event, change: unknown) => {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
   const asked = change as GrantChange
   if (!isGrant(asked.id)) return refuse('There is no such permission.')
@@ -3919,7 +3910,7 @@ function tellTheSession(): boolean {
  * `EMOTIONS` is still the bound. This ends at `wearExpression`, which is one
  * enum wide on purpose, and a window does not get to widen it.
  */
-ipcMain.handle('shelf:wear-face', (_event, face: unknown): SettingsWrite => {
+answer('shelf:wear-face', (_event, face: unknown) => {
   if (typeof face !== 'string' || !(EMOTIONS as readonly string[]).includes(face)) {
     return refuse('There is no expression called that.')
   }
@@ -3933,7 +3924,7 @@ ipcMain.handle('shelf:wear-face', (_event, face: unknown): SettingsWrite => {
   return { ok: true }
 })
 
-ipcMain.handle('shelf:prompt', (_event, text: unknown): SettingsWrite => {
+answer('shelf:prompt', (_event, text: unknown) => {
   const checked = checkPrompt(text)
   if (!checked.ok) return refuse(checked.why)
   try {
@@ -3954,7 +3945,7 @@ ipcMain.handle('shelf:prompt', (_event, text: unknown): SettingsWrite => {
   return { ok: true }
 })
 
-ipcMain.handle('settings:screen', (_event, change: unknown): SettingsWrite => {
+answer('settings:screen', (_event, change: unknown) => {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
   const asked = applyScreen(change)
   if (!asked.ok) return refuse(asked.why)
@@ -4015,7 +4006,7 @@ ipcMain.handle('settings:screen', (_event, change: unknown): SettingsWrite => {
  * session already guarantees, and the window says so rather than leaving
  * somebody to wonder whether it took.
  */
-ipcMain.handle('settings:hearing', (_event, change: unknown): SettingsWrite => {
+answer('settings:hearing', (_event, change: unknown) => {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
   const asked = applyHearing(change)
   if (!asked.ok) return refuse(asked.why)
@@ -4057,7 +4048,7 @@ ipcMain.handle('settings:hearing', (_event, change: unknown): SettingsWrite => {
  * No refusal path and no `SettingsWrite`: nothing is saved, so there is nothing
  * that can fail to save. A check that throws rejects, and the window says so.
  */
-ipcMain.handle('settings:codex-recheck', async (): Promise<SettingsCodex> => {
+answer('settings:codex-recheck', async () => {
   console.log('[codex] re-checking on request')
   return await checkCodexNow()
 })
@@ -4075,8 +4066,8 @@ ipcMain.handle('settings:codex-recheck', async (): Promise<SettingsCodex> => {
  * and a window that asked for a fourth address is a bug in this repository, not
  * a state a person can be in.
  */
-ipcMain.handle('settings:check-update', async (): Promise<SettingsUpdate> => checkForUpdate())
-ipcMain.handle('settings:download-update', async (): Promise<SettingsUpdate> => downloadUpdate())
+answer('settings:check-update', async () => checkForUpdate())
+answer('settings:download-update', async () => downloadUpdate())
 listenTo('settings:install-update', () => {
   void installUpdate()
 })
@@ -4132,7 +4123,7 @@ listenTo('settings:reveal', (_event, what: unknown) => {
  * screen that says "deleted" while the second is outstanding is making a
  * promise the disk has not kept.
  */
-ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
+answer('history:forget', (_event, action: unknown) => {
   const no = (why: string): Forgotten => ({ ok: false, gone: null, pending: false, why })
   const kind = (action as { kind?: unknown } | null)?.kind
   if (kind !== 'some' && kind !== 'hers' && kind !== 'everything') {
@@ -4217,7 +4208,7 @@ ipcMain.handle('history:forget', (_event, action: unknown): Forgotten => {
   return { ok: true, gone, pending: archive.scrubPending(), why: null }
 })
 
-ipcMain.handle('history:search', (_event, query: unknown): readonly HistoryHit[] => {
+answer('history:search', (_event, query: unknown) => {
   const persona = wornId()
   if (typeof query !== 'string') return []
   return transcripts()

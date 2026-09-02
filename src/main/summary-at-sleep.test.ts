@@ -209,7 +209,7 @@ describe('the presence that just ended is summarised into her note', () => {
     const rewrite = theRewrite()
     expect(rewrite).toContain('const forgottenBefore = historyForgotten')
     expect(theGuards()).toContain('historyForgotten !== at.forgottenBefore')
-    const forget = MAIN.slice(MAIN.indexOf("ipcMain.handle('history:forget'"))
+    const forget = MAIN.slice(MAIN.indexOf("answer('history:forget'"))
     expect(forget.slice(0, forget.indexOf('\n})'))).toContain('historyForgotten += 1')
   })
 
@@ -327,7 +327,7 @@ describe('the presence that just ended is summarised into her note', () => {
 
       So the assertion is about ORDER, not presence.
     */
-    const handler = MAIN.slice(MAIN.indexOf("ipcMain.handle('shelf:persona'"))
+    const handler = MAIN.slice(MAIN.indexOf("answer('shelf:persona'"))
     const body = handler.slice(0, handler.indexOf('\n})'))
     expect(body).toContain('personasDeleted += 1')
     expect(body.indexOf('personasDeleted += 1')).toBeLessThan(body.indexOf('readWornPersonaId('))

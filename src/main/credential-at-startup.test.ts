@@ -99,7 +99,7 @@ describe('the borrowed credential is judged before she needs it', () => {
     // It described a moment rather than a state: `did-finish-load` fires again
     // on every reload, so somebody who ran `codex` to fix a stale token would
     // have had the old sentence put back under her afterwards.
-    const open = MAIN.slice(MAIN.indexOf("ipcMain.handle('voice:open'"))
+    const open = MAIN.slice(MAIN.indexOf("answer('voice:open'"))
     expect(open.slice(0, open.indexOf('nextSession.opened()'))).toContain('cannotSpeak = null')
   })
 

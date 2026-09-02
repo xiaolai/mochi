@@ -1409,6 +1409,34 @@ export interface SessionConfig {
 }
 
 /**
+ * WHAT MAIN ANSWERS `voice:open` WITH, as a name rather than as a shape.
+ *
+ * It was written inline in `MochiApi.open` below, and that had a consequence
+ * one level down: the preload could only cast the reply to
+ * `Awaited<ReturnType<MochiApi['open']>>` — the API's own declared return,
+ * derived from the very function being defined. There was no second name for
+ * main to be checked against, so main's reply and the renderer's belief about
+ * it were held together by nothing at all.
+ *
+ * `session` is NOT the key and is worth nothing on its own: the key stays in
+ * main. It says WHICH negotiation is speaking, so a second open arriving
+ * mid-handshake cannot hand its credential to the first renderer.
+ */
+export type VoiceOpened =
+  | { readonly ok: true; readonly session: string; readonly model: string }
+  | { readonly ok: false; readonly why: string }
+
+/**
+ * What main answers `voice:sdp` with. Named for `VoiceOpened`'s reason.
+ *
+ * A superseded session is refused here rather than silently answered against
+ * the newer session's credential, which is why the failure branch carries a
+ * sentence and not a boolean.
+ */
+export type VoiceAnswer =
+  { readonly ok: true; readonly answer: string } | { readonly ok: false; readonly why: string }
+
+/**
  * The shape the preload bridge puts on `window.mochi`.
  *
  * It lives here rather than in `src/preload` because the renderer has to name
@@ -1424,17 +1452,14 @@ export interface MochiApi {
    * in main. It says WHICH negotiation is speaking, so that a second open
    * arriving mid-handshake cannot hand its credential to the first renderer.
    */
-  open(): Promise<{ ok: true; session: string; model: string } | { ok: false; why: string }>
+  open(): Promise<VoiceOpened>
   /**
    * Exchange the offer. Main holds the key; the renderer never sees it.
    *
    * `session` is what `open` returned. A superseded one is refused rather than
    * silently answered against the newer session's credential.
    */
-  sdp(
-    offer: string,
-    session: string,
-  ): Promise<{ ok: true; answer: string } | { ok: false; why: string }>
+  sdp(offer: string, session: string): Promise<VoiceAnswer>
   /** Everything `session.update` needs. See `voice:config`. */
   config(): Promise<SessionConfig>
   /** Forward a tool call to main. Fire and forget: the answer comes back as a frame. */

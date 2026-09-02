@@ -15,7 +15,7 @@ const HANDLER = ((): string => {
   const main = readFileSync(join(process.cwd(), 'src', 'main', 'index.ts'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^[ \t]*\/\/.*$/gm, '')
-  const from = main.indexOf("ipcMain.handle('history:forget'")
+  const from = main.indexOf("answer('history:forget'")
   expect(from, 'the delete handler is gone').toBeGreaterThan(-1)
   return main.slice(from, main.indexOf('\n})', from))
 })()

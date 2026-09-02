@@ -136,7 +136,7 @@ describe('the control that sets it', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^[ \t]*\/\/.*$/gm, '')
 
-    const handler = main.slice(main.indexOf("ipcMain.handle('shelf:save'"))
+    const handler = main.slice(main.indexOf("answer('shelf:save'"))
     const body = handler.slice(0, handler.indexOf('\n})'))
     expect(body).toContain("typeof asked.keeps === 'boolean'")
     expect(body).toContain('writePolicy(userData, asked.id, { keeps: asked.keeps })')

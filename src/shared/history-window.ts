@@ -248,16 +248,31 @@ export interface ShelfView {
  * The role decides which one is installed, so the other is not merely
  * unreachable — it was never constructed.
  */
+/**
+ * WHAT `history:list` ANSWERS WITH, as a name rather than an inline shape.
+ *
+ * `wire:` bound the conversations inside it by annotating main's map callback
+ * `HistoryConversation`, which was the half that could drift silently. The
+ * WRAPPER around them had no name on either side: main returned an object
+ * literal and the preload cast to a matching literal written out again. Two
+ * copies of one shape, agreeing by having been typed twice.
+ *
+ * The persona is a string, so nothing was going to go wrong today. What the
+ * name buys is that `Answers` can hold this channel like every other, instead
+ * of it being the one that cannot be expressed.
+ */
+export interface HistoryList {
+  readonly persona: string
+  readonly conversations: readonly HistoryConversation[]
+}
+
 export interface MochiHistoryApi {
   /** Everything that went wrong this launch, newest first. */
   problems(): Promise<readonly HistoryProblem[]>
   /** Save everything to a file. Answers what happened, for a status line. */
   exportAll(): Promise<HistoryExport>
   /** Whoever is worn. The window never gets to name a persona. */
-  list(): Promise<{
-    readonly persona: string
-    readonly conversations: readonly HistoryConversation[]
-  }>
+  list(): Promise<HistoryList>
   turns(token: string): Promise<readonly HistoryTurn[]>
   search(query: string): Promise<readonly HistoryHit[]>
   /** Delete conversations: some of hers, all of hers, or every one there is. */

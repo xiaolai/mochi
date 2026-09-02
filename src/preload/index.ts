@@ -1,3 +1,4 @@
+import { type Answers } from '@shared/answers'
 import { type Link } from '@shared/links'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
@@ -5,7 +6,6 @@ import {
   isSettingsChannel,
   isShelfChannel,
   type ForgetTalk,
-  type Forgotten,
   type MochiApi,
   type MochiSettingsApi,
   type GrantChange,
@@ -14,26 +14,12 @@ import {
   type NoteAction,
   type PersonaAction,
   type PersonaChange,
-  type ChosenWorkspace,
   type Revealable,
   type HearingChange,
   type ScreenChange,
-  type SettingsCodex,
-  type SettingsUpdate,
-  type SettingsView,
-  type SettingsWrite,
-  type SessionConfig,
   type VoiceReport,
 } from '@shared/ipc'
-import {
-  type HistoryConversation,
-  type HistoryHit,
-  type HistoryExport,
-  type HistoryProblem,
-  type HistoryTurn,
-  type MochiHistoryApi,
-  type ShelfView,
-} from '@shared/history-window'
+import { type MochiHistoryApi } from '@shared/history-window'
 
 /**
  * The only path between the page and the main process.
@@ -111,15 +97,13 @@ const ROLES = new Set(['companion', 'history'])
 
 const api: MochiApi = {
   async open() {
-    return (await ipcRenderer.invoke(guard('voice:open'))) as Awaited<ReturnType<MochiApi['open']>>
+    return (await ipcRenderer.invoke(guard('voice:open'))) as Answers['voice:open']
   },
   async sdp(offer: string, session: string) {
-    return (await ipcRenderer.invoke(guard('voice:sdp'), offer, session)) as Awaited<
-      ReturnType<MochiApi['sdp']>
-    >
+    return (await ipcRenderer.invoke(guard('voice:sdp'), offer, session)) as Answers['voice:sdp']
   },
   async config() {
-    return (await ipcRenderer.invoke(guard('voice:config'))) as SessionConfig
+    return (await ipcRenderer.invoke(guard('voice:config'))) as Answers['voice:config']
   },
   call(name: string, callId: string, args: string) {
     ipcRenderer.send(guard('voice:call'), name, callId, args)
@@ -175,55 +159,67 @@ const api: MochiApi = {
 
 const history: MochiHistoryApi = {
   async list() {
-    return (await ipcRenderer.invoke(guardShelf('history:list'))) as {
-      persona: string
-      conversations: readonly HistoryConversation[]
-    }
+    return (await ipcRenderer.invoke(guardShelf('history:list'))) as Answers['history:list']
   },
   async turns(token: string) {
-    return (await ipcRenderer.invoke(guardShelf('history:turns'), token)) as readonly HistoryTurn[]
+    return (await ipcRenderer.invoke(
+      guardShelf('history:turns'),
+      token,
+    )) as Answers['history:turns']
   },
   async problems() {
-    return (await ipcRenderer.invoke(guardShelf('history:problems'))) as readonly HistoryProblem[]
+    return (await ipcRenderer.invoke(guardShelf('history:problems'))) as Answers['history:problems']
   },
   async exportAll() {
-    return (await ipcRenderer.invoke(guardShelf('history:export'))) as HistoryExport
+    return (await ipcRenderer.invoke(guardShelf('history:export'))) as Answers['history:export']
   },
   async search(query: string) {
-    return (await ipcRenderer.invoke(guardShelf('history:search'), query)) as readonly HistoryHit[]
+    return (await ipcRenderer.invoke(
+      guardShelf('history:search'),
+      query,
+    )) as Answers['history:search']
   },
   async forget(action: ForgetTalk) {
-    return (await ipcRenderer.invoke(guardShelf('history:forget'), action)) as Forgotten
+    return (await ipcRenderer.invoke(
+      guardShelf('history:forget'),
+      action,
+    )) as Answers['history:forget']
   },
   async shelf() {
-    return (await ipcRenderer.invoke(guardShelf('shelf:read'))) as ShelfView
+    return (await ipcRenderer.invoke(guardShelf('shelf:read'))) as Answers['shelf:read']
   },
   async wear(id: string) {
-    return (await ipcRenderer.invoke(guardShelf('shelf:wear'), id)) as SettingsWrite
+    return (await ipcRenderer.invoke(guardShelf('shelf:wear'), id)) as Answers['shelf:wear']
   },
   async saveCharacter(change: PersonaChange) {
-    return (await ipcRenderer.invoke(guardShelf('shelf:save'), change)) as SettingsWrite
+    return (await ipcRenderer.invoke(guardShelf('shelf:save'), change)) as Answers['shelf:save']
   },
   async wearFace(face: string) {
-    return (await ipcRenderer.invoke(guardShelf('shelf:wear-face'), face)) as SettingsWrite
+    return (await ipcRenderer.invoke(
+      guardShelf('shelf:wear-face'),
+      face,
+    )) as Answers['shelf:wear-face']
   },
   async character(action: PersonaAction) {
-    return (await ipcRenderer.invoke(guardShelf('shelf:persona'), action)) as SettingsWrite
+    return (await ipcRenderer.invoke(
+      guardShelf('shelf:persona'),
+      action,
+    )) as Answers['shelf:persona']
   },
   async memory(action: NoteAction) {
-    return (await ipcRenderer.invoke(guardShelf('shelf:memory'), action)) as SettingsWrite
+    return (await ipcRenderer.invoke(guardShelf('shelf:memory'), action)) as Answers['shelf:memory']
   },
   async prompt(text: string) {
-    return (await ipcRenderer.invoke(guardShelf('shelf:prompt'), text)) as SettingsWrite
+    return (await ipcRenderer.invoke(guardShelf('shelf:prompt'), text)) as Answers['shelf:prompt']
   },
   async copy(text: string) {
-    return (await ipcRenderer.invoke(guardShelf('shelf:copy'), text)) as SettingsWrite
+    return (await ipcRenderer.invoke(guardShelf('shelf:copy'), text)) as Answers['shelf:copy']
   },
 }
 
 const settings: MochiSettingsApi = {
   async read() {
-    return (await ipcRenderer.invoke(guardSettings('settings:read'))) as SettingsView
+    return (await ipcRenderer.invoke(guardSettings('settings:read'))) as Answers['settings:read']
   },
   reveal(what: Revealable) {
     ipcRenderer.send(guardSettings('settings:reveal'), what)
@@ -232,40 +228,67 @@ const settings: MochiSettingsApi = {
     ipcRenderer.send(guardSettings('settings:open-link'), what)
   },
   async checkUpdate() {
-    return (await ipcRenderer.invoke(guardSettings('settings:check-update'))) as SettingsUpdate
+    return (await ipcRenderer.invoke(
+      guardSettings('settings:check-update'),
+    )) as Answers['settings:check-update']
   },
   async downloadUpdate() {
-    return (await ipcRenderer.invoke(guardSettings('settings:download-update'))) as SettingsUpdate
+    return (await ipcRenderer.invoke(
+      guardSettings('settings:download-update'),
+    )) as Answers['settings:download-update']
   },
   installUpdate() {
     ipcRenderer.send(guardSettings('settings:install-update'))
   },
   async chooseWorkspace() {
-    return (await ipcRenderer.invoke(guardSettings('settings:choose-workspace'))) as ChosenWorkspace
+    return (await ipcRenderer.invoke(
+      guardSettings('settings:choose-workspace'),
+    )) as Answers['settings:choose-workspace']
   },
   showProfile() {
     ipcRenderer.send(guardSettings('settings:show-profile'))
   },
   async lookup(change: LookupChange) {
-    return (await ipcRenderer.invoke(guardSettings('settings:lookup'), change)) as SettingsWrite
+    return (await ipcRenderer.invoke(
+      guardSettings('settings:lookup'),
+      change,
+    )) as Answers['settings:lookup']
   },
   async screen(change: ScreenChange) {
-    return (await ipcRenderer.invoke(guardSettings('settings:screen'), change)) as SettingsWrite
+    return (await ipcRenderer.invoke(
+      guardSettings('settings:screen'),
+      change,
+    )) as Answers['settings:screen']
   },
   async hearing(change: HearingChange) {
-    return (await ipcRenderer.invoke(guardSettings('settings:hearing'), change)) as SettingsWrite
+    return (await ipcRenderer.invoke(
+      guardSettings('settings:hearing'),
+      change,
+    )) as Answers['settings:hearing']
   },
   async prompt(key: string, text: string | null) {
-    return (await ipcRenderer.invoke(guardSettings('settings:prompt'), key, text)) as SettingsWrite
+    return (await ipcRenderer.invoke(
+      guardSettings('settings:prompt'),
+      key,
+      text,
+    )) as Answers['settings:prompt']
   },
   async grant(change: GrantChange) {
-    return (await ipcRenderer.invoke(guardSettings('settings:grant'), change)) as SettingsWrite
+    return (await ipcRenderer.invoke(
+      guardSettings('settings:grant'),
+      change,
+    )) as Answers['settings:grant']
   },
   async key(change: KeyChange) {
-    return (await ipcRenderer.invoke(guardSettings('settings:key'), change)) as SettingsWrite
+    return (await ipcRenderer.invoke(
+      guardSettings('settings:key'),
+      change,
+    )) as Answers['settings:key']
   },
   async recheckCodex() {
-    return (await ipcRenderer.invoke(guardSettings('settings:codex-recheck'))) as SettingsCodex
+    return (await ipcRenderer.invoke(
+      guardSettings('settings:codex-recheck'),
+    )) as Answers['settings:codex-recheck']
   },
 }
 
