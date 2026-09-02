@@ -89,13 +89,16 @@
         did the `.grow` spacer inside it. Save and Reset touched, edge to edge,
         under every one of the twenty-seven prompt editors.
 
-        10px is the delivery's gap between adjacent buttons, which is what these
-        rows mostly hold.
+        The delivery's gap between adjacent buttons is 10 and this is 12, which
+        is the rung — see the ladder note in `tokens.css`. `.picker` and
+        `.keys-right` do the same job for the same shape of row and were already
+        at 12, so the delivery's number here was the odd one of three rather
+        than a decision anybody could point at.
       */
       .row {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: var(--s3);
       }
       /*
         A control and the word for it.
@@ -229,7 +232,7 @@
       /*
         THE WORD AND THE NUMBER AT OPPOSITE ENDS, which is what `Rail.dc.html`
         draws: `CHARACTERS` in caps on the left, `2` in mono on the right,
-        `padding: 0 8px 10px`.
+        `padding: 0 8px 10px` — 12 rather than 10 under it, for the ladder.
 
         It was one sentence — "2 characters" — set entirely in the caps face, so
         a count that changes sat inside a heading that does not, and the number
@@ -248,7 +251,7 @@
         letter-spacing: var(--track-wide);
         text-transform: uppercase;
         color: var(--ink-3);
-        padding: 0 var(--s2) 10px;
+        padding: 0 var(--s2) var(--s3);
         max-width: none;
       }
       /* The count is a machine fact and takes the machine face — it is not part
@@ -276,9 +279,9 @@
       .rail-row {
         display: flex;
         align-items: center;
-        gap: 11px;
+        gap: var(--s3);
         width: 100%;
-        padding: 10px var(--s3);
+        padding: var(--s3);
         margin-bottom: var(--s0);
         border: 0;
         /* Cards and fields. The row IS the card here — there is no box around
@@ -289,7 +292,19 @@
         font: inherit;
         text-align: left;
         cursor: pointer;
+        /* The fill arrives. See `button.btn` in `tokens.css` for why the
+           duration is a token and why the property is named. */
+        transition: background-color var(--duration-fast);
       }
+      /*
+        UP, on a sunken ground.
+
+        The rail is `--paper-3`, so a row here lifts to `--paper` where a row on
+        the page darkens to `--paper-3`. One convention — a step away from the
+        ground — and the direction is the ground's, because white has no lighter
+        step. `tokens.css` carries the rule; this and `.entry:hover` are its two
+        readers.
+      */
       .rail-row:hover {
         background: var(--paper);
       }
@@ -900,7 +915,7 @@
       .kept {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: var(--s3);
       }
 
       /*
@@ -980,16 +995,28 @@
         232 + 32 + 760 + 32 + 224 = 1280.
       */
       /*
-        26 at the top, not 32 — `HerHead.dc.html` is `padding: 26px 32px 0`.
+        22 at the top, not 32 and not 26 — and the reason has changed.
 
-        The six pixels matter because this band has a budget: `Mochi 窗口
-        尺寸.dc.html` sizes the masthead at 152 and derives the whole window
-        from it, and this header measured 193. Every pixel over comes out of the
-        reading column on all four screens.
+        It was 26, because `HerHead.dc.html` is `padding: 26px 32px 0` and this
+        band has a budget: `Mochi 窗口尺寸.dc.html` sizes the masthead at 152 and
+        derives the whole window from it, while this header measured 193. Every
+        pixel over comes out of the reading column on all four screens.
+
+        Both of those still hold. What was missed is that THREE containers do
+        this one job — the top inset of a page-level band — at three different
+        numbers: this at 26, `.reading` at 24, `.machine-pane` at 22. Two of the
+        three are not on the ladder, and moving between her page and the
+        machine's moved the first line of content with no rule able to say why.
+
+        22 is the rung, it is the tightest of the three so nothing below has to
+        grow, and it hands four pixels back to a band that is already forty over
+        its budget. The delivery's 26 loses to the scale, which is the trade
+        `tokens.css` describes as a spine rather than a whitelist: a considered
+        number stays, and a number that is only a number goes to the nearest rung.
       */
       .head {
         flex: none;
-        padding: 26px var(--s6) 0;
+        padding: var(--s5) var(--s6) 0;
       }
       /*
         The subject row: her face, her name, and the search that is about her.
@@ -1049,10 +1076,10 @@
       .finding {
         display: flex;
         align-items: center;
-        gap: 11px;
+        gap: var(--s3);
         width: 320px;
         flex: none;
-        padding: 10px 18px;
+        padding: var(--s3) var(--s5);
         border: 0;
         border-radius: var(--r-pill);
         background: var(--paper-3);
@@ -1158,13 +1185,18 @@
       }
       .view {
         display: block;
-        padding: var(--s2) 20px;
+        padding: var(--s2) var(--s5);
         border: 0;
         border-radius: var(--r-pill);
         background: transparent;
         color: inherit;
         text-align: left;
         cursor: pointer;
+        /* The lozenge slides between two paints rather than jumping. It cannot
+           slide ALONG the track — the raised one is a background on whichever
+           button is current, not one element that moves — and animating that
+           would mean a fourth element behind the three. */
+        transition: background-color var(--duration-fast);
       }
       .view-label {
         font-family: var(--sans);
@@ -1172,6 +1204,7 @@
         font-weight: var(--w-medium);
         color: var(--ink-2);
         white-space: nowrap;
+        transition: color var(--duration-fast);
       }
       /*
         The raised one carries `--paper`, and it needs a lift to read as raised
@@ -1287,15 +1320,25 @@
       /*
         THE GUTTERS ARE THE PADDING, and they are equal.
 
-        24 top and 32 either side, which is what closes the width: her page is
+        22 top and 32 either side, which is what closes the width: her page is
         rail 232 + (32 + 760 + 32) + apparatus 224 = 1280. It was 26/22/32/40 —
         four different numbers, none of them the same on the two sides, so the
         column was not centred in its own track and the arithmetic could not be
         checked against anything.
+
+        The top was 24 after that pass, which is not a rung and was the middle
+        of three values doing one job — `.head` at 26, this at 24, the machine's
+        pane at 22. All three are the rung now; see `.head`.
+
+        The gap is 22 and USED TO BE 26, and it has never drawn anything either
+        way: this column's three children are `#pane`, `.talk` and `#permits`,
+        and `showPlace` hides two of them on every view. A gap between siblings
+        of which exactly one is ever on screen is a number nobody can see, which
+        is the only reason it survived being different from every other column's.
       */
       .reading {
-        gap: 26px;
-        padding: 24px var(--s6) var(--s6);
+        gap: var(--s5);
+        padding: var(--s5) var(--s6) var(--s6);
       }
       /*
         The machine's rows carry their own rhythm — `padding: 12px 0` and a rule
@@ -1306,9 +1349,21 @@
         the machine's own section of the sheet: a 26px gap, then no gap, then a
         different padding. Two of the three had no effect and nothing said which.
       */
-      /* The same gutter as every other pane, and the sections' own rhythm. */
+      /*
+        22 between sections, which is now the ONE rhythm in the window.
+
+        It was 26 — the only gap between sections in the build that was not 22.
+        Her sheet is 22 (`.sheet`), the apparatus column is 22 (`.margin`), and
+        `.margin`'s own comment already claimed "the same 22px rhythm as the page
+        beside it" while the page beside it was 26. The claim was true of the
+        column that made it and false of everything it was about.
+
+        Inside a section stays 12, so the 12/22 step that groups a heading with
+        its own control is untouched; what goes is a fourth number for the
+        distance between two groups.
+      */
       .machine-pane {
-        gap: 26px;
+        gap: var(--s5);
         padding: var(--s5) var(--s6);
       }
       /*
@@ -1370,10 +1425,14 @@
       /*
         THE APPARATUS COLUMN, at the artboard's own measurements.
 
-        224 wide, 24 and 22 of padding, and the same 22px rhythm as the page
-        beside it — one rhythm in the window rather than one per column. It sat
-        on `--paper-2` with 26/26/32/22 of padding, which is four numbers and a
-        second surface for a column whose job is to recede.
+        224 wide, 22 of padding on every side, and the same 22px rhythm as the
+        page beside it — one rhythm in the window rather than one per column. It
+        sat on `--paper-2` with 26/26/32/22 of padding, which is four numbers and
+        a second surface for a column whose job is to recede.
+
+        The top was 24 and is 22, with the two panes it sits beside: this column
+        and `.reading` are the two halves of one page and were starting their
+        content at different heights.
 
         No fill at all now: the hairline is what separates it, which is the rule
         the whole window runs on. A pane that recedes by being a different colour
@@ -1381,7 +1440,7 @@
       */
       .margin {
         border-left: var(--s-px) solid var(--rule);
-        padding: 24px var(--s5);
+        padding: var(--s5);
         overflow-y: auto;
         display: flex;
         flex-direction: column;
@@ -1390,16 +1449,20 @@
       /*
         The margin's bodies carry the column's gap.
 
-        `.margin` sets `gap: 18px` and its children are the three per-view
-        bodies, so the gap never reached the blocks inside them — the same shape
-        as `.sheet`, where the reading column's rhythm stopped at `#pane`. Each
-        body is a column in its own right and has to say so.
+        `.margin` sets a gap and its children are the three per-view bodies, so
+        that gap never reached the blocks inside them — the same shape as
+        `.sheet`, where the reading column's rhythm stopped at `#pane`. Each body
+        is a column in its own right and has to say so.
+
+        THE SAME NUMBER, which it was not: this was 18 against the column's 22,
+        so a body's blocks sat four pixels tighter than the bodies themselves,
+        which is a rhythm inside a rhythm nobody chose.
       */
       #margin-hers,
       #margin-permits {
         display: flex;
         flex-direction: column;
-        gap: 18px;
+        gap: var(--s5);
       }
       /*
         A LABEL AND ITS FACT, tight — 4px, because the pair is one thing and the
@@ -1468,7 +1531,7 @@
       .machine-subject {
         display: flex;
         align-items: flex-start;
-        gap: 20px;
+        gap: var(--s5);
       }
       /*
         Where her face goes on her page, at the same 60px — a sunken tile with a
@@ -1554,12 +1617,14 @@
         at the top. Aligned to the numerals now, which is the line the eye reads
         across.
       */
-      /* A3's row: 18 above, 12 below, 18 between the month nav and the days. */
+      /* A3's row: 18 above, 12 below, 18 between the month nav and the days.
+         22 for the two 18s, which is the rung; the four pixels this adds at the
+         top are the four `.head` gave back at the same joint. */
       .daystrip {
         display: flex;
         align-items: center;
-        gap: 18px;
-        padding: 18px 0 var(--s3);
+        gap: var(--s5);
+        padding: var(--s5) 0 var(--s3);
       }
       .month-nav {
         display: flex;
@@ -1651,12 +1716,13 @@
         inset: auto;
         margin: 0;
         /*
-          C2's card: 340 wide, a panel radius, 20/22 of padding. It was 12px of
+          C2's card: 340 wide, a panel radius, 22 of padding on all four sides —
+          the drawing says 20/22 and 20 is not a rung. It was 12px of
           padding at the PART radius — the rung for a control — on a surface
           that holds three of them.
         */
         width: 340px;
-        padding: 20px var(--s5);
+        padding: var(--s5);
         border: var(--s-px) solid var(--rule-2);
         border-radius: var(--r-panel);
         background: var(--paper);
@@ -1801,8 +1867,19 @@
         stroke-width: 1.5;
         stroke-linecap: round;
       }
+      /*
+        STRETCHED to the row, so the cells have a height to fill.
+
+        `.daystrip` is `align-items: center` and this was centred in it at its
+        own content height — about 25px inside a row the month button makes 30
+        tall. Five pixels of the row were unreachable, above and below thirty-one
+        targets that are already the smallest controls in the window. Stretching
+        costs nothing: the strip has no background and no border, so the only
+        thing that changes is how much of the row a press lands on.
+      */
       .strip {
         flex: 1;
+        align-self: stretch;
         min-width: 0;
         display: grid;
         grid-template-columns: repeat(31, 1fr);
@@ -1837,20 +1914,84 @@
         a numeral moving 4.63:1 to 4.94:1, "which nobody can see". This was that,
         one step further along.
       */
+      /*
+        THE TARGET IS THE CELL; THE DISC IS THE MARK. They were one element.
+
+        A 25×25 button, `justify-self: center` in a 1fr track that measures about
+        26.5 at the default width, in a row 30 tall. So the pressable area was
+        625px² out of the 795 the cell actually offers, with a dead gutter down
+        each side of every day and five dead pixels above and below — on the
+        control that decides what both columns beneath it show, and the smallest
+        thing on the page.
+
+        The two jobs are now two boxes. The button fills its cell, so there is no
+        gap between one day and the next where a press lands on nothing, and the
+        disc is a pseudo-element at the size A3 draws it. The strip does not
+        change width and the row does not change height; only the part that
+        answers a click does.
+
+        NOT bigger than 25. The disc is what a picked day is, and 26.5 is all the
+        track there is — a 32px disc, which is what a report of this asked for,
+        would overlap the two days either side of it at the default width. The
+        emphasis this mark deserves has to come from the fill it already has,
+        not from a size the strip cannot pay for.
+      */
       .day {
+        position: relative;
+        /* A stacking context, so the disc can sit BEHIND the numeral without
+           falling behind the strip as well. `isolation` rather than a z-index,
+           because nothing here needs to be ordered against anything outside. */
+        isolation: isolate;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         gap: var(--s1);
-        width: 25px;
-        height: 25px;
-        justify-self: center;
+        width: 100%;
+        /* The floor is the disc: if the row ever gets shorter than the mark, the
+           mark is what has to fit. */
+        min-height: 25px;
         padding: 0;
         border: 0;
-        border-radius: var(--r-pill);
         background: transparent;
         color: var(--ink-3);
+        transition: color var(--duration-fast);
+      }
+      /*
+        The drawn mark: 25px, centred, and behind everything the cell holds.
+
+        `translate` rather than a negative margin, so the size can change in one
+        place. It carries the fill for both states that have one — hover and
+        picked — and the focus ring, which is why it is a box rather than a
+        `background-image` on the button.
+
+        `min(25px, 100%)`, AND THAT IS A BUG FIX RATHER THAN A PRECAUTION.
+
+        The strip is 31 equal tracks of whatever is left after the month nav:
+        about 26.5 at the default width and about 21 at the 1120 floor. The disc
+        was a flat 25 on a button that was also a flat 25, so at the floor every
+        day in the month overlapped the two beside it by two pixels — including
+        the picked one, whose ink disc ran under its neighbours' numerals. It
+        showed as nothing at all: the button's own `scrollWidth` matched its
+        `clientWidth`, so `fits` had nothing to measure, and what overflowed was
+        the grid TRACK, which nothing measures.
+
+        Splitting the target from the mark is what exposed it — the same
+        overflow, now on a box the check can see. `aspect-ratio` keeps it a
+        circle while it shrinks, because a disc that becomes an ellipse at one
+        width is a second mark.
+      */
+      .day::before {
+        content: '';
+        position: absolute;
+        z-index: -1;
+        inset: 50% auto auto 50%;
+        translate: -50% -50%;
+        width: min(25px, 100%);
+        aspect-ratio: 1;
+        border-radius: var(--r-pill);
+        background: transparent;
+        transition: background-color var(--duration-fast);
       }
       .day:disabled {
         color: var(--ink-off);
@@ -1862,6 +2003,26 @@
       }
       .day.has {
         color: var(--ink-2);
+      }
+      /*
+        HOVER GETS THE DISC, because a colour change alone was not one.
+
+        This moved an 11px mono numeral from `--ink-2` to `--ink` and changed
+        nothing else — 4.94:1 to 14.47:1, which is legible in a table and is
+        almost nothing at eleven pixels on a strip of thirty-one. It is the same
+        failure the comment under `.day .dot` diagnoses one state over, and it
+        was left standing on the state that one did not reach.
+
+        `--chosen-2` is the lighter of the two chosen greys, so the two fills say
+        different things: the pointer is here, and this day is the one the page
+        is showing. The picked state owns the ink; there is no confusing them.
+
+        `:not([aria-current])` rather than source order — `.day.has:hover` is
+        (0,3,0) and `.day[aria-current='true']` is (0,2,0), so hover would win on
+        the picked day and repaint the strongest fill in the window as a hover.
+      */
+      .day.has:hover:not([aria-current='true'])::before {
+        background: var(--chosen-2);
       }
       .day.has:hover {
         color: var(--ink);
@@ -1901,7 +2062,7 @@
         grows. Two states cannot be told apart by a mark that one of them may not
         have.
       */
-      .day[aria-current='true'] {
+      .day[aria-current='true']::before {
         background: var(--ink);
       }
       .day[aria-current='true'] .day-n {
@@ -1912,6 +2073,36 @@
       .day[aria-current='true'] .dot {
         background: var(--paper);
         opacity: 1;
+      }
+      /*
+        THE RING RINGS THE MARK, now that the target is bigger than it.
+
+        The sandwich paints 4px outside whatever box it is on. On a 25px disc
+        that is 33px, which is what the day strip has always drawn and what
+        `tokens.css` writes down as a known cost: it covers part of the two
+        neighbouring cells, only one day is focused at a time, and the
+        alternative is spending 8px of every cell on room for a ring shown on one
+        of them.
+
+        Moving the target out to the full cell would have made that WORSE — a
+        ring on a 26.5×30 button paints 34.5×38 — which is the part a report of
+        this got backwards: enlarging the target does not fix the ring, it
+        enlarges the ring too. Putting the ring on the disc keeps exactly the
+        geometry the note in `tokens.css` measured, while the thing you press
+        grows.
+
+        `outline: none` here is opted out of and immediately replaced, which is
+        the convention `stylesheets.test.ts` enforces.
+      */
+      .day:focus-visible {
+        outline: none;
+      }
+      .day:focus-visible::before {
+        outline: var(--s-px) solid var(--ink);
+        outline-offset: 3px;
+        box-shadow:
+          0 0 0 var(--s-px) var(--ink),
+          0 0 0 3px var(--paper);
       }
       /*
         How much is in the archive, in the foot beside the problem count.
@@ -1999,7 +2190,7 @@
         gap: var(--s3);
         width: 100%;
         text-align: left;
-        padding: 10px 14px;
+        padding: var(--s3) 14px;
         border: 0;
         border-radius: var(--r-card);
         background: transparent;
@@ -2082,7 +2273,7 @@
         display: flex;
         flex-direction: column;
         gap: var(--s2);
-        padding: 18px 20px;
+        padding: var(--s5);
         border: 0;
         border-radius: var(--r-panel);
         background: var(--paper-3);
@@ -2427,9 +2618,30 @@
         that has to be readable at a glance -- a workspace is a long path -- and
         a two-column grid would give a four-word button as much room as it.
       */
+      /*
+        AT THE PANE'S RIGHT EDGE, which is where every other trailing control on
+        this page already sits.
+
+        The field is capped at 420 and the button was packed against it, so a
+        picker row ended around 534 in a 761 pane and its button floated with
+        227px of nothing to its right. `.folder` and `.grant` -- the two other
+        row shapes on the machine's page -- are `space-between` and end at the
+        pane's edge, and so does the status card at the top of it. Three right
+        edges, and the only one that was neither the field's nor the pane's
+        belonged to the rows drawn most often.
+
+        `--measure-read`'s note quotes the delivery on this directly: A7 puts
+        "Allowed" and its switch at the PANE's right edge, 760 out, and pulling
+        that in "grew a second right margin". This is the same row shape.
+
+        Nothing grows with the window: the field keeps its 420 cap and the button
+        keeps its label's width. What moves is where the button is put, which is
+        the pane's decision and not the control's.
+      */
       .picker {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: var(--s3);
         min-width: 0;
       }
@@ -2485,7 +2697,8 @@
         warning."
       */
       /*
-        The column, at A3's numbers: 368 wide, 18/16 of padding, 3px between
+        The column, at A3's numbers: 368 wide, 22/16 of padding — the drawing
+        says 18/16, and 18 is not a rung — and 3px between
         cards. The gap is what separates one row from the next now that the
         hairline under each has gone, and it is deliberately small — these are a
         list, not a set of unrelated panels.
@@ -2497,15 +2710,43 @@
         min-width: 0;
         min-height: 0;
         overflow-y: auto;
-        padding: 18px var(--s4);
+        padding: var(--s5) var(--s4);
         border-right: var(--s-px) solid var(--rule);
+        /*
+          HOW FAR IN A ROW'S TEXT SITS, declared once for the two rules that
+          have to agree about it.
+
+          `.entry` is a card: its fill needs padding, so its text starts 15px
+          inside the column while the column's own heading started at the
+          column's edge. The heading hung fifteen pixels left of everything it
+          heads, and nothing else in either window hangs a heading — so it read
+          as a mistake rather than as a device.
+
+          A local custom property rather than the literal twice, because the two
+          rules are the same measurement and a second copy is a second thing to
+          keep in step. `design-values.test.ts` counts a locally declared
+          property as declared, which is what makes this legal here.
+        */
+        --entry-inset: 15px;
       }
 
+      /*
+        The TEXT is flush with the rows; the RULE still spans the column.
+
+        Padding rather than margin, deliberately, and the two edges are two
+        different alignments each doing its own job. The heading now starts where
+        every conversation title under it starts — that was the defect, a heading
+        hanging fifteen pixels left of everything it heads, in a window where
+        nothing else hangs a heading. The hairline is not part of that: it
+        separates the day from its list, and a card's fill spans the whole
+        column, so a rule that stopped short of the fills either side of it would
+        be a third edge rather than a shared one.
+      */
       .picked {
         display: flex;
         align-items: baseline;
         gap: var(--s3);
-        padding-bottom: 10px;
+        padding: 0 var(--entry-inset) var(--s3);
         border-bottom: var(--s-px) solid var(--rule);
       }
       .picked .what {
@@ -2538,7 +2779,7 @@
         gap: var(--s2);
         width: 100%;
         min-width: 0;
-        padding: 13px 15px;
+        padding: 13px var(--entry-inset);
         border: 0;
         border-radius: var(--r-card);
         background: transparent;
@@ -2546,6 +2787,10 @@
         font: inherit;
         text-align: left;
         cursor: pointer;
+        /* On the base rule, not on `:hover` — a transition declared on the hover
+           state eases in and snaps back out, which reads as a control that is
+           reluctant to let go. See `button.btn` in `tokens.css`. */
+        transition: background-color var(--duration-fast);
       }
       /*
         Somebody's own words, and they can be a URL with no spaces in it.
@@ -2558,11 +2803,19 @@
       .entry .said-of {
         overflow-wrap: anywhere;
       }
-      /* `--paper-hover`, which is the sheet's one hover surface and had lost its
-         only reader. A list row picking `--paper-2` by hand is how a window ends
-         up with two hover greys that agree until one of them is changed. */
+      /*
+        ONE STEP OFF THE GROUND, which here is down.
+
+        This read `--paper-hover` — a token whose value was `--paper-3` exactly,
+        with sixteen elements resting on that colour and this as its only
+        reader. Two names for one grey, and the name promised a convention the
+        rail broke by hovering UP to `--paper`. The token is gone; see the
+        surfaces block in `tokens.css` for the rule that replaced it. A row on
+        the page darkens, a row on the sunken rail lightens, and the difference
+        is the ground rather than a second opinion.
+      */
       .entry:hover {
-        background: var(--paper-hover);
+        background: var(--paper-3);
       }
       /*
         Chosen is a FILL, and that became safe when the hue left.
@@ -2897,7 +3150,7 @@
         flex-wrap: wrap;
         gap: 6px;
         width: fit-content;
-        padding: 10px 14px;
+        padding: var(--s3) 14px;
         border-radius: var(--r-panel);
         background: var(--paper-3);
       }
@@ -3465,13 +3718,13 @@
           screen — and with no gap the button's box ended flush against the
           heading below it.
 
-          26px is the reading column's own rhythm, which is the stack this
+          22px is the reading column's own rhythm, which is the stack this
           button is part of. Carried here rather than by restoring the gap on
           `#pane`, because a gap there would also govern the single-wrapper case
           the note above is about, and this is the only child that needs
           separating from what follows.
         */
-        margin-bottom: 26px;
+        margin-bottom: var(--s5);
       }
 
       /*
@@ -3649,8 +3902,9 @@
       .who-band {
         display: flex;
         align-items: center;
-        /* 20, HerHead's gap between her face and her name. */
-        gap: 20px;
+        /* 22, the rung. HerHead draws 20, which is two pixels off the one number
+           every other gap on this page is set at. */
+        gap: var(--s5);
         min-width: 0;
       }
       /*
@@ -3838,7 +4092,7 @@
       .who-facts {
         display: flex;
         align-items: baseline;
-        gap: 10px;
+        gap: var(--s3);
         flex-wrap: wrap;
         font-family: var(--mono);
         font-size: var(--t-data-2);
@@ -4172,7 +4426,7 @@
       */
       .bubble {
         position: relative;
-        padding: 13px 18px;
+        padding: 13px var(--s5);
         border: 0;
         border-radius: var(--r-panel);
         background: var(--paper-3);
@@ -4366,7 +4620,7 @@
         margin: 0;
         display: flex;
         align-items: center;
-        gap: 9px;
+        gap: var(--s3);
         min-width: 0;
         font-family: var(--sans);
         font-size: var(--t-ui);
@@ -4659,7 +4913,27 @@
             <button class="btn" id="export" type="button" hidden>Export&#8230;</button>
             <button class="btn bad" id="drop-some" type="button" hidden disabled>Delete</button>
             <button class="btn bad" id="drop-hers" type="button" hidden>Delete all&#8230;</button>
-            <p id="said" role="status" aria-live="polite">
+            <!--
+              SHIPS HIDDEN, which it did not.
+
+              `status.ts` says in as many words that this strip is `hidden`
+              rather than empty, and `hush` sets the attribute — but `hush` only
+              runs when somebody presses the dismiss button, and the markup never
+              carried it. So from launch until the first receipt this paragraph
+              was on screen with nothing in it, drawing the one thing it does
+              have without any text: `#said::before`, a 5px ink dot.
+
+              That dot exists to make a sentence appearing in an empty bar read
+              as new. With no sentence there is nothing to mark, and where it
+              landed depended on the page — alone at the left of the bar on three
+              of them, and immediately after "Delete all…" on the archive, where
+              the buttons come before it in this row and it read as punctuation
+              on the last one.
+
+              One attribute. The mark stops moving because it stops appearing
+              without the line it belongs to.
+            -->
+            <p id="said" role="status" aria-live="polite" hidden>
               <span id="said-what"></span>
               <button id="said-shut" type="button" aria-label="Dismiss" title="Dismiss" hidden>
                 <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">

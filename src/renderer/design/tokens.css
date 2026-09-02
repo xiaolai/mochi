@@ -119,8 +119,23 @@
   --paper: light-dark(#ffffff, #08080a);
   --paper-2: light-dark(#fafafa, #111114);
   --paper-3: light-dark(#f4f4f5, #16161a);
-  /* "One hover surface, and it is not the sunken one." */
-  --paper-hover: light-dark(#f4f4f5, #16161a);
+  /*
+   * HOVER IS ONE STEP OFF THE GROUND, and it is drawn from these three.
+   *
+   * `--paper-hover` stood here carrying "one hover surface, and it is not the
+   * sunken one" — and the value it carried was `--paper-3` exactly. So the
+   * window declared one hover grey, sixteen elements RESTED on that grey, and
+   * the single rule that read the hover name could not have shown on any of
+   * them. The rail meanwhile hovers to `--paper`: lighter, where the named
+   * surface goes darker.
+   *
+   * Two names for one colour is one too many, and the rule both consumers were
+   * already following is the honest one: a row hovers one step AWAY from the
+   * ground it rests on. On the page that step is down, to `--paper-3`; on the
+   * sunken rail it is up, to `--paper`, because white has no lighter step. The
+   * same shape as `--chosen` and `--chosen-2` below — two rungs because the
+   * ground differs, not two conventions.
+   */
 
   /* ---- chosen is one step of grey, and never a bar ------------------------
    *
@@ -299,16 +314,6 @@
     contradicting comments got to nine.
   */
   --status-h-acts: 56px;
-  /*
-    The one thing in the window with a measure of its own.
-
-    "列里的东西一律填满列" — everything in a column fills the column, and the
-    column width IS the cap. The two exceptions the delivery names are a
-    single-line input (past ~420px there is no more content to show) and a
-    centred empty state. `--reading` is gone: a second measure inside a column
-    that already has one is how a 760px pane came to hold a 66ch line.
-  */
-  --field-max: 420px;
 
   /* ---- her halo, on her own window --------------------------------------- */
   --ring-w: 66px;
@@ -432,6 +437,23 @@
    * in this file. What the ladder is for is the SAME relationship spaced two
    * ways in two places, which is the thing that actually reads as sloppy.
    *
+   * AND THAT IS EXACTLY WHAT THE SHELL HAD. Eight different gaps lived between
+   * 6 and 26 where the spine offers three, and the drift was invisible per rule
+   * because each literal could name an artboard: 10 was the delivery's gap
+   * between two buttons, 20 was HerHead's gap between a face and a name, 18 was
+   * A3's inset on the conversation column. Every one defensible alone; together,
+   * three page-level panes starting their content at three different heights.
+   *
+   * So one fold, once: 9/10/11 → 12, 18/20 → 22, 24/26 → 22. Only where the
+   * value is ROOM BETWEEN THINGS. A number inside a mark is untouched — the
+   * machine's glyph is still a 9px radius on a 30px tile, the day's disc is
+   * still 25 — because that is artwork, and the paragraph above is about
+   * artwork as much as about anything.
+   *
+   * The cost is named rather than hidden: a dozen components now sit two to
+   * four pixels off the drawing they came from. The drawings disagree with each
+   * other at that resolution, and a reader can check a rung.
+   *
    * `--s6` is 32 rather than v1's 30: it is the gutter either side of every
    * content pane, and the single most-drawn distance in the delivery.
    */
@@ -464,6 +486,15 @@
     The COLUMN may still be wider than any of these — the sizing document is
     explicit that surplus width goes to the apparatus column and to whitespace
     rather than into the line.
+
+    `--field-max` was a FOURTH, declared two hundred lines up among the
+    component heights, at 420px, meaning exactly what `--measure-field` means:
+    "列里的东西一律填满列" — everything in a column fills the column, the column
+    width IS the cap, and the two exceptions the delivery names are a
+    single-line input (past ~420 there is no more content to show) and a centred
+    empty state. Two names for one width, one read by the token file's own
+    `input` rule and one by the shell's, is the same defect `--paper-hover` was
+    and is folded the same way: the family survives, the loner goes.
   */
   --measure-read: 600px;
   --measure-field: 420px;
@@ -538,6 +569,28 @@ button.btn {
   font-size: var(--t-ui-2);
   font-weight: var(--w-medium);
   cursor: default;
+  /*
+    THE STATE ARRIVES, rather than appearing.
+
+    Every hover in this window was a hard cut between two paint states: the edge
+    darkening under the pointer, a row taking its fill, a day being picked. The
+    switch's knob and the find-a-setting mark were the only two things that
+    moved, so the motion vocabulary existed and almost nothing spoke it.
+
+    `--duration-fast`, because this is a state change on a control somebody is
+    already pointing at — it has to be over before they decide anything. The
+    properties are named rather than `all`: a transition on `all` animates
+    whatever a future rule happens to add, including layout, which is how a
+    hover starts costing a reflow nobody asked for.
+
+    The reduced-motion block at the foot of this file zeroes the token, so this
+    honours the preference by construction rather than by a second rule
+    remembering to.
+  */
+  transition:
+    background-color var(--duration-fast),
+    border-color var(--duration-fast),
+    color var(--duration-fast);
 }
 button.btn:hover:not(:disabled) {
   border-color: var(--ink-3);
@@ -629,7 +682,7 @@ input[type='text'],
 input[type='search'],
 textarea,
 select {
-  max-width: var(--field-max);
+  max-width: var(--measure-field);
   padding: 9px 15px;
   border: 0;
   border-radius: var(--r-card);
@@ -857,16 +910,22 @@ textarea:focus-visible {
  * The sandwich paints 4px OUTSIDE the border box: 1px edge, 2px of paper, 1px
  * ring. A FIELD paints 1px: one ring, on its own edge, with no offset and no
  * layer inside it — so the containers that were tight for a field are no longer
- * tight at all, and only the bare controls need the room. Every container that holds a focusable control has to have that much
- * slack or the ring lands on a neighbour. `.groups` has 12px of padding and
- * `.reading` has 32, so both are clear. The day strip is not: 25px cells at a
- * 1px gap means the paper gap of a focused day covers part of the two days
- * either side of it.
+ * tight at all, and only the bare controls need the room. Every container that
+ * holds a focusable control has to have that much slack or the ring lands on a
+ * neighbour. `.groups` has 12px of padding and `.reading` has 32, so both are
+ * clear. The day strip is not: a 25px disc in a track of about 26.5 means the
+ * paper gap of a focused day covers part of the two days either side of it.
  *
  * That is survivable — the ring is still unambiguous, it is the neighbours that
  * are momentarily obscured, and only one day is focused at a time — and it is a
  * known consequence rather than an oversight. The alternative is a strip that
  * spends 8px of every cell on room for a ring that is shown on one of them.
+ *
+ * THE TARGET AND THE RING CAME APART, and this note is about the ring. The day
+ * button now fills its cell; the ring is drawn on the 25px disc inside it
+ * (`.day:focus-visible::before`), so the arithmetic above is unchanged while
+ * the thing you press is a third larger. Putting the ring on the enlarged
+ * button instead would have made the overhang worse, not better.
  */
 
 /*
