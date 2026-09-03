@@ -22,6 +22,7 @@ import { PROMPT_SLOTS } from '@shared/instructions'
 import { createRegistry, type WireTool } from '@shared/capability/registry'
 import { grantOutcome } from './grant-outcome'
 import { answer } from './ipc/answer'
+import { shellPath, widenPath } from './shell-path'
 import { listener } from './ipc/listen'
 import { DRIFT_PX, createHerPlace } from './window/her-place'
 import { createIdleSleep } from './idle-sleep'
@@ -4225,7 +4226,7 @@ answer('history:search', (_event, query: unknown) => {
  * line diff nobody can review.
  */
 const startup = app.whenReady().then(
-  () => {
+  async () => {
     /*
       Before any window exists, because the menu is what binds the keys those
       windows will be pressed with — and because Electron installs its own
@@ -4449,6 +4450,31 @@ const startup = app.whenReady().then(
       or two before the first answer lands, which is honest rather than
       convenient.
     */
+    /*
+      THE PATH FIRST, because everything below it resolves against one.
+
+      A GUI application on macOS is handed launchd's PATH — roughly
+      `/usr/bin:/bin:/usr/sbin:/sbin` — not the one the person has in their
+      terminal. Reported 2026-09-03 from a real machine: Codex installed under
+      mise, the app reporting it absent, and `which codex` in the same person's
+      shell printing the path. `locate.ts` answers this with a list of
+      well-known directories and that list cannot win; `shell-path.ts` argues it
+      out in full, including why FINDING the binary would not have been enough.
+
+      Awaited, and it is the only await added to this chain. The check below
+      spawns Codex, and the npm fallback behind it spawns npm; both resolve
+      against `process.env.PATH` at the moment they run, so widening it
+      afterwards would fix the second launch and not the first. The cost is one
+      shell start-up, bounded, and skipped entirely on Windows.
+
+      It never rejects — a shell that will not answer yields null and the PATH
+      is left exactly as it was.
+    */
+    process.env.PATH = widenPath(
+      process.env.PATH,
+      await shellPath({ platform: process.platform, env: process.env }),
+    )
+
     void checkCodexNow().then(undefined, (error: unknown) => {
       // Not fatal, and not silent. A check that threw would otherwise leave the
       // status on its "not finished yet" answer for the life of the process.
