@@ -1,61 +1,90 @@
 {
-  "name": "mochi",
-  "productName": "Mochi",
-  "version": "0.1.20",
-  "private": true,
-  "description": "A realtime-voice AI companion that lives on your desktop",
-  "author": "@xiaolai",
-  "license": "MIT",
+  "name": "@hando/mochi",
+  "version": "1.0.0",
+  "description": "Mochi — a soft-body companion character, and the engine that draws her. Superellipse geometry, area-preserving squash, spring physics and an idle layer. Canvas2D, SVG, or one custom element. Zero runtime dependencies.",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "author": "HANDO K.K.",
+  "homepage": "https://github.com/xiaolai/mochi#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xiaolai/mochi.git"
   },
-  "homepage": "https://lixiaolai.com",
+  "bugs": "https://github.com/xiaolai/mochi/issues",
+  "type": "module",
+  "sideEffects": [
+    "./dist/element/index.js"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./element": {
+      "types": "./dist/element/index.d.ts",
+      "default": "./dist/element/index.js"
+    },
+    "./characters": {
+      "types": "./dist/characters/index.d.ts",
+      "default": "./dist/characters/index.js"
+    },
+    "./core/*": {
+      "types": "./dist/core/*.d.ts",
+      "default": "./dist/core/*.js"
+    },
+    "./canvas2d/*": {
+      "types": "./dist/canvas2d/*.d.ts",
+      "default": "./dist/canvas2d/*.js"
+    },
+    "./svg/*": {
+      "types": "./dist/svg/*.d.ts",
+      "default": "./dist/svg/*.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md",
+    "BRAND.md"
+  ],
+  "keywords": [
+    "avatar",
+    "character",
+    "mascot",
+    "canvas",
+    "svg",
+    "custom-element",
+    "web-component",
+    "superellipse",
+    "spring",
+    "animation"
+  ],
   "engines": {
-    "node": ">=24.0.0",
-    "pnpm": ">=10.0.0"
+    "node": ">=20"
   },
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "dist": "pnpm verify && pnpm build && electron-builder",
-    "dist:mac": "pnpm verify && pnpm build && electron-builder --mac",
-    "icons": "node scripts/icons.mjs",
-    "icons:check": "node scripts/icons.mjs --check",
-    "showreel": "node scripts/showreel.mjs",
-    "verify:signing": "bash scripts/verify-signing.sh",
-    "verify:codex": "bash scripts/verify-codex-precedence.sh",
-    "preview": "electron-vite preview",
-    "bump": "node scripts/bump.mjs",
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.test.json",
+    "typecheck": "tsc --noEmit",
     "lint": "oxlint --type-aware",
     "format": "prettier --write --cache .",
     "format:check": "prettier --check --cache .",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
-    "verify:rendered": "pnpm build && node scripts/check-rendered.mjs",
-    "rendered": "node scripts/check-rendered.mjs"
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "prepublishOnly": "pnpm verify"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.6",
     "@types/node": "^26.1.2",
     "@vitest/coverage-v8": "^4.1.10",
-    "electron": "^43.3.0",
-    "electron-builder": "^26.15.3",
-    "electron-vite": "^5.0.0",
-    "lucide-static": "^1.31.0",
     "oxlint": "1.77.0",
     "oxlint-tsgolint": "7.0.2001",
     "prettier": "3.9.6",
     "typescript": "^7.0.2",
-    "vite": "^7.3.6",
     "vitest": "^4.1.10"
-  },
-  "main": "./out/main/index.js",
-  "dependencies": {
-    "electron-updater": "^6.8.9"
   }
 }

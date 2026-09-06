@@ -1,0 +1,15 @@
+{
+  // What actually ships. Same checks as `tsconfig.json`, minus the tests, plus
+  // emit: `.js` for Node and `.d.ts` for editors.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/__fixtures__/**", "src/test/**"]
+}

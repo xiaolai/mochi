@@ -1,9 +1,11 @@
 # Brand, Character, and Trademark
 
-The MIT licence in [`LICENSE`](LICENSE) covers the **source code** of this
-project. It does not grant any right in the **Mochi character**, the name
-"Mochi" as used to identify this software, or the marks and artwork listed
-below. Those are reserved.
+[`LICENSE.md`](LICENSE.md) splits this package in two. **Part 1 is MIT and covers
+the engine** — the geometry, the physics, the format, the renderers. **Part 2
+covers the character**, and it is not MIT.
+
+This file is the reasoning behind that split. `LICENSE.md` is the operative
+document; where the two differ, `LICENSE.md` governs.
 
 This is the same split used by Rust, Kubernetes, Mozilla, and Docker: the code
 is free, the identity is not.
@@ -29,9 +31,8 @@ limitation:
   cycle that together give the character its motion identity;
 - any work derived from, or substantially similar to, the above.
 
-**The artwork.** `src/renderer/companion/rig/__fixtures__/mochi-icon.png`, all
-files under `resources/icons/` and `resources/tray/`, and every rendering of
-the character produced by this software.
+**The artwork.** `src/characters/__fixtures__/mochi-icon.png`, and every
+rendering of the character produced by this software.
 
 **The name and marks.** "Mochi" as the name of this application, the character
 name, and the icon as used to identify the software or the character.
@@ -41,8 +42,10 @@ licence, and not placed in the public domain.
 
 ## 2. What you may do without asking
 
-- Use, modify, and redistribute the **source code** under the MIT licence.
-- Run the software and use the character as the application presents it.
+- Use, modify, and redistribute the **engine** under the MIT licence, including
+  in commercial work.
+- Display and animate **Mochi herself** in your own projects, including ones you
+  sell. She is not a paid asset and there is no non-commercial restriction.
 - Design **your own** avatar as a `FaceSpec` JSON file, using the plugin format
   documented in `src/shared/avatar-spec.ts`. Your parameter values are yours.
   The format, the renderer, and the built-in `MOCHI` values are not.
@@ -52,24 +55,25 @@ licence, and not placed in the public domain.
 
 ## 3. What requires written permission
 
-- Redistributing a fork, product, or service that uses the Mochi character or
-  the name "Mochi" as its own identity or branding.
+- Presenting the character under another name, or as a character of your own.
+- Selling her _as_ the goods — asset packs, sticker sets, merchandise.
+- Using the character or the name as the primary identity of a product or
+  organisation.
 - Using the character or the marks on merchandise, in a logo, or in any way
   suggesting affiliation, sponsorship, or endorsement.
 - Registering the character, the name, or any confusingly similar mark as a
   trademark in any jurisdiction, or as a copyright in any registry.
 - Training a generative model for the purpose of reproducing the character.
 
-**If you fork the code, change the avatar.** The format exists precisely so
-that you can: ship your own `FaceSpec` and your own name, and nothing here
-constrains you.
+**If you want a character of your own, change the numbers.** The format exists
+precisely so that costs a JSON file rather than a fork: start from `PLAIN`, and
+what comes out is yours, with nothing here constraining it.
 
 ## 4. Attribution
 
 Where attribution is required by the MIT licence, use:
 
-> Based on Mochi (https://github.com/xiaolai/mochi), © 2026 HANDO K.K.
-> Used under the MIT licence. The Mochi character and name are not included.
+> Mochi © 2026 HANDO K.K. — https://github.com/xiaolai/mochi
 
 ## 5. Contact
 

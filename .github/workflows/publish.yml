@@ -1,0 +1,61 @@
+# Publish to npm on a version tag.
+#
+# ## This workflow deliberately does NOT create a GitHub Release
+#
+# Every copy of the retired desktop app polls this repository's releases forever
+# — `provider: github, owner: xiaolai, repo: mochi` was compiled into it. A new
+# release here would be offered to those installs as an update, and what they
+# would find is an npm package rather than an application.
+#
+# So: tags and npm, never a release. The last release is v0.1.20 and it should
+# stay that way, because it is true — that is the last version of the app.
+#
+# ## Setup
+#
+# Needs an `NPM_TOKEN` secret with publish rights to the `@hando` scope.
+# Provenance requires `id-token: write` and a public repository.
+
+name: publish
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      # The whole gate again rather than trusting the tag: a tag can be pushed
+      # from any commit, including one that never saw CI.
+      - run: pnpm verify
+
+      # Refuse to publish a tag that disagrees with the manifest. Otherwise
+      # `v1.2.0` can quietly ship `1.1.0` and the mismatch surfaces months later
+      # as "why does npm have an old version".
+      - name: tag matches package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag $tag does not match package.json $pkg"
+            exit 1
+          fi
+
+      - run: pnpm publish --access public --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

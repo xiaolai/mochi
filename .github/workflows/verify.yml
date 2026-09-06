@@ -1,34 +1,18 @@
-# Run the gates. `pnpm verify` = prettier --check → oxlint --type-aware → tsc →
-# vitest. `pnpm verify:rendered` then builds and checks what the window DRAWS.
+# Run the gates: prettier --check → oxlint --type-aware → tsc → vitest → build.
 #
-# ## Why this file exists at all
+# ## Ubuntu now, and the reason is finally allowed
 #
-# Until it did, `pnpm verify` was run by whoever remembered to run it. This
-# project is organised around "red means not done", and nothing enforced it:
-# `pages.yml` was the only workflow, and `core.hooksPath` points at a personal
-# commit-message guard that knows nothing about tests. A gate nobody runs is a
-# gate that is already open.
-#
-# ## macOS, and the original reason for it is gone
-#
-# This ran on macOS because a rig test regenerated the site PNGs and compared
-# them to the committed ones by byte digest, through a rasteriser that ships a
-# different native binary per platform. The v1 rewrite archived that rig, its
-# generator and that test, so **that argument no longer applies** and is not
-# quietly retained here as if it did.
-#
-# What still holds is weaker and worth stating plainly: macOS is the development
-# machine and what `electron-builder` packages for, so a green here is green on
-# the platform that ships. Nothing in the current gate is platform-sensitive —
-# prettier, oxlint, tsc and vitest are all pure — so moving to `ubuntu-latest`
-# for speed and cost is a defensible change whenever somebody wants it. It just
-# should be made on that reasoning, not on the deleted one.
+# This ran on macOS because that was what `electron-builder` packaged for. The
+# app is retired and lives on `archive/app`; nothing left in this repository is
+# platform-sensitive — prettier, oxlint, tsc and vitest are pure, and
+# `@napi-rs/canvas` ships a prebuilt binary per platform. The old file already
+# said this move was defensible "whenever somebody wants it, on that reasoning
+# rather than the deleted one". This is that.
 #
 # ## Fail closed
 #
 # No `continue-on-error`, no `|| true`, no step that swallows a non-zero exit.
-# `pages.yml` argues this at length for its own asserts and the argument is the
-# same one: a workflow that cannot fail is not a check.
+# A workflow that cannot fail is not a check.
 
 name: verify
 
@@ -36,8 +20,6 @@ on:
   push:
   pull_request:
 
-# One run per ref. A superseded push has nothing to tell us, and cancelling it
-# frees a macOS runner, which is the scarce one.
 concurrency:
   group: verify-${{ github.ref }}
   cancel-in-progress: true
@@ -47,13 +29,8 @@ permissions:
 
 jobs:
   verify:
-    runs-on: macos-latest
-    # The pure suite is ~30s locally and the rendered gate about a minute; the
-    # ceiling is here so a hung `vitest`, a wedged `pnpm install` or an Electron
-    # that never draws fails in minutes instead of running up against GitHub's
-    # six-hour default. The rendered gate carries its own four-minute watchdog
-    # for the same reason, one level down.
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -72,14 +49,12 @@ jobs:
       # fails here, loudly, instead of resolving to something nobody tested.
       - run: pnpm install --frozen-lockfile
 
+      # `verify` ends in `build`, so a package that typechecks but does not
+      # emit cannot pass.
       - run: pnpm verify
 
-      # The rendered gate: the half of the contract that only exists once a
-      # browser has laid the window out. It builds, launches the app twice over
-      # a seeded profile in a temporary user-data directory, and throws it away.
-      #
-      # Here rather than inside `pnpm verify` because that gate is pure and runs
-      # constantly; this one needs a build and a window, and costs about a
-      # minute. Both have to be green — a rule held only by the fast one is a
-      # rule that was lost every previous time the view was rewritten.
-      - run: pnpm verify:rendered
+      # What the audit actually caught: the manifest pointed at TypeScript that
+      # Node could not load. Importing the built entry from plain Node — no
+      # bundler, no loader — is the only check that would have failed then.
+      - name: the built package imports under plain Node
+        run: node --input-type=module -e "import('./dist/index.js').then(m => { if (!m.MOCHI || !m.DoughAvatar) throw new Error('public surface missing from the build'); })"
