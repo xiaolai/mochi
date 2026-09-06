@@ -262,9 +262,16 @@ with her.
 
 ## Licence
 
-[MIT](LICENSE) — © 2026 HANDO K.K. Use it, change it, ship it. Keep the notice,
-and it carries no warranty.
+The **code** is [MIT](LICENSE) — © 2026 HANDO K.K. Use it, change it, ship it.
+Keep the notice, and it carries no warranty.
 
-The grant covers this repository. Her dependencies keep their own licences, and
-what she can actually do still depends on your own ChatGPT subscription and your
-own Codex login — the licence gives you the code, not an account.
+The **character is not**. Mochi herself — her silhouette, her palette, her face,
+her expressions, and the name — is reserved. See [BRAND.md](BRAND.md) for what
+that covers and what you can do without asking. The short version: fork the
+code freely, and give your fork its own avatar. The avatar format exists so
+that you can, and it takes a JSON file rather than a patch.
+
+The grant covers the source of this repository. Her dependencies keep their own
+licences, and what she can actually do still depends on your own ChatGPT
+subscription and your own Codex login — the licence gives you the code, not an
+account.
