@@ -19,6 +19,7 @@ import {
   readShoulderChip,
   readSleepAfterMinutes,
   readTranscriptionLanguages,
+  readTurnTaking,
   readWornPersonaId,
   writeHerPlace,
   writeLookup,
@@ -26,6 +27,7 @@ import {
   writeScreen,
   writeShelfPlace,
   writeTranscriptionLanguages,
+  writeTurnTaking,
   writeWornPersonaId,
 } from './worn'
 
@@ -296,6 +298,59 @@ describe('whether the control at her shoulder is offered', () => {
     writeScreen(userData, { shoulderChip: false })
     expect(readHaloWhen(userData)).toBe('never')
     expect(readShoulderChip(userData)).toBe(false)
+  })
+})
+
+describe('how she takes turns', () => {
+  it('is auto and interruptible before anybody has chosen', () => {
+    // What every session before the setting existed ran on. A default that
+    // differed from the shipped behaviour would change how she behaves for
+    // people who never opened the pane.
+    expect(readTurnTaking(userData)).toEqual({ eagerness: 'auto', interruptible: true })
+  })
+
+  it('round-trips both halves', () => {
+    writeTurnTaking(userData, { eagerness: 'low', interruptible: false })
+    expect(readTurnTaking(userData)).toEqual({ eagerness: 'low', interruptible: false })
+  })
+
+  it('leaves the other half alone when only one moves', () => {
+    // The pane can move either control on its own, and a write that reset the
+    // one nobody touched is how a setting comes undone without being changed.
+    writeTurnTaking(userData, { eagerness: 'high', interruptible: false })
+    writeTurnTaking(userData, { eagerness: 'low' })
+    expect(readTurnTaking(userData)).toEqual({ eagerness: 'low', interruptible: false })
+    writeTurnTaking(userData, { interruptible: true })
+    expect(readTurnTaking(userData)).toEqual({ eagerness: 'low', interruptible: true })
+  })
+
+  it('writes nothing at all for an empty change', () => {
+    writeTurnTaking(userData, { eagerness: 'high' })
+    writeTurnTaking(userData, {})
+    expect(readTurnTaking(userData)).toEqual({ eagerness: 'high', interruptible: true })
+  })
+
+  it('keeps the rest of the file, like every other writer here', () => {
+    writeTranscriptionLanguages(userData, ['zh'])
+    writeTurnTaking(userData, { interruptible: false })
+    expect(readTranscriptionLanguages(userData)).toEqual(['zh'])
+    expect(readTurnTaking(userData).interruptible).toBe(false)
+  })
+
+  it('reads a hand-edited file back to the shipped behaviour, not to a guess', () => {
+    /*
+      The direction that matters most in this file. A companion that had
+      silently stopped being interruptible would look exactly like one that had
+      stopped listening, and nothing on screen would say which — so a value
+      nobody can make sense of has to land on `true`, never on `false`.
+    */
+    writePreferences({ turnEagerness: 'blazing', interruptible: 'nope' })
+    expect(readTurnTaking(userData)).toEqual({ eagerness: 'auto', interruptible: true })
+  })
+
+  it('honours a stored false, which is the one value that turns it off', () => {
+    writePreferences({ interruptible: false })
+    expect(readTurnTaking(userData).interruptible).toBe(false)
   })
 })
 

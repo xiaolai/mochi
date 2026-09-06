@@ -146,6 +146,38 @@ export const SAYS = {
     he: 'Languages he listens for',
     it: 'Languages it listens for',
   },
+  interruptibleHead: {
+    she: 'Let anyone cut her off',
+    he: 'Let anyone cut him off',
+    it: 'Let anyone cut it off',
+  },
+  /* Says WHOSE voice, because the answer is never "yours" -- a microphone
+     cannot tell one mouth from another, and the whole reason this switch
+     exists is that the second voice in the room is usually not the one she
+     belongs to. */
+  interruptibleOn: {
+    she: 'She stops mid-sentence when any voice is heard — including another child, or another Mochi across the table.',
+    he: 'He stops mid-sentence when any voice is heard — including another child, or another Mochi across the table.',
+    it: 'It stops mid-sentence when any voice is heard — including another child, or another Mochi across the table.',
+  },
+  /* The cost is stated in the same breath as the benefit, because it is a real
+     one and somebody who is not told will read it as a bug the first time
+     their own interjection goes unanswered. */
+  interruptibleOff: {
+    she: 'She finishes her sentence whoever speaks. Good in a shared room — but your own interruptions may go unheard until she is done.',
+    he: 'He finishes his sentence whoever speaks. Good in a shared room — but your own interruptions may go unheard until he is done.',
+    it: 'It finishes its sentence whoever speaks. Good in a shared room — but your own interruptions may go unheard until it is done.',
+  },
+  eagernessHead: {
+    she: 'How soon she answers',
+    he: 'How soon he answers',
+    it: 'How soon it answers',
+  },
+  eagernessNote: {
+    she: 'How long she waits before deciding you have finished. Waiting longer is steadier in a noisy room; waiting less feels quicker at a quiet desk.',
+    he: 'How long he waits before deciding you have finished. Waiting longer is steadier in a noisy room; waiting less feels quicker at a quiet desk.',
+    it: 'How long it waits before deciding you have finished. Waiting longer is steadier in a noisy room; waiting less feels quicker at a quiet desk.',
+  },
   typefaces:
     'Outfit and JetBrains Mono, both under the SIL Open Font License, bundled rather than fetched. CJK comes from the operating system — bundling a face for せんせい would be tens of megabytes to replace what the system already ships.',
   workspaceNote: {
@@ -314,4 +346,24 @@ export const HALO_LABELS: Readonly<Record<string, string>> = {
   always: 'always',
   listening: 'only while the microphone is open',
   never: 'never',
+}
+
+/**
+ * The waiting speeds, said as waits rather than as speeds.
+ *
+ * `low`, `medium` and `high` name the model's EAGERNESS to answer, which is the
+ * opposite direction from the thing somebody is choosing: `low` means she waits
+ * LONGER. Drawing the service's own words would leave the one control in this
+ * window whose labels run backwards from their effect.
+ *
+ * The seconds are the maximum waits the service documents for each, and they
+ * are here because "longer" means nothing on its own — the difference between
+ * these choices is four seconds, and a person deciding whether it is worth
+ * touching deserves to know that before they try it.
+ */
+export const EAGERNESS_LABELS: Readonly<Record<string, string>> = {
+  auto: 'let the service decide',
+  low: 'wait longest — up to 8s',
+  medium: 'wait a little — up to 4s',
+  high: 'answer soonest — up to 2s',
 }

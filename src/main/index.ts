@@ -93,6 +93,8 @@ import {
   readShoulderChip,
   readTranscriptionLanguages,
   writeTranscriptionLanguages,
+  readTurnTaking,
+  writeTurnTaking,
   writeHerPlace,
   type Resting,
 } from './store/worn'
@@ -100,6 +102,7 @@ import { readGrants, writeGrant } from './store/grants'
 import { claimShortcuts, rebindShortcut, releaseShortcuts, type ShortcutOutcome } from './shortcuts'
 import { readShortcuts, writeShortcut } from './store/keys'
 import { MOST_LANGUAGES, OFFERED_LANGUAGES } from '@shared/transcription'
+import { EAGERNESS, type Eagerness } from '@shared/turn-taking'
 import { SHORTCUTS, SHORTCUT_NAMES, SHORTCUT_SAYS, type ShortcutId } from '@shared/shortcuts'
 import {
   allowsCapability,
@@ -2794,6 +2797,13 @@ answer('settings:read', () => {
       // the pane cannot offer a language this build would refuse.
       choices: OFFERED_LANGUAGES,
       most: MOST_LANGUAGES,
+      // Both halves in one read, because `turn_detection` carries both fields
+      // and a pair read a moment apart could be a pair nobody chose.
+      ...readTurnTaking(userData),
+      // `haloChoices`' reason: the list main accepts and the list the pane
+      // draws have to be one list, and two copies drift the day either is
+      // edited.
+      eagernessChoices: EAGERNESS,
     },
     /*
       The whole catalogue, resolved against what is on disk.
@@ -4011,6 +4021,47 @@ answer('settings:hearing', (_event, change: unknown) => {
   if (typeof change !== 'object' || change === null) return refuse('That is not a change.')
   const asked = applyHearing(change)
   if (!asked.ok) return refuse(asked.why)
+
+  /*
+    THE TURN-TAKING PAIR FIRST, and in ONE write.
+
+    `writeTurnTaking` takes both because they are one question — see there. It
+    runs before the languages rather than after for the reason `writeScreen`
+    was introduced: two writes for one gesture means the second can fail with
+    the first already on disk, and the nearer the failing write is to the
+    refusal the smaller the window in which the file disagrees with the answer
+    the window gave.
+  */
+  if (asked.change.eagerness !== undefined || asked.change.interruptible !== undefined) {
+    /*
+      Assembled by presence rather than by spreading both fields.
+
+      `exactOptionalPropertyTypes` refuses an explicit `undefined` for an
+      optional field, and it is right to: "unchanged" and "changed to nothing"
+      are different messages, and `writeTurnTaking` branches on the difference.
+      Only what somebody actually moved goes in.
+    */
+    const write: { eagerness?: Eagerness; interruptible?: boolean } = {}
+    if (asked.change.eagerness !== undefined) write.eagerness = asked.change.eagerness
+    if (asked.change.interruptible !== undefined) write.interruptible = asked.change.interruptible
+    try {
+      writeTurnTaking(app.getPath('userData'), write)
+    } catch (error: unknown) {
+      console.error('[hearing] could not save how she takes turns:', error)
+      problems.note('settings', null, `the turn-taking could not be saved: ${String(error)}`)
+      return refuse(`That could not be saved: ${String(error)}`)
+    }
+    if (asked.change.eagerness !== undefined) {
+      console.log(`[hearing] waiting ${asked.change.eagerness} before judging a turn over`)
+    }
+    if (asked.change.interruptible !== undefined) {
+      console.log(
+        asked.change.interruptible
+          ? '[hearing] a voice mid-sentence cuts her off'
+          : '[hearing] she finishes her sentence whoever speaks',
+      )
+    }
+  }
 
   if (asked.change.languages !== undefined) {
     const languages = asked.change.languages

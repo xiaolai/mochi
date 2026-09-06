@@ -500,12 +500,33 @@ export interface SettingsHearing {
   readonly choices: readonly { readonly code: string; readonly label: string }[]
   /** How many may be chosen at once, so the pane can say so before refusing. */
   readonly most: number
+  /**
+   * How quickly a turn is judged to be over. See `EAGERNESS`.
+   *
+   * On the hearing pane rather than on screen, because it is about what she
+   * does with sound and not about what is drawn. It sits beside the languages
+   * for the plainer reason that both are answers about the ROOM.
+   */
+  readonly eagerness: Eagerness
+  /** Every value the pane may offer, so it never draws one main would refuse. */
+  readonly eagernessChoices: readonly Eagerness[]
+  /**
+   * Whether a voice arriving mid-sentence cuts her off.
+   *
+   * `true` is what every build before this setting ran as, and the README still
+   * describes it as the ordinary behaviour. It is here because a room with two
+   * children and two Mochis makes it wrong — see `turn-taking.ts`.
+   */
+  readonly interruptible: boolean
 }
 
 /** What may be changed about her hearing. Absent means unchanged. */
 export interface HearingChange {
   /** Codes, unchecked — this is the WIRE shape. `applyHearing` decides. */
   readonly languages?: readonly unknown[]
+  /** An `Eagerness`, unchecked — this is the WIRE shape. `applyHearing` decides. */
+  readonly eagerness?: string
+  readonly interruptible?: boolean
 }
 
 /** What may be changed about the screen. Absent means unchanged. */
@@ -1311,6 +1332,7 @@ export type VoiceReport =
   | { readonly kind: 'note'; readonly text: string }
 
 import type { CodexReadiness, Remedy } from './delegation'
+import type { Eagerness, TurnTaking } from './turn-taking'
 import type { FaceSpec } from './avatar-spec'
 import type { Emotion } from './avatar'
 import type { Pronoun } from './pronoun'
@@ -1406,6 +1428,21 @@ export interface SessionConfig {
     readonly model: string
     readonly languages: readonly string[]
   }
+  /**
+   * How she takes turns, resolved in main. See `turn-taking.ts`.
+   *
+   * On the config for `transcription`'s reason and read from the same file on
+   * the same pass: both are settings somebody can change, and `voice:config` is
+   * read fresh on every session — so a change lands on her next wake without a
+   * restart. Neither is sent to a session already running, because a
+   * `session.update` re-sending the configuration would have to carry the
+   * voice, and the voice is locked after her first audio (§21).
+   *
+   * The renderer turns this into the `turn_detection` object with
+   * `turnDetectionConfig`, which is where the two decisions about what to omit
+   * live and where a test can hold them.
+   */
+  readonly turnTaking: TurnTaking
 }
 
 /**

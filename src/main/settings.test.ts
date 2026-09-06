@@ -969,6 +969,62 @@ describe('the six fields that had no control until now', () => {
  * just operated is refused loudly. Filtering a person's selection down and
  * telling them it saved is the failure this whole pane exists to remove.
  */
+describe('how she takes turns', () => {
+  it('takes each waiting speed the pane may offer', () => {
+    for (const one of ['auto', 'low', 'medium', 'high']) {
+      expect(applyHearing({ eagerness: one })).toEqual({ ok: true, change: { eagerness: one } })
+    }
+  })
+
+  it('REFUSES a speed it does not know, rather than defaulting it', () => {
+    /*
+      The opposite of what `readEagerness` does with the same value, and the
+      difference is the whole point: that reader takes a FILE, where falling
+      back preserves a setting this build cannot draw. This takes a control
+      somebody just operated, and quietly turning their answer into `auto`
+      would report "Saved" for a choice that was never stored.
+    */
+    const asked = applyHearing({ eagerness: 'blazing' })
+    expect(asked.ok).toBe(false)
+    if (!asked.ok) expect(asked.why).toContain('blazing')
+  })
+
+  it('takes both switch positions', () => {
+    expect(applyHearing({ interruptible: false })).toEqual({
+      ok: true,
+      change: { interruptible: false },
+    })
+    expect(applyHearing({ interruptible: true })).toEqual({
+      ok: true,
+      change: { interruptible: true },
+    })
+  })
+
+  it('refuses anything that is not a boolean, rather than coercing it', () => {
+    // `readInterruptible` treats everything that is not `false` as `true`,
+    // which is right for a file and wrong here: a page sending a string would
+    // otherwise store "interruptible" whichever way the switch was moved.
+    for (const one of ['false', 0, 1, null, {}]) {
+      expect(applyHearing({ interruptible: one as unknown as boolean }).ok).toBe(false)
+    }
+  })
+
+  it('carries turn-taking and languages through together', () => {
+    // The pane can move all three, and they land in one write. A checker that
+    // dropped one would leave the handler saving a change nobody asked for.
+    expect(applyHearing({ languages: ['en'], eagerness: 'low', interruptible: false })).toEqual({
+      ok: true,
+      change: { languages: ['en'], eagerness: 'low', interruptible: false },
+    })
+  })
+
+  it('refuses the WHOLE change when one part of it is bad', () => {
+    // Nothing partial reaches the store: the handler writes what this returns,
+    // so a half-accepted change is a half-saved setting reported as saved.
+    expect(applyHearing({ languages: ['en'], eagerness: 'blazing' }).ok).toBe(false)
+  })
+})
+
 describe('which languages she should expect to hear', () => {
   it('changes nothing when nothing was asked for', () => {
     expect(applyHearing({})).toEqual({ ok: true, change: {} })

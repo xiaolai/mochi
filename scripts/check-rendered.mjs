@@ -2179,7 +2179,8 @@ async function checks(page, where = '') {
       return {
         named: group === null ? null : group.getAttribute('role') + ' ' + String(group.getAttribute('aria-label')),
         pills: ${pills}.length,
-        selects: document.querySelectorAll('#machine-pane select').length,
+        listBoxes: document.querySelectorAll('#machine-pane select[multiple]').length,
+        eagerness: document.querySelectorAll('#machine-pane select#eagerness').length,
         limit: ${limitNote},
       };
     })()`)
@@ -2187,11 +2188,40 @@ async function checks(page, where = '') {
       bad('languages', 'the hearing pane draws no group of pressable languages')
       return
     }
-    if (shape.selects > 0) {
+    /*
+      A LIST BOX, which is narrower than "a select" — and the line moved on
+      purpose.
+
+      This read `select` of any kind, and that was the right proxy while the
+      pane held exactly one control: the only select anybody could add here WAS
+      the languages one coming back. The pane holds a single-choice waiting
+      speed now, and a single select has none of the defect described above —
+      clicking an option selects that option, which is the whole gesture. The
+      halo has been drawn that way on the next pane over since it shipped.
+
+      What is actually forbidden is the MULTIPLE, because that is where a plain
+      click deselects everything else. Reintroducing the original bug — the
+      languages control as a `select multiple` — still fails here, which is the
+      test of whether narrowing a check kept the fact it was defending.
+    */
+    if (shape.listBoxes > 0) {
       bad(
         'languages',
-        'a <select> is back on the hearing pane — one plain click in a list box clears every other choice, and this pane saves on change',
+        'a <select multiple> is back on the hearing pane — one plain click in a list box clears every other choice, and this pane saves on change',
       )
+      return
+    }
+    /*
+      AND THE WAITING SPEED IS DRAWN, so the narrowing above buys coverage
+      rather than spending it.
+
+      A check that merely stopped refusing the new control would leave it
+      untested, which is how a setting comes to be shipped in a window nothing
+      looks at. This fails if the eagerness select disappears as well as if a
+      list box appears.
+    */
+    if (shape.eagerness === 0) {
+      bad('languages', 'the hearing pane draws no waiting speed to choose')
       return
     }
     if (shape.limit) {

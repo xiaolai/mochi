@@ -49,6 +49,12 @@ export function settledView(): SettingsView {
         { code: 'zh', label: 'Chinese' },
       ],
       most: 6,
+      // What the app shipped as before either control existed, so a test that
+      // says nothing about turn-taking is testing the behaviour every session
+      // already had.
+      eagerness: 'auto',
+      eagernessChoices: ['auto', 'low', 'medium', 'high'],
+      interruptible: true,
     },
     screen: {
       halo: 'always',

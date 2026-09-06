@@ -8,7 +8,12 @@ import { avatarsRoot, resolveFaceFor, seedAvatars } from '../store/avatars'
 import { readGrants } from '../store/grants'
 import { recall } from '../store/memory'
 import { readPrompt } from '../store/prompt'
-import { legacyGrants, readTranscriptionLanguages, readWornPersonaId } from '../store/worn'
+import {
+  legacyGrants,
+  readTranscriptionLanguages,
+  readTurnTaking,
+  readWornPersonaId,
+} from '../store/worn'
 import type { Transcripts } from '../store/transcripts'
 import type { Conversation } from '../store/conversation'
 import type { WireTool } from '@shared/capability/registry'
@@ -431,5 +436,13 @@ export function sessionConfig(deps: SessionConfigDeps): SessionConfig {
       model: TRANSCRIPTION_MODEL,
       languages: readTranscriptionLanguages(userData),
     },
+    /*
+      Read on the same pass and from the same file as the languages above, and
+      for the same reason. It is passed WHOLE rather than as two fields: the
+      renderer hands it to `turnDetectionConfig`, which is the one place that
+      decides what reaches the wire, and splitting it here would give a caller
+      somewhere to assemble a different answer.
+    */
+    turnTaking: readTurnTaking(userData),
   }
 }

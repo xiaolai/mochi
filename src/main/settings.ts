@@ -44,6 +44,7 @@ import type {
 import { acceleratorProblem } from '@shared/accelerator'
 import { GRANT_SPECS, type Grants } from '@shared/grants'
 import { MOST_LANGUAGES, isLanguageCode } from '@shared/transcription'
+import { isEagerness, type Eagerness } from '@shared/turn-taking'
 
 import type { Usage } from './store/usage'
 import { WEB_SEARCH_MODES, isWebSearchMode, type WebSearchMode } from '@shared/delegation'
@@ -553,6 +554,8 @@ export function applyLookup(
 /** A checked hearing change, in the types the store actually takes. */
 export interface CheckedHearing {
   readonly languages?: readonly string[]
+  readonly eagerness?: Eagerness
+  readonly interruptible?: boolean
 }
 
 /**
@@ -577,7 +580,40 @@ export function applyHearing(
 ):
   | { readonly ok: true; readonly change: CheckedHearing }
   | { readonly ok: false; readonly why: string } {
-  const next: { languages?: readonly string[] } = {}
+  const next: {
+    languages?: readonly string[]
+    eagerness?: Eagerness
+    interruptible?: boolean
+  } = {}
+
+  /*
+    REFUSED rather than defaulted, which is the opposite of what `readEagerness`
+    does with the same value.
+
+    That reader is tolerant on purpose: it reads a FILE, possibly written by a
+    later version, and falling back to `auto` there preserves a setting this
+    build cannot draw. This reads a control somebody just operated. Quietly
+    turning an unrecognised answer into `auto` would report "Saved" for a
+    choice that was not stored — the failure the header above names for
+    languages, arriving through the other door.
+  */
+  if (change.eagerness !== undefined) {
+    if (!isEagerness(change.eagerness)) {
+      return { ok: false, why: `${String(change.eagerness)} is not one of the waiting speeds.` }
+    }
+    next.eagerness = change.eagerness
+  }
+
+  if (change.interruptible !== undefined) {
+    // Checked rather than coerced. `readInterruptible` treats everything that
+    // is not `false` as `true`, which is right for a file and wrong here: a
+    // page sending a string would silently store "interruptible" whichever way
+    // the switch was actually moved.
+    if (typeof change.interruptible !== 'boolean') {
+      return { ok: false, why: 'That is not a yes or a no.' }
+    }
+    next.interruptible = change.interruptible
+  }
 
   if (change.languages !== undefined) {
     if (!Array.isArray(change.languages)) {

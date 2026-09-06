@@ -1,5 +1,6 @@
 import { parseServerFrame } from '@shared/realtime/frames'
 import { transcriptionConfig } from '@shared/transcription'
+import { turnDetectionConfig } from '@shared/turn-taking'
 import { isPrivateFrame, type SessionConfig } from '@shared/ipc'
 import type { Emotion } from '@shared/avatar'
 import type { FaceSpec } from '@shared/avatar-spec'
@@ -819,7 +820,14 @@ export async function openSession(callbacks: SessionCallbacks): Promise<Session>
             // turn without this, and `semantic_vad` lets the model decide what
             // a turn is rather than an energy threshold deciding for it.
             noise_reduction: { type: 'far_field' },
-            turn_detection: { type: 'semantic_vad' },
+            /*
+              Resolved in main, because how long she waits and whether she may
+              be cut off are somebody's settings — the languages below make the
+              same move. What actually reaches the wire is
+              `turnDetectionConfig`'s decision, which is where it can be
+              tested: nothing can construct this file.
+            */
+            turn_detection: turnDetectionConfig(config.turnTaking),
             // Resolved in main, because the languages are somebody's setting.
             // The empty-means-omit rule is `transcriptionConfig`'s, which is
             // where it can be tested — nothing can construct this file.

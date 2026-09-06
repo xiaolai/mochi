@@ -5,6 +5,12 @@ import { isWebSearchMode, type WebSearchMode } from '@shared/delegation'
 import { BUBBLE_SIDES, type BubbleSide } from '@shared/persona'
 import { isHaloWhen, type HaloWhen } from '@shared/ipc'
 import { readLanguages } from '@shared/transcription'
+import {
+  readEagerness,
+  readInterruptible,
+  type Eagerness,
+  type TurnTaking,
+} from '@shared/turn-taking'
 import { isRecord } from '@shared/is-record'
 import { DEFAULT_GRANTS, WITHHELD_GRANTS, parseGrants, type Grants } from '@shared/grants'
 import { logBoundedRead, readBounded } from './read-bounded'
@@ -811,6 +817,68 @@ export function writeTranscriptionLanguages(userData: string, codes: readonly st
   // silently truncate — which is how a stored choice comes to differ from the
   // one that was made.
   writeMerged(userData, { transcriptionLanguages: [...readLanguages(codes)] })
+}
+
+/**
+ * How she takes turns: how quickly a turn is judged over, and whether a voice
+ * arriving mid-sentence cuts her off.
+ *
+ * ## A preference, for `readTranscriptionLanguages`' reason exactly
+ *
+ * It passes the same test that file states: this describes the ROOM, not the
+ * character. Two children at one table with a Mochi each need her to finish her
+ * sentences whichever persona either of them is wearing, and switching from one
+ * character to another does not make the other child quieter. Filing it under a
+ * persona would make the control mean something different the first time
+ * somebody switched.
+ *
+ * Both halves read from `preferences.json` in one pass because they are one
+ * question — `turn_detection` carries both fields, and a session that read them
+ * a moment apart could send a pair that was never chosen together.
+ */
+export function readTurnTaking(userData: string): TurnTaking {
+  const held = preferences(userData)
+  /*
+    Unreadable falls back to what the app shipped as, which for this pair means
+    `auto` and interruptible — the configuration every session before the
+    setting existed ran on. The rule the readers here share is that a file which
+    cannot be established claims nothing; for this one it also means a broken
+    file cannot silently make her uninterruptible, which is the failure with no
+    symptom on screen.
+  */
+  return {
+    eagerness: readEagerness(held?.['turnEagerness']),
+    interruptible: readInterruptible(held?.['interruptible']),
+  }
+}
+
+/** What a turn-taking setting may be changed to. Absent means unchanged. */
+export interface TurnTakingWrite {
+  readonly eagerness?: Eagerness
+  readonly interruptible?: boolean
+}
+
+/**
+ * Both turn-taking settings somebody changed, in ONE write. See `writeScreen`.
+ *
+ * `writeScreen`'s argument applies with less force here — nothing is redrawn
+ * from these and nothing is sent to her window — but the file is the same file,
+ * and two writes to `preferences.json` for one gesture is two chances for the
+ * second to fail after the first has landed. The pane can move both controls,
+ * so it gets one write.
+ */
+export function writeTurnTaking(userData: string, change: TurnTakingWrite): void {
+  const next: Record<string, unknown> = {}
+  // Checked again on the way IN, not only at the control — the rule
+  // `writeTranscriptionLanguages` states: a caller that skipped the window
+  // cannot store a value the reader would then silently replace, which is how
+  // a stored choice comes to differ from the one that was made.
+  if (change.eagerness !== undefined) next['turnEagerness'] = readEagerness(change.eagerness)
+  if (change.interruptible !== undefined) {
+    next['interruptible'] = readInterruptible(change.interruptible)
+  }
+  if (Object.keys(next).length === 0) return
+  writeMerged(userData, next)
 }
 
 /**

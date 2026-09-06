@@ -44,11 +44,11 @@
  * makes the same call from the other side: a `<select>` is for a list this
  * build cannot enumerate, which a fixed twenty-four is not.
  */
-import { element } from '../../element'
+import { checkbox, element } from '../../element'
 import { type Pane, type Field } from '../pane'
 import { forPronoun } from '@shared/pronoun'
-import { SAYS } from '../panes-says'
-import { field } from '../pane'
+import { EAGERNESS_LABELS, SAYS } from '../panes-says'
+import { field, options } from '../pane'
 /**
  * The one setting this group holds, named once. See `Field`.
  *
@@ -63,11 +63,43 @@ const LANGUAGES: Field = {
   keywords: ['language', 'accent', 'english', 'chinese', 'transcription', 'speech'],
 }
 
+/**
+ * The two turn-taking settings, named once. See `Field`.
+ *
+ * Keywords are what somebody TYPES, and for these two that is almost never the
+ * setting's name. Somebody whose companion keeps getting cut off searches for
+ * "interrupt" or "cut off"; somebody in a room with two of them searches for
+ * "noise" or "another mochi"; somebody who finds her slow searches for "slow"
+ * or "wait", not for "eagerness", which is the service's word and appears on
+ * screen nowhere.
+ */
+const TURNS: Readonly<Record<'interruptible' | 'eagerness', Field>> = {
+  interruptible: {
+    id: 'interruptible',
+    label: SAYS.interruptibleHead,
+    keywords: [
+      'interrupt',
+      'cut off',
+      'barge',
+      'talk over',
+      'noise',
+      'room',
+      'children',
+      'another',
+    ],
+  },
+  eagerness: {
+    id: 'eagerness',
+    label: SAYS.eagernessHead,
+    keywords: ['pause', 'wait', 'slow', 'quick', 'delay', 'turn', 'silence', 'eagerness'],
+  },
+}
+
 export const HEARING: Pane = {
   id: 'hearing',
   label: 'Hearing you',
   attention: () => null,
-  fields: () => [LANGUAGES],
+  fields: () => [LANGUAGES, TURNS.interruptible, TURNS.eagerness],
   render(view, handlers) {
     const chosen = new Set(view.hearing.languages)
     /*
@@ -181,6 +213,77 @@ export const HEARING: Pane = {
         element('p', 'note', `${String(view.hearing.most)} is the limit. Drop one to add another.`),
       )
     }
+
+    /*
+      WHETHER SHE MAY BE CUT OFF, as a switch rather than a select.
+
+      Two answers and no third, so `chip`'s form rather than `halo`'s. It sits
+      ON — the behaviour every build before it shipped with, and the one the
+      README describes — and the note under it changes with the state, because
+      the two states have genuinely different consequences and only one of them
+      is obvious from the label.
+
+      The note names the COST in the off state on purpose. Somebody who switches
+      this to stop the other child's Mochi silencing theirs will, sooner or
+      later, interrupt her deliberately and get nothing; told here, that is a
+      trade they accepted, and untold it is a bug they report.
+    */
+    const interruptible = checkbox('interruptible', view.hearing.interruptible, (on) => {
+      handlers.hearing({ interruptible: on })
+    })
+    const interruptibleLabel = element(
+      'label',
+      undefined,
+      forPronoun(SAYS.interruptibleHead, view.pronoun),
+    )
+    interruptibleLabel.htmlFor = interruptible.id
+    const interruptibleSwitch = element('div', 'switch')
+    interruptibleSwitch.append(interruptible, interruptibleLabel)
+    parts.push(
+      field(TURNS.interruptible, view, interruptibleSwitch, {
+        note: forPronoun(
+          view.hearing.interruptible ? SAYS.interruptibleOn : SAYS.interruptibleOff,
+          view.pronoun,
+        ),
+      }),
+    )
+
+    /*
+      HOW LONG SHE WAITS, which is the softer half and the one most rooms want
+      first.
+
+      Offered even when she is not interruptible, and deliberately: this decides
+      when a turn is judged to be OVER, which is what makes her answer at all.
+      Greying it out with the switch off would say the two are one setting, and
+      somebody who had turned interruption off would lose the control that fixes
+      the complaint they still have.
+
+      The choices come from main for `haloChoices`' reason: a page holding its
+      own list is a second answer to what may be chosen, and only one of the two
+      is checked on the way back.
+    */
+    const eagerness = document.createElement('select')
+    // Named so the rendered gate can ask for THIS control rather than counting
+    // selects on the pane. That check forbids a list box here — the languages
+    // defect it was written for — and an id is what lets it say "the waiting
+    // speed is drawn" without also saying "and nothing else ever may be".
+    eagerness.id = 'eagerness'
+    options(
+      eagerness,
+      view.hearing.eagernessChoices.map((one) => ({
+        value: one,
+        label: EAGERNESS_LABELS[one] ?? one,
+      })),
+      view.hearing.eagerness,
+    )
+    eagerness.addEventListener('change', () => {
+      handlers.hearing({ eagerness: eagerness.value })
+    })
+    parts.push(
+      field(TURNS.eagerness, view, eagerness, {
+        note: forPronoun(SAYS.eagernessNote, view.pronoun),
+      }),
+    )
     // Said plainly, because nothing on screen changes when this is saved. The
     // voice locks after her first audio, so the configuration is re-sent on the
     // next session rather than to this one.
