@@ -42,7 +42,7 @@
  * the second driver, not before.
  */
 
-import type { AvatarBackend } from '@shared/avatar'
+import type { AvatarBackend } from './vocabulary'
 import { DEFAULT_ENVELOPE, SILENT, advanceEnvelope, type EnvelopeSettings } from './envelope'
 
 /** Only the part of the backend a mouth driver is allowed to touch. */

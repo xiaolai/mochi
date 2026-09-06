@@ -1,5 +1,5 @@
-import type { FaceSpec } from '@shared/avatar-spec'
-import { domeOutline, type BodyShape, type Point } from './geometry'
+import type { FaceSpec } from '../core/spec'
+import { domeOutline, type BodyShape, type Point } from '../core/geometry'
 
 /**
  * Her, as a vector, from the same geometry that paints her.

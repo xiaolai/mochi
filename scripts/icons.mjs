@@ -60,7 +60,16 @@ const vite = await createServer({
   logLevel: 'error',
   appType: 'custom',
   server: { middlewareMode: true },
-  resolve: { alias: { '@shared': join(ROOT, 'src/shared') } },
+  resolve: {
+    alias: {
+      '@shared': join(ROOT, 'src/shared'),
+      // The engine. This script builds its own loader with `configFile: false`,
+      // so it inherits NOTHING from the four aliases the app declares -- and
+      // `pnpm verify` never runs this script, so a missing alias here fails
+      // silently everywhere except when somebody regenerates icons.
+      '@hando/dough': join(ROOT, 'packages/dough/src'),
+    },
+  },
 })
 const { MOCHI } = await vite.ssrLoadModule('/src/shared/avatar-spec.ts')
 const { mochiSvg } = await vite.ssrLoadModule('/src/renderer/companion/rig/svg.ts')

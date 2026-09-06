@@ -10,7 +10,7 @@
  * so retuning the face in the tuner does not invalidate the table.
  */
 
-import { clamp01, type Emotion } from '@shared/avatar'
+import { clamp01, type Emotion } from './vocabulary'
 
 export interface Look {
   /** Multiplies the eye's upper arc. */

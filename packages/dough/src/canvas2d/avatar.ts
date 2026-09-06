@@ -21,8 +21,9 @@ import {
   type EmotionSignal,
   type MonotonicMs,
   type VisemeWeights,
-} from '@shared/avatar'
-import { MOCHI, type FaceSpec } from '@shared/avatar-spec'
+} from '../core/vocabulary'
+import { type FaceSpec } from '../core/spec'
+import { PLAIN } from '../core/plain'
 import {
   BREATHING_UNITS,
   FEET_FROM_TOP,
@@ -30,14 +31,20 @@ import {
   feetY,
   fitToCanvas,
   layoutFor,
-} from '@shared/avatar-layout'
-import { driftAt, IdleLayer, type Drift } from './idle'
-import { blendLook, type Look } from './looks'
-import { BUILT_IN_MOTIONS, poseAt, progress, type MotionClip, type MotionPose } from './motion'
-import { Spring } from './spring'
+} from '../core/layout'
+import { driftAt, IdleLayer, type Drift } from '../core/idle'
+import { blendLook, type Look } from '../core/looks'
+import {
+  BUILT_IN_MOTIONS,
+  poseAt,
+  progress,
+  type MotionClip,
+  type MotionPose,
+} from '../core/motion'
+import { Spring } from '../core/spring'
 import { paintCheeks, paintEyes, paintMouth } from './face'
 import { toPath } from './paths'
-import { domeOutline, placeFeature, squashed, type BodyShape, type Point } from './geometry'
+import { domeOutline, placeFeature, squashed, type BodyShape, type Point } from '../core/geometry'
 
 const NEUTRAL_SIGNAL: EmotionSignal = { emotion: 'neutral', intensity: 0 }
 
@@ -119,7 +126,7 @@ const ASLEEP_BREATH_SLOWER = 1.5
 /** No drift at all — the tuner wants her still. See `setIdle`. */
 const NO_DRIFT: Drift = { lean: 0, shift: 0, lift: 0 }
 
-export interface MochiOptions {
+export interface AvatarOptions {
   readonly face?: FaceSpec
   /**
    * Her size: a percentage of the base scale, or "fill the canvas".
@@ -141,7 +148,7 @@ export interface MochiOptions {
   readonly random?: () => number
 }
 
-export class MochiAvatar implements AvatarBackend {
+export class DoughAvatar implements AvatarBackend {
   readonly kind: AvatarKind = 'mochi'
   readonly caps: AvatarBackendCaps = {
     presetExpressions: true,
@@ -214,9 +221,9 @@ export class MochiAvatar implements AvatarBackend {
 
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
-    options: MochiOptions,
+    options: AvatarOptions,
   ) {
-    this.face = options.face ?? MOCHI
+    this.face = options.face ?? PLAIN
     this.sizePercent = options.size
     this.idleLayer = new IdleLayer(0, options.random)
   }
@@ -358,7 +365,11 @@ export class MochiAvatar implements AvatarBackend {
    * to see, and the second is what somebody will assume.
    */
   playMotion(name: string): void {
-    const clip = BUILT_IN_MOTIONS[name]
+    // `hasOwn` first: a plain index signature resolves inherited names, so
+    // `playMotion('toString')` found a "clip", skipped the warning below,
+    // replaced whatever was playing, and then vanished on the next frame
+    // because its duration was undefined.
+    const clip = Object.hasOwn(BUILT_IN_MOTIONS, name) ? BUILT_IN_MOTIONS[name] : undefined
     if (clip === undefined) {
       console.warn(`[rig] no motion called ${JSON.stringify(name)}`)
       return

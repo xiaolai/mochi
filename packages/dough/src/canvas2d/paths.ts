@@ -6,7 +6,7 @@
  * straight onto the context and left no object to clip against.
  */
 
-import type { Point } from './geometry'
+import type { Point } from '../core/geometry'
 
 /** Local +y-up has already been flipped by the caller. */
 export function toPath(points: readonly Point[]): Path2D {

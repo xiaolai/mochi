@@ -12,7 +12,7 @@
  * a metronome blink for thirty seconds to rediscover why it looks wrong.
  */
 
-import type { MonotonicMs } from '@shared/avatar'
+import type { MonotonicMs } from './vocabulary'
 
 export const BREATH_PERIOD_MS = 3400
 

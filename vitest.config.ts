@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),
+      '@hando/dough': fileURLToPath(new URL('./packages/dough/src', import.meta.url)),
     },
   },
   test: {
@@ -14,7 +15,10 @@ export default defineConfig({
     // canvas uses `@napi-rs/canvas`, which is a real rasteriser rather than a
     // stub — a fake DOM would only make the rig look tested.
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    // `packages/` too, or the engine's own tests silently stop running the
+    // moment it is extracted — 108 of them, and the suite still goes green
+    // because a test file nobody collects cannot fail.
+    include: ['src/**/*.test.ts', 'packages/*/src/**/*.test.ts'],
     /*
      * 30s, not Vitest's 5s, and the reason is that the default bound here can
      * only ever be wrong.
@@ -50,8 +54,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
-      include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts'],
+      include: ['src/**/*.ts', 'packages/*/src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'packages/*/src/**/*.test.ts'],
     },
   },
 })

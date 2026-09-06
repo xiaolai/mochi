@@ -9,6 +9,9 @@ import { defineConfig } from 'electron-vite'
  */
 const alias = {
   '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),
+  // The engine, consumed from source while it lives in this repo. Aliased to
+  // the DIRECTORY, so both the bare specifier and its subpaths resolve.
+  '@hando/dough': fileURLToPath(new URL('./packages/dough/src', import.meta.url)),
 }
 
 export default defineConfig({

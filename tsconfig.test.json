@@ -16,11 +16,13 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "paths": {
-      "@shared/*": ["./src/shared/*"]
+      "@shared/*": ["./src/shared/*"],
+      "@hando/dough": ["./packages/dough/src/index.ts"],
+      "@hando/dough/*": ["./packages/dough/src/*"]
     }
   },
   // Wider than `tsconfig.web.json` on purpose: this is the project that covers
   // `src/main` and `src/preload`, which run under Node rather than in the page
   // and so need the `node` types the web project deliberately does not load.
-  "include": ["src/**/*.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "packages/dough/src/**/*.ts", "vitest.config.ts"]
 }

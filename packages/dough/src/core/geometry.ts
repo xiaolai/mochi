@@ -33,8 +33,8 @@
 // the bundler, this line is the one that breaks first -- and it will break
 // silently, so give it a gate that runs the generator rather than restoring the
 // relative path and hoping.
-import { SHEAR_GAIN } from '@shared/avatar-layout'
-import { clamp01 } from '@shared/avatar'
+import { SHEAR_GAIN } from './layout'
+import { clamp01 } from './vocabulary'
 
 export interface Point {
   readonly x: number

@@ -13,12 +13,12 @@
  * paint wherever they are told rather than into somewhere they own.
  */
 
-import { clamp01 } from '@shared/avatar'
-import { parseHex } from '../../design/accent'
-import type { FaceSpec } from '@shared/avatar-spec'
-import type { Look } from './looks'
-import { lensOutline, lensHeight, type LensShape } from './lens'
-import type { Point } from './geometry'
+import { clamp01 } from '../core/vocabulary'
+import { parseHexRgb } from '../core/colour'
+import type { FaceSpec } from '../core/spec'
+import type { Look } from '../core/looks'
+import { lensOutline, lensHeight, type LensShape } from '../core/lens'
+import type { Point } from '../core/geometry'
 import { outlinePath } from './paths'
 
 /** Where a feature sits, in canvas space. Supplied by the caller's body frame. */
@@ -36,13 +36,13 @@ const GLINT_ROUNDNESS = 3.2
 /**
  * The same colour at zero alpha, whatever hex form it arrived in.
  *
- * `parseHex` already understands every form the avatar format accepts, so this
+ * `parseHexRgb` already understands every form the avatar format accepts, so this
  * reuses it rather than adding a fifth place that knows about hex. Falls back
  * to fully transparent black: a cheek that fades to nothing is a cheek nobody
  * notices, which is a better failure than a throw inside the paint loop.
  */
 function transparentOf(hex: string): string {
-  const rgb = parseHex(hex)
+  const rgb = parseHexRgb(hex)
   return rgb === null ? 'rgba(0, 0, 0, 0)' : `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`
 }
 
@@ -108,7 +108,94 @@ const MIN_LID = 0.04
  * never thinner than `MIN_LID`.
  */
 export function lidScale(look: number, blink: number): number {
-  return Math.max(MIN_LID, look * Math.max(0, 1 - blink))
+  // Normalised before the arithmetic, not after. `Math.max(MIN_LID, ...)` and
+  // `Math.abs` both pass NaN straight through, so a non-finite look or blink
+  // escaped the floor entirely: `lidScale(NaN, 0)` was NaN and
+  // `lidScale(1, -Infinity)` was Infinity — neither of which is a lid.
+  if (!Number.isFinite(look)) return MIN_LID
+  const shut = Number.isFinite(blink) ? clamp01(blink) : 1
+  const open = look * (1 - shut)
+  /*
+    The floor is on the MAGNITUDE, and the sign survives it.
+
+    `Math.max(MIN_LID, open)` silently discards a NEGATIVE look, and
+    `looks.ts` leans on exactly that sign: `happy` sets `eyeLower` to -0.62 and
+    `shy` to -0.28 to bow the lower edge above the baseline and make the
+    crescent `^ ^` eye. Clamped to +0.04, both were drawn with a flat lower lid,
+    so the one expression a child reads fastest never reached the canvas.
+
+    Both halves were right and tested -- `lens.test.ts` proves a negative lower
+    makes a crescent, `looks.test.ts` proves the table carries one. Only the
+    connector between them was wrong, and the test that would have caught it
+    checked `eyeUpper`, which is positive for every emotion.
+
+    A fully shut eye is a POSITIVE hairline whatever the look was: at `blink` 1
+    the excursion is zero, and the eye is closed rather than bowed.
+  */
+  /*
+    Sign-preserving at full blink too, and that is the whole of this line.
+
+    Returning a POSITIVE hairline for a negative look made the function jump at
+    exactly `blink === 1`: approached from below the value tends to -MIN_LID,
+    and at the endpoint it flipped to +MIN_LID. On a narrow crescent that is a
+    step of twice the floor, landing on whichever frame happens to sample the
+    peak of a blink.
+
+    What a CLOSED eye looks like is not this function's decision. It reports how
+    far one lid is open; `lidPair` owns the shape the two of them make, and it
+    is the thing that can see both.
+  */
+  if (open === 0) return look < 0 ? -MIN_LID : MIN_LID
+  return Math.sign(open) * Math.max(MIN_LID, Math.abs(open))
+}
+
+/**
+ * The two lid extents, with the minimum enforced on what is actually DRAWN.
+ *
+ * `lidScale` floors each lid on its own, and that is not enough. The eye's
+ * rendered height is the SUM of the two — `lower` is signed, and a crescent's
+ * negative lower bows the bottom edge up toward the top one — so both lids can
+ * sit exactly on the floor with opposite signs and cancel to nothing. A happy
+ * face late in a blink did precisely that: two lids at the minimum, an eye of
+ * zero height, which is the one outcome `MIN_LID` exists to prevent.
+ *
+ * Two things about the floor are easy to get wrong, and the first attempt got
+ * both:
+ *
+ * It is a fraction of the eye's own RESTING SPAN — `eyeUpper + eyeLower` — and
+ * not of the sum of the two magnitudes. Those are the same number for an eye
+ * whose lids both bulge outward, and wildly different for a crescent, where the
+ * lids nearly cancel by design. Measured against magnitudes, a face drawn with
+ * `eyeUpper: 4, eyeLower: -3.8` had a floor larger than its entire open eye, so
+ * it was flattened at rest, at blink zero, in the neutral pose.
+ *
+ * And when the span is short, only the BOTTOM edge moves: the top arc is left
+ * exactly where the expression put it. Collapsing to an evenly split hairline
+ * instead made the eye jump — a crescent one frame, a flat sliver the next, its
+ * midpoint snapping across the eye. Lifting the lower edge to meet the floor is
+ * continuous through the moment it crosses the baseline, so the eye passes from
+ * crescent to flat to ordinary lens without a visible step.
+ *
+ * A face with both extents at zero is left alone. That is a designer asking for
+ * no eye at all, the same way `eyeGlint: 0` asks for no catchlight.
+ */
+export function lidPair(
+  face: FaceSpec,
+  look: Look,
+  blink: number,
+  scale: number,
+): { upper: number; lower: number } {
+  const upper = face.eyeUpper * scale * lidScale(look.eyeUpper, blink)
+  const lower = face.eyeLower * scale * lidScale(look.eyeLower, blink)
+  // Measured against the LARGER extent, not against the span and not against
+  // the sum of magnitudes. The span goes to zero for a face drawn with
+  // `eyeUpper === -eyeLower`, which left a floor of zero and rendered an eye of
+  // literally no pixels; the sum of magnitudes is enormous for any crescent and
+  // flattened faces that were never in trouble. The larger extent is a measure
+  // of how big the eye IS, which is what a minimum should be a fraction of.
+  const floor = Math.max(Math.abs(face.eyeUpper), Math.abs(face.eyeLower)) * scale * MIN_LID
+  if (upper + lower >= floor) return { upper, lower }
+  return { upper, lower: floor - upper }
 }
 
 export function paintEyes(
@@ -121,10 +208,11 @@ export function paintEyes(
   scale: number,
 ): void {
   const halfWidth = face.eyeHw * scale * look.eyeWidth
+  const lids = lidPair(face, look, blink, scale)
   const lens: LensShape = {
     halfWidth,
-    upper: face.eyeUpper * scale * lidScale(look.eyeUpper, blink),
-    lower: face.eyeLower * scale * lidScale(look.eyeLower, blink),
+    upper: lids.upper,
+    lower: lids.lower,
     tilt: 0,
     roundness: face.eyeRound,
   }

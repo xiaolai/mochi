@@ -21,9 +21,11 @@
     // in one and missing from another typechecks cleanly and fails at bundle
     // time, which is a worse configuration than having no alias at all.
     "paths": {
-      "@shared/*": ["./src/shared/*"]
+      "@shared/*": ["./src/shared/*"],
+      "@hando/dough": ["./packages/dough/src/index.ts"],
+      "@hando/dough/*": ["./packages/dough/src/*"]
     }
   },
-  "include": ["src/renderer/**/*", "src/shared/**/*"],
-  "exclude": ["src/**/*.test.ts"]
+  "include": ["src/renderer/**/*", "src/shared/**/*", "packages/dough/src/**/*"],
+  "exclude": ["src/**/*.test.ts", "packages/**/*.test.ts"]
 }
