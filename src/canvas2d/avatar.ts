@@ -210,6 +210,16 @@ export class DoughAvatar implements AvatarBackend {
    * movement, not for no feedback.
    */
   private reducedMotion = false
+
+  /**
+   * Whether the going-nowhere sway is running.
+   *
+   * Separate from `reducedMotion`, which stops the breath as well. There was no
+   * way to ask for a mochi who is alive but STILL — breathing, blinking, not
+   * wandering — and that is a reasonable thing to want for a small avatar in a
+   * fixed slot, or for a picture of her that has to hold its own frame.
+   */
+  private drifting = true
   private emotion: EmotionSignal = NEUTRAL_SIGNAL
   private emotionExpiresAt: number | null = null
   /** A hold requested before the first frame, when there was no clock to add it to. */
@@ -411,6 +421,18 @@ export class DoughAvatar implements AvatarBackend {
    * told apart from an accessibility preference, and one of them wants the
    * blink schedule re-armed on the way out while the other does not care.
    */
+  /**
+   * Turn the continuous sway on or off, leaving everything else alone.
+   *
+   * She goes on breathing and blinking; what stops is the several pixels of
+   * lean, shift and lift that keep her from looking pinned to the page. Use it
+   * when she has to hold a fixed frame. For the accessibility preference use
+   * `setReducedMotion`, which is a stronger statement.
+   */
+  setDrift(on: boolean): void {
+    this.drifting = on
+  }
+
   setReducedMotion(on: boolean): void {
     if (on === this.reducedMotion) return
     this.reducedMotion = on
@@ -630,7 +652,10 @@ export class DoughAvatar implements AvatarBackend {
       her still, and a still she can be measured against.
     */
     const stirring = this.idle && !this.reducedMotion
-    const drift = stirring ? driftAt(now, this.asleep ? ASLEEP_DRIFT : 1) : NO_DRIFT
+    // The drift is gated by BOTH, and the breath by `stirring` alone: turning
+    // off the sway must not turn off the thing that says she is alive.
+    const drift =
+      stirring && this.drifting ? driftAt(now, this.asleep ? ASLEEP_DRIFT : 1) : NO_DRIFT
 
     const shutEyes = this.asleep && !this.speaking
     const pose = shutEyes

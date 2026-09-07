@@ -1619,3 +1619,48 @@ describe('she breathes while she sleeps, and visibly', () => {
     expect(paintedWidth(r.ctx)).toBe(first)
   })
 })
+
+describe('setDrift', () => {
+  const pixels = (avatar: DoughAvatar, ctx: SKRSContext2D, at: number): number => {
+    ctx.clearRect(0, 0, 160, 160)
+    avatar.render(at)
+    const { data } = ctx.getImageData(0, 0, 160, 160)
+    let n = 0
+    for (let i = 3; i < data.length; i += 4) if ((data[i] ?? 0) > 8) n++
+    return n
+  }
+
+  const madeOne = (): { avatar: DoughAvatar; ctx: SKRSContext2D } => {
+    const canvas = createCanvas(160, 160)
+    const ctx = canvas.getContext('2d')
+    const avatar = new DoughAvatar(ctx as unknown as CanvasRenderingContext2D, {
+      face: MOCHI,
+      size: 'fit-canvas',
+      // Far out, so no blink lands in the window and changes a pixel.
+      random: () => 0.999,
+    })
+    avatar.resize(160, 160, 1)
+    return { avatar, ctx }
+  }
+
+  it('stops the sway and keeps the breath', () => {
+    // The distinction this exists for. `setReducedMotion` stops both, so a
+    // caller who only wanted her to hold still lost the one thing that says she
+    // is not a frozen image.
+    const { avatar, ctx } = madeOne()
+    avatar.setDrift(false)
+    const area: number[] = []
+    for (let i = 0; i <= 8; i++) area.push(pixels(avatar, ctx, (i / 8) * BREATH_PERIOD_MS))
+    expect(Math.max(...area)).toBeGreaterThan(Math.min(...area))
+  })
+
+  it('is reversible, and on by default', () => {
+    const { avatar, ctx } = madeOne()
+    const wandering = pixels(avatar, ctx, 4321)
+    avatar.setDrift(false)
+    const still = pixels(avatar, ctx, 4321)
+    avatar.setDrift(true)
+    expect(pixels(avatar, ctx, 4321)).toBe(wandering)
+    expect(still).not.toBe(Number.NaN)
+  })
+})

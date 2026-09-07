@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/mochi-alive.png" width="220" alt="Mochi, breathing and blinking — a soft green ovoid with two round eyes and a small quiet mouth">
+  <img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/mochi-alive.png" width="220" alt="Mochi, breathing — a soft green ovoid with two round eyes and a small quiet mouth">
 </p>
 
 <h1 align="center">Mochi</h1>
@@ -62,7 +62,8 @@ requestAnimationFrame(tick)
 
 That image is not a loop somebody animated. It is the engine, running, with no
 input at all — because an idle character who holds perfectly still reads as a
-crashed one.
+crashed one. She is breathing and nothing else there: `setDrift(false)`, and a
+blink schedule pinned past the end of the clip.
 
 |            |                                                                                                                                                                                                                                          |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -105,10 +106,14 @@ wires `emotion`, `size` and `face` only; anything above needs the JS object.
 ### Accessibility
 
 ```js
-avatar.setReducedMotion(true)
+avatar.setReducedMotion(true) // stops the idle motion, keeps one-shot replies
+avatar.setDrift(false) // stops only the sway; she goes on breathing
 ```
 
-Stops the continuous idle motion and keeps one-shot replies. A companion who
+`setReducedMotion` is the accessibility preference, and it stops the breath
+along with everything else. `setDrift` is the weaker, orthogonal one: use it
+when she has to hold a fixed frame but should still look alive — which is
+exactly what the image at the top of this page is doing. A companion who
 answers nothing is a picture, not a quieter companion — the preference asks for
 less movement, not for no feedback.
 

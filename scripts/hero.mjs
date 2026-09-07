@@ -122,21 +122,21 @@ write('colourways.png', trim(flavours, 16))
    badly. This is one breath — 3400ms, the period the engine actually uses — with
    a blink placed inside it.
 
-   ## Why the loop is exactly one breath
+   ## Breathing only, and the loop is therefore seamless
 
-   The breath is periodic, so a clip of exactly one period joins itself. The
-   drift layer does not: it is three incommensurate sines per channel whose
-   least common multiple is hours, deliberately, so that it never visibly
-   repeats. At the seam it is therefore a fraction of `DRIFT.shift` out — about
-   2.6px on a 94px body, and less than a pixel at this size. Worth the seam;
-   removing the drift would cost the thing that makes her read as present.
+   No sway, no blink. `setDrift(false)` stops the going-nowhere motion while
+   leaving the breath running — which is the whole reason that method exists;
+   `setReducedMotion` would have stopped both.
 
-   ## Why the blink is at 2400ms and not wherever
+   The blink is pushed out rather than switched off: `nextBlinkGap` draws from a
+   clamped exponential, `IdleLayer` takes its random source by injection, and a
+   source pinned at 1 returns the maximum gap of 6200ms — past the end of a
+   3400ms clip, so no blink ever lands in it.
 
-   `nextBlinkGap` draws from a clamped exponential, and `IdleLayer` takes its
-   random source by injection precisely so a caller can pin it. Solving that
-   curve for a 2400ms gap gives 0.2076, which puts one blink comfortably inside
-   the loop and the next one past its end.
+   With both gone the only thing moving is the breath, and the breath is exactly
+   periodic. A clip of exactly one period therefore joins itself with nothing
+   left over — the earlier version drifted a fraction of a pixel at the seam,
+   and this one does not.
 
    ## APNG rather than GIF
 
@@ -147,8 +147,26 @@ write('colourways.png', trim(flavours, 16))
 --------------------------------------------------------------------------- */
 
 const BREATH_MS = 3400
-const FPS = 20
-const BLINK_SEED = 0.2076
+/*
+  Forty frames of 85ms, which is 3400ms exactly.
+
+  Chosen as a COUNT rather than a frame rate, because a rate has to divide the
+  breath period exactly or the clip is a few milliseconds longer than the thing
+  it loops — 25fps gives 85 frames of 40ms, which is 3400ms, but 12fps gives
+  40.8 frames and no integer rounding of that closes the loop. 85ms per frame is
+  1000/85 fps, handed to ffmpeg as the exact fraction 200/17 rather than a
+  rounded decimal.
+
+  Slow is affordable here in a way it was not before: with the blink pushed out
+  of the clip there is no fast event left to sample, and a breath moving 2.4% of
+  her size across 3.4 seconds is smooth at 12fps. That halves the file, which
+  the earlier version needed — breathing squashes the whole silhouette, so its
+  frames differ everywhere and inter-frame compression has little to work with.
+*/
+const FRAMES = 40
+const FRAME_RATE = '200/17'
+/** Pinned at the top of the range: the maximum gap, 6200ms, is past the clip. */
+const BLINK_SEED = 1
 
 function haveFfmpeg() {
   try {
@@ -160,7 +178,7 @@ function haveFfmpeg() {
 }
 
 function animate(width, height, scale = 2) {
-  const count = Math.round((BREATH_MS / 1000) * FPS)
+  const count = FRAMES
   const canvas = createCanvas(width * scale, height * scale)
   const ctx = canvas.getContext('2d')
   const avatar = new DoughAvatar(ctx, {
@@ -169,6 +187,7 @@ function animate(width, height, scale = 2) {
     random: () => BLINK_SEED,
   })
   avatar.resize(width, height, scale)
+  avatar.setDrift(false)
 
   // Two passes. The first finds ONE crop box covering every frame; cropping
   // each frame to its own bounds would make her jitter against the edge as she
@@ -180,7 +199,7 @@ function animate(width, height, scale = 2) {
   let maxY = -1
   for (let i = 0; i < count; i++) {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    avatar.render((i / FPS) * 1000)
+    avatar.render((i / count) * BREATH_MS)
     const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
     frames.push(image)
     const { data } = image
@@ -215,18 +234,18 @@ function animate(width, height, scale = 2) {
 if (!haveFfmpeg()) {
   console.log('\n  skipped mochi-alive.png — ffmpeg not on PATH (the stills above are complete)')
 } else {
-  // 280 at scale 1, not 300 at scale 2. Eighty-five frames of antialiased RGBA
-  // do not inter-frame compress well — the retina version came to 2MB, which is
-  // a poor thing to put at the top of a page that loads on every npm and GitHub
-  // view. She is displayed at 240px; rendering much above that buys nothing.
-  const { dir, count, size } = animate(280, 280, 1)
+  // Breathing alone leaves consecutive frames almost identical, which is what
+  // APNG's inter-frame compression is good at — so this affords a larger, higher
+  // frame-rate clip than the earlier version, which also had to encode a blink
+  // and several pixels of sway.
+  const { dir, count, size } = animate(320, 320, 1)
   execFileSync(
     'ffmpeg',
     // `-plays 0` is APNG for "loop forever"; without it she breathes once and stops.
     [
       '-y',
       '-framerate',
-      String(FPS),
+      FRAME_RATE,
       '-i',
       join(dir, 'f%03d.png'),
       '-plays',
@@ -238,5 +257,8 @@ if (!haveFfmpeg()) {
     { stdio: 'ignore' },
   )
   rmSync(dir, { recursive: true, force: true })
-  console.log(`  assets/mochi-alive.png`.padEnd(34), `${size}, ${count} frames @ ${FPS}fps`)
+  console.log(
+    `  assets/mochi-alive.png`.padEnd(34),
+    `${size}, ${count} frames, ${BREATH_MS}ms loop`,
+  )
 }
