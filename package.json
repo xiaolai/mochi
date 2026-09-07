@@ -67,6 +67,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "assets": "pnpm build && node scripts/hero.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

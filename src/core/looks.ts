@@ -131,8 +131,25 @@ export const LOOKS: Readonly<Record<Emotion, Look>> = {
     eyeLower: 0.92,
     eyeWidth: 1.06,
     eyeTilt: 0.28,
-    mouthUpper: 2,
-    mouthLower: 0,
+    /*
+      A frown, made the way `sad` makes one.
+
+      This was `mouthUpper: 2, mouthLower: 0`, and it drew NO MOUTH — the
+      multipliers are applied to the tuned base, `MOCHI.mouthUpper` is 0, and
+      two times nothing is nothing. So the one expression that most needs a
+      mouth had none, on every face whose resting mouth is a lower arc only.
+
+      It is a defect rather than a choice, and the table itself proves that:
+      `sleepy` removes its mouth on purpose with `mouthAlpha: 0`. Whoever wrote
+      `mouthUpper: 2` was reaching for a shape, not for an absence.
+
+      A negative lower bows the bottom edge above the baseline, which is what
+      turns a smile into a frown without a second asset — the same trick the
+      crescent eye uses, and what `sad` already does at -0.3. Tighter here,
+      because anger is held and sadness is slack.
+    */
+    mouthUpper: 0,
+    mouthLower: -0.25,
     mouthWidth: 0.84,
     cheek: 0.28,
     gazeY: -0.14,

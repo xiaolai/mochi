@@ -1,14 +1,24 @@
-# Mochi
+<p align="center">
+  <img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/mochi.png" width="240" alt="Mochi — a soft green ovoid with two round eyes and a small quiet mouth">
+</p>
 
-<img src="https://raw.githubusercontent.com/xiaolai/mochi/main/src/characters/__fixtures__/mochi-icon.png" width="120" align="right" alt="Mochi">
+<h1 align="center">Mochi</h1>
 
-A soft-body companion character, and the engine that draws her.
+<p align="center">
+  A soft-body companion character, and the engine that draws her.
+</p>
+
+---
 
 She is an ovoid whose widest point sits at 0.295 of her height, formed from
 superellipse exponents 1.86 above the waist and 2.58 below. She squashes without
 changing area, leans by a shear pinned at the point where she meets the surface,
 breathes on a one-sided curve and settles on an underdamped spring. Her face
 rides on her at a grip of 0.82 — following the body without looking printed on.
+
+Every image in this file was rendered by the package itself, from `MOCHI`. There
+is no second drawing of her anywhere in this repository for the code to drift
+away from.
 
 Zero runtime dependencies.
 
@@ -48,17 +58,33 @@ const tick = (now) => {
 requestAnimationFrame(tick)
 ```
 
-**Expressions** — `neutral` · `happy` · `shy` · `sad` · `angry` · `surprised` ·
-`thinking` · `sleepy`. Each is a set of multipliers on the neutral geometry, not
-separate artwork, so one silhouette carries all eight.
+### Expressions
 
-**Colourways** — `matcha` (the original) · `sakura` · `kinako` · `yuzu` ·
-`ramune` · `budo`.
+<img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/expressions.png" width="100%" alt="Mochi in eight expressions: neutral, happy, shy, sad, angry, surprised, thinking, sleepy">
+
+<p align="center"><sub>
+neutral · happy · shy · sad · angry · surprised · thinking · sleepy
+</sub></p>
+
+Each is a set of multipliers on the neutral geometry rather than separate
+artwork, so one silhouette carries all eight. Sleepy has no mouth on purpose —
+a mouth left on a sleeping face reads as awake-but-quiet.
+
+### Colourways
+
+<img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/colourways.png" width="100%" alt="Mochi in six colourways: matcha, sakura, kinako, yuzu, ramune, budo">
+
+<p align="center"><sub>
+matcha · sakura · kinako · yuzu · ramune · budo
+</sub></p>
 
 ```js
 import { mochiIn, MOCHI } from 'mochi-avatar'
 const sakura = mochiIn('sakura', MOCHI)
 ```
+
+One geometry throughout — five colour fields swapped, nothing else. Which is the
+claim the picture is making: she is the shape, not the colour.
 
 ## Just the geometry
 
