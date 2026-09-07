@@ -1,7 +1,7 @@
 {
-  "name": "@hando/mochi",
+  "name": "mochi-avatar",
   "version": "1.0.0",
-  "description": "Mochi — a soft-body companion character, and the engine that draws her. Superellipse geometry, area-preserving squash, spring physics and an idle layer. Canvas2D, SVG, or one custom element. Zero runtime dependencies.",
+  "description": "Mochi \u2014 a soft-body companion character, and the engine that draws her. Superellipse geometry, area-preserving squash, spring physics and an idle layer. Canvas2D, SVG, or one custom element. Zero runtime dependencies.",
   "license": "SEE LICENSE IN LICENSE.md",
   "author": "HANDO K.K.",
   "homepage": "https://github.com/xiaolai/mochi#readme",

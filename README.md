@@ -13,14 +13,14 @@ rides on her at a grip of 0.82 — following the body without looking printed on
 Zero runtime dependencies.
 
 ```sh
-npm install @hando/mochi
+npm install mochi-avatar
 ```
 
 ## From a plain HTML page
 
 ```html
 <script type="module">
-  import '@hando/mochi/element'
+  import 'mochi-avatar/element'
 </script>
 
 <dough-avatar emotion="happy" style="width: 200px; height: 200px"></dough-avatar>
@@ -35,7 +35,7 @@ Attributes: `emotion` (one of the eight below), `size` (a percentage or
 ## Against a canvas
 
 ```js
-import { DoughAvatar, MOCHI } from '@hando/mochi'
+import { DoughAvatar, MOCHI } from 'mochi-avatar'
 
 const avatar = new DoughAvatar(canvas.getContext('2d'), { face: MOCHI, size: 'fit-canvas' })
 avatar.resize(300, 300, devicePixelRatio)
@@ -56,7 +56,7 @@ separate artwork, so one silhouette carries all eight.
 `ramune` · `budo`.
 
 ```js
-import { mochiIn, MOCHI } from '@hando/mochi'
+import { mochiIn, MOCHI } from 'mochi-avatar'
 const sakura = mochiIn('sakura', MOCHI)
 ```
 
@@ -67,7 +67,7 @@ no document and no platform — useful for hit-testing, your own renderer, or
 working out where to put something.
 
 ```js
-import { domeOutline, squashed, widthAt } from '@hando/mochi'
+import { domeOutline, squashed, widthAt } from 'mochi-avatar'
 
 const shape = {
   halfWidth: 50,
@@ -101,7 +101,7 @@ format bounds every field so a bad one is refused with a reason instead of
 rendering something wrong in a way nothing mentions.
 
 ```js
-import { DoughAvatar, PLAIN } from '@hando/mochi'
+import { DoughAvatar, PLAIN } from 'mochi-avatar'
 new DoughAvatar(ctx, { face: { ...PLAIN, waist: 0.5, colBody: '#c88e9d' }, size: 'fit-canvas' })
 ```
 
