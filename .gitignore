@@ -47,3 +47,7 @@ release/
 # The pet exporter's intermediates. `spritesheet.webp` and `neutral.png` are
 # committed; everything they are built from is not.
 examples/codex-pet/build/
+
+# Assembled into site/ by the pages workflow, never committed.
+site/art/
+site/dough/

@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mochi — a soft-body companion character</title>
+    <meta
+      name="description"
+      content="Mochi, and the engine that draws her. Superellipse geometry, area-preserving squash, spring physics. One custom element, or any 2D context. Zero dependencies."
+    />
+    <link rel="icon" href="art/icon.png" />
+    <meta property="og:title" content="Mochi" />
+    <meta
+      property="og:description"
+      content="A soft-body companion character, and the engine that draws her."
+    />
+    <meta property="og:image" content="https://moch.im/art/icon.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      /*
+        Her own ink and body colours, carried out to the page. `--body` and
+        `--ink` are literally `MOCHI.colBody` and `MOCHI.colInk`; if she is ever
+        retuned they should be brought across rather than left to drift.
+      */
+      :root {
+        --body: #8ec8a8;
+        --ink: #24463a;
+        --bg: #fbfaf7;
+        --surface: #ffffff;
+        --line: #e6e3da;
+        --text: #22231a;
+        --muted: #5e5f50;
+        --faint: #90917f;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #16170f;
+          --surface: #1c1e16;
+          --line: #2f3128;
+          --text: #eceadf;
+          --muted: #aead9c;
+          --faint: #7d7e6d;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 16.5px/1.65 ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 0 24px 96px;
+      }
+      header {
+        text-align: center;
+        padding: 72px 0 8px;
+      }
+      dough-avatar {
+        display: block;
+        width: 220px;
+        height: 200px;
+        margin: 0 auto;
+      }
+      /* Shown until the element upgrades, and whenever it cannot. */
+      #fallback {
+        width: 220px;
+        margin: 0 auto;
+        display: block;
+      }
+      h1 {
+        font-family: ui-serif, Georgia, 'Iowan Old Style', serif;
+        font-size: 2.9rem;
+        letter-spacing: -0.02em;
+        margin: 18px 0 6px;
+        font-weight: 600;
+      }
+      .tag {
+        color: var(--muted);
+        margin: 0 0 6px;
+        font-size: 1.08rem;
+      }
+      .poke {
+        color: var(--faint);
+        font-size: 0.82rem;
+        margin: 0;
+      }
+      .cta {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin: 26px 0 0;
+      }
+      .cta a {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        text-decoration: none;
+        padding: 9px 18px;
+        border-radius: 999px;
+        font-size: 0.92rem;
+        font-weight: 600;
+      }
+      .cta a.primary {
+        background: var(--ink);
+        border-color: var(--ink);
+        color: #eefaf3;
+      }
+      .cta a:hover {
+        border-color: var(--body);
+      }
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 56px 0;
+      }
+      h2 {
+        font-family: ui-serif, Georgia, serif;
+        font-size: 1.45rem;
+        margin: 0 0 10px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      p {
+        margin: 0 0 16px;
+      }
+      pre {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px 18px;
+        overflow-x: auto;
+        font-size: 13.5px;
+        line-height: 1.6;
+        margin: 0 0 16px;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      img.strip {
+        width: 100%;
+        display: block;
+        margin: 6px 0 4px;
+      }
+      .caption {
+        text-align: center;
+        color: var(--faint);
+        font-size: 0.8rem;
+        margin: 0 0 8px;
+      }
+      .note {
+        border-left: 3px solid var(--body);
+        background: var(--surface);
+        border-radius: 0 10px 10px 0;
+        padding: 14px 18px;
+        margin: 0 0 16px;
+      }
+      .note p:last-child {
+        margin-bottom: 0;
+      }
+      a {
+        color: inherit;
+        text-decoration-color: var(--body);
+        text-underline-offset: 2px;
+      }
+      footer {
+        border-top: 1px solid var(--line);
+        margin-top: 56px;
+        padding-top: 22px;
+        color: var(--faint);
+        font-size: 0.84rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <!--
+          The live engine, not a picture of it. If the module fails to load or
+          the browser has no custom elements, the fallback below is the same
+          character rendered by the same code, so the page degrades to a still
+          rather than to a gap.
+        -->
+        <img
+          id="fallback"
+          src="art/mochi-alive.png"
+          alt="Mochi, a soft green ovoid with two round eyes and a small quiet mouth, breathing"
+        />
+        <dough-avatar id="her" emotion="neutral" hidden></dough-avatar>
+
+        <h1>Mochi</h1>
+        <p class="tag">A soft-body companion character, and the engine that draws her.</p>
+        <p class="poke" id="poke" hidden>Click her.</p>
+
+        <div class="cta">
+          <a class="primary" href="https://www.npmjs.com/package/mochi-avatar">npm</a>
+          <a href="https://github.com/xiaolai/mochi">GitHub</a>
+          <a href="https://github.com/xiaolai/mochi/tree/main/examples/codex-pet">Codex pet</a>
+        </div>
+      </header>
+
+      <hr />
+
+      <h2>One element</h2>
+      <p>
+        No build step, no framework. The tag above this line is the real one — it makes its own
+        canvas, sizes it at device resolution, runs the frame loop, and stops when it leaves the
+        document.
+      </p>
+      <pre><code>&lt;script type="module"&gt;
+  import 'https://esm.sh/mochi-avatar/element'
+&lt;/script&gt;
+
+&lt;dough-avatar emotion="happy"&gt;&lt;/dough-avatar&gt;</code></pre>
+
+      <h2>Or any 2D context</h2>
+      <pre><code>import { DoughAvatar, MOCHI } from 'mochi-avatar'
+
+const her = new DoughAvatar(canvas.getContext('2d'), { face: MOCHI, size: 'fit-canvas' })
+her.resize(300, 300, devicePixelRatio)
+her.setEmotion({ emotion: 'happy', intensity: 1 })</code></pre>
+      <p>
+        Browser, worker, Node, Electron — <code>CanvasRenderingContext2D</code> is used
+        structurally, so nothing needs an adapter. Zero runtime dependencies.
+      </p>
+
+      <hr />
+
+      <h2>She is alive before you tell her anything</h2>
+      <p>
+        Breath on a 3400ms one-sided curve. Blinks drawn from a clamped exponential, because
+        blinking is a Poisson process and a uniform gap reads as a metronome within about thirty
+        seconds. A few pixels of drift, from three incommensurate sines that never visibly repeat.
+        An idle character holding perfectly still reads as a crashed one.
+      </p>
+
+      <h2>Eight expressions</h2>
+      <img class="strip" src="art/expressions.png" alt="Mochi in eight expressions" />
+      <p class="caption">
+        neutral · happy · shy · sad · angry · surprised · thinking · sleepy
+      </p>
+      <p>
+        Multipliers on the neutral geometry rather than separate artwork, so one silhouette carries
+        all eight. Sleepy has no mouth on purpose — a mouth left on a sleeping face reads as
+        awake-but-quiet.
+      </p>
+
+      <h2>Six colourways</h2>
+      <img class="strip" src="art/colourways.png" alt="Mochi in six colourways" />
+      <p class="caption">matcha · sakura · kinako · yuzu · ramune · budo</p>
+      <p>
+        One geometry throughout; five colour fields swapped. Measured on the sprite exports, the six
+        have pixel-identical alpha channels — she is the shape, not the colour.
+      </p>
+
+      <hr />
+
+      <h2>The desktop app has been retired</h2>
+      <p>
+        Mochi began as a realtime-voice companion that lived on a macOS desktop. That app is no
+        longer developed, and the character outlived it — which is the usual way round.
+      </p>
+      <div class="note">
+        <p>
+          <strong>The downloads still work.</strong>
+          <a href="https://github.com/xiaolai/mochi/releases/tag/v0.1.20">v0.1.20</a> remains
+          available, signed and notarized for Apple silicon and Intel, and its source is preserved
+          on the
+          <a href="https://github.com/xiaolai/mochi/tree/archive/app">archive/app</a> branch exactly
+          as it shipped.
+        </p>
+      </div>
+
+      <footer>
+        <p>
+          Every picture on this page was rendered by the engine that ships, from her own constants —
+          never drawn by eye. A likeness drawn by hand looks right on the day and stops matching the
+          product the first time somebody tunes a shoulder exponent.
+        </p>
+        <p>
+          The engine is MIT. Mochi herself is not: use her, don't rename her — see
+          <a href="https://github.com/xiaolai/mochi/blob/main/LICENSE.md">LICENSE.md</a>. ©&nbsp;2026
+          HANDO&nbsp;K.K.
+        </p>
+      </footer>
+    </div>
+
+    <script type="module">
+      /*
+        Swap the still for the live element, and only if it actually works.
+
+        The <img> is what the page ships with, so a browser that cannot load
+        this module — or an older one without custom elements — keeps a picture
+        of her instead of an empty box. The element is revealed after the module
+        resolves, not before.
+      */
+      try {
+        await import('./dough/element/index.js')
+        const her = document.getElementById('her')
+        const fallback = document.getElementById('fallback')
+        const poke = document.getElementById('poke')
+        fallback.hidden = true
+        her.hidden = false
+        poke.hidden = false
+
+        // A poke is the one gesture that needs no explanation: she squashes and
+        // settles on the spring, which is the whole argument for using a
+        // second-order system rather than an easing curve.
+        const HELLO = ['happy', 'surprised', 'shy', 'thinking']
+        let n = 0
+        her.addEventListener('click', () => {
+          her.setAttribute('emotion', HELLO[n++ % HELLO.length])
+          poke.textContent = 'Click her again.'
+        })
+      } catch {
+        // Deliberately silent. The still is already on screen and correct.
+      }
+    </script>
+  </body>
+</html>

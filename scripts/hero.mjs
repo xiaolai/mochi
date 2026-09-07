@@ -94,6 +94,23 @@ console.log('rendering from dist/:')
 // The hero: her whole self, neutral, with the face on.
 write('mochi.png', trim(draw(MOCHI, 'neutral', 320, 320), 24))
 
+/*
+  A square icon, for a favicon and a social card.
+
+  Padded to square from her own bounds rather than rendered into a square canvas
+  — she is wider than she is tall, so a square render would size her to the
+  height and leave her small. Trim first, then centre what is left.
+*/
+{
+  const her = trim(draw(MOCHI, 'neutral', 400, 400), 0)
+  const side = Math.round(Math.max(her.width, her.height) * 1.18)
+  const icon = createCanvas(side, side)
+  icon
+    .getContext('2d')
+    .drawImage(her, Math.round((side - her.width) / 2), Math.round((side - her.height) / 2))
+  write('icon.png', icon)
+}
+
 // The eight expressions, in one strip. Named in EMOTIONS order so the strip and
 // the list in the README cannot disagree about what exists.
 const CELL = 150
