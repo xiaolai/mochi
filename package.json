@@ -68,6 +68,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "assets": "pnpm build && node scripts/hero.mjs",
+    "pets": "pnpm build && for f in matcha sakura kinako yuzu ramune budo; do node examples/codex-pet/render.mjs $f && python3 examples/codex-pet/assemble.py $f >/dev/null; done",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

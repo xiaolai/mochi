@@ -35,9 +35,11 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { createCanvas, Path2D } from '@napi-rs/canvas'
 import {
+  COLOURWAYS,
   MOCHI,
   NEUTRAL,
   domeOutline,
+  mochiIn,
   paintCheeks,
   paintEyes,
   paintMouth,
@@ -50,7 +52,25 @@ import {
 // is global, and under Node it ships with the rasteriser.
 globalThis.Path2D ??= Path2D
 
-const OUT = fileURLToPath(new URL('./build/', import.meta.url))
+/**
+ * Which colourway to export. `matcha` is her original green and keeps the pet id
+ * `mochi`; the rest get `mochi-<flavour>`, so several can be installed at once
+ * without one overwriting another.
+ */
+const FLAVOUR = process.argv[2] ?? 'matcha'
+if (!Object.hasOwn(COLOURWAYS, FLAVOUR)) {
+  console.error(`unknown colourway ${JSON.stringify(FLAVOUR)}`)
+  console.error(`try one of: ${Object.keys(COLOURWAYS).join(', ')}`)
+  process.exit(1)
+}
+const PET_ID = FLAVOUR === 'matcha' ? 'mochi' : `mochi-${FLAVOUR}`
+
+// Five colour fields over identical geometry. Every frame below is the same
+// shape whichever flavour this is — which is the claim the package makes, and
+// the atlas is a decent place to hold it to.
+const FACE = mochiIn(FLAVOUR, MOCHI)
+
+const OUT = fileURLToPath(new URL(`./build/${FLAVOUR}/`, import.meta.url))
 
 /** One atlas cell, and where she stands in it. */
 const W = 192
@@ -85,7 +105,7 @@ function draw(p = {}) {
   const ctx = canvas.getContext('2d')
   ctx.scale(DPR, DPR)
 
-  const face = { ...MOCHI, eyeGlint: 0, ...p.face }
+  const face = { ...FACE, eyeGlint: 0, ...p.face }
   const look = { ...NEUTRAL, ...p.look, sparkle: 0, lean: 0 }
 
   const base = {
@@ -204,7 +224,24 @@ function pose(state, i, n) {
   return p
 }
 
+const DESCRIPTIONS = {
+  matcha: 'The original smooth mint Mochi: quiet breathing, eyes and mouth, with no limbs.',
+  sakura: 'Mochi in cherry blossom. Quiet breathing, eyes and mouth, with no limbs.',
+  kinako: 'Mochi in roasted soybean flour. Quiet breathing, eyes and mouth, with no limbs.',
+  yuzu: 'Mochi in citrus. Quiet breathing, eyes and mouth, with no limbs.',
+  ramune: 'Mochi in soda blue. Quiet breathing, eyes and mouth, with no limbs.',
+  budo: 'Mochi in grape. Quiet breathing, eyes and mouth, with no limbs.',
+}
+
 const manifest = {
+  pet: {
+    id: PET_ID,
+    displayName: FLAVOUR === 'matcha' ? 'Mochi' : `Mochi (${FLAVOUR})`,
+    description: DESCRIPTIONS[FLAVOUR],
+    spriteVersionNumber: 2,
+    spritesheetPath: 'spritesheet.webp',
+  },
+  colourway: FLAVOUR,
   renderer: 'mochi-avatar geometry and face paint functions',
   cellWidth: W,
   cellHeight: H,
@@ -243,4 +280,4 @@ await writeFile(`${OUT}render-manifest.json`, `${JSON.stringify(manifest, null, 
 await writeFile(`${OUT}raw/neutral.png`, draw())
 
 const frames = Object.values(manifest.states).reduce((sum, list) => sum + list.length, 0)
-console.log(`rendered ${frames} state frames, 16 look poses and a neutral, from mochi-avatar`)
+console.log(`${FLAVOUR}: rendered ${frames} state frames, 16 look poses and a neutral → ${PET_ID}`)

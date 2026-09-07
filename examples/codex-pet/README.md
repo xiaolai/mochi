@@ -10,32 +10,83 @@ Codex CLI pets are a fixed grid: 192×208 cells, one row per animation state,
 plus sixteen look directions. This renders all 74 frames from `MOCHI` and
 assembles them into `spritesheet.webp`.
 
-```sh
-node render.mjs      # 74 frames into build/raw/, plus a manifest
-python3 assemble.py  # downsample, atlas, verify invariants
-```
+**Six are prebuilt.** Nothing to install, nothing to run.
+
+<img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/colourways.png" width="100%" alt="Mochi in six colourways: matcha, sakura, kinako, yuzu, ramune, budo">
+
+<p align="center"><sub>
+matcha · sakura · kinako · yuzu · ramune · budo
+</sub></p>
+
+---
 
 ## Installing
 
-Codex CLI keeps its pets in `~/.codex/pets/<id>/`, one directory per pet, and
-reads two files from it: `pet.json` and whatever `spritesheetPath` names.
-Nothing else in the directory is used, so keep backups somewhere else — a stray
-file in a pet folder is a scan waiting to trip over it.
+Codex keeps its pets in `~/.codex/pets/`, one directory per pet. Copy the one
+you want:
 
 ```sh
-mkdir -p ~/.codex/pets/mochi
-cp pet.json spritesheet.webp ~/.codex/pets/mochi/
+mkdir -p ~/.codex/pets
+cp -r pets/mochi-sakura ~/.codex/pets/
 ```
 
-Both are committed here, so installing needs no build. To rebuild them you need
-`@napi-rs/canvas` (a dev dependency of this repo) and Python with Pillow.
+Or take all six and switch between them:
 
-**Updating an existing install** is a copy of `spritesheet.webp` — `pet.json`
-has not changed. If your pet was built before the engine was extracted into this
-package, exactly one frame is stale: `waving` frame 2, whose crescent eye the
-old code flattened.
+```sh
+cp -r pets/* ~/.codex/pets/
+```
 
-## What it demonstrates
+| Directory           | Pet id         | Colour                      |
+| ------------------- | -------------- | --------------------------- |
+| `pets/mochi`        | `mochi`        | matcha — her original green |
+| `pets/mochi-sakura` | `mochi-sakura` | cherry blossom              |
+| `pets/mochi-kinako` | `mochi-kinako` | roasted soybean flour       |
+| `pets/mochi-yuzu`   | `mochi-yuzu`   | citrus                      |
+| `pets/mochi-ramune` | `mochi-ramune` | soda blue                   |
+| `pets/mochi-budo`   | `mochi-budo`   | grape                       |
+
+Each id is distinct, so installing several does not overwrite anything. Matcha
+keeps the plain `mochi` id, so it replaces an earlier install rather than sitting
+beside it.
+
+### Three things worth knowing
+
+**Codex reads exactly two files** from a pet directory: `pet.json`, and whatever
+its `spritesheetPath` names. That is all these folders contain, on purpose.
+
+**Keep backups somewhere else.** A spare `.webp` sitting next to the real one in
+a pet folder is a directory scan waiting to trip over it:
+
+```sh
+cp ~/.codex/pets/mochi/spritesheet.webp ~/.codex/pets/mochi-backup.webp   # beside, not inside
+```
+
+**Updating an existing pet** is a copy of `spritesheet.webp` alone — `pet.json`
+has not changed. If yours was built before the engine moved into this package,
+exactly one frame is stale: `waving` frame 2, whose crescent eye the old code
+flattened into a half-disc because a floor was being applied to a signed value.
+
+## A colour of your own
+
+The six are convenience, not a limit. Any colourway in the package works:
+
+```sh
+node render.mjs ramune      # 74 frames into build/ramune/, plus a manifest
+python3 assemble.py ramune  # downsample, atlas, verify invariants, write pets/mochi-ramune/
+```
+
+For a colour that is not in the package, edit the `FACE` line in `render.mjs`:
+
+```js
+const FACE = { ...MOCHI, colBody: '#d4a373', colShadow: '#c08e5c', colInk: '#3a2a18' }
+```
+
+Rebuilding needs `@napi-rs/canvas` (a dev dependency of this repo) and Python
+with Pillow. The shape never changes — the six prebuilt sheets have **pixel-
+identical alpha channels**, verified by comparison, so a colourway really is five
+fields and nothing else.
+
+## What this example demonstrates
 
 **Rendering without the clock.** `DoughAvatar` owns time — it runs the idle
 layer, schedules its own blinks, decides how far through a breath it is. That is
@@ -74,12 +125,9 @@ of her. That distinction is why it belongs in this repository at all.
 
 When the exporter was re-pointed at the published package, **73 of its 74 frames
 came out pixel-identical** to the atlas Codex originally produced against the
-pre-extraction source tree. The single exception is `waving` frame 2, the only
-frame in the atlas with a negative `eyeLower` — the crescent eye, which the
-engine [used to
-flatten](https://github.com/xiaolai/mochi/commit/115b899) because a floor was
-being applied to a signed value. That one frame is the bug fix, and nothing else
-moved.
+pre-extraction source tree. The single exception is that `waving` frame 2 — the
+only frame in the atlas with a negative `eyeLower`. That one frame is the bug
+fix, and nothing else moved.
 
 ## Licence
 
