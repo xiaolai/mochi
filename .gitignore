@@ -43,3 +43,7 @@ dev-docs/
 .vmark/
 
 release/
+
+# The pet exporter's intermediates. `spritesheet.webp` and `neutral.png` are
+# committed; everything they are built from is not.
+examples/codex-pet/build/

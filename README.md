@@ -195,6 +195,15 @@ new DoughAvatar(ctx, { face: { ...PLAIN, waist: 0.5, colBody: '#c88e9d' }, size:
 `PLAIN` is the default face and is deliberately plain — a near-symmetric egg,
 one flat tone, no blush. It exists to be replaced.
 
+## Example: Mochi as a Codex CLI pet
+
+[`examples/codex-pet/`](examples/codex-pet) exports her as a sprite atlas — 74
+frames, no canvas and no frame loop, because the core is pure functions and does
+not need either. It is also the closest thing to a fidelity test this package
+has: re-pointed at the published build, 73 of its 74 frames came out
+pixel-identical to an atlas produced against the original application's source
+tree.
+
 ## Licence
 
 **Two licences, split by directory.** The engine is [MIT](LICENSE.md). Mochi
