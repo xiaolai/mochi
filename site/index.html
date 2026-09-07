@@ -45,6 +45,15 @@
       * {
         box-sizing: border-box;
       }
+      /*
+        `hidden` is a UA `display: none`, and ANY author `display` outranks it.
+        Both the still and the element below set `display: block`, so both were
+        visible at once: a picture of her, and under it the element rendering
+        the engine's default face. This restores what the attribute is for.
+      */
+      [hidden] {
+        display: none !important;
+      }
       body {
         margin: 0;
         background: var(--bg);
@@ -305,7 +314,13 @@ her.setEmotion({ emotion: 'happy', intensity: 1 })</code></pre>
       */
       try {
         await import('./dough/element/index.js')
+        // Her face, explicitly. The engine defaults an unspecified face to
+        // PLAIN — a deliberately generic body that exists to be replaced — so
+        // her own page showing it was the default working exactly as designed,
+        // in the one place it should never have been left alone.
+        const { MOCHI } = await import('./dough/characters/index.js')
         const her = document.getElementById('her')
+        her.faceSpec = MOCHI
         const fallback = document.getElementById('fallback')
         const poke = document.getElementById('poke')
         fallback.hidden = true
