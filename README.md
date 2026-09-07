@@ -131,7 +131,7 @@ Each is a set of multipliers on the neutral geometry rather than separate
 artwork, so one silhouette carries all eight. Sleepy has no mouth on purpose —
 a mouth left on a sleeping face reads as awake-but-quiet.
 
-### Colourways
+## Colourways
 
 <img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/colourways.png" width="100%" alt="Mochi in six colourways: matcha, sakura, kinako, yuzu, ramune, budo">
 
