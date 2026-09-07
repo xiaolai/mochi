@@ -235,9 +235,9 @@
 &lt;dough-avatar emotion="happy"&gt;&lt;/dough-avatar&gt;</code></pre>
 
       <h2>Or any 2D context</h2>
-      <pre><code>import { DoughAvatar, MOCHI } from 'mochi-avatar'
+      <pre><code>import { DoughAvatar } from 'mochi-avatar'
 
-const her = new DoughAvatar(canvas.getContext('2d'), { face: MOCHI, size: 'fit-canvas' })
+const her = new DoughAvatar(canvas.getContext('2d'), { size: 'fit-canvas' })
 her.resize(300, 300, devicePixelRatio)
 her.setEmotion({ emotion: 'happy', intensity: 1 })</code></pre>
       <p>
@@ -314,13 +314,10 @@ her.setEmotion({ emotion: 'happy', intensity: 1 })</code></pre>
       */
       try {
         await import('./dough/element/index.js')
-        // Her face, explicitly. The engine defaults an unspecified face to
-        // PLAIN — a deliberately generic body that exists to be replaced — so
-        // her own page showing it was the default working exactly as designed,
-        // in the one place it should never have been left alone.
-        const { MOCHI } = await import('./dough/characters/index.js')
+        // No face is passed on purpose: the default is Mochi, and this page is
+        // where that had better be true. It was PLAIN once, and this page is
+        // where that showed.
         const her = document.getElementById('her')
-        her.faceSpec = MOCHI
         const fallback = document.getElementById('fallback')
         const poke = document.getElementById('poke')
         fallback.hidden = true

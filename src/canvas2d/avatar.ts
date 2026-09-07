@@ -23,7 +23,7 @@ import {
   type VisemeWeights,
 } from '../core/vocabulary.js'
 import { type FaceSpec } from '../core/spec.js'
-import { PLAIN } from '../core/plain.js'
+import { MOCHI } from '../characters/mochi.js'
 import {
   BREATHING_UNITS,
   FEET_FROM_TOP,
@@ -239,7 +239,22 @@ export class DoughAvatar implements AvatarBackend {
     private readonly ctx: CanvasRenderingContext2D,
     options: AvatarOptions,
   ) {
-    this.face = options.face ?? PLAIN
+    /*
+      Mochi, because this package is named after her and ships her.
+
+      It used to be `PLAIN`, from a design where she was reserved and did not
+      ship at all; a generic default was the only honest thing an engine could
+      hand out. She ships now, under her own licence, and a default of PLAIN
+      meant somebody installing `mochi-avatar` and writing the shortest possible
+      code got a grey egg. Her own website got one.
+
+      This is the single place the MIT engine references the character layer,
+      which is not MIT — see LICENSE.md. Taking the engine alone therefore means
+      supplying a face, which anybody building their own character is doing on
+      the first line anyway. `PLAIN` is still here for exactly that: a starting
+      point, not a fallback.
+    */
+    this.face = options.face ?? MOCHI
     this.sizePercent = options.size
     this.idleLayer = new IdleLayer(0, options.random)
   }

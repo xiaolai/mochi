@@ -15,7 +15,8 @@
  * shape.
  *
  * A face is DATA — see `FaceSpec` — so a design is a JSON file rather than a
- * fork. `PLAIN` is the default; it is intended to be replaced.
+ * fork. `MOCHI` is the default. `PLAIN` is a deliberately generic body to start
+ * your own character from.
  */
 
 // --- core: the character as arithmetic -------------------------------------

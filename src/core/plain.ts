@@ -1,13 +1,15 @@
 import type { FaceSpec } from './spec.js'
 
 /**
- * The default face, and deliberately NOT a good one.
+ * A starting point for a character of your own, and deliberately NOT a good one.
  *
- * An engine that renders nothing until you hand it thirty-nine numbers is an
- * engine nobody evaluates, so there has to be a default. But the character this
- * engine was extracted from is reserved, and shipping her as the default would
- * hand her out with the library — so `PLAIN` is built to be visibly a different
- * creature, along exactly the axes that identify her:
+ * This was the default face, from a design where Mochi was reserved and did not
+ * ship; a generic body was the only thing an engine could honestly hand out.
+ * She ships now and she is the default, so `PLAIN` has the job it was always
+ * better suited to: the thing you start from and change.
+ *
+ * It is built to be visibly a different creature from her, along exactly the
+ * axes that identify her:
  *
  * | | Mochi | PLAIN |
  * |---|---|---|
@@ -18,7 +20,8 @@ import type { FaceSpec } from './spec.js'
  * | face | low on the body, small eyes | centred, larger eyes |
  *
  * Every one of those is a choice you are expected to replace. Start here, move
- * the numbers, and the result is yours — that is what the format is for.
+ * the numbers, and the result is yours — that is what the format is for, and
+ * nothing about it owes anything to her.
  */
 export const PLAIN: FaceSpec = {
   size: 100,

@@ -13,7 +13,13 @@ way of drawing soft-bodied characters and belongs to anyone who wants it. Mochi
 is one specific character, and she is not a free asset.
 
 **If you want a character of your own, the engine is all you need.** Start from
-`PLAIN`, move the numbers, and what comes out owes nothing to Part 2.
+`PLAIN` — which lives in `src/core/` and is MIT — move the numbers, and what
+comes out owes nothing to Part 2.
+
+One caveat, stated rather than buried: an avatar constructed without a face
+defaults to Mochi, so that is the single place Part 1 code names something from
+Part 2. Taking the engine alone means passing a face, which anyone building
+their own character does on the first line anyway.
 
 ---
 

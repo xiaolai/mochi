@@ -15,7 +15,7 @@
 
 import { DoughAvatar } from '../canvas2d/avatar.js'
 import { parseFaceSpec, type FaceSpec } from '../core/spec.js'
-import { PLAIN } from '../core/plain.js'
+import { MOCHI } from '../characters/mochi.js'
 import { EMOTIONS, type Emotion } from '../core/vocabulary.js'
 
 function isEmotion(value: string | null): value is Emotion {
@@ -121,12 +121,12 @@ export class DoughAvatarElement extends HTMLElement {
   /** The face, as a `FaceSpec`. Set this instead of the attribute when you have one. */
   set faceSpec(face: FaceSpec | undefined) {
     this.face = face
-    // Cleared means "back to the engine default", applied to the LIVE avatar
-    // too. Clearing only the stored copy left the current face on screen until
-    // the next reconnect, at which point it silently changed — the same input
+    // Cleared means "back to the default", applied to the LIVE avatar too.
+    // Clearing only the stored copy left the current face on screen until the
+    // next reconnect, at which point it silently changed — the same input
     // producing two different results depending on DOM history.
     if (this.avatar === null) return
-    this.avatar.setFace(face ?? PLAIN)
+    this.avatar.setFace(face ?? MOCHI)
   }
 
   get faceSpec(): FaceSpec | undefined {

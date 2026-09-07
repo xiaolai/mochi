@@ -45,9 +45,9 @@ Attributes: `emotion` (one of the eight below), `size` (a percentage or
 ## Against a canvas
 
 ```js
-import { DoughAvatar, MOCHI } from 'mochi-avatar'
+import { DoughAvatar } from 'mochi-avatar'
 
-const avatar = new DoughAvatar(canvas.getContext('2d'), { face: MOCHI, size: 'fit-canvas' })
+const avatar = new DoughAvatar(canvas.getContext('2d'), { size: 'fit-canvas' }) // Mochi by default
 avatar.resize(300, 300, devicePixelRatio)
 avatar.setEmotion({ emotion: 'happy', intensity: 1 })
 
@@ -192,8 +192,11 @@ import { DoughAvatar, PLAIN } from 'mochi-avatar'
 new DoughAvatar(ctx, { face: { ...PLAIN, waist: 0.5, colBody: '#c88e9d' }, size: 'fit-canvas' })
 ```
 
-`PLAIN` is the default face and is deliberately plain — a near-symmetric egg,
-one flat tone, no blush. It exists to be replaced.
+`PLAIN` is a deliberately generic body — a near-symmetric egg, one flat tone, no
+blush — built to be visibly a different creature from her along the axes that
+identify her. It exists to be started from.
+
+Give no face at all and you get **Mochi**, since that is whose package this is.
 
 ## Example: Mochi as a Codex CLI pet
 
