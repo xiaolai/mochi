@@ -64,17 +64,38 @@ jobs:
       # The page ships the engine, so the engine has to be green to ship.
       - run: pnpm verify
 
+      # The engine goes in a directory named for its version, and the page is
+      # rewritten to point at it.
+      #
+      # GitHub Pages serves HTML at max-age=600 and assets at max-age=14400, so
+      # the page refreshes twenty-four times faster than the code it loads.
+      # Every deploy therefore has a window, up to four hours wide, in which a
+      # visitor runs NEW html against OLD javascript. That is not a rare race;
+      # it is the guaranteed state immediately after every deploy, and it showed
+      # the first time the page began relying on the two agreeing: new html that
+      # had stopped naming a face, old javascript whose default was still the
+      # generic body, and a stranger on her own front page.
+      #
+      # A query string on the entry does not fix it. `element/index.js?v=x`
+      # still reaches `./dough-avatar.js` by a plain relative path, and that one
+      # comes from cache. Only a different DIRECTORY moves every transitive
+      # import at once.
       - name: assemble the page
         run: |
-          mkdir -p site/art site/dough
-          cp -r dist/* site/dough/
+          version="$(node -p "require('./package.json').version")"
+          echo "ENGINE_DIR=dough-$version" >> "$GITHUB_ENV"
+          mkdir -p site/art "site/dough-$version"
+          cp -r dist/* "site/dough-$version/"
           cp assets/mochi-alive.png assets/expressions.png assets/colourways.png assets/icon.png site/art/
+          # index.html names ./dough/ so it works when copied by hand for local
+          # preview; the deployed copy is pinned to the version it was built with.
+          sed -i "s|\./dough/|./dough-$version/|g" site/index.html
 
       - name: everything the page references exists
         run: |
           fail=0
           for f in art/mochi-alive.png art/expressions.png art/colourways.png art/icon.png \
-                   dough/element/index.js dough/index.js; do
+                   "$ENGINE_DIR/element/index.js" "$ENGINE_DIR/index.js"; do
             [ -f "site/$f" ] || { echo "::error::site/$f is missing"; fail=1; }
           done
 
@@ -83,6 +104,13 @@ jobs:
             | sed -E 's/.*="([^"]*)".*/\1/' | sort -u | while read -r ref; do
               [ -f "site/$ref" ] || { echo "::error::index.html references missing site/$ref"; exit 1; }
             done || fail=1
+
+          # The rewrite must have happened. An unversioned ./dough/ reference
+          # left in the deployed page is the stale-cache bug coming back.
+          if grep -q './dough/' site/index.html; then
+            echo "::error::index.html still references the unversioned ./dough/"
+            fail=1
+          fi
 
           # A CNAME edited to something else is a silent redirect of the whole site.
           domain=$(tr -d '[:space:]' < site/CNAME)
