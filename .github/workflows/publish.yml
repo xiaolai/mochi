@@ -57,6 +57,19 @@ jobs:
             exit 1
           fi
 
-      - run: pnpm publish --access public --no-git-checks --provenance
+      # Idempotent on purpose. A release can be pushed by hand and then tagged —
+      # it happened with 1.0.0 — and a workflow that dies on
+      # EPUBLISHCONFLICT turns a tag pushed for traceability into a red run and
+      # a broken badge. Already-published is not a failure; it is the goal,
+      # reached another way.
+      - name: publish unless this version is already on the registry
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          code="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/mochi-avatar/$version")"
+          if [ "$code" = "200" ]; then
+            echo "mochi-avatar@$version is already published — nothing to do"
+            exit 0
+          fi
+          pnpm publish --access public --no-git-checks --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
