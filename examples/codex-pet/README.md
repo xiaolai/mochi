@@ -15,15 +15,25 @@ node render.mjs      # 74 frames into build/raw/, plus a manifest
 python3 assemble.py  # downsample, atlas, verify invariants
 ```
 
-Install it:
+## Installing
+
+Codex CLI keeps its pets in `~/.codex/pets/<id>/`, one directory per pet, and
+reads two files from it: `pet.json` and whatever `spritesheetPath` names.
+Nothing else in the directory is used, so keep backups somewhere else — a stray
+file in a pet folder is a scan waiting to trip over it.
 
 ```sh
-cp -r . ~/.codex/pets/mochi
+mkdir -p ~/.codex/pets/mochi
+cp pet.json spritesheet.webp ~/.codex/pets/mochi/
 ```
 
-Needs `@napi-rs/canvas` (a dev dependency of this repo) and Python with Pillow.
-`spritesheet.webp` and `neutral.png` are committed, so you can install without
-building anything.
+Both are committed here, so installing needs no build. To rebuild them you need
+`@napi-rs/canvas` (a dev dependency of this repo) and Python with Pillow.
+
+**Updating an existing install** is a copy of `spritesheet.webp` — `pet.json`
+has not changed. If your pet was built before the engine was extracted into this
+package, exactly one frame is stale: `waving` frame 2, whose crescent eye the
+old code flattened.
 
 ## What it demonstrates
 
