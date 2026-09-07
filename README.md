@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/mochi.png" width="240" alt="Mochi — a soft green ovoid with two round eyes and a small quiet mouth">
+  <img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/mochi-alive.png" width="220" alt="Mochi, breathing and blinking — a soft green ovoid with two round eyes and a small quiet mouth">
 </p>
 
 <h1 align="center">Mochi</h1>
@@ -57,6 +57,60 @@ const tick = (now) => {
 }
 requestAnimationFrame(tick)
 ```
+
+## She is alive before you tell her anything
+
+That image is not a loop somebody animated. It is the engine, running, with no
+input at all — because an idle character who holds perfectly still reads as a
+crashed one.
+
+|            |                                                                                                                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Breath** | 3400ms, one-sided. Two half raised-cosines meeting at zero slope, 1:1.5 in to out — inspiration is muscular, expiration is elastic recoil. It only ever spreads her; her resting silhouette is a floor she returns to, never a midpoint. |
+| **Blink**  | 130ms, 35% closing and 65% opening, because a real lid shuts faster than it opens. Gaps come from a clamped exponential — blinking is a Poisson process, and a uniform gap reads as a metronome within about thirty seconds.             |
+| **Drift**  | Three mutually incommensurate sines per channel, so the pattern never visibly repeats. About 2.6px of sway on a 94px body: somebody shifting their weight, not somebody pacing.                                                          |
+
+All of it is a pure function of the clock — no timers, no random walk, no state
+that a throttled tab can desynchronise. Ask it where she is at time _t_ and it
+answers.
+
+## Making her do things
+
+```js
+avatar.setEmotion({ emotion: 'happy', intensity: 1 })
+avatar.playMotion('hop') // nod · sway · hop · swing · turn · wander
+avatar.lookAt(0.4, -0.2) // she follows a point; the far side wraps out of sight
+avatar.poke() // squash, then settle on the spring
+avatar.setAsleep(true) // she keeps breathing; stopping entirely reads as a crash
+```
+
+### Speaking
+
+```js
+avatar.setSpeaking(true)
+avatar.setMouthOpen(0.8) // drive this from your audio, per frame
+avatar.setSpeaking(false)
+```
+
+`EnvelopeMouth` in `core/mouth` will do the driving for you from an audio
+envelope — `advanceEnvelope` turns a `Float32Array` of samples into a mouth
+opening with attack and release, so speech does not chatter on every zero
+crossing.
+
+Two honest limits: `setVisemes` exists on the backend interface but this rig
+does not implement it — the mouth is one lens with an opening, not a phoneme
+shape, and `caps.visemes` says so rather than pretending. And the custom element
+wires `emotion`, `size` and `face` only; anything above needs the JS object.
+
+### Accessibility
+
+```js
+avatar.setReducedMotion(true)
+```
+
+Stops the continuous idle motion and keeps one-shot replies. A companion who
+answers nothing is a picture, not a quieter companion — the preference asks for
+less movement, not for no feedback.
 
 ### Expressions
 
