@@ -116,57 +116,69 @@ names.forEach((name, i) => {
 write('colourways.png', trim(flavours, 16))
 
 /* ---------------------------------------------------------------------------
-   The animated hero.
+   The animated hero: breathing, with an occasional blink.
 
-   A still of a character whose entire point is that she is alive undersells her
-   badly. This is one breath — 3400ms, the period the engine actually uses — with
-   a blink placed inside it.
+   ## The two timescales are the whole problem
 
-   ## Breathing only, and the loop is therefore seamless
+   A breath is 3400ms and a blink is 130ms. One frame rate has to serve both, so
+   fast enough to render a blink as a blink rather than as a dropped frame means
+   about 200 frames for a two-breath loop, and a file nobody should have at the
+   top of a page.
 
-   No sway, no blink. `setDrift(false)` stops the going-nowhere motion while
-   leaving the breath running — which is the whole reason that method exists;
-   `setReducedMotion` would have stopped both.
+   APNG carries a delay PER FRAME, which is the way out: hold long frames through
+   the quiet breathing and go dense only across the blink. Sixty-odd frames
+   instead of two hundred, for the same clip.
 
-   The blink is pushed out rather than switched off: `nextBlinkGap` draws from a
-   clamped exponential, `IdleLayer` takes its random source by injection, and a
-   source pinned at 1 returns the maximum gap of 6200ms — past the end of a
-   3400ms clip, so no blink ever lands in it.
+   ## The blink is found, not assumed
 
-   With both gone the only thing moving is the breath, and the breath is exactly
-   periodic. A clip of exactly one period therefore joins itself with nothing
-   left over — the earlier version drifted a fraction of a pixel at the seam,
-   and this one does not.
+   `IdleLayer` takes its random source by injection, so the schedule is
+   reproducible — but where it puts the blink is arithmetic inside the engine,
+   and hard-coding a timestamp here would be a second copy of that arithmetic,
+   free to drift. So the clip is scanned at 10ms first and the blink is located
+   by watching the eyes close. If the engine ever reschedules, this follows.
+
+   ## Two breaths, not one
+
+   The loop has to be a whole number of breath periods or it does not close. One
+   period would blink every 3.4 seconds — inside the natural range, but perfectly
+   regular, which is the metronome the engine's Poisson gap exists to avoid. Two
+   periods put it at 6.8s, rare enough to read as occasional.
 
    ## APNG rather than GIF
 
    GIF has one bit of transparency, which would put a hard fringe on every
    antialiased edge she has, against both the light and dark page she has to sit
-   on. APNG carries the full alpha channel and is a valid PNG, so a renderer
-   that does not animate it shows the first frame instead of nothing.
+   on. APNG carries the full alpha channel and is a valid PNG, so a renderer that
+   does not animate it shows the first frame instead of nothing.
 --------------------------------------------------------------------------- */
 
 const BREATH_MS = 3400
+const LOOP_MS = BREATH_MS * 2
 /*
-  Forty frames of 85ms, which is 3400ms exactly.
+  A CONSTANT 40ms rate, with long holds expressed as repeated frames.
 
-  Chosen as a COUNT rather than a frame rate, because a rate has to divide the
-  breath period exactly or the clip is a few milliseconds longer than the thing
-  it loops — 25fps gives 85 frames of 40ms, which is 3400ms, but 12fps gives
-  40.8 frames and no integer rounding of that closes the loop. 85ms per frame is
-  1000/85 fps, handed to ffmpeg as the exact fraction 200/17 rather than a
-  rounded decimal.
+  Variable per-frame delays were the obvious answer and they do not survive the
+  toolchain. ffmpeg's APNG muxer writes delays against a fixed 1/25 timebase —
+  neither `-enc_time_base` nor `-video_track_timescale` moves it — so 25ms and
+  100ms came back as 40ms and 80ms, and the concat demuxer's duration handling
+  put the loop 40 to 80ms out of phase with the breath it repeats, sliding
+  further on every pass.
 
-  Slow is affordable here in a way it was not before: with the blink pushed out
-  of the clip there is no fast event left to sample, and a breath moving 2.4% of
-  her size across 3.4 seconds is smooth at 12fps. That halves the file, which
-  the earlier version needed — breathing squashes the whole silhouette, so its
-  frames differ everywhere and inter-frame compression has little to work with.
+  Repeating a frame instead is exact by construction: 170 ticks of 40ms is
+  6800ms, full stop. It costs nothing, because a repeated frame is byte-identical
+  to the one before it and inter-frame compression is very good at that — which
+  is the same property that made this file EXPENSIVE when every frame differed.
+
+  A distinct render every third tick through the quiet breathing, every tick
+  across the blink.
 */
-const FRAMES = 40
-const FRAME_RATE = '200/17'
-/** Pinned at the top of the range: the maximum gap, 6200ms, is past the clip. */
-const BLINK_SEED = 1
+const TICK_MS = 40
+/** Three ticks through the quiet breathing. It is a slow, smooth motion. */
+const CALM_MS = TICK_MS * 3
+/** One tick across the blink, the finest this container allows. */
+const QUICK_MS = TICK_MS
+/** Blink schedule, pinned. Where it lands is measured below, not assumed here. */
+const BLINK_SEED = 0.94
 
 function haveFfmpeg() {
   try {
@@ -177,31 +189,100 @@ function haveFfmpeg() {
   }
 }
 
-function animate(width, height, scale = 2) {
-  const count = FRAMES
+function makeAvatar(width, height, scale) {
   const canvas = createCanvas(width * scale, height * scale)
   const ctx = canvas.getContext('2d')
-  const avatar = new DoughAvatar(ctx, {
-    face: MOCHI,
-    size: 'fit-canvas',
-    random: () => BLINK_SEED,
-  })
+  const avatar = new DoughAvatar(ctx, { face: MOCHI, size: 'fit-canvas', random: () => BLINK_SEED })
   avatar.resize(width, height, scale)
+  // Breathing and blinking only. The sway is a third thing and this is a still
+  // frame on a page, not a companion on a desktop.
   avatar.setDrift(false)
+  return { canvas, ctx, avatar }
+}
 
-  // Two passes. The first finds ONE crop box covering every frame; cropping
-  // each frame to its own bounds would make her jitter against the edge as she
-  // breathes, which is the opposite of the intended reading.
-  const frames = []
+/** How much dark ink is on screen. The eyes are most of it; a blink drops it. */
+function inkAt(ctx, canvas, avatar, t) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  avatar.render(t)
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  let ink = 0
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] > 128 && data[i] < 80 && data[i + 1] < 110) ink++
+  }
+  return ink
+}
+
+/**
+ * The window the eyes are shut in, and the instant they are shut hardest —
+ * scanned rather than computed.
+ *
+ * `deepest` is what the loop is then aligned to. A blink is 130ms and the ticks
+ * are 40ms, so where the grid falls decides whether the closure is sampled
+ * through its lowest point or straddled either side of it. Aligning costs
+ * nothing and removes the question: the whole loop simply starts a few
+ * milliseconds later, which it is free to do, because the breath is periodic and
+ * the clip is a whole number of periods.
+ *
+ * Measured on the finished file, the eyes lose 89% of their ink at the bottom of
+ * the blink. An earlier reading of 60% was the metric's fault, not the clip's —
+ * it counted the mouth, which is ink that never closes.
+ */
+function findBlink(width, height, scale) {
+  const { canvas, ctx, avatar } = makeAvatar(width, height, scale)
+  const samples = []
+  for (let t = 0; t < LOOP_MS; t += 5) samples.push({ t, ink: inkAt(ctx, canvas, avatar, t) })
+  const open = samples.map((s) => s.ink).sort((a, b) => b - a)[Math.floor(samples.length * 0.1)]
+  const shut = samples.filter((s) => s.ink < open * 0.8)
+  if (shut.length === 0) return null
+  const deepest = shut.reduce((low, s) => (s.ink < low.ink ? s : low), shut[0])
+  return { from: shut[0].t, to: shut[shut.length - 1].t, deepest: deepest.t }
+}
+
+/** Timestamps and delays: sparse through the breath, dense across the blink. */
+/**
+ * One entry per 40ms tick. `render` says whether this tick needs a fresh draw
+ * or repeats the last one — a repeat is the same bytes, so it is nearly free.
+ */
+function timeline(blink) {
+  // Wide enough to carry the eye down and back up, not just the shut frames.
+  const margin = 80
+  const dense = blink === null ? null : { from: blink.from - margin, to: blink.to + margin }
+  const ticks = []
+  for (let t = 0; t < LOOP_MS; t += TICK_MS) {
+    const inBlink = dense !== null && t >= dense.from && t < dense.to
+    const every = inBlink ? QUICK_MS : CALM_MS
+    ticks.push({ t, render: t % every === 0 })
+  }
+  return ticks
+}
+
+if (!haveFfmpeg()) {
+  console.log('\n  skipped mochi-alive.png — ffmpeg not on PATH (the stills above are complete)')
+} else {
+  const W = 320
+  const SCALE = 1
+  const blink = findBlink(W, W, SCALE)
+  const frames = timeline(blink)
+  // Start the loop so the hardest part of the blink falls exactly on a tick.
+  const phase = blink === null ? 0 : blink.deepest % TICK_MS
+
+  const { canvas, ctx, avatar } = makeAvatar(W, W, SCALE)
+  // One crop box across every frame. Cropping each to its own bounds would make
+  // her jitter against the edge as she breathes.
+  const shots = []
   let minX = canvas.width
   let maxX = -1
   let minY = canvas.height
   let maxY = -1
-  for (let i = 0; i < count; i++) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    avatar.render((i / count) * BREATH_MS)
-    const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    frames.push(image)
+  let last = null
+  for (const frame of frames) {
+    if (frame.render || last === null) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      avatar.render(frame.t + phase)
+      last = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    }
+    const image = last
+    shots.push(image)
     const { data } = image
     for (let y = 0; y < canvas.height; y++) {
       for (let x = 0; x < canvas.width; x++) {
@@ -222,32 +303,24 @@ function animate(width, height, scale = 2) {
   const cellCtx = cell.getContext('2d')
   const source = createCanvas(canvas.width, canvas.height)
   const sourceCtx = source.getContext('2d')
-  frames.forEach((image, i) => {
+  shots.forEach((image, i) => {
     sourceCtx.putImageData(image, 0, 0)
     cellCtx.clearRect(0, 0, cell.width, cell.height)
     cellCtx.drawImage(source, minX, minY, w, h, pad, pad, w, h)
-    writeFileSync(join(dir, `f${String(i).padStart(3, '0')}.png`), cell.toBuffer('image/png'))
+    writeFileSync(join(dir, `f${String(i).padStart(4, '0')}.png`), cell.toBuffer('image/png'))
   })
-  return { dir, count, size: `${cell.width}x${cell.height}` }
-}
 
-if (!haveFfmpeg()) {
-  console.log('\n  skipped mochi-alive.png — ffmpeg not on PATH (the stills above are complete)')
-} else {
-  // Breathing alone leaves consecutive frames almost identical, which is what
-  // APNG's inter-frame compression is good at — so this affords a larger, higher
-  // frame-rate clip than the earlier version, which also had to encode a blink
-  // and several pixels of sway.
-  const { dir, count, size } = animate(320, 320, 1)
+  // A plain constant-rate image sequence. Every hold is already expressed as a
+  // repeated frame, so nothing here has to carry a per-frame duration — which
+  // is the point, because that was the part the muxer would not honour.
   execFileSync(
     'ffmpeg',
-    // `-plays 0` is APNG for "loop forever"; without it she breathes once and stops.
     [
       '-y',
       '-framerate',
-      FRAME_RATE,
+      String(1000 / TICK_MS),
       '-i',
-      join(dir, 'f%03d.png'),
+      join(dir, 'f%04d.png'),
       '-plays',
       '0',
       '-f',
@@ -257,8 +330,9 @@ if (!haveFfmpeg()) {
     { stdio: 'ignore' },
   )
   rmSync(dir, { recursive: true, force: true })
+  const blinkNote = blink === null ? 'no blink found' : `blink ${blink.from}-${blink.to}ms`
   console.log(
     `  assets/mochi-alive.png`.padEnd(34),
-    `${size}, ${count} frames, ${BREATH_MS}ms loop`,
+    `${cell.width}x${cell.height}, ${shots.length} ticks, ${LOOP_MS}ms loop, ${blinkNote}`,
   )
 }

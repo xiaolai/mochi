@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/mochi-alive.png" width="220" alt="Mochi, breathing — a soft green ovoid with two round eyes and a small quiet mouth">
+  <img src="https://raw.githubusercontent.com/xiaolai/mochi/main/assets/mochi-alive.png" width="220" alt="Mochi, breathing and occasionally blinking — a soft green ovoid with two round eyes and a small quiet mouth">
 </p>
 
 <h1 align="center">Mochi</h1>
@@ -62,8 +62,10 @@ requestAnimationFrame(tick)
 
 That image is not a loop somebody animated. It is the engine, running, with no
 input at all — because an idle character who holds perfectly still reads as a
-crashed one. She is breathing and nothing else there: `setDrift(false)`, and a
-blink schedule pinned past the end of the clip.
+crashed one. She is breathing, and blinking about once every seven seconds —
+which is her own schedule, not a decision made in the picture. What is turned
+off there is the sway: `setDrift(false)`, because a still on a page should hold
+its frame.
 
 |            |                                                                                                                                                                                                                                          |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
